@@ -23,6 +23,7 @@ import {
   unassignTemplateFromShip,
   unassignTemplateFromFleet,
   unassignTemplateFromOwner,
+  cleanupLowerLevelAssignments,
   type SalaryTemplate,
   type ShipSalaryAssignment,
   type FleetSalaryAssignment,
@@ -168,12 +169,41 @@ export default function TemplateAssignmentsPage() {
     setAssignDialogOpen(true);
   };
 
-  const handleAssign = async () => {
+const handleAssign = async () => {
     if (!assignTemplateId || !assignTargetId) { alert('모든 항목을 선택하세요.'); return; }
     let success = false;
-    if (assignTarget === 'ship') success = !!(await assignTemplateToShip(assignTargetId, assignTemplateId));
-    else if (assignTarget === 'fleet') success = !!(await assignTemplateToFleet(assignTargetId, assignTemplateId));
-    else if (assignTarget === 'owner') success = !!(await assignTemplateToOwner(assignTargetId, assignTemplateId));
+
+    if (assignTarget === 'ship') {
+      // 해당 선박의 기존 할당 모두 제거 후 새로 할당
+      const existing = await getShipSalaryAssignments(assignTargetId);
+      for (const a of existing) {
+        await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
+      }
+      success = !!(await assignTemplateToShip(assignTargetId, assignTemplateId));
+    } else if (assignTarget === 'fleet') {
+      // 해당 플릿 소속 선박의 선박 레벨 할당 제거 후 플릿 할당
+      const { removedShips } = await cleanupLowerLevelAssignments('fleet', assignTargetId);
+      const existing = await getFleetSalaryAssignments(assignTargetId);
+      for (const a of existing) {
+        await unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id));
+      }
+      success = !!(await assignTemplateToFleet(assignTargetId, assignTemplateId));
+      if (success && removedShips > 0) {
+        alert(`선박 레벨 할당 ${removedShips}건이 자동으로 해제되었습니다.`);
+      }
+    } else if (assignTarget === 'owner') {
+      // 해당 선주 소속 플릿/선박 레벨 할당 모두 제거 후 선주 할당
+      const { removedShips, removedFleets } = await cleanupLowerLevelAssignments('owner', assignTargetId);
+      const existing = await getOwnerSalaryAssignments(assignTargetId);
+      for (const a of existing) {
+        await unassignTemplateFromOwner(String(a.owner_id), String(a.template_id));
+      }
+      success = !!(await assignTemplateToOwner(assignTargetId, assignTemplateId));
+      if (success && (removedShips > 0 || removedFleets > 0)) {
+        alert(`하위 레벨 할당 해제: 플릿 ${removedFleets}건, 선박 ${removedShips}건`);
+      }
+    }
+
     if (success) { setAssignDialogOpen(false); await loadData(); }
     else alert('할당에 실패했습니다.');
   };
