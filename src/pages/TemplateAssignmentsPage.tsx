@@ -348,11 +348,12 @@ const handleAssign = async () => {
           </CardHeader>
           <CardContent className="pt-0">
             <Tabs defaultValue="all" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 h-9">
+              <TabsList className="grid w-full grid-cols-5 h-9">
                 <TabsTrigger value="all" className="text-xs">전체 ({totalCount})</TabsTrigger>
                 <TabsTrigger value="owner" className="text-xs"><Building2 className="h-3 w-3 mr-1" />선주 ({filteredOwner.length})</TabsTrigger>
                 <TabsTrigger value="fleet" className="text-xs"><Layers className="h-3 w-3 mr-1" />플릿 ({filteredFleet.length})</TabsTrigger>
                 <TabsTrigger value="ship" className="text-xs"><ShipIcon className="h-3 w-3 mr-1" />선박 ({filteredShip.length})</TabsTrigger>
+                <TabsTrigger value="by-template" className="text-xs">📋 템플릿별</TabsTrigger>
               </TabsList>
 
               {/* 전체 탭 */}
@@ -503,6 +504,121 @@ const handleAssign = async () => {
                   </div>
                 )}
               </TabsContent>
+{/* 템플릿별 탭 */}
+              <TabsContent value="by-template" className="mt-3">
+                {templates.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-gray-500">등록된 템플릿이 없습니다.</div>
+                ) : (
+                  <div className="space-y-6">
+                    {templates.map(t => {
+                      const tOwner = ownerAssignments.filter(a => String(a.template_id) === String(t.id));
+                      const tFleet = fleetAssignments.filter(a => String(a.template_id) === String(t.id));
+                      const tShip = shipAssignments.filter(a => String(a.template_id) === String(t.id));
+                      const tTotal = tOwner.length + tFleet.length + tShip.length;
+
+                      return (
+                        <div key={t.id} className="border rounded-lg overflow-hidden">
+                          {/* 템플릿 헤더 */}
+                          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+                            <div className="flex items-center gap-3">
+                              <Badge variant="default" className="text-xs">{t.name}</Badge>
+                              <span className="text-xs text-gray-500">{t.currency}</span>
+                              {t.description && <span className="text-xs text-gray-400">{t.description}</span>}
+                            </div>
+                            <span className="text-xs text-gray-500">총 {tTotal}건 할당</span>
+                          </div>
+
+                          {tTotal === 0 ? (
+                            <div className="text-center py-4 text-xs text-gray-400">할당된 대상 없음</div>
+                          ) : (
+                            <div className="divide-y">
+
+                              {/* 선주 레벨 */}
+                              {tOwner.length > 0 && (
+                                <div className="px-4 py-3">
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2">
+                                    <Building2 className="h-3.5 w-3.5" />선주 레벨 ({tOwner.length})
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {tOwner.map(a => (
+                                      <div key={a.id} className="flex items-center justify-between bg-blue-50 rounded px-3 py-2">
+                                        <div className="flex items-center gap-2">
+                                          <Building2 className="h-3.5 w-3.5 text-blue-500" />
+                                          <span className="text-sm font-medium">{a.owner_name}</span>
+                                          <span className="text-xs text-gray-500">{a.fleet_count}개 플릿 · {a.ship_count}척</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">{formatDate(a.assigned_at)}</span>
+                                          {unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 플릿 레벨 */}
+                              {tFleet.length > 0 && (
+                                <div className="px-4 py-3">
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2">
+                                    <Layers className="h-3.5 w-3.5" />플릿 레벨 ({tFleet.length})
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {tFleet.map(a => (
+                                      <div key={a.id} className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
+                                        <div className="flex items-center gap-2">
+                                          <Layers className="h-3.5 w-3.5 text-green-500" />
+                                          <span className="text-xs text-gray-400">{a.owner_name}</span>
+                                          <span className="text-gray-300">›</span>
+                                          <span className="text-sm font-medium">{a.fleet_name}</span>
+                                          <span className="text-xs text-gray-500">{a.ship_count}척</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">{formatDate(a.assigned_at)}</span>
+                                          {unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 선박 레벨 */}
+                              {tShip.length > 0 && (
+                                <div className="px-4 py-3">
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2">
+                                    <ShipIcon className="h-3.5 w-3.5" />선박 레벨 ({tShip.length})
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    {tShip.map(a => (
+                                      <div key={a.id} className="flex items-center justify-between bg-orange-50 rounded px-3 py-2">
+                                        <div className="flex items-center gap-2">
+                                          <ShipIcon className="h-3.5 w-3.5 text-orange-500" />
+                                          <span className="text-xs text-gray-400">{a.owner_name}</span>
+                                          {a.fleet_name && <><span className="text-gray-300">›</span><span className="text-xs text-gray-400">{a.fleet_name}</span></>}
+                                          <span className="text-gray-300">›</span>
+                                          <span className="text-sm font-medium">{a.ship_name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">{formatDate(a.assigned_at)}</span>
+                                          {unassignBtn(() => handleUnassignShip(String(a.ship_id), String(a.template_id)))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </TabsContent>
+
+
             </Tabs>
           </CardContent>
         </Card>
