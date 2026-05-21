@@ -1,0 +1,367 @@
+import { supabase } from '@/lib/supabase';
+import type { CrewRecommendation, CrewRecommendationWithDetails } from '@/types/models';
+import { supervisorService } from './supervisor.service';
+
+const TABLE_NAME = 'crew_recommendations';
+
+class CrewRecommendationService {
+  async getAll(): Promise<CrewRecommendationWithDetails[]> {
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Return data with empty strings for joined fields
+    return (data || []).map(item => ({
+      ...item,
+      manning_agency_name: '',
+      rank_name: '',
+      rank_code: '',
+      department: '',
+      company_name: '',
+      fleet_name: '',
+      ship_name: '',
+    }));
+  }
+
+  async getRecommendationsByCompany(companyId: string): Promise<CrewRecommendationWithDetails[]> {
+    // First, get all recommendations for this company
+    const { data: recommendations, error: recError } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+
+    if (recError) throw recError;
+    if (!recommendations || recommendations.length === 0) return [];
+
+    // Get unique IDs for batch fetching
+    const rankIds = [...new Set(recommendations.map(r => r.rank_id))];
+    const companyIds = [...new Set(recommendations.map(r => r.company_id))];
+    const fleetIds = [...new Set(recommendations.map(r => r.fleet_id).filter(Boolean))];
+    const shipIds = [...new Set(recommendations.map(r => r.ship_id))];
+    const agencyIds = [...new Set(recommendations.map(r => r.manning_agency_id))];
+
+    // Batch fetch all related data
+    const [ranksRes, companiesRes, fleetsRes, shipsRes, agenciesRes] = await Promise.all([
+      supabase.from('ranks').select('id, name, rank_code, department').in('id', rankIds),
+      supabase.from('companies').select('id, name').in('id', companyIds),
+      fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : { data: [] },
+      supabase.from('ships').select('id, name').in('id', shipIds),
+      supabase.from('companies').select('id, name').in('id', agencyIds),
+    ]);
+
+    // Create lookup maps
+    const ranksMap = new Map((ranksRes.data || []).map(r => [r.id, r]));
+    const companiesMap = new Map((companiesRes.data || []).map(c => [c.id, c]));
+    const fleetsMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
+    const shipsMap = new Map((shipsRes.data || []).map(s => [s.id, s]));
+    const agenciesMap = new Map((agenciesRes.data || []).map(a => [a.id, a]));
+
+    // Map recommendations with joined data
+    return recommendations.map(rec => {
+      const rank = ranksMap.get(rec.rank_id);
+      const company = companiesMap.get(rec.company_id);
+      const fleet = rec.fleet_id ? fleetsMap.get(rec.fleet_id) : null;
+      const ship = shipsMap.get(rec.ship_id);
+      const agency = agenciesMap.get(rec.manning_agency_id);
+
+      return {
+        ...rec,
+        manning_agency_name: agency?.name || '',
+        rank_name: rank?.name || '',
+        rank_code: rank?.rank_code || '',
+        department: rank?.department || '',
+        company_name: company?.name || '',
+        fleet_name: fleet?.name || '',
+        ship_name: ship?.name || '',
+      };
+    });
+  }
+
+  async getByJobPostingGroup(groupId: string): Promise<CrewRecommendationWithDetails[]> {
+    // First, get all recommendations for this job posting group
+    const { data: recommendations, error: recError } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('job_posting_group_id', groupId)
+      .order('created_at', { ascending: false });
+
+    if (recError) throw recError;
+    if (!recommendations || recommendations.length === 0) return [];
+
+    // Get unique IDs for batch fetching
+    const rankIds = [...new Set(recommendations.map(r => r.rank_id))];
+    const companyIds = [...new Set(recommendations.map(r => r.company_id))];
+    const fleetIds = [...new Set(recommendations.map(r => r.fleet_id).filter(Boolean))];
+    const shipIds = [...new Set(recommendations.map(r => r.ship_id))];
+    const agencyIds = [...new Set(recommendations.map(r => r.manning_agency_id))];
+
+    // Batch fetch all related data
+    const [ranksRes, companiesRes, fleetsRes, shipsRes, agenciesRes] = await Promise.all([
+      supabase.from('ranks').select('id, name, rank_code, department').in('id', rankIds),
+      supabase.from('companies').select('id, name').in('id', companyIds),
+      fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : { data: [] },
+      supabase.from('ships').select('id, name').in('id', shipIds),
+      supabase.from('companies').select('id, name').in('id', agencyIds),
+    ]);
+
+    // Create lookup maps
+    const ranksMap = new Map((ranksRes.data || []).map(r => [r.id, r]));
+    const companiesMap = new Map((companiesRes.data || []).map(c => [c.id, c]));
+    const fleetsMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
+    const shipsMap = new Map((shipsRes.data || []).map(s => [s.id, s]));
+    const agenciesMap = new Map((agenciesRes.data || []).map(a => [a.id, a]));
+
+    // Map recommendations with joined data
+    return recommendations.map(rec => {
+      const rank = ranksMap.get(rec.rank_id);
+      const company = companiesMap.get(rec.company_id);
+      const fleet = rec.fleet_id ? fleetsMap.get(rec.fleet_id) : null;
+      const ship = shipsMap.get(rec.ship_id);
+      const agency = agenciesMap.get(rec.manning_agency_id);
+
+      return {
+        ...rec,
+        manning_agency_name: agency?.name || '',
+        rank_name: rank?.name || '',
+        rank_code: rank?.rank_code || '',
+        department: rank?.department || '',
+        company_name: company?.name || '',
+        fleet_name: fleet?.name || '',
+        ship_name: ship?.name || '',
+      };
+    });
+  }
+
+  async getByJobPostingGroupAndAgency(groupId: string, agencyId: string): Promise<CrewRecommendationWithDetails[]> {
+    // First, get all recommendations for this job posting group and agency
+    const { data: recommendations, error: recError } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('job_posting_group_id', groupId)
+      .eq('manning_agency_id', agencyId)
+      .order('created_at', { ascending: false });
+
+    if (recError) throw recError;
+    if (!recommendations || recommendations.length === 0) return [];
+
+    // Get unique IDs for batch fetching
+    const rankIds = [...new Set(recommendations.map(r => r.rank_id))];
+    const companyIds = [...new Set(recommendations.map(r => r.company_id))];
+    const fleetIds = [...new Set(recommendations.map(r => r.fleet_id).filter(Boolean))];
+    const shipIds = [...new Set(recommendations.map(r => r.ship_id))];
+    const agencyIds = [...new Set(recommendations.map(r => r.manning_agency_id))];
+
+    // Batch fetch all related data
+    const [ranksRes, companiesRes, fleetsRes, shipsRes, agenciesRes] = await Promise.all([
+      supabase.from('ranks').select('id, name, rank_code, department').in('id', rankIds),
+      supabase.from('companies').select('id, name').in('id', companyIds),
+      fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : { data: [] },
+      supabase.from('ships').select('id, name').in('id', shipIds),
+      supabase.from('companies').select('id, name').in('id', agencyIds),
+    ]);
+
+    // Create lookup maps
+    const ranksMap = new Map((ranksRes.data || []).map(r => [r.id, r]));
+    const companiesMap = new Map((companiesRes.data || []).map(c => [c.id, c]));
+    const fleetsMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
+    const shipsMap = new Map((shipsRes.data || []).map(s => [s.id, s]));
+    const agenciesMap = new Map((agenciesRes.data || []).map(a => [a.id, a]));
+
+    // Map recommendations with joined data
+    return recommendations.map(rec => {
+      const rank = ranksMap.get(rec.rank_id);
+      const company = companiesMap.get(rec.company_id);
+      const fleet = rec.fleet_id ? fleetsMap.get(rec.fleet_id) : null;
+      const ship = shipsMap.get(rec.ship_id);
+      const agency = agenciesMap.get(rec.manning_agency_id);
+
+      return {
+        ...rec,
+        manning_agency_name: agency?.name || '',
+        rank_name: rank?.name || '',
+        rank_code: rank?.rank_code || '',
+        department: rank?.department || '',
+        company_name: company?.name || '',
+        fleet_name: fleet?.name || '',
+        ship_name: ship?.name || '',
+      };
+    });
+  }
+
+  async getByManningAgency(agencyId: string): Promise<CrewRecommendationWithDetails[]> {
+    // First, get all recommendations for this agency
+    const { data: recommendations, error: recError } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('manning_agency_id', agencyId)
+      .order('created_at', { ascending: false });
+
+    if (recError) throw recError;
+    if (!recommendations || recommendations.length === 0) return [];
+
+    // Get unique IDs for batch fetching
+    const rankIds = [...new Set(recommendations.map(r => r.rank_id))];
+    const companyIds = [...new Set(recommendations.map(r => r.company_id))];
+    const fleetIds = [...new Set(recommendations.map(r => r.fleet_id).filter(Boolean))];
+    const shipIds = [...new Set(recommendations.map(r => r.ship_id))];
+    const agencyIds = [...new Set(recommendations.map(r => r.manning_agency_id))];
+
+    // Batch fetch all related data
+    const [ranksRes, companiesRes, fleetsRes, shipsRes, agenciesRes] = await Promise.all([
+      supabase.from('ranks').select('id, name, rank_code, department').in('id', rankIds),
+      supabase.from('companies').select('id, name').in('id', companyIds),
+      fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : { data: [] },
+      supabase.from('ships').select('id, name').in('id', shipIds),
+      supabase.from('companies').select('id, name').in('id', agencyIds),
+    ]);
+
+    // Create lookup maps
+    const ranksMap = new Map((ranksRes.data || []).map(r => [r.id, r]));
+    const companiesMap = new Map((companiesRes.data || []).map(c => [c.id, c]));
+    const fleetsMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
+    const shipsMap = new Map((shipsRes.data || []).map(s => [s.id, s]));
+    const agenciesMap = new Map((agenciesRes.data || []).map(a => [a.id, a]));
+
+    // Map recommendations with joined data
+    return recommendations.map(rec => {
+      const rank = ranksMap.get(rec.rank_id);
+      const company = companiesMap.get(rec.company_id);
+      const fleet = rec.fleet_id ? fleetsMap.get(rec.fleet_id) : null;
+      const ship = shipsMap.get(rec.ship_id);
+      const agency = agenciesMap.get(rec.manning_agency_id);
+
+      return {
+        ...rec,
+        manning_agency_name: agency?.name || '',
+        rank_name: rank?.name || '',
+        rank_code: rank?.rank_code || '',
+        department: rank?.department || '',
+        company_name: company?.name || '',
+        fleet_name: fleet?.name || '',
+        ship_name: ship?.name || '',
+      };
+    });
+  }
+
+  async getByShip(shipId: string): Promise<CrewRecommendationWithDetails[]> {
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('ship_id', shipId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map(item => ({
+      ...item,
+      manning_agency_name: '',
+      rank_name: '',
+      rank_code: '',
+      department: '',
+      company_name: '',
+      fleet_name: '',
+      ship_name: '',
+    }));
+  }
+
+  /**
+   * Check if current user has supervisor permission for a ship
+   */
+  async checkSupervisorPermission(userId: string, shipId: string): Promise<{ allowed: boolean; message?: string }> {
+    // Get user role
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !userData) {
+      return { allowed: false, message: '사용자 정보를 찾을 수 없습니다.' };
+    }
+
+    // Only ship_manager role needs supervisor check
+    if (userData.role !== 'ship_manager') {
+      return { allowed: true }; // Other roles don't need supervisor permission
+    }
+
+    // Check supervisor assignment
+    const supervisorCheck = await supervisorService.isSupervisorForShip(userId, shipId);
+    
+    if (!supervisorCheck.is_supervisor) {
+      return { 
+        allowed: false, 
+        message: '해당 선박의 담당 감독이 아닙니다. 담당 감독만 선원 추천을 생성할 수 있습니다.' 
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  async create(recommendation: Partial<CrewRecommendation>): Promise<CrewRecommendation> {
+    // Check supervisor permission if ship_id is provided
+    if (recommendation.ship_id && recommendation.created_by) {
+      const permissionCheck = await this.checkSupervisorPermission(
+        recommendation.created_by,
+        recommendation.ship_id
+      );
+
+      if (!permissionCheck.allowed) {
+        throw new Error(permissionCheck.message || '권한이 없습니다.');
+      }
+    }
+
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .insert(recommendation)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateStatus(id: string, status: CrewRecommendation['status']): Promise<void> {
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .update({ status })
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  async getRecommendationCountByJobPostingGroup(groupId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*', { count: 'exact', head: true })
+      .eq('job_posting_group_id', groupId);
+
+    if (error) throw error;
+    return count || 0;
+  }
+
+  async getRecommendationCountByJobPostingGroupAndAgency(groupId: string, agencyId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*', { count: 'exact', head: true })
+      .eq('job_posting_group_id', groupId)
+      .eq('manning_agency_id', agencyId);
+
+    if (error) throw error;
+    return count || 0;
+  }
+}
+
+export const crewRecommendationService = new CrewRecommendationService();

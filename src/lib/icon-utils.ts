@@ -1,0 +1,57 @@
+import {
+  Users,
+  Ship,
+  Briefcase,
+  Settings,
+  Calendar,
+  Globe,
+  FileText,
+  Award,
+  Layers,
+  Flag,
+  ListChecks,
+  FileCheck,
+  Inbox,
+  FolderOpen,
+  CheckSquare,
+  DollarSign,
+  ClipboardList,
+  Coins,
+  Building2,
+  UserCog,
+  UserCheck,
+  Shield,
+  Layout,
+  LucideIcon,
+} from 'lucide-react';
+
+const iconMap: Record<string, LucideIcon> = {
+  Users,
+  Ship,
+  Briefcase,
+  Settings,
+  Calendar,
+  Globe,
+  FileText,
+  Award,
+  Layers,
+  Flag,
+  ListChecks,
+  FileCheck,
+  Inbox,
+  FolderOpen,
+  CheckSquare,
+  DollarSign,
+  ClipboardList,
+  Coins,
+  Building2,
+  UserCog,
+  UserCheck,
+  Shield,
+  Layout,
+};
+
+export function getIconComponent(iconName?: string): LucideIcon | undefined {
+  if (!iconName) return undefined;
+  return iconMap[iconName];
+}
