@@ -33,6 +33,14 @@ const RANKS = [
 
 const CURRENCIES = ['USD', 'EUR', 'KRW'];
 
+// items 구조: { rank, component_id, amount, checked }
+interface ItemRow {
+  rank: string;
+  component_id: string;
+  amount: number;
+  checked: boolean;
+}
+
 export default function SalaryTemplatesPage() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<SalaryTemplate[]>([]);
@@ -50,7 +58,8 @@ export default function SalaryTemplatesPage() {
     is_active: true,
   });
   const [selectedRanks, setSelectedRanks] = useState<string[]>([]);
-  const [items, setItems] = useState<{ rank: string; component_id: string; amount: number }[]>([]);
+  // rank → component_id → { checked, amount }
+  const [itemMatrix, setItemMatrix] = useState<Record<string, Record<string, { checked: boolean; amount: number }>>>({});
 
   useEffect(() => {
     const init = async () => {
@@ -72,11 +81,75 @@ export default function SalaryTemplatesPage() {
     setLoading(false);
   };
 
+  // 직급 선택/해제 시 itemMatrix 업데이트
+  const toggleRank = (rank: string) => {
+    const isSelected = selectedRanks.includes(rank);
+    if (isSelected) {
+      setSelectedRanks(prev => prev.filter(r => r !== rank));
+      setItemMatrix(prev => {
+        const next = { ...prev };
+        delete next[rank];
+        return next;
+      });
+    } else {
+      setSelectedRanks(prev => [...prev, rank]);
+      // 새 직급 추가 시 모든 급여항목을 unchecked/0으로 초기화
+      setItemMatrix(prev => ({
+        ...prev,
+        [rank]: Object.fromEntries(
+          components.map(c => [c.id, { checked: false, amount: 0 }])
+        ),
+      }));
+    }
+  };
+
+  // 항목 체크/해제
+  const toggleComponent = (rank: string, compId: string) => {
+    setItemMatrix(prev => ({
+      ...prev,
+      [rank]: {
+        ...prev[rank],
+        [compId]: {
+          ...prev[rank]?.[compId],
+          checked: !prev[rank]?.[compId]?.checked,
+        },
+      },
+    }));
+  };
+
+  // 금액 변경
+  const setAmount = (rank: string, compId: string, amount: number) => {
+    setItemMatrix(prev => ({
+      ...prev,
+      [rank]: {
+        ...prev[rank],
+        [compId]: {
+          ...prev[rank]?.[compId],
+          amount,
+        },
+      },
+    }));
+  };
+
+  // itemMatrix → items 배열 변환 (checked인 것만)
+  const matrixToItems = () => {
+    const result: { rank: string; component_id: string; amount: number }[] = [];
+    for (const rank of selectedRanks) {
+      const rankData = itemMatrix[rank] || {};
+      for (const [compId, val] of Object.entries(rankData)) {
+        if (val.checked) {
+          result.push({ rank, component_id: compId, amount: val.amount });
+        }
+      }
+    }
+    return result;
+  };
+
   const openAdd = () => {
     setEditingTemplate(null);
     setFormData({ name: '', description: '', currency: 'USD', is_active: true });
     setSelectedRanks([]);
-    setItems([]);
+    setItemMatrix({});
     setDialogOpen(true);
   };
 
@@ -91,11 +164,18 @@ export default function SalaryTemplatesPage() {
       is_active: full.is_active,
     });
     setSelectedRanks(full.ranks);
-    setItems(full.items.map(i => ({
-      rank: i.rank || '',
-      component_id: i.component_id,
-      amount: i.amount,
-    })));
+
+    // 기존 항목으로 matrix 구성
+    const matrix: Record<string, Record<string, { checked: boolean; amount: number }>> = {};
+    for (const rank of full.ranks) {
+      matrix[rank] = Object.fromEntries(
+        components.map(c => {
+          const existing = full.items.find(i => i.rank === rank && i.component_id === c.id);
+          return [c.id, { checked: !!existing, amount: existing?.amount || 0 }];
+        })
+      );
+    }
+    setItemMatrix(matrix);
     setDialogOpen(true);
   };
 
@@ -110,21 +190,10 @@ export default function SalaryTemplatesPage() {
     setExpandedData(full);
   };
 
-  const addItem = () => {
-    setItems([...items, { rank: selectedRanks[0] || '', component_id: components[0]?.id || '', amount: 0 }]);
-  };
-
-  const removeItem = (idx: number) => {
-    setItems(items.filter((_, i) => i !== idx));
-  };
-
-  const updateItem = (idx: number, field: string, value: string | number) => {
-    setItems(items.map((item, i) => i === idx ? { ...item, [field]: value } : item));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) { alert('템플릿명을 입력하세요.'); return; }
+    const items = matrixToItems();
     if (editingTemplate) {
       await updateSalaryTemplate(editingTemplate.id, formData, selectedRanks, items);
     } else {
@@ -218,29 +287,31 @@ export default function SalaryTemplatesPage() {
                               {expandedData.ranks.length === 0 ? (
                                 <p className="text-xs text-gray-400">등록된 직급 없음</p>
                               ) : (
-                                expandedData.ranks.map(rank => {
-                                  const rankItems = expandedData.items.filter(i => i.rank === rank);
-                                  return (
-                                    <div key={rank} className="mb-3">
-                                      <div className="text-xs font-semibold text-gray-700 mb-1">{rank}</div>
-                                      <table className="w-full text-xs border rounded">
-                                        <thead><tr className="bg-gray-100"><th className="text-left p-1.5">항목</th><th className="text-right p-1.5">금액 ({t.currency})</th></tr></thead>
-                                        <tbody>
-                                          {rankItems.map(item => (
-                                            <tr key={item.id} className="border-t">
-                                              <td className="p-1.5">{item.component?.name || '-'}</td>
-                                              <td className="p-1.5 text-right">{item.amount.toLocaleString()}</td>
+                                <div className="grid grid-cols-2 gap-4">
+                                  {expandedData.ranks.map(rank => {
+                                    const rankItems = expandedData.items.filter(i => i.rank === rank);
+                                    return (
+                                      <div key={rank} className="border rounded bg-white p-3">
+                                        <div className="text-xs font-semibold text-gray-700 mb-2">{rank}</div>
+                                        <table className="w-full text-xs">
+                                          <thead><tr className="border-b"><th className="text-left pb-1">항목</th><th className="text-right pb-1">금액 ({t.currency})</th></tr></thead>
+                                          <tbody>
+                                            {rankItems.map(item => (
+                                              <tr key={item.id} className="border-t">
+                                                <td className="py-1">{item.component?.name || '-'}</td>
+                                                <td className="py-1 text-right">{item.amount.toLocaleString()}</td>
+                                              </tr>
+                                            ))}
+                                            <tr className="border-t font-semibold bg-gray-50">
+                                              <td className="py-1">합계</td>
+                                              <td className="py-1 text-right">{rankItems.reduce((s, i) => s + i.amount, 0).toLocaleString()}</td>
                                             </tr>
-                                          ))}
-                                          <tr className="border-t font-semibold bg-gray-50">
-                                            <td className="p-1.5">합계</td>
-                                            <td className="p-1.5 text-right">{rankItems.reduce((s, i) => s + i.amount, 0).toLocaleString()}</td>
-                                          </tr>
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  );
-                                })
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               )}
                             </TableCell>
                           </TableRow>
@@ -255,7 +326,7 @@ export default function SalaryTemplatesPage() {
         </Card>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-base">
                 {editingTemplate ? '급여 템플릿 수정' : '급여 템플릿 추가'}
@@ -263,6 +334,7 @@ export default function SalaryTemplatesPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4 py-2">
+                {/* 기본 정보 */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-sm">템플릿명 *</Label>
@@ -280,61 +352,76 @@ export default function SalaryTemplatesPage() {
                   <Label className="text-sm">설명</Label>
                   <Textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} rows={2} className="text-sm" />
                 </div>
+
+                {/* 직급 선택 */}
                 <div className="space-y-1.5">
-                  <Label className="text-sm">적용 직급</Label>
-                  <div className="grid grid-cols-4 gap-1.5 p-2 border rounded-md">
+                  <Label className="text-sm">적용 직급 <span className="text-gray-400 font-normal">(선택하면 아래 급여 항목이 자동 생성됩니다)</span></Label>
+                  <div className="grid grid-cols-4 gap-1.5 p-3 border rounded-md bg-gray-50">
                     {RANKS.map(rank => (
-                      <label key={rank} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <label key={rank} className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1 rounded ${selectedRanks.includes(rank) ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}>
                         <input
                           type="checkbox"
                           checked={selectedRanks.includes(rank)}
-                          onChange={e => setSelectedRanks(e.target.checked ? [...selectedRanks, rank] : selectedRanks.filter(r => r !== rank))}
+                          onChange={() => toggleRank(rank)}
+                          className="accent-blue-600"
                         />
                         {rank}
                       </label>
                     ))}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm">급여 항목</Label>
-                    <Button type="button" variant="outline" size="sm" onClick={addItem} className="h-7 text-xs">
-                      <Plus className="h-3 w-3 mr-1" />항목 추가
-                    </Button>
-                  </div>
-                  {items.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-2">항목 추가 버튼을 눌러 급여 항목을 추가하세요.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {items.map((item, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                          <div className="col-span-3">
-                            <Select value={item.rank} onValueChange={v => updateItem(idx, 'rank', v)}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="직급" /></SelectTrigger>
-                              <SelectContent>{selectedRanks.map(r => <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>)}</SelectContent>
-                            </Select>
+
+                {/* 직급별 급여 항목 */}
+                {selectedRanks.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">직급별 급여 항목 <span className="text-gray-400 font-normal">(항목 체크 후 금액 입력)</span></Label>
+                    <div className="space-y-3">
+                      {selectedRanks.map(rank => (
+                        <div key={rank} className="border rounded-md overflow-hidden">
+                          <div className="bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 flex items-center justify-between">
+                            <span>{rank}</span>
+                            <span className="text-gray-500 font-normal">
+                              합계: {formData.currency} {
+                                Object.entries(itemMatrix[rank] || {})
+                                  .filter(([, v]) => v.checked)
+                                  .reduce((s, [, v]) => s + (v.amount || 0), 0)
+                                  .toLocaleString()
+                              }
+                            </span>
                           </div>
-                          <div className="col-span-4">
-                            <Select value={item.component_id} onValueChange={v => updateItem(idx, 'component_id', v)}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="항목" /></SelectTrigger>
-                              <SelectContent>{components.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                          </div>
-                          <div className="col-span-4">
-                            <Input type="number" value={item.amount} onChange={e => updateItem(idx, 'amount', parseInt(e.target.value) || 0)} className="h-8 text-xs" placeholder="금액" />
-                          </div>
-                          <div className="col-span-1">
-                            <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(idx)} className="h-8 w-8 p-0 text-red-500">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                          <div className="p-2 grid grid-cols-1 gap-1">
+                            {components.map(comp => {
+                              const val = itemMatrix[rank]?.[comp.id];
+                              return (
+                                <div key={comp.id} className={`flex items-center gap-2 px-2 py-1.5 rounded ${val?.checked ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={val?.checked || false}
+                                    onChange={() => toggleComponent(rank, comp.id)}
+                                    className="accent-blue-600 flex-shrink-0"
+                                  />
+                                  <span className="text-xs flex-1 text-gray-700">{comp.name}</span>
+                                  {val?.checked && (
+                                    <Input
+                                      type="number"
+                                      value={val.amount || ''}
+                                      onChange={e => setAmount(rank, comp.id, parseInt(e.target.value) || 0)}
+                                      className="h-7 text-xs w-32 text-right"
+                                      placeholder="금액"
+                                      min={0}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-              <DialogFooter>
+              <DialogFooter className="mt-4">
                 <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="h-8">취소</Button>
                 <Button type="submit" size="sm" className="h-8">저장</Button>
               </DialogFooter>
