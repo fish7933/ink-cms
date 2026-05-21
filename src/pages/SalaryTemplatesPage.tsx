@@ -33,13 +33,8 @@ const RANKS = [
 
 const CURRENCIES = ['USD', 'EUR', 'KRW'];
 
-// items 구조: { rank, component_id, amount, checked }
-interface ItemRow {
-  rank: string;
-  component_id: string;
-  amount: number;
-  checked: boolean;
-}
+// amounts[rank][component_id] = number
+type AmountMatrix = Record<string, Record<string, number>>;
 
 export default function SalaryTemplatesPage() {
   const navigate = useNavigate();
@@ -51,23 +46,17 @@ export default function SalaryTemplatesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedData, setExpandedData] = useState<SalaryTemplateWithItems | null>(null);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    currency: 'USD',
-    is_active: true,
-  });
+  const [formData, setFormData] = useState({ name: '', description: '', currency: 'USD', is_active: true });
   const [selectedRanks, setSelectedRanks] = useState<string[]>([]);
-  // rank → component_id → { checked, amount }
-  const [itemMatrix, setItemMatrix] = useState<Record<string, Record<string, { checked: boolean; amount: number }>>>({});
+  const [selectedComponents, setSelectedComponents] = useState<string[]>([]);
+  // amounts[rank][component_id] = 금액
+  const [amounts, setAmounts] = useState<AmountMatrix>({});
 
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
       if (!user) { navigate('/login'); return; }
-      if (!['ship_manager', 'ship_owner'].includes(user.role || '')) {
-        navigate('/dashboard'); return;
-      }
+      if (!['ship_manager', 'ship_owner'].includes(user.role || '')) { navigate('/dashboard'); return; }
       await loadData();
     };
     init();
@@ -81,65 +70,36 @@ export default function SalaryTemplatesPage() {
     setLoading(false);
   };
 
-  // 직급 선택/해제 시 itemMatrix 업데이트
   const toggleRank = (rank: string) => {
-    const isSelected = selectedRanks.includes(rank);
-    if (isSelected) {
-      setSelectedRanks(prev => prev.filter(r => r !== rank));
-      setItemMatrix(prev => {
-        const next = { ...prev };
-        delete next[rank];
-        return next;
-      });
-    } else {
-      setSelectedRanks(prev => [...prev, rank]);
-      // 새 직급 추가 시 모든 급여항목을 unchecked/0으로 초기화
-      setItemMatrix(prev => ({
-        ...prev,
-        [rank]: Object.fromEntries(
-          components.map(c => [c.id, { checked: false, amount: 0 }])
-        ),
-      }));
-    }
+    setSelectedRanks(prev =>
+      prev.includes(rank) ? prev.filter(r => r !== rank) : [...prev, rank]
+    );
   };
 
-  // 항목 체크/해제
-  const toggleComponent = (rank: string, compId: string) => {
-    setItemMatrix(prev => ({
+  const toggleComponent = (compId: string) => {
+    setSelectedComponents(prev =>
+      prev.includes(compId) ? prev.filter(c => c !== compId) : [...prev, compId]
+    );
+  };
+
+  const setAmount = (rank: string, compId: string, value: number) => {
+    setAmounts(prev => ({
       ...prev,
-      [rank]: {
-        ...prev[rank],
-        [compId]: {
-          ...prev[rank]?.[compId],
-          checked: !prev[rank]?.[compId]?.checked,
-        },
-      },
+      [rank]: { ...prev[rank], [compId]: value },
     }));
   };
 
-  // 금액 변경
-  const setAmount = (rank: string, compId: string, amount: number) => {
-    setItemMatrix(prev => ({
-      ...prev,
-      [rank]: {
-        ...prev[rank],
-        [compId]: {
-          ...prev[rank]?.[compId],
-          amount,
-        },
-      },
-    }));
-  };
+  const getAmount = (rank: string, compId: string) =>
+    amounts[rank]?.[compId] || 0;
 
-  // itemMatrix → items 배열 변환 (checked인 것만)
+  const rankTotal = (rank: string) =>
+    selectedComponents.reduce((s, cid) => s + getAmount(rank, cid), 0);
+
   const matrixToItems = () => {
     const result: { rank: string; component_id: string; amount: number }[] = [];
     for (const rank of selectedRanks) {
-      const rankData = itemMatrix[rank] || {};
-      for (const [compId, val] of Object.entries(rankData)) {
-        if (val.checked) {
-          result.push({ rank, component_id: compId, amount: val.amount });
-        }
+      for (const compId of selectedComponents) {
+        result.push({ rank, component_id: compId, amount: getAmount(rank, compId) });
       }
     }
     return result;
@@ -149,7 +109,8 @@ export default function SalaryTemplatesPage() {
     setEditingTemplate(null);
     setFormData({ name: '', description: '', currency: 'USD', is_active: true });
     setSelectedRanks([]);
-    setItemMatrix({});
+    setSelectedComponents([]);
+    setAmounts({});
     setDialogOpen(true);
   };
 
@@ -157,34 +118,21 @@ export default function SalaryTemplatesPage() {
     const full = await getSalaryTemplateWithItems(template.id);
     if (!full) return;
     setEditingTemplate(full);
-    setFormData({
-      name: full.name,
-      description: full.description || '',
-      currency: full.currency,
-      is_active: full.is_active,
-    });
+    setFormData({ name: full.name, description: full.description || '', currency: full.currency, is_active: full.is_active });
     setSelectedRanks(full.ranks);
-
-    // 기존 항목으로 matrix 구성
-    const matrix: Record<string, Record<string, { checked: boolean; amount: number }>> = {};
-    for (const rank of full.ranks) {
-      matrix[rank] = Object.fromEntries(
-        components.map(c => {
-          const existing = full.items.find(i => i.rank === rank && i.component_id === c.id);
-          return [c.id, { checked: !!existing, amount: existing?.amount || 0 }];
-        })
-      );
+    const compIds = [...new Set(full.items.map(i => i.component_id))];
+    setSelectedComponents(compIds);
+    const mat: AmountMatrix = {};
+    for (const item of full.items) {
+      if (!mat[item.rank || '']) mat[item.rank || ''] = {};
+      mat[item.rank || ''][item.component_id] = item.amount;
     }
-    setItemMatrix(matrix);
+    setAmounts(mat);
     setDialogOpen(true);
   };
 
   const toggleExpand = async (id: string) => {
-    if (expandedId === id) {
-      setExpandedId(null);
-      setExpandedData(null);
-      return;
-    }
+    if (expandedId === id) { setExpandedId(null); setExpandedData(null); return; }
     const full = await getSalaryTemplateWithItems(id);
     setExpandedId(id);
     setExpandedData(full);
@@ -227,16 +175,13 @@ export default function SalaryTemplatesPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">급여 템플릿 관리</CardTitle>
               <Button size="sm" className="gap-1.5 h-8" onClick={openAdd}>
-                <Plus className="h-4 w-4" />
-                템플릿 추가
+                <Plus className="h-4 w-4" />템플릿 추가
               </Button>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
             {templates.length === 0 ? (
-              <div className="text-center py-6 text-sm text-gray-500">
-                등록된 급여 템플릿이 없습니다.
-              </div>
+              <div className="text-center py-6 text-sm text-gray-500">등록된 급여 템플릿이 없습니다.</div>
             ) : (
               <div className="rounded-md border">
                 <Table>
@@ -254,10 +199,7 @@ export default function SalaryTemplatesPage() {
                       <>
                         <TableRow key={t.id}>
                           <TableCell className="font-medium text-sm">
-                            <button
-                              className="flex items-center gap-1 hover:text-blue-600"
-                              onClick={() => toggleExpand(t.id)}
-                            >
+                            <button className="flex items-center gap-1 hover:text-blue-600" onClick={() => toggleExpand(t.id)}>
                               {expandedId === t.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                               {t.name}
                             </button>
@@ -281,36 +223,49 @@ export default function SalaryTemplatesPage() {
                           </TableCell>
                         </TableRow>
                         {expandedId === t.id && expandedData && (
-                          <TableRow key={`${t.id}-detail`}>
+                          <TableRow key={`${t.id}-exp`}>
                             <TableCell colSpan={5} className="bg-gray-50 p-4">
-                              <div className="text-xs font-medium mb-2 text-gray-600">직급별 급여 항목</div>
+                              <div className="text-xs font-medium mb-3 text-gray-600">직급별 급여 현황</div>
                               {expandedData.ranks.length === 0 ? (
                                 <p className="text-xs text-gray-400">등록된 직급 없음</p>
                               ) : (
-                                <div className="grid grid-cols-2 gap-4">
-                                  {expandedData.ranks.map(rank => {
-                                    const rankItems = expandedData.items.filter(i => i.rank === rank);
-                                    return (
-                                      <div key={rank} className="border rounded bg-white p-3">
-                                        <div className="text-xs font-semibold text-gray-700 mb-2">{rank}</div>
-                                        <table className="w-full text-xs">
-                                          <thead><tr className="border-b"><th className="text-left pb-1">항목</th><th className="text-right pb-1">금액 ({t.currency})</th></tr></thead>
-                                          <tbody>
-                                            {rankItems.map(item => (
-                                              <tr key={item.id} className="border-t">
-                                                <td className="py-1">{item.component?.name || '-'}</td>
-                                                <td className="py-1 text-right">{item.amount.toLocaleString()}</td>
-                                              </tr>
-                                            ))}
-                                            <tr className="border-t font-semibold bg-gray-50">
-                                              <td className="py-1">합계</td>
-                                              <td className="py-1 text-right">{rankItems.reduce((s, i) => s + i.amount, 0).toLocaleString()}</td>
-                                            </tr>
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    );
-                                  })}
+                                <div className="overflow-x-auto">
+                                  <table className="text-xs border rounded w-full bg-white">
+                                    <thead>
+                                      <tr className="bg-gray-100">
+                                        <th className="text-left p-2 border-r font-semibold">급여 항목</th>
+                                        {expandedData.ranks.map(r => (
+                                          <th key={r} className="text-right p-2 border-r font-semibold min-w-24">{r}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {[...new Set(expandedData.items.map(i => i.component_id))].map(cid => {
+                                        const comp = expandedData.items.find(i => i.component_id === cid)?.component;
+                                        return (
+                                          <tr key={cid} className="border-t">
+                                            <td className="p-2 border-r text-gray-700">{comp?.name || '-'}</td>
+                                            {expandedData.ranks.map(r => {
+                                              const item = expandedData.items.find(i => i.rank === r && i.component_id === cid);
+                                              return (
+                                                <td key={r} className="p-2 border-r text-right">
+                                                  {item ? item.amount.toLocaleString() : '-'}
+                                                </td>
+                                              );
+                                            })}
+                                          </tr>
+                                        );
+                                      })}
+                                      <tr className="border-t bg-gray-50 font-semibold">
+                                        <td className="p-2 border-r">합계</td>
+                                        {expandedData.ranks.map(r => (
+                                          <td key={r} className="p-2 border-r text-right">
+                                            {expandedData.items.filter(i => i.rank === r).reduce((s, i) => s + i.amount, 0).toLocaleString()}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    </tbody>
+                                  </table>
                                 </div>
                               )}
                             </TableCell>
@@ -326,7 +281,7 @@ export default function SalaryTemplatesPage() {
         </Card>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-base">
                 {editingTemplate ? '급여 템플릿 수정' : '급여 템플릿 추가'}
@@ -334,6 +289,7 @@ export default function SalaryTemplatesPage() {
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4 py-2">
+
                 {/* 기본 정보 */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -355,71 +311,79 @@ export default function SalaryTemplatesPage() {
 
                 {/* 직급 선택 */}
                 <div className="space-y-1.5">
-                  <Label className="text-sm">적용 직급 <span className="text-gray-400 font-normal">(선택하면 아래 급여 항목이 자동 생성됩니다)</span></Label>
-                  <div className="grid grid-cols-4 gap-1.5 p-3 border rounded-md bg-gray-50">
+                  <Label className="text-sm">적용 직급</Label>
+                  <div className="grid grid-cols-4 gap-1 p-3 border rounded-md bg-gray-50">
                     {RANKS.map(rank => (
-                      <label key={rank} className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1 rounded ${selectedRanks.includes(rank) ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}>
-                        <input
-                          type="checkbox"
-                          checked={selectedRanks.includes(rank)}
-                          onChange={() => toggleRank(rank)}
-                          className="accent-blue-600"
-                        />
+                      <label key={rank} className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded transition-colors ${selectedRanks.includes(rank) ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}>
+                        <input type="checkbox" checked={selectedRanks.includes(rank)} onChange={() => toggleRank(rank)} className="accent-blue-600" />
                         {rank}
                       </label>
                     ))}
                   </div>
                 </div>
 
-                {/* 직급별 급여 항목 */}
-                {selectedRanks.length > 0 && (
+                {/* 급여 항목 선택 */}
+                <div className="space-y-1.5">
+                  <Label className="text-sm">급여 항목</Label>
+                  <div className="flex flex-wrap gap-1 p-3 border rounded-md bg-gray-50">
+                    {components.map(comp => (
+                      <label key={comp.id} className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded border transition-colors ${selectedComponents.includes(comp.id) ? 'bg-blue-100 text-blue-700 border-blue-300 font-medium' : 'bg-white border-gray-200 hover:bg-gray-100'}`}>
+                        <input type="checkbox" checked={selectedComponents.includes(comp.id)} onChange={() => toggleComponent(comp.id)} className="accent-blue-600" />
+                        {comp.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 금액 입력 표 */}
+                {selectedRanks.length > 0 && selectedComponents.length > 0 && (
                   <div className="space-y-1.5">
-                    <Label className="text-sm">직급별 급여 항목 <span className="text-gray-400 font-normal">(항목 체크 후 금액 입력)</span></Label>
-                    <div className="space-y-3">
-                      {selectedRanks.map(rank => (
-                        <div key={rank} className="border rounded-md overflow-hidden">
-                          <div className="bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 flex items-center justify-between">
-                            <span>{rank}</span>
-                            <span className="text-gray-500 font-normal">
-                              합계: {formData.currency} {
-                                Object.entries(itemMatrix[rank] || {})
-                                  .filter(([, v]) => v.checked)
-                                  .reduce((s, [, v]) => s + (v.amount || 0), 0)
-                                  .toLocaleString()
-                              }
-                            </span>
-                          </div>
-                          <div className="p-2 grid grid-cols-1 gap-1">
-                            {components.map(comp => {
-                              const val = itemMatrix[rank]?.[comp.id];
-                              return (
-                                <div key={comp.id} className={`flex items-center gap-2 px-2 py-1.5 rounded ${val?.checked ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={val?.checked || false}
-                                    onChange={() => toggleComponent(rank, comp.id)}
-                                    className="accent-blue-600 flex-shrink-0"
-                                  />
-                                  <span className="text-xs flex-1 text-gray-700">{comp.name}</span>
-                                  {val?.checked && (
+                    <Label className="text-sm">직급별 금액 입력</Label>
+                    <div className="overflow-x-auto border rounded-md">
+                      <table className="text-xs w-full">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="text-left p-2 border-r font-semibold min-w-32">급여 항목</th>
+                            {selectedRanks.map(r => (
+                              <th key={r} className="text-center p-2 border-r font-semibold min-w-28">{r}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedComponents.map(cid => {
+                            const comp = components.find(c => c.id === cid);
+                            return (
+                              <tr key={cid} className="border-t">
+                                <td className="p-2 border-r font-medium text-gray-700 bg-gray-50">{comp?.name}</td>
+                                {selectedRanks.map(rank => (
+                                  <td key={rank} className="p-1 border-r">
                                     <Input
                                       type="number"
-                                      value={val.amount || ''}
-                                      onChange={e => setAmount(rank, comp.id, parseInt(e.target.value) || 0)}
-                                      className="h-7 text-xs w-32 text-right"
-                                      placeholder="금액"
+                                      value={getAmount(rank, cid) || ''}
+                                      onChange={e => setAmount(rank, cid, parseInt(e.target.value) || 0)}
+                                      className="h-7 text-xs text-right w-full"
+                                      placeholder="0"
                                       min={0}
                                     />
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                          <tr className="border-t bg-gray-50 font-semibold">
+                            <td className="p-2 border-r text-gray-700">합계</td>
+                            {selectedRanks.map(rank => (
+                              <td key={rank} className="p-2 border-r text-right text-blue-700">
+                                {rankTotal(rank).toLocaleString()}
+                              </td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
+
               </div>
               <DialogFooter className="mt-4">
                 <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} className="h-8">취소</Button>
