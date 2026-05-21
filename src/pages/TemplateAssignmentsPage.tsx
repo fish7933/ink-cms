@@ -184,47 +184,39 @@ const handleAssign = async () => {
 
       const ownerName = ownerCompanies.find(c => String(c.id) === assignOwnerId)?.name || '';
 
-      // 해당 선주 소속 플릿 중 이미 할당된 것 확인
       const ownerFleets = fleets.filter(f => String(f.owner_id) === assignOwnerId);
       const ownerFleetIds = ownerFleets.map(f => String(f.id));
       const allFleetAssigns = await getFleetSalaryAssignments();
       const conflictFleets = allFleetAssigns.filter(a => ownerFleetIds.includes(String(a.fleet_id)));
 
-      // 해당 선주 소속 선박 중 이미 할당된 것 확인
       const ownerShips = ships.filter(s => String(s.owner_id) === assignOwnerId);
       const ownerShipIds = ownerShips.map(s => String(s.id));
       const allShipAssigns = await getShipSalaryAssignments();
       const conflictShips = allShipAssigns.filter(a => ownerShipIds.includes(String(a.ship_id)));
 
+      // 항상 확인 요청
+      let msg = `"${ownerName}" 선주에 "${templateName}" 템플릿을 할당하시겠습니까?\n\n`;
+
       if (conflictFleets.length > 0 || conflictShips.length > 0) {
-        const fleetNames = conflictFleets.map(a => {
-          const f = ownerFleets.find(f => String(f.id) === String(a.fleet_id));
-          return f?.name || '';
-        }).filter(Boolean);
-        const shipNames = conflictShips.map(a => {
-          const s = ownerShips.find(s => String(s.id) === String(a.ship_id));
-          return s?.name || '';
-        }).filter(Boolean);
-
-        let msg = `"${ownerName}" 선주에 "${templateName}" 템플릿을 할당하려 합니다.\n\n`;
-        if (fleetNames.length > 0) msg += `이미 템플릿이 할당된 플릿:\n${fleetNames.map(n => `  • ${n}`).join('\n')}\n\n`;
-        if (shipNames.length > 0) msg += `이미 템플릿이 할당된 선박:\n${shipNames.map(n => `  • ${n}`).join('\n')}\n\n`;
-        msg += `기존 플릿/선박 할당을 모두 삭제하고 선주 레벨로 통일하시겠습니까?\n(취소 시 기존 할당을 유지합니다)`;
-
-        const confirmed = window.confirm(msg);
-        if (confirmed) {
-          // 하위 레벨 할당 모두 제거
-          for (const a of conflictFleets) {
-            await unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id));
-          }
-          for (const a of conflictShips) {
-            await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
-          }
-        }
-        // 취소해도 선주 레벨 할당은 진행 (하위 할당은 유지)
+        const fleetNames = conflictFleets.map(a => ownerFleets.find(f => String(f.id) === String(a.fleet_id))?.name || '').filter(Boolean);
+        const shipNames = conflictShips.map(a => ownerShips.find(s => String(s.id) === String(a.ship_id))?.name || '').filter(Boolean);
+        if (fleetNames.length > 0) msg += `⚠️ 이미 템플릿이 할당된 플릿:\n${fleetNames.map(n => `  • ${n}`).join('\n')}\n\n`;
+        if (shipNames.length > 0) msg += `⚠️ 이미 템플릿이 할당된 선박:\n${shipNames.map(n => `  • ${n}`).join('\n')}\n\n`;
+        msg += `[확인] 기존 플릿/선박 할당을 모두 삭제하고 선주 레벨로 통일합니다.\n[취소] 진행하지 않습니다.`;
+      } else {
+        msg += `[확인] 할당을 진행합니다.\n[취소] 진행하지 않습니다.`;
       }
 
-      // 기존 선주 레벨 할당 제거 후 새로 할당
+      if (!window.confirm(msg)) return;
+
+      // 확인 후 하위 레벨 할당 제거
+      for (const a of conflictFleets) {
+        await unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id));
+      }
+      for (const a of conflictShips) {
+        await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
+      }
+
       const existingOwner = await getOwnerSalaryAssignments(assignOwnerId);
       for (const a of existingOwner) {
         await unassignTemplateFromOwner(String(a.owner_id), String(a.template_id));
@@ -236,32 +228,27 @@ const handleAssign = async () => {
 
       const fleetName = fleets.find(f => String(f.id) === assignFleetId)?.name || '';
 
-      // 해당 플릿 소속 선박 중 이미 할당된 것 확인
       const fleetShips = ships.filter(s => String(s.fleet_id) === assignFleetId);
       const fleetShipIds = fleetShips.map(s => String(s.id));
       const allShipAssigns = await getShipSalaryAssignments();
       const conflictShips = allShipAssigns.filter(a => fleetShipIds.includes(String(a.ship_id)));
 
+      let msg = `"${fleetName}" 플릿에 "${templateName}" 템플릿을 할당하시겠습니까?\n\n`;
+
       if (conflictShips.length > 0) {
-        const shipNames = conflictShips.map(a => {
-          const s = fleetShips.find(s => String(s.id) === String(a.ship_id));
-          return s?.name || '';
-        }).filter(Boolean);
-
-        const msg =
-          `"${fleetName}" 플릿에 "${templateName}" 템플릿을 할당하려 합니다.\n\n` +
-          `이미 템플릿이 할당된 선박:\n${shipNames.map(n => `  • ${n}`).join('\n')}\n\n` +
-          `기존 선박 할당을 모두 삭제하고 플릿 레벨로 통일하시겠습니까?\n(취소 시 기존 선박 할당을 유지합니다)`;
-
-        const confirmed = window.confirm(msg);
-        if (confirmed) {
-          for (const a of conflictShips) {
-            await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
-          }
-        }
+        const shipNames = conflictShips.map(a => fleetShips.find(s => String(s.id) === String(a.ship_id))?.name || '').filter(Boolean);
+        msg += `⚠️ 이미 템플릿이 할당된 선박:\n${shipNames.map(n => `  • ${n}`).join('\n')}\n\n`;
+        msg += `[확인] 기존 선박 할당을 모두 삭제하고 플릿 레벨로 통일합니다.\n[취소] 진행하지 않습니다.`;
+      } else {
+        msg += `[확인] 할당을 진행합니다.\n[취소] 진행하지 않습니다.`;
       }
 
-      // 기존 플릿 레벨 할당 제거 후 새로 할당
+      if (!window.confirm(msg)) return;
+
+      for (const a of conflictShips) {
+        await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
+      }
+
       const existingFleet = await getFleetSalaryAssignments(assignFleetId);
       for (const a of existingFleet) {
         await unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id));
@@ -271,7 +258,14 @@ const handleAssign = async () => {
     } else if (assignTarget === 'ship') {
       if (!assignShipId) { alert('선박을 선택하세요.'); return; }
 
-      // 선박 레벨는 항상 허용 (상위 할당보다 우선 적용)
+      const shipName = ships.find(s => String(s.id) === assignShipId)?.name || '';
+
+      const msg =
+        `"${shipName}" 선박에 "${templateName}" 템플릿을 할당하시겠습니까?\n\n` +
+        `[확인] 할당을 진행합니다.\n[취소] 진행하지 않습니다.`;
+
+      if (!window.confirm(msg)) return;
+
       const existing = await getShipSalaryAssignments(assignShipId);
       for (const a of existing) {
         await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
