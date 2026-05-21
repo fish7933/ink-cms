@@ -33,7 +33,6 @@ const RANKS = [
 
 const CURRENCIES = ['USD', 'EUR', 'KRW'];
 
-// amounts[rank][component_id] = number
 type AmountMatrix = Record<string, Record<string, number>>;
 
 export default function SalaryTemplatesPage() {
@@ -49,7 +48,6 @@ export default function SalaryTemplatesPage() {
   const [formData, setFormData] = useState({ name: '', description: '', currency: 'USD', is_active: true });
   const [selectedRanks, setSelectedRanks] = useState<string[]>([]);
   const [selectedComponents, setSelectedComponents] = useState<string[]>([]);
-  // amounts[rank][component_id] = 금액
   const [amounts, setAmounts] = useState<AmountMatrix>({});
 
   useEffect(() => {
@@ -89,8 +87,7 @@ export default function SalaryTemplatesPage() {
     }));
   };
 
-  const getAmount = (rank: string, compId: string) =>
-    amounts[rank]?.[compId] || 0;
+  const getAmount = (rank: string, compId: string) => amounts[rank]?.[compId] || 0;
 
   const rankTotal = (rank: string) =>
     selectedComponents.reduce((s, cid) => s + getAmount(rank, cid), 0);
@@ -222,6 +219,8 @@ export default function SalaryTemplatesPage() {
                             </div>
                           </TableCell>
                         </TableRow>
+
+                        {/* 상세 보기 */}
                         {expandedId === t.id && expandedData && (
                           <TableRow key={`${t.id}-exp`}>
                             <TableCell colSpan={5} className="bg-gray-50 p-4">
@@ -233,37 +232,36 @@ export default function SalaryTemplatesPage() {
                                   <table className="text-xs border rounded w-full bg-white">
                                     <thead>
                                       <tr className="bg-gray-100">
-                                        <th className="text-left p-2 border-r font-semibold">급여 항목</th>
-                                        {expandedData.ranks.map(r => (
-                                          <th key={r} className="text-right p-2 border-r font-semibold min-w-24">{r}</th>
-                                        ))}
+                                        <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100">직급</th>
+                                        {[...new Set(expandedData.items.map(i => i.component_id))].map(cid => {
+                                          const comp = expandedData.items.find(i => i.component_id === cid)?.component;
+                                          return (
+                                            <th key={cid} className="text-right p-2 border-r font-semibold min-w-24">{comp?.name || '-'}</th>
+                                          );
+                                        })}
+                                        <th className="text-right p-2 font-semibold min-w-20">합계</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {[...new Set(expandedData.items.map(i => i.component_id))].map(cid => {
-                                        const comp = expandedData.items.find(i => i.component_id === cid)?.component;
+                                      {expandedData.ranks.map(r => {
+                                        const compIds = [...new Set(expandedData.items.map(i => i.component_id))];
                                         return (
-                                          <tr key={cid} className="border-t">
-                                            <td className="p-2 border-r text-gray-700">{comp?.name || '-'}</td>
-                                            {expandedData.ranks.map(r => {
+                                          <tr key={r} className="border-t">
+                                            <td className="p-2 border-r font-medium text-gray-700 bg-gray-50 sticky left-0">{r}</td>
+                                            {compIds.map(cid => {
                                               const item = expandedData.items.find(i => i.rank === r && i.component_id === cid);
                                               return (
-                                                <td key={r} className="p-2 border-r text-right">
+                                                <td key={cid} className="p-2 border-r text-right">
                                                   {item ? item.amount.toLocaleString() : '-'}
                                                 </td>
                                               );
                                             })}
+                                            <td className="p-2 text-right font-semibold text-blue-700">
+                                              {expandedData.items.filter(i => i.rank === r).reduce((s, i) => s + i.amount, 0).toLocaleString()}
+                                            </td>
                                           </tr>
                                         );
                                       })}
-                                      <tr className="border-t bg-gray-50 font-semibold">
-                                        <td className="p-2 border-r">합계</td>
-                                        {expandedData.ranks.map(r => (
-                                          <td key={r} className="p-2 border-r text-right">
-                                            {expandedData.items.filter(i => i.rank === r).reduce((s, i) => s + i.amount, 0).toLocaleString()}
-                                          </td>
-                                        ))}
-                                      </tr>
                                     </tbody>
                                   </table>
                                 </div>
@@ -280,6 +278,7 @@ export default function SalaryTemplatesPage() {
           </CardContent>
         </Card>
 
+        {/* 추가/수정 다이얼로그 */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
@@ -294,7 +293,12 @@ export default function SalaryTemplatesPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-sm">템플릿명 *</Label>
-                    <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="h-9 text-sm" placeholder="Standard Officer 2025" />
+                    <Input
+                      value={formData.name}
+                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                      className="h-9 text-sm"
+                      placeholder="Standard Officer 2025"
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-sm">통화</Label>
@@ -306,7 +310,12 @@ export default function SalaryTemplatesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm">설명</Label>
-                  <Textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} rows={2} className="text-sm" />
+                  <Textarea
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    rows={2}
+                    className="text-sm"
+                  />
                 </div>
 
                 {/* 직급 선택 */}
@@ -314,8 +323,17 @@ export default function SalaryTemplatesPage() {
                   <Label className="text-sm">적용 직급</Label>
                   <div className="grid grid-cols-4 gap-1 p-3 border rounded-md bg-gray-50">
                     {RANKS.map(rank => (
-                      <label key={rank} className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded transition-colors ${selectedRanks.includes(rank) ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}>
-                        <input type="checkbox" checked={selectedRanks.includes(rank)} onChange={() => toggleRank(rank)} className="accent-blue-600" />
+                      <label
+                        key={rank}
+                        className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded transition-colors
+                          ${selectedRanks.includes(rank) ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedRanks.includes(rank)}
+                          onChange={() => toggleRank(rank)}
+                          className="accent-blue-600"
+                        />
                         {rank}
                       </label>
                     ))}
@@ -327,15 +345,26 @@ export default function SalaryTemplatesPage() {
                   <Label className="text-sm">급여 항목</Label>
                   <div className="flex flex-wrap gap-1 p-3 border rounded-md bg-gray-50">
                     {components.map(comp => (
-                      <label key={comp.id} className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded border transition-colors ${selectedComponents.includes(comp.id) ? 'bg-blue-100 text-blue-700 border-blue-300 font-medium' : 'bg-white border-gray-200 hover:bg-gray-100'}`}>
-                        <input type="checkbox" checked={selectedComponents.includes(comp.id)} onChange={() => toggleComponent(comp.id)} className="accent-blue-600" />
+                      <label
+                        key={comp.id}
+                        className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded border transition-colors
+                          ${selectedComponents.includes(comp.id)
+                            ? 'bg-blue-100 text-blue-700 border-blue-300 font-medium'
+                            : 'bg-white border-gray-200 hover:bg-gray-100'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedComponents.includes(comp.id)}
+                          onChange={() => toggleComponent(comp.id)}
+                          className="accent-blue-600"
+                        />
                         {comp.name}
                       </label>
                     ))}
                   </div>
                 </div>
 
-                {/* 금액 입력 표 */}
+                {/* 금액 입력 표: 행=직급, 열=급여항목 */}
                 {selectedRanks.length > 0 && selectedComponents.length > 0 && (
                   <div className="space-y-1.5">
                     <Label className="text-sm">직급별 금액 입력</Label>
@@ -343,41 +372,37 @@ export default function SalaryTemplatesPage() {
                       <table className="text-xs w-full">
                         <thead>
                           <tr className="bg-gray-100">
-                            <th className="text-left p-2 border-r font-semibold min-w-32">급여 항목</th>
-                            {selectedRanks.map(r => (
-                              <th key={r} className="text-center p-2 border-r font-semibold min-w-28">{r}</th>
-                            ))}
+                            <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100 min-w-32">직급</th>
+                            {selectedComponents.map(cid => {
+                              const comp = components.find(c => c.id === cid);
+                              return (
+                                <th key={cid} className="text-center p-2 border-r font-semibold min-w-28">{comp?.name}</th>
+                              );
+                            })}
+                            <th className="text-center p-2 font-semibold min-w-24">합계</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedComponents.map(cid => {
-                            const comp = components.find(c => c.id === cid);
-                            return (
-                              <tr key={cid} className="border-t">
-                                <td className="p-2 border-r font-medium text-gray-700 bg-gray-50">{comp?.name}</td>
-                                {selectedRanks.map(rank => (
-                                  <td key={rank} className="p-1 border-r">
-                                    <Input
-                                      type="number"
-                                      value={getAmount(rank, cid) || ''}
-                                      onChange={e => setAmount(rank, cid, parseInt(e.target.value) || 0)}
-                                      className="h-7 text-xs text-right w-full"
-                                      placeholder="0"
-                                      min={0}
-                                    />
-                                  </td>
-                                ))}
-                              </tr>
-                            );
-                          })}
-                          <tr className="border-t bg-gray-50 font-semibold">
-                            <td className="p-2 border-r text-gray-700">합계</td>
-                            {selectedRanks.map(rank => (
-                              <td key={rank} className="p-2 border-r text-right text-blue-700">
+                          {selectedRanks.map(rank => (
+                            <tr key={rank} className="border-t">
+                              <td className="p-2 border-r font-medium text-gray-700 bg-gray-50 sticky left-0">{rank}</td>
+                              {selectedComponents.map(cid => (
+                                <td key={cid} className="p-1 border-r">
+                                  <Input
+                                    type="number"
+                                    value={getAmount(rank, cid) || ''}
+                                    onChange={e => setAmount(rank, cid, parseInt(e.target.value) || 0)}
+                                    className="h-7 text-xs text-right w-full"
+                                    placeholder="0"
+                                    min={0}
+                                  />
+                                </td>
+                              ))}
+                              <td className="p-2 text-right font-semibold text-blue-700">
                                 {rankTotal(rank).toLocaleString()}
                               </td>
-                            ))}
-                          </tr>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
