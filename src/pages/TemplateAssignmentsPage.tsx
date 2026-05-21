@@ -69,7 +69,9 @@ export default function TemplateAssignmentsPage() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState<AssignTarget>('ship');
   const [assignTemplateId, setAssignTemplateId] = useState('');
-  const [assignTargetId, setAssignTargetId] = useState('');
+  const [assignOwnerId, setAssignOwnerId] = useState('');
+  const [assignFleetId, setAssignFleetId] = useState('');
+  const [assignShipId, setAssignShipId] = useState('');
 
   useEffect(() => {
     const loadUser = async () => {
@@ -162,46 +164,49 @@ export default function TemplateAssignmentsPage() {
     }
   };
 
-  const openAssignDialog = () => {
+    const openAssignDialog = () => {
     setAssignTarget('ship');
     setAssignTemplateId(templates[0]?.id || '');
-    setAssignTargetId('');
+    setAssignOwnerId('');
+    setAssignFleetId('');
+    setAssignShipId('');
     setAssignDialogOpen(true);
   };
 
 const handleAssign = async () => {
-    if (!assignTemplateId || !assignTargetId) { alert('모든 항목을 선택하세요.'); return; }
+    if (!assignTemplateId) { alert('템플릿을 선택하세요.'); return; }
+
     let success = false;
 
-    if (assignTarget === 'ship') {
-      // 해당 선박의 기존 할당 모두 제거 후 새로 할당
-      const existing = await getShipSalaryAssignments(assignTargetId);
-      for (const a of existing) {
-        await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
-      }
-      success = !!(await assignTemplateToShip(assignTargetId, assignTemplateId));
-    } else if (assignTarget === 'fleet') {
-      // 해당 플릿 소속 선박의 선박 레벨 할당 제거 후 플릿 할당
-      const { removedShips } = await cleanupLowerLevelAssignments('fleet', assignTargetId);
-      const existing = await getFleetSalaryAssignments(assignTargetId);
-      for (const a of existing) {
-        await unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id));
-      }
-      success = !!(await assignTemplateToFleet(assignTargetId, assignTemplateId));
-      if (success && removedShips > 0) {
-        alert(`선박 레벨 할당 ${removedShips}건이 자동으로 해제되었습니다.`);
-      }
-    } else if (assignTarget === 'owner') {
-      // 해당 선주 소속 플릿/선박 레벨 할당 모두 제거 후 선주 할당
-      const { removedShips, removedFleets } = await cleanupLowerLevelAssignments('owner', assignTargetId);
-      const existing = await getOwnerSalaryAssignments(assignTargetId);
+    if (assignTarget === 'owner') {
+      if (!assignOwnerId) { alert('선주를 선택하세요.'); return; }
+      const { removedShips, removedFleets } = await cleanupLowerLevelAssignments('owner', assignOwnerId);
+      const existing = await getOwnerSalaryAssignments(assignOwnerId);
       for (const a of existing) {
         await unassignTemplateFromOwner(String(a.owner_id), String(a.template_id));
       }
-      success = !!(await assignTemplateToOwner(assignTargetId, assignTemplateId));
+      success = !!(await assignTemplateToOwner(assignOwnerId, assignTemplateId));
       if (success && (removedShips > 0 || removedFleets > 0)) {
-        alert(`하위 레벨 할당 해제: 플릿 ${removedFleets}건, 선박 ${removedShips}건`);
+        alert(`하위 레벨 할당 자동 해제: 플릿 ${removedFleets}건, 선박 ${removedShips}건`);
       }
+    } else if (assignTarget === 'fleet') {
+      if (!assignFleetId) { alert('플릿을 선택하세요.'); return; }
+      const { removedShips } = await cleanupLowerLevelAssignments('fleet', assignFleetId);
+      const existing = await getFleetSalaryAssignments(assignFleetId);
+      for (const a of existing) {
+        await unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id));
+      }
+      success = !!(await assignTemplateToFleet(assignFleetId, assignTemplateId));
+      if (success && removedShips > 0) {
+        alert(`선박 레벨 할당 ${removedShips}건이 자동으로 해제되었습니다.`);
+      }
+    } else if (assignTarget === 'ship') {
+      if (!assignShipId) { alert('선박을 선택하세요.'); return; }
+      const existing = await getShipSalaryAssignments(assignShipId);
+      for (const a of existing) {
+        await unassignTemplateFromShip(String(a.ship_id), String(a.template_id));
+      }
+      success = !!(await assignTemplateToShip(assignShipId, assignTemplateId));
     }
 
     if (success) { setAssignDialogOpen(false); await loadData(); }
@@ -439,46 +444,117 @@ const handleAssign = async () => {
         </Card>
 
         {/* 할당 다이얼로그 */}
+        {/* 할당 다이얼로그 */}
         <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="text-base">템플릿 할당</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
+
+              {/* 할당 레벨 */}
               <div className="space-y-1.5">
-                <Label className="text-sm">할당 대상 레벨</Label>
-                <Select value={assignTarget} onValueChange={v => { setAssignTarget(v as AssignTarget); setAssignTargetId(''); }}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ship" className="text-sm"><div className="flex items-center gap-2"><ShipIcon className="h-3.5 w-3.5" />선박</div></SelectItem>
-                    <SelectItem value="fleet" className="text-sm"><div className="flex items-center gap-2"><Layers className="h-3.5 w-3.5" />플릿</div></SelectItem>
-                    <SelectItem value="owner" className="text-sm"><div className="flex items-center gap-2"><Building2 className="h-3.5 w-3.5" />선주</div></SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm">할당 레벨</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['owner', 'fleet', 'ship'] as AssignTarget[]).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        setAssignTarget(t);
+                        setAssignOwnerId('');
+                        setAssignFleetId('');
+                        setAssignShipId('');
+                      }}
+                      className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border text-xs font-medium transition-colors
+                        ${assignTarget === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                      {t === 'owner' && <><Building2 className="h-3.5 w-3.5" />선주</>}
+                      {t === 'fleet' && <><Layers className="h-3.5 w-3.5" />플릿</>}
+                      {t === 'ship' && <><ShipIcon className="h-3.5 w-3.5" />선박</>}
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              {/* 선주 선택 (항상 표시) */}
               <div className="space-y-1.5">
-                <Label className="text-sm">
-                  {assignTarget === 'ship' ? '선박 선택' : assignTarget === 'fleet' ? '플릿 선택' : '선주 선택'}
-                </Label>
-                <Select value={assignTargetId} onValueChange={setAssignTargetId}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선택하세요" /></SelectTrigger>
+                <Label className="text-sm">선주 <span className="text-red-500">*</span></Label>
+                <Select
+                  value={assignOwnerId}
+                  onValueChange={v => {
+                    setAssignOwnerId(v);
+                    setAssignFleetId('');
+                    setAssignShipId('');
+                  }}
+                >
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주 선택" /></SelectTrigger>
                   <SelectContent>
-                    {assignTarget === 'ship' && ships.map(s => (
-                      <SelectItem key={s.id} value={String(s.id)} className="text-sm">{s.name}</SelectItem>
-                    ))}
-                    {assignTarget === 'fleet' && fleets.map(f => (
-                      <SelectItem key={f.id} value={String(f.id)} className="text-sm">{f.name}</SelectItem>
-                    ))}
-                    {assignTarget === 'owner' && ownerCompanies.map(c => (
+                    {ownerCompanies.map(c => (
                       <SelectItem key={c.id} value={String(c.id)} className="text-sm">{c.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
+              {/* 플릿 선택 (fleet, ship 레벨일 때) */}
+              {(assignTarget === 'fleet' || assignTarget === 'ship') && (
+                <div className="space-y-1.5">
+                  <Label className="text-sm">
+                    플릿 {assignTarget === 'fleet' && <span className="text-red-500">*</span>}
+                    {assignTarget === 'ship' && <span className="text-gray-400 font-normal">(선택)</span>}
+                  </Label>
+                  <Select
+                    value={assignFleetId}
+                    onValueChange={v => {
+                      setAssignFleetId(v);
+                      setAssignShipId('');
+                    }}
+                    disabled={!assignOwnerId}
+                  >
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={assignOwnerId ? '플릿 선택' : '선주를 먼저 선택하세요'} /></SelectTrigger>
+                    <SelectContent>
+                      {assignTarget === 'ship' && (
+                        <SelectItem value="none" className="text-sm text-gray-400">플릿 없음</SelectItem>
+                      )}
+                      {fleets
+                        .filter(f => String(f.owner_id) === assignOwnerId)
+                        .map(f => (
+                          <SelectItem key={f.id} value={String(f.id)} className="text-sm">{f.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* 선박 선택 (ship 레벨일 때) */}
+              {assignTarget === 'ship' && (
+                <div className="space-y-1.5">
+                  <Label className="text-sm">선박 <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={assignShipId}
+                    onValueChange={setAssignShipId}
+                    disabled={!assignOwnerId}
+                  >
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={assignOwnerId ? '선박 선택' : '선주를 먼저 선택하세요'} /></SelectTrigger>
+                    <SelectContent>
+                      {ships
+                        .filter(s => {
+                          if (!assignOwnerId) return false;
+                          if (assignFleetId && assignFleetId !== 'none') return String(s.fleet_id) === assignFleetId;
+                          return String(s.owner_id) === assignOwnerId;
+                        })
+                        .map(s => (
+                          <SelectItem key={s.id} value={String(s.id)} className="text-sm">{s.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* 템플릿 선택 */}
               <div className="space-y-1.5">
-                <Label className="text-sm">급여 템플릿 선택</Label>
+                <Label className="text-sm">급여 템플릿 <span className="text-red-500">*</span></Label>
                 <Select value={assignTemplateId} onValueChange={setAssignTemplateId}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="템플릿 선택" /></SelectTrigger>
                   <SelectContent>
@@ -488,6 +564,16 @@ const handleAssign = async () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* 안내 메시지 */}
+              {assignTarget !== 'ship' && (
+                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded-md">
+                  {assignTarget === 'owner'
+                    ? '선주 레벨 할당 시 해당 선주의 모든 플릿/선박 레벨 할당이 자동 해제됩니다.'
+                    : '플릿 레벨 할당 시 해당 플릿 소속 선박의 선박 레벨 할당이 자동 해제됩니다.'}
+                </p>
+              )}
+
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" size="sm" onClick={() => setAssignDialogOpen(false)} className="h-8">취소</Button>
