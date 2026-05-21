@@ -3,16 +3,6 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
-그 다음:
-
-bash
-git add vercel.json
-git commit -m "add vercel routing config"
-git push
-이 현상을 없애줘
-
-오후 3:50
-어떤 현상인지 좀 더 구체적으로 알려주세요. 현재 보이는 화면이나 오류 메시지가 어떤지 알려주시면 해결해드리겠습니다.
 
 
 
