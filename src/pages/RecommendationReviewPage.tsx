@@ -143,16 +143,25 @@ export default function RecommendationReviewPage() {
         const shipsMap = new Map((shipsRes.data || []).map(s => [s.id, s]));
         const agenciesMap = new Map((agenciesRes.data || []).map(a => [a.id, a]));
 
-        const enrichedRecs = allRecs.map(rec => ({
-          ...rec,
-          manning_agency_name: agenciesMap.get(rec.manning_agency_id)?.name || '',
-          rank_name: ranksMap.get(rec.rank_id)?.name || '',
-          rank_code: ranksMap.get(rec.rank_id)?.rank_code || '',
-          department: ranksMap.get(rec.rank_id)?.department || '',
-          company_name: companiesMap.get(rec.company_id)?.name || '',
-          fleet_name: rec.fleet_id ? fleetsMap.get(rec.fleet_id)?.name || '' : '',
-          ship_name: shipsMap.get(rec.ship_id)?.name || '',
-        }));
+       const enrichedRecs = allRecs.map(rec => {
+          let resumeFiles = rec.resume_files;
+          if (typeof resumeFiles === 'string') {
+            try { resumeFiles = JSON.parse(resumeFiles); } catch { resumeFiles = []; }
+          }
+          if (!Array.isArray(resumeFiles)) resumeFiles = [];
+
+          return {
+            ...rec,
+            resume_files: resumeFiles,
+            manning_agency_name: agenciesMap.get(rec.manning_agency_id)?.name || '',
+            rank_name: ranksMap.get(rec.rank_id)?.name || '',
+            rank_code: ranksMap.get(rec.rank_id)?.rank_code || '',
+            department: ranksMap.get(rec.rank_id)?.department || '',
+            company_name: companiesMap.get(rec.company_id)?.name || '',
+            fleet_name: rec.fleet_id ? fleetsMap.get(rec.fleet_id)?.name || '' : '',
+            ship_name: shipsMap.get(rec.ship_id)?.name || '',
+          };
+        });
 
         setRecommendations(enrichedRecs);
 
