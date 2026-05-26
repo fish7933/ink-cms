@@ -5,16 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Pagination, PaginationContent, PaginationItem,
-  PaginationLink, PaginationNext, PaginationPrevious,
-} from '@/components/ui/pagination';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Textarea } from '@/components/ui/textarea';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { approvalService } from '@/services/approval.service';
@@ -31,8 +24,8 @@ const calculateAge = (birthDate: string): number => {
   const today = new Date();
   const birth = new Date(birthDate);
   let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
   return age;
 };
 
@@ -41,21 +34,21 @@ export default function RecommendationReviewPage() {
   const [filteredRecommendations, setFilteredRecommendations] = useState<CrewRecommendationWithDetails[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedRecommendation, setSelectedRecommendation] = useState<CrewRecommendationWithDetails | null>(null);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [selectedRec, setSelectedRec] = useState<CrewRecommendationWithDetails | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [approvalOpen, setApprovalOpen] = useState(false);
   const [approvalAction, setApprovalAction] = useState<'accept' | 'reject' | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
-  const [submittingApproval, setSubmittingApproval] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  // 결재 상태 맵: recommendationId -> approvalDetails
   const [approvalMap, setApprovalMap] = useState<Map<string, CrewRecommendationApprovalWithDetails>>(new Map());
-
   const [supervisorPermissions, setSupervisorPermissions] = useState<Map<string, boolean>>(new Map());
+  const [shipSupervisorMap, setShipSupervisorMap] = useState<Map<string, string[]>>(new Map());
+
   const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
-  const [selectedApprovalLine, setSelectedApprovalLine] = useState<string>('');
+  const [selectedApprovalLine, setSelectedApprovalLine] = useState('');
   const [useApprovalLineForFuture, setUseApprovalLineForFuture] = useState(false);
-  const [defaultApprovalLineId, setDefaultApprovalLineId] = useState<string>('');
+  const [defaultApprovalLineId, setDefaultApprovalLineId] = useState('');
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
@@ -65,25 +58,23 @@ export default function RecommendationReviewPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('all');
-  const [ownerFilter, setOwnerFilter] = useState<string>('all');
-  const [fleetFilter, setFleetFilter] = useState<string>('all');
-  const [shipFilter, setShipFilter] = useState<string>('all');
-  const [rankFilter, setRankFilter] = useState<string>('all');
-  const [agencyFilter, setAgencyFilter] = useState<string>('all');
-  const [shipSupervisorMap, setShipSupervisorMap] = useState<Map<string, string[]>>(new Map());
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [fleetFilter, setFleetFilter] = useState('all');
+  const [shipFilter, setShipFilter] = useState('all');
+  const [rankFilter, setRankFilter] = useState('all');
+  const [agencyFilter, setAgencyFilter] = useState('all');
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { applyFilters(); }, [recommendations, searchTerm, statusFilter, dateFilter, ownerFilter, fleetFilter, shipFilter, rankFilter, agencyFilter]);
   useEffect(() => {
-    if (ownerFilter && ownerFilter !== 'all') loadFleetsByOwner(ownerFilter);
-    else loadAllFleets();
+    if (ownerFilter !== 'all') loadFleetsByOwner(ownerFilter); else loadAllFleets();
     setFleetFilter('all');
   }, [ownerFilter]);
   useEffect(() => {
-    if (fleetFilter && fleetFilter !== 'all') loadShipsByFleet(fleetFilter);
-    else if (ownerFilter && ownerFilter !== 'all') loadShipsByOwner(ownerFilter);
+    if (fleetFilter !== 'all') loadShipsByFleet(fleetFilter);
+    else if (ownerFilter !== 'all') loadShipsByOwner(ownerFilter);
     else loadAllShips();
     setShipFilter('all');
   }, [fleetFilter, ownerFilter]);
@@ -91,145 +82,134 @@ export default function RecommendationReviewPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+
       const [user, companiesData, fleetsData, shipsData, ranksData] = await Promise.all([
         getCurrentUser(), getCompanies(), getFleets(), getShips(), getRanks(),
       ]);
 
       setCurrentUser(user);
-      setCompanies(companiesData.filter(c => c.type === 'owner'));
-      setManningAgencies(companiesData.filter(c => c.type === 'manning'));
+      setCompanies(companiesData.filter((c: Company) => c.type === 'owner'));
+      setManningAgencies(companiesData.filter((c: Company) => c.type === 'manning'));
       setFleets(fleetsData);
       setShips(shipsData);
       setRanks(ranksData);
 
       if (!user || user.role !== 'ship_manager') return;
 
-      const { data: preference } = await supabase
+      // 기본 결재선 로드
+      const { data: pref } = await supabase
         .from('users').select('default_approval_line_id').eq('id', user.id).single();
-
-      if (preference?.default_approval_line_id) {
-        setDefaultApprovalLineId(preference.default_approval_line_id);
-        setSelectedApprovalLine(preference.default_approval_line_id);
+      if (pref?.default_approval_line_id) {
+        setDefaultApprovalLineId(pref.default_approval_line_id);
+        setSelectedApprovalLine(pref.default_approval_line_id);
       }
-
       if (user.company_id) {
         const lines = await approvalService.getApprovalLines(user.company_id);
         setApprovalLines(lines);
-        if (!preference?.default_approval_line_id && lines.length > 0) setSelectedApprovalLine('');
+        if (!pref?.default_approval_line_id) setSelectedApprovalLine('');
       }
 
+      // 추천 목록 로드
       const { data: allRecs, error } = await supabase
         .from('crew_recommendations').select('*').order('created_at', { ascending: false });
-
       if (error) throw error;
+      if (!allRecs || allRecs.length === 0) { setLoading(false); return; }
 
-      if (allRecs && allRecs.length > 0) {
-        const rankIds = [...new Set(allRecs.map(r => r.rank_id))];
-        const companyIds = [...new Set(allRecs.map(r => r.company_id))];
-        const fleetIds = [...new Set(allRecs.map(r => r.fleet_id).filter(Boolean))];
-        const shipIds = [...new Set(allRecs.map(r => r.ship_id))];
-        const agencyIds = [...new Set(allRecs.map(r => r.manning_agency_id))];
+      // 관련 데이터 배치 조회
+      const rankIds = [...new Set(allRecs.map(r => r.rank_id).filter(Boolean))];
+      const companyIds = [...new Set(allRecs.map(r => r.company_id).filter(Boolean))];
+      const fleetIds = [...new Set(allRecs.map(r => r.fleet_id).filter(Boolean))];
+      const shipIds = [...new Set(allRecs.map(r => r.ship_id).filter(Boolean))];
+      const agencyIds = [...new Set(allRecs.map(r => r.manning_agency_id).filter(Boolean))];
 
-        const [ranksRes, companiesRes, fleetsRes, shipsRes, agenciesRes] = await Promise.all([
-          supabase.from('ranks').select('id, name, rank_code, department').in('id', rankIds),
-          supabase.from('companies').select('id, name').in('id', companyIds),
-          fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : { data: [] },
-          supabase.from('ships').select('id, name').in('id', shipIds),
-          supabase.from('companies').select('id, name').in('id', agencyIds),
-        ]);
+      const [ranksRes, companiesRes, fleetsRes, shipsRes, agenciesRes] = await Promise.all([
+        rankIds.length > 0 ? supabase.from('ranks').select('id, name, rank_code, department').in('id', rankIds) : { data: [] },
+        companyIds.length > 0 ? supabase.from('companies').select('id, name').in('id', companyIds) : { data: [] },
+        fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : { data: [] },
+        shipIds.length > 0 ? supabase.from('ships').select('id, name').in('id', shipIds) : { data: [] },
+        agencyIds.length > 0 ? supabase.from('companies').select('id, name').in('id', agencyIds) : { data: [] },
+      ]);
 
-        const ranksMap = new Map((ranksRes.data || []).map(r => [r.id, r]));
-        const companiesMap = new Map((companiesRes.data || []).map(c => [c.id, c]));
-        const fleetsMap = new Map((fleetsRes.data || []).map(f => [f.id, f]));
-        const shipsMap = new Map((shipsRes.data || []).map(s => [s.id, s]));
-        const agenciesMap = new Map((agenciesRes.data || []).map(a => [a.id, a]));
+      const ranksMap = new Map((ranksRes.data || []).map((r: { id: string; name: string; rank_code: string; department: string }) => [r.id, r]));
+      const companiesMap = new Map((companiesRes.data || []).map((c: { id: string; name: string }) => [c.id, c]));
+      const fleetsMap = new Map((fleetsRes.data || []).map((f: { id: string; name: string }) => [f.id, f]));
+      const shipsMap = new Map((shipsRes.data || []).map((s: { id: string; name: string }) => [s.id, s]));
+      const agenciesMap = new Map((agenciesRes.data || []).map((a: { id: string; name: string }) => [a.id, a]));
 
-       const enrichedRecs = allRecs.map(rec => {
-          let resumeFiles = rec.resume_files;
-          if (typeof resumeFiles === 'string') {
-            try { resumeFiles = JSON.parse(resumeFiles); } catch { resumeFiles = []; }
-          }
-          if (!Array.isArray(resumeFiles)) resumeFiles = [];
-
-          return {
-            ...rec,
-            resume_files: resumeFiles,
-            manning_agency_name: agenciesMap.get(rec.manning_agency_id)?.name || '',
-            rank_name: ranksMap.get(rec.rank_id)?.name || '',
-            rank_code: ranksMap.get(rec.rank_id)?.rank_code || '',
-            department: ranksMap.get(rec.rank_id)?.department || '',
-            company_name: companiesMap.get(rec.company_id)?.name || '',
-            fleet_name: rec.fleet_id ? fleetsMap.get(rec.fleet_id)?.name || '' : '',
-            ship_name: shipsMap.get(rec.ship_id)?.name || '',
-          };
-        });
-
-        setRecommendations(enrichedRecs);
-
-        // 결재 상태 로드 (reviewed 상태인 것만)
-        const reviewedRecs = allRecs.filter(r => r.status === 'reviewed');
-        if (reviewedRecs.length > 0) {
-          const newApprovalMap = new Map<string, CrewRecommendationApprovalWithDetails>();
-          await Promise.all(
-            reviewedRecs.map(async (rec) => {
-              try {
-                const approvals = await approvalService.getApprovalsByRecommendation(rec.id);
-                if (approvals.length > 0) {
-                  newApprovalMap.set(rec.id, approvals[0]);
-                }
-              } catch (e) {
-                console.error('Failed to load approval for', rec.id, e);
-              }
-            })
-          );
-          setApprovalMap(newApprovalMap);
+      const enrichedRecs = allRecs.map(rec => {
+        let resumeFiles = rec.resume_files;
+        if (typeof resumeFiles === 'string') {
+          try { resumeFiles = JSON.parse(resumeFiles); } catch { resumeFiles = []; }
         }
+        if (!Array.isArray(resumeFiles)) resumeFiles = [];
+        return {
+          ...rec,
+          resume_files: resumeFiles,
+          manning_agency_name: (agenciesMap.get(rec.manning_agency_id) as { name: string } | undefined)?.name || '',
+          rank_name: (ranksMap.get(rec.rank_id) as { name: string } | undefined)?.name || '',
+          rank_code: (ranksMap.get(rec.rank_id) as { rank_code: string } | undefined)?.rank_code || '',
+          department: (ranksMap.get(rec.rank_id) as { department: string } | undefined)?.department || '',
+          company_name: (companiesMap.get(rec.company_id) as { name: string } | undefined)?.name || '',
+          fleet_name: rec.fleet_id ? (fleetsMap.get(rec.fleet_id) as { name: string } | undefined)?.name || '' : '',
+          ship_name: (shipsMap.get(rec.ship_id) as { name: string } | undefined)?.name || '',
+        };
+      });
 
-        const uniqueShipIds = [...new Set(allRecs.map(r => r.ship_id))];
-        const permissionsMap = new Map<string, boolean>();
-        const supervisorNamesMap = new Map<string, string[]>();
+      setRecommendations(enrichedRecs);
 
-        // 선박별 담당 supervisor 조회
-        const { data: allSupervisorAssignments } = await supabase
-          .from('supervisor_assignments')
-          .select('supervisor_id, ship_id, fleet_id, owner_id');
-
-        const { data: allSupervisorUsers } = await supabase
-          .from('users')
-          .select('id, name');
-
-        const supervisorUserMap = new Map((allSupervisorUsers || []).map(u => [u.id, u.name]));
-
-        // 각 선박별 supervisor 이름 목록 구성
-        for (const shipId of uniqueShipIds) {
-          const ship = shipsMap.get(shipId);
-          const names: string[] = [];
-
-          for (const sa of allSupervisorAssignments || []) {
-            const isForShip = sa.ship_id === shipId;
-            const isForFleet = ship && sa.fleet_id && sa.fleet_id === ship.fleet_id;
-            const isForOwner = ship && sa.owner_id && sa.owner_id === ship.owner_id;
-            if (isForShip || isForFleet || isForOwner) {
-              const name = supervisorUserMap.get(sa.supervisor_id);
-              if (name && !names.includes(name)) names.push(name);
-            }
-          }
-
-          supervisorNamesMap.set(shipId, names);
-        }
-
-        setShipSupervisorMap(supervisorNamesMap);
-
-        await Promise.all(
-          uniqueShipIds.map(async (shipId) => {
-            const result = await supervisorService.isSupervisorForShip(user.id, shipId);
-            permissionsMap.set(shipId, result.is_supervisor);
-          })
-        );
-        setSupervisorPermissions(permissionsMap);
+      // 결재 진행 현황 로드
+      const reviewedRecs = allRecs.filter(r => r.status === 'reviewed');
+      if (reviewedRecs.length > 0) {
+        const newApprovalMap = new Map<string, CrewRecommendationApprovalWithDetails>();
+        await Promise.all(reviewedRecs.map(async rec => {
+          try {
+            const approvals = await approvalService.getApprovalsByRecommendation(rec.id);
+            if (approvals.length > 0) newApprovalMap.set(rec.id, approvals[0]);
+          } catch (e) { console.error('approval load error', e); }
+        }));
+        setApprovalMap(newApprovalMap);
       }
+
+      // 선박별 supervisor 정보 로드
+      const uniqueShipIds = [...new Set(allRecs.map(r => r.ship_id).filter(Boolean))];
+
+      const [saRes, suRes, shipsDetailRes] = await Promise.all([
+        supabase.from('supervisor_assignments').select('supervisor_id, ship_id, fleet_id, owner_id'),
+        supabase.from('users').select('id, name'),
+        shipIds.length > 0 ? supabase.from('ships').select('id, fleet_id, owner_id').in('id', uniqueShipIds) : { data: [] },
+      ]);
+
+      const supervisorUserMap = new Map((suRes.data || []).map((u: { id: string; name: string }) => [u.id, u.name]));
+      const shipsDetailMap = new Map((shipsDetailRes.data || []).map((s: { id: string; fleet_id: string | null; owner_id: string }) => [s.id, s]));
+      const allSA = saRes.data || [];
+
+      const supervisorNamesMap = new Map<string, string[]>();
+      for (const shipId of uniqueShipIds) {
+        const ship = shipsDetailMap.get(shipId);
+        const names: string[] = [];
+        for (const sa of allSA) {
+          const isForShip = sa.ship_id === shipId;
+          const isForFleet = ship?.fleet_id && sa.fleet_id === ship.fleet_id;
+          const isForOwner = ship?.owner_id && sa.owner_id === ship.owner_id;
+          if (isForShip || isForFleet || isForOwner) {
+            const name = supervisorUserMap.get(sa.supervisor_id);
+            if (name && !names.includes(name)) names.push(name);
+          }
+        }
+        supervisorNamesMap.set(shipId, names);
+      }
+      setShipSupervisorMap(supervisorNamesMap);
+
+      // supervisor 권한 확인
+      const permissionsMap = new Map<string, boolean>();
+      await Promise.all(uniqueShipIds.map(async shipId => {
+        const result = await supervisorService.isSupervisorForShip(user.id, shipId);
+        permissionsMap.set(shipId, result.is_supervisor);
+      }));
+      setSupervisorPermissions(permissionsMap);
+
     } catch (error) {
-      console.error('Failed to load recommendations:', error);
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
@@ -238,18 +218,18 @@ export default function RecommendationReviewPage() {
   const loadAllFleets = async () => { try { setFleets(await getFleets()); } catch (e) { console.error(e); } };
   const loadFleetsByOwner = async (ownerId: string) => { try { setFleets(await getFleets(ownerId)); } catch (e) { console.error(e); } };
   const loadAllShips = async () => { try { setShips(await getShips()); } catch (e) { console.error(e); } };
-  const loadShipsByFleet = async (fleetId: string) => { try { const all = await getShips(); setShips(all.filter(s => s.fleet_id === fleetId)); } catch (e) { console.error(e); } };
-  const loadShipsByOwner = async (ownerId: string) => { try { const all = await getShips(); setShips(all.filter(s => s.owner_id === ownerId)); } catch (e) { console.error(e); } };
+  const loadShipsByFleet = async (fleetId: string) => { try { const all = await getShips(); setShips(all.filter((s: Ship) => s.fleet_id === fleetId)); } catch (e) { console.error(e); } };
+  const loadShipsByOwner = async (ownerId: string) => { try { const all = await getShips(); setShips(all.filter((s: Ship) => s.owner_id === ownerId)); } catch (e) { console.error(e); } };
 
   const applyFilters = () => {
     let filtered = [...recommendations];
     if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+      const t = searchTerm.toLowerCase();
       filtered = filtered.filter(r =>
-        r.crew_name.toLowerCase().includes(term) ||
-        r.ship_name.toLowerCase().includes(term) ||
-        (r.rank_code && r.rank_code.toLowerCase().includes(term)) ||
-        r.manning_agency_name.toLowerCase().includes(term)
+        r.crew_name.toLowerCase().includes(t) ||
+        r.ship_name.toLowerCase().includes(t) ||
+        r.rank_code?.toLowerCase().includes(t) ||
+        r.manning_agency_name.toLowerCase().includes(t)
       );
     }
     if (statusFilter !== 'all') filtered = filtered.filter(r => r.status === statusFilter);
@@ -259,37 +239,31 @@ export default function RecommendationReviewPage() {
     if (rankFilter !== 'all') filtered = filtered.filter(r => r.rank_id === rankFilter);
     if (agencyFilter !== 'all') filtered = filtered.filter(r => r.manning_agency_id === agencyFilter);
     if (dateFilter !== 'all') {
-      const filterDate = new Date();
-      if (dateFilter === 'week') filterDate.setDate(filterDate.getDate() - 7);
-      else if (dateFilter === 'month') filterDate.setMonth(filterDate.getMonth() - 1);
-      else if (dateFilter === 'quarter') filterDate.setMonth(filterDate.getMonth() - 3);
-      filtered = filtered.filter(r => new Date(r.created_at) >= filterDate);
+      const d = new Date();
+      if (dateFilter === 'week') d.setDate(d.getDate() - 7);
+      else if (dateFilter === 'month') d.setMonth(d.getMonth() - 1);
+      else if (dateFilter === 'quarter') d.setMonth(d.getMonth() - 3);
+      filtered = filtered.filter(r => new Date(r.created_at) >= d);
     }
     setFilteredRecommendations(filtered);
     setCurrentPage(1);
   };
 
-  const handleViewDetail = (rec: CrewRecommendationWithDetails) => {
-    setSelectedRecommendation(rec);
-    setDetailDialogOpen(true);
-  };
-
-  const handleOpenApprovalDialog = (rec: CrewRecommendationWithDetails, action: 'accept' | 'reject') => {
-    setSelectedRecommendation(rec);
-    setApprovalAction(action);
-    setApprovalComment('');
+  const openDetail = (rec: CrewRecommendationWithDetails) => { setSelectedRec(rec); setDetailOpen(true); };
+  const openApproval = (rec: CrewRecommendationWithDetails, action: 'accept' | 'reject') => {
+    setSelectedRec(rec); setApprovalAction(action); setApprovalComment('');
     setUseApprovalLineForFuture(false);
     if (defaultApprovalLineId) setSelectedApprovalLine(defaultApprovalLineId);
-    setApprovalDialogOpen(true);
+    setApprovalOpen(true);
   };
 
   const handleSubmitApproval = async () => {
-    if (!selectedRecommendation || !approvalAction || !currentUser) return;
+    if (!selectedRec || !approvalAction || !currentUser) return;
     try {
-      setSubmittingApproval(true);
+      setSubmitting(true);
       if (approvalAction === 'reject') {
         if (!approvalComment.trim()) { alert('거절 사유를 입력해주세요.'); return; }
-        await crewRecommendationService.updateStatus(selectedRecommendation.id, 'rejected');
+        await crewRecommendationService.updateStatus(selectedRec.id, 'rejected');
         alert('추천이 거절되었습니다.');
       } else {
         if (!selectedApprovalLine) { alert('결재 라인을 선택해주세요.'); return; }
@@ -297,35 +271,25 @@ export default function RecommendationReviewPage() {
           await supabase.from('users').update({ default_approval_line_id: selectedApprovalLine }).eq('id', currentUser.id);
           setDefaultApprovalLineId(selectedApprovalLine);
         }
-        await approvalService.createApproval(selectedRecommendation.id, selectedApprovalLine, currentUser.id, approvalComment);
-        await crewRecommendationService.updateStatus(selectedRecommendation.id, 'reviewed');
+        await approvalService.createApproval(selectedRec.id, selectedApprovalLine, currentUser.id, approvalComment);
+        await crewRecommendationService.updateStatus(selectedRec.id, 'reviewed');
         alert('채용 결재가 요청되었습니다.');
       }
       await loadData();
-      setApprovalDialogOpen(false);
-      setSelectedRecommendation(null);
-      setApprovalAction(null);
-      setApprovalComment('');
-      setUseApprovalLineForFuture(false);
-    } catch (error) {
-      console.error('Failed to submit approval:', error);
-      alert('결재 처리에 실패했습니다.');
-    } finally {
-      setSubmittingApproval(false);
+      setApprovalOpen(false); setSelectedRec(null); setApprovalAction(null); setApprovalComment(''); setUseApprovalLineForFuture(false);
+    } catch (e) { console.error(e); alert('결재 처리에 실패했습니다.'); }
+    finally { setSubmitting(false); }
+  };
+
+  const openResume = async (rec: CrewRecommendationWithDetails) => {
+    if (!rec.resume_files?.length) { alert('첨부된 이력서가 없습니다.'); return; }
+    for (const file of rec.resume_files) {
+      const { data } = supabase.storage.from('documents').getPublicUrl(file.path);
+      if (data?.publicUrl) window.open(data.publicUrl, '_blank');
     }
   };
 
-  const handleOpenResume = async (rec: CrewRecommendationWithDetails) => {
-    if (!rec.resume_files || rec.resume_files.length === 0) { alert('첨부된 이력서가 없습니다.'); return; }
-    try {
-      for (const file of rec.resume_files) {
-        const { data } = supabase.storage.from('documents').getPublicUrl(file.path);
-        if (data?.publicUrl) window.open(data.publicUrl, '_blank');
-      }
-    } catch (e) { console.error(e); alert('이력서 열기에 실패했습니다.'); }
-  };
-
-  const getStatusBadge = (status: string) => {
+  const statusBadge = (status: string) => {
     switch (status) {
       case 'pending': return <Badge variant="secondary" className="text-xs">검토대기</Badge>;
       case 'reviewed': return <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-300">결재중</Badge>;
@@ -335,35 +299,30 @@ export default function RecommendationReviewPage() {
     }
   };
 
-  const getDeptColor = (dept: string) => {
-    switch (dept) {
-      case 'deck': return 'bg-blue-100 text-blue-700 border-blue-300';
-      case 'engine': return 'bg-green-100 text-green-700 border-green-300';
-      case 'catering': return 'bg-orange-100 text-orange-700 border-orange-300';
-      default: return 'bg-gray-100 text-gray-700 border-gray-300';
-    }
+  const deptColor = (d: string) => {
+    if (d === 'deck') return 'bg-blue-100 text-blue-700 border-blue-300';
+    if (d === 'engine') return 'bg-green-100 text-green-700 border-green-300';
+    if (d === 'catering') return 'bg-orange-100 text-orange-700 border-orange-300';
+    return 'bg-gray-100 text-gray-700 border-gray-300';
   };
 
-  // 결재 진행 상태 표시 컴포넌트
+  const canApprove = (rec: CrewRecommendationWithDetails) => supervisorPermissions.get(rec.ship_id) || false;
+
   const ApprovalProgress = ({ recId }: { recId: string }) => {
     const approval = approvalMap.get(recId);
     if (!approval) return <span className="text-xs text-gray-400">-</span>;
-
     const steps = approval.approval_line?.steps || [];
     const actions = approval.actions || [];
-    const currentStep = approval.current_step;
-
     return (
       <div className="flex items-center gap-1">
         {steps.map((step, idx) => {
           const action = actions.find(a => a.step_order === step.step_order);
-          const isCurrent = step.step_order === currentStep;
+          const isCurrent = step.step_order === approval.current_step;
           const isDone = action?.action === 'approved';
           const isRejected = action?.action === 'rejected';
-
           return (
             <div key={step.id} className="flex items-center gap-1">
-              <div className={`flex flex-col items-center`}>
+              <div className="flex flex-col items-center">
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold border
                   ${isDone ? 'bg-green-500 border-green-500 text-white'
                     : isRejected ? 'bg-red-500 border-red-500 text-white'
@@ -373,13 +332,9 @@ export default function RecommendationReviewPage() {
                 >
                   {isDone ? '✓' : isRejected ? '✗' : idx + 1}
                 </div>
-                <span className="text-xs text-gray-500 mt-0.5 max-w-[40px] truncate text-center" title={step.approver_name}>
-                  {step.approver_name.split(' ')[0]}
-                </span>
+                <span className="text-xs text-gray-500 mt-0.5 max-w-[40px] truncate text-center">{step.approver_name.split(' ')[0]}</span>
               </div>
-              {idx < steps.length - 1 && (
-                <ChevronRight className="w-3 h-3 text-gray-300 mb-4" />
-              )}
+              {idx < steps.length - 1 && <ChevronRight className="w-3 h-3 text-gray-300 mb-4" />}
             </div>
           );
         })}
@@ -387,23 +342,15 @@ export default function RecommendationReviewPage() {
     );
   };
 
-  const canApproveRecommendation = (rec: CrewRecommendationWithDetails) =>
-    supervisorPermissions.get(rec.ship_id) || false;
-
-  const getSelectedApprovalLineSteps = () => {
-    if (!selectedApprovalLine) return [];
-    return approvalLines.find(l => l.id === selectedApprovalLine)?.steps || [];
-  };
-
-  const isApprovalRequestDisabled = () => {
+  const getApprovalLineSteps = () => approvalLines.find(l => l.id === selectedApprovalLine)?.steps || [];
+  const isApprovalDisabled = () => {
     if (approvalAction === 'reject') return !approvalComment.trim();
     if (!selectedApprovalLine) return true;
-    return getSelectedApprovalLineSteps().length === 0;
+    return getApprovalLineSteps().length === 0;
   };
 
   const totalPages = Math.ceil(filteredRecommendations.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentRecommendations = filteredRecommendations.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const currentRecs = filteredRecommendations.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   if (loading) return <Layout><div className="p-8">로딩 중...</div></Layout>;
 
@@ -417,10 +364,7 @@ export default function RecommendationReviewPage() {
 
         {/* 필터 */}
         <div className="bg-white rounded-lg shadow-sm p-3 mb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="text-sm font-medium">필터</span>
-          </div>
+          <div className="flex items-center gap-2 mb-2"><Filter className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-sm font-medium">필터</span></div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
             <div className="md:col-span-4">
               <div className="relative">
@@ -447,94 +391,83 @@ export default function RecommendationReviewPage() {
                 <TableHead className="text-xs py-2 w-32">선박</TableHead>
                 <TableHead className="text-xs py-2 w-20">직급</TableHead>
                 <TableHead className="text-xs py-2 w-24">선원명</TableHead>
-                <TableHead className="text-xs py-2 w-16">나이</TableHead>
+                <TableHead className="text-xs py-2 w-12">나이</TableHead>
                 <TableHead className="text-xs py-2 w-28">매닝사</TableHead>
                 <TableHead className="text-xs py-2">희망조건</TableHead>
                 <TableHead className="text-xs py-2 w-24">출국가능일</TableHead>
                 <TableHead className="text-xs py-2">결재 진행 현황</TableHead>
                 <TableHead className="text-xs py-2 w-32">결재 시작 담당자</TableHead>
-                <TableHead className="text-right text-xs py-2 w-40">작업</TableHead>
+                <TableHead className="text-right text-xs py-2 w-36">작업</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentRecommendations.map(rec => {
-                const canApprove = canApproveRecommendation(rec);
-                return (
-                  <TableRow key={rec.id} className="hover:bg-muted/50">
-                    <TableCell className="py-2">{getStatusBadge(rec.status)}</TableCell>
-                    <TableCell className="py-2">
-                      <div className="text-sm font-medium truncate max-w-[120px]" title={rec.ship_name}>{rec.ship_name}</div>
-                      {rec.fleet_name && <div className="text-xs text-muted-foreground truncate max-w-[120px]">{rec.fleet_name}</div>}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      {rec.rank_code
-                        ? <Badge variant="outline" className={`text-xs ${getDeptColor(rec.department)}`}>{rec.rank_code}</Badge>
-                        : <Badge variant="outline" className="text-xs bg-gray-100 text-gray-400">-</Badge>}
-                    </TableCell>
-                    <TableCell className="py-2"><div className="text-sm font-medium">{rec.crew_name}</div></TableCell>
-                    <TableCell className="py-2"><div className="text-xs text-muted-foreground">{calculateAge(rec.crew_birth_date)}세</div></TableCell>
-                    <TableCell className="py-2"><div className="text-sm truncate max-w-[110px]" title={rec.manning_agency_name}>{rec.manning_agency_name}</div></TableCell>
-                    <TableCell className="py-2">
-                      <div className="text-sm">{rec.desired_currency} {rec.desired_salary.toLocaleString()}</div>
-                      <div className="text-xs text-muted-foreground">{rec.desired_contract_months}개월</div>
-                    </TableCell>
-                    <TableCell className="text-xs py-2">
-                      {new Date(rec.available_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      {rec.status === 'reviewed'
-                        ? <ApprovalProgress recId={rec.id} />
-                        : <span className="text-xs text-gray-300">-</span>}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      {rec.status === 'pending' ? (
-                        (() => {
-                          const names = shipSupervisorMap.get(rec.ship_id) || [];
-                          if (names.length === 0) {
-                            return <span className="text-xs text-red-400">담당자 미지정</span>;
-                          }
-                          return (
-                            <div className="flex flex-wrap gap-1">
-                              {names.map(name => (
-                                <span key={name} className={`text-xs px-1.5 py-0.5 rounded font-medium
-                                  ${canApproveRecommendation(rec) && name === currentUser?.name
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : 'bg-gray-100 text-gray-600'}`}>
-                                  {name}
-                                </span>
-                              ))}
-                            </div>
-                          );
-                        })()
-                      ) : (
-                        <span className="text-xs text-gray-300">-</span>
+              {currentRecs.map(rec => (
+                <TableRow key={rec.id} className="hover:bg-muted/50">
+                  <TableCell className="py-2">{statusBadge(rec.status)}</TableCell>
+                  <TableCell className="py-2">
+                    <div className="text-sm font-medium truncate max-w-[120px]">{rec.ship_name}</div>
+                    {rec.fleet_name && <div className="text-xs text-muted-foreground truncate">{rec.fleet_name}</div>}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    {rec.rank_code
+                      ? <Badge variant="outline" className={`text-xs ${deptColor(rec.department)}`}>{rec.rank_code}</Badge>
+                      : <Badge variant="outline" className="text-xs bg-gray-100 text-gray-400">-</Badge>}
+                  </TableCell>
+                  <TableCell className="py-2"><div className="text-sm font-medium">{rec.crew_name}</div></TableCell>
+                  <TableCell className="py-2"><div className="text-xs text-muted-foreground">{calculateAge(rec.crew_birth_date)}세</div></TableCell>
+                  <TableCell className="py-2"><div className="text-sm truncate max-w-[110px]">{rec.manning_agency_name}</div></TableCell>
+                  <TableCell className="py-2">
+                    <div className="text-sm">{rec.desired_currency} {rec.desired_salary.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">{rec.desired_contract_months}개월</div>
+                  </TableCell>
+                  <TableCell className="text-xs py-2">
+                    {new Date(rec.available_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    {rec.status === 'reviewed' ? <ApprovalProgress recId={rec.id} /> : <span className="text-xs text-gray-300">-</span>}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    {rec.status === 'pending' ? (() => {
+                      const names = shipSupervisorMap.get(rec.ship_id) || [];
+                      if (names.length === 0) return <span className="text-xs text-red-400">담당자 미지정</span>;
+                      return (
+                        <div className="flex flex-wrap gap-1">
+                          {names.map(name => (
+                            <span key={name} className={`text-xs px-1.5 py-0.5 rounded font-medium
+                              ${canApprove(rec) && name === currentUser?.name
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-gray-100 text-gray-600'}`}>
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })() : <span className="text-xs text-gray-300">-</span>}
+                  </TableCell>
+                  <TableCell className="text-right py-2">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="outline" size="sm" onClick={() => openDetail(rec)} className="h-7 px-2 text-xs">
+                        <Eye className="w-3.5 h-3.5 mr-1" />상세
+                      </Button>
+                      {rec.status === 'pending' && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={() => openApproval(rec, 'accept')} disabled={!canApprove(rec)}
+                            className="h-7 px-2 text-xs text-blue-600 hover:bg-blue-50 disabled:opacity-50" title={!canApprove(rec) ? '해당 선박의 감독이 아닙니다' : ''}>
+                            <Send className="w-3.5 h-3.5 mr-1" />결재
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => openApproval(rec, 'reject')} disabled={!canApprove(rec)}
+                            className="h-7 px-2 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50" title={!canApprove(rec) ? '해당 선박의 감독이 아닙니다' : ''}>
+                            <XCircle className="w-3.5 h-3.5 mr-1" />거절
+                          </Button>
+                        </>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right py-2">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="outline" size="sm" onClick={() => handleViewDetail(rec)} className="h-7 px-2 text-xs">
-                          <Eye className="w-3.5 h-3.5 mr-1" />상세
-                        </Button>
-                        {rec.status === 'pending' && (
-                          <>
-                            <Button variant="outline" size="sm" onClick={() => handleOpenApprovalDialog(rec, 'accept')} disabled={!canApprove}
-                              className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 disabled:opacity-50" title={!canApprove ? '해당 선박의 감독이 아닙니다' : ''}>
-                              <Send className="w-3.5 h-3.5 mr-1" />결재
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => handleOpenApprovalDialog(rec, 'reject')} disabled={!canApprove}
-                              className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50" title={!canApprove ? '해당 선박의 감독이 아닙니다' : ''}>
-                              <XCircle className="w-3.5 h-3.5 mr-1" />거절
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
-          {currentRecommendations.length === 0 && (
+          {currentRecs.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
               {searchTerm || statusFilter !== 'all' ? '검색 결과가 없습니다.' : '받은 선원 추천이 없습니다.'}
             </div>
@@ -566,26 +499,24 @@ export default function RecommendationReviewPage() {
         )}
 
         {/* 상세 다이얼로그 */}
-        <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>추천 선원 상세 정보</DialogTitle></DialogHeader>
-            {selectedRecommendation && (() => {
-              const canApprove = canApproveRecommendation(selectedRecommendation);
-              const approval = approvalMap.get(selectedRecommendation.id);
+            {selectedRec && (() => {
+              const approval = approvalMap.get(selectedRec.id);
               return (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
                     <span className="text-sm font-medium">현재 상태</span>
-                    {getStatusBadge(selectedRecommendation.status)}
+                    {statusBadge(selectedRec.status)}
                   </div>
 
                   {/* 결재 진행 현황 */}
-                  {selectedRecommendation.status === 'reviewed' && approval && (
+                  {selectedRec.status === 'reviewed' && approval && (
                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                       <div className="text-sm font-semibold text-yellow-800 mb-3 flex items-center gap-2">
-                        <Clock className="w-4 h-4" />결재 진행 현황
+                        <Clock className="w-4 h-4" />결재 진행 현황 — {approval.approval_line?.name}
                       </div>
-                      <div className="text-xs text-yellow-700 mb-2">결재선: {approval.approval_line?.name}</div>
                       <div className="flex items-start gap-3 flex-wrap">
                         {(approval.approval_line?.steps || []).map((step, idx) => {
                           const action = approval.actions?.find(a => a.step_order === step.step_order);
@@ -595,28 +526,22 @@ export default function RecommendationReviewPage() {
                           return (
                             <div key={step.id} className="flex items-center gap-2">
                               <div className="flex flex-col items-center">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2
                                   ${isDone ? 'bg-green-500 border-green-500 text-white'
                                     : isRejected ? 'bg-red-500 border-red-500 text-white'
                                     : isCurrent ? 'bg-yellow-400 border-yellow-400 text-white'
                                     : 'bg-white border-gray-300 text-gray-400'}`}>
                                   {isDone ? <CheckCircle2 className="w-4 h-4" /> : isRejected ? '✗' : idx + 1}
                                 </div>
-                                <div className="text-xs mt-1 text-center max-w-[60px]">
-                                  <div className="font-medium text-gray-700 truncate">{step.approver_name}</div>
-                                  <div className={`${isDone ? 'text-green-600' : isRejected ? 'text-red-600' : isCurrent ? 'text-yellow-600 font-semibold' : 'text-gray-400'}`}>
+                                <div className="text-xs mt-1 text-center">
+                                  <div className="font-medium text-gray-700">{step.approver_name}</div>
+                                  <div className={isDone ? 'text-green-600' : isRejected ? 'text-red-600' : isCurrent ? 'text-yellow-600 font-semibold' : 'text-gray-400'}>
                                     {isDone ? '승인' : isRejected ? '반려' : isCurrent ? '대기중' : '미도달'}
                                   </div>
-                                  {action?.comment && (
-                                    <div className="text-gray-500 text-xs italic mt-0.5 max-w-[80px] truncate" title={action.comment}>
-                                      "{action.comment}"
-                                    </div>
-                                  )}
+                                  {action?.comment && <div className="text-gray-400 italic">"{action.comment}"</div>}
                                 </div>
                               </div>
-                              {idx < (approval.approval_line?.steps || []).length - 1 && (
-                                <ChevronRight className="w-4 h-4 text-gray-300 mt-[-16px]" />
-                              )}
+                              {idx < (approval.approval_line?.steps || []).length - 1 && <ChevronRight className="w-4 h-4 text-gray-300 mt-[-16px]" />}
                             </div>
                           );
                         })}
@@ -624,58 +549,78 @@ export default function RecommendationReviewPage() {
                     </div>
                   )}
 
+                  {/* 결재 시작 담당자 */}
+                  {selectedRec.status === 'pending' && (() => {
+                    const names = shipSupervisorMap.get(selectedRec.ship_id) || [];
+                    return (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <div className="text-sm font-semibold text-blue-800 mb-2">결재 시작 담당자</div>
+                        {names.length === 0
+                          ? <span className="text-sm text-red-500">담당자가 지정되지 않았습니다.</span>
+                          : <div className="flex flex-wrap gap-2">{names.map(name => (
+                              <span key={name} className={`text-sm px-2 py-1 rounded font-medium
+                                ${canApprove(selectedRec) && name === currentUser?.name
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white text-blue-700 border border-blue-300'}`}>
+                                {name} {canApprove(selectedRec) && name === currentUser?.name ? '(본인)' : ''}
+                              </span>
+                            ))}</div>}
+                      </div>
+                    );
+                  })()}
+
                   <div>
                     <h3 className="text-sm font-semibold mb-2">선원 정보</h3>
                     <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                      <div><span className="text-xs text-gray-600">직급</span><div className="mt-1">{selectedRecommendation.rank_code ? <Badge className={getDeptColor(selectedRecommendation.department)}>{selectedRecommendation.rank_code}</Badge> : <span className="text-xs text-gray-400">-</span>}</div></div>
-                      <div><span className="text-xs text-gray-600">성명</span><p className="text-sm font-medium">{selectedRecommendation.crew_name}</p></div>
-                      <div><span className="text-xs text-gray-600">생년월일</span><p className="text-sm font-medium">{new Date(selectedRecommendation.crew_birth_date).toLocaleDateString('ko-KR')}</p></div>
-                      <div><span className="text-xs text-gray-600">나이</span><p className="text-sm font-medium">{calculateAge(selectedRecommendation.crew_birth_date)}세</p></div>
-                      <div><span className="text-xs text-gray-600">출국 가능일</span><p className="text-sm font-medium">{new Date(selectedRecommendation.available_date).toLocaleDateString('ko-KR')}</p></div>
+                      <div><span className="text-xs text-gray-600">직급</span><div className="mt-1">{selectedRec.rank_code ? <Badge className={deptColor(selectedRec.department)}>{selectedRec.rank_code}</Badge> : '-'}</div></div>
+                      <div><span className="text-xs text-gray-600">성명</span><p className="text-sm font-medium">{selectedRec.crew_name}</p></div>
+                      <div><span className="text-xs text-gray-600">생년월일</span><p className="text-sm font-medium">{new Date(selectedRec.crew_birth_date).toLocaleDateString('ko-KR')}</p></div>
+                      <div><span className="text-xs text-gray-600">나이</span><p className="text-sm font-medium">{calculateAge(selectedRec.crew_birth_date)}세</p></div>
+                      <div><span className="text-xs text-gray-600">출국 가능일</span><p className="text-sm font-medium">{new Date(selectedRec.available_date).toLocaleDateString('ko-KR')}</p></div>
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-sm font-semibold mb-2">선박 정보</h3>
                     <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                      <div><span className="text-xs text-gray-600">선주사</span><p className="text-sm font-medium">{selectedRecommendation.company_name}</p></div>
-                      <div><span className="text-xs text-gray-600">선박명</span><p className="text-sm font-medium">{selectedRecommendation.ship_name}</p></div>
-                      {selectedRecommendation.fleet_name && <div><span className="text-xs text-gray-600">선대</span><p className="text-sm font-medium">{selectedRecommendation.fleet_name}</p></div>}
+                      <div><span className="text-xs text-gray-600">선주사</span><p className="text-sm font-medium">{selectedRec.company_name}</p></div>
+                      <div><span className="text-xs text-gray-600">선박명</span><p className="text-sm font-medium">{selectedRec.ship_name}</p></div>
+                      {selectedRec.fleet_name && <div><span className="text-xs text-gray-600">선대</span><p className="text-sm font-medium">{selectedRec.fleet_name}</p></div>}
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-sm font-semibold mb-2">추천 매닝사</h3>
-                    <div className="p-3 bg-gray-50 rounded-md"><p className="text-sm font-medium">{selectedRecommendation.manning_agency_name}</p></div>
+                    <div className="p-3 bg-gray-50 rounded-md"><p className="text-sm font-medium">{selectedRec.manning_agency_name}</p></div>
                   </div>
 
                   <div>
                     <h3 className="text-sm font-semibold mb-2">희망 계약 조건</h3>
-                    <div className="grid grid-cols-3 gap-3 p-3 bg-gray-50 rounded-md">
-                      <div><span className="text-xs text-gray-600">희망 급여</span><p className="text-sm font-medium">{selectedRecommendation.desired_currency} {selectedRecommendation.desired_salary.toLocaleString()}</p></div>
-                      <div><span className="text-xs text-gray-600">희망 계약기간</span><p className="text-sm font-medium">{selectedRecommendation.desired_contract_months}개월</p></div>
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
+                      <div><span className="text-xs text-gray-600">희망 급여</span><p className="text-sm font-medium">{selectedRec.desired_currency} {selectedRec.desired_salary.toLocaleString()}</p></div>
+                      <div><span className="text-xs text-gray-600">희망 계약기간</span><p className="text-sm font-medium">{selectedRec.desired_contract_months}개월</p></div>
                     </div>
                   </div>
 
-                  {selectedRecommendation.remarks && (
+                  {selectedRec.remarks && (
                     <div>
                       <h3 className="text-sm font-semibold mb-2">비고</h3>
-                      <div className="p-3 bg-gray-50 rounded-md"><p className="text-sm whitespace-pre-wrap">{selectedRecommendation.remarks}</p></div>
+                      <div className="p-3 bg-gray-50 rounded-md"><p className="text-sm whitespace-pre-wrap">{selectedRec.remarks}</p></div>
                     </div>
                   )}
 
-                  {selectedRecommendation.resume_files && selectedRecommendation.resume_files.length > 0 && (
+                  {selectedRec.resume_files?.length > 0 && (
                     <div>
                       <h3 className="text-sm font-semibold mb-2">첨부 이력서</h3>
                       <div className="space-y-2">
-                        {selectedRecommendation.resume_files.map((file, index) => (
+                        {selectedRec.resume_files.map((file: { name: string; size: number; path: string }, index: number) => (
                           <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
                             <div className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-gray-500" />
                               <span className="text-sm">{file.name}</span>
                               <span className="text-xs text-gray-500">({(file.size / 1024).toFixed(1)} KB)</span>
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => handleOpenResume(selectedRecommendation)} className="h-7">
+                            <Button variant="ghost" size="sm" onClick={() => openResume(selectedRec)} className="h-7">
                               <ExternalLink className="w-3.5 h-3.5 mr-1" />열기
                             </Button>
                           </div>
@@ -684,19 +629,19 @@ export default function RecommendationReviewPage() {
                     </div>
                   )}
 
-                  {selectedRecommendation.status === 'pending' && (
+                  {selectedRec.status === 'pending' && (
                     <div className="flex justify-end gap-2 pt-4 border-t">
-                      <Button variant="outline" onClick={() => { setDetailDialogOpen(false); handleOpenApprovalDialog(selectedRecommendation, 'reject'); }} disabled={!canApprove} className="text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50">
+                      <Button variant="outline" onClick={() => { setDetailOpen(false); openApproval(selectedRec, 'reject'); }} disabled={!canApprove(selectedRec)} className="text-red-600 hover:bg-red-50 disabled:opacity-50">
                         <XCircle className="w-4 h-4 mr-2" />거절
                       </Button>
-                      <Button onClick={() => { setDetailDialogOpen(false); handleOpenApprovalDialog(selectedRecommendation, 'accept'); }} disabled={!canApprove} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
+                      <Button onClick={() => { setDetailOpen(false); openApproval(selectedRec, 'accept'); }} disabled={!canApprove(selectedRec)} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
                         <Send className="w-4 h-4 mr-2" />채용 결재 요청
                       </Button>
                     </div>
                   )}
 
                   <div className="flex justify-end pt-2">
-                    <Button onClick={() => setDetailDialogOpen(false)}>닫기</Button>
+                    <Button onClick={() => setDetailOpen(false)}>닫기</Button>
                   </div>
                 </div>
               );
@@ -705,15 +650,15 @@ export default function RecommendationReviewPage() {
         </Dialog>
 
         {/* 결재 다이얼로그 */}
-        <Dialog open={approvalDialogOpen} onOpenChange={setApprovalDialogOpen}>
+        <Dialog open={approvalOpen} onOpenChange={setApprovalOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>{approvalAction === 'accept' ? '채용 결재 요청' : '선원 추천 거절'}</DialogTitle></DialogHeader>
-            {selectedRecommendation && (
+            {selectedRec && (
               <div className="space-y-4">
                 <div className="p-3 bg-gray-50 rounded-md text-sm space-y-1">
-                  <div><span className="font-medium">선원:</span> {selectedRecommendation.crew_name}</div>
-                  <div><span className="font-medium">직급:</span> {selectedRecommendation.rank_code}</div>
-                  <div><span className="font-medium">선박:</span> {selectedRecommendation.ship_name}</div>
+                  <div><span className="font-medium">선원:</span> {selectedRec.crew_name}</div>
+                  <div><span className="font-medium">직급:</span> {selectedRec.rank_code}</div>
+                  <div><span className="font-medium">선박:</span> {selectedRec.ship_name}</div>
                 </div>
 
                 {approvalAction === 'accept' && (
@@ -724,20 +669,20 @@ export default function RecommendationReviewPage() {
                       <SelectContent>
                         {approvalLines.length === 0
                           ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
-                          : approvalLines.map(line => <SelectItem key={line.id} value={String(line.id)}>{line.name} ({line.steps.length}단계)</SelectItem>)}
+                          : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    {selectedApprovalLine && getSelectedApprovalLineSteps().length > 0 && (
+                    {selectedApprovalLine && getApprovalLineSteps().length > 0 && (
                       <>
                         <div className="mt-2 p-2 bg-blue-50 rounded-md">
                           <p className="text-xs font-medium text-blue-900 mb-1">결재 순서:</p>
-                          {getSelectedApprovalLineSteps().map((step, idx) => (
+                          {getApprovalLineSteps().map((step, idx) => (
                             <div key={step.id} className="text-xs text-blue-700">{idx + 1}. {step.approver_name} ({step.approver_role || '담당자'})</div>
                           ))}
                         </div>
                         <div className="flex items-center space-x-2 mt-3">
-                          <Checkbox id="use-for-future" checked={useApprovalLineForFuture} onCheckedChange={c => setUseApprovalLineForFuture(c as boolean)} />
-                          <label htmlFor="use-for-future" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                          <Checkbox id="future" checked={useApprovalLineForFuture} onCheckedChange={c => setUseApprovalLineForFuture(c as boolean)} />
+                          <label htmlFor="future" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
                         </div>
                       </>
                     )}
@@ -762,9 +707,9 @@ export default function RecommendationReviewPage() {
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setApprovalDialogOpen(false)} disabled={submittingApproval}>취소</Button>
-              <Button onClick={handleSubmitApproval} disabled={submittingApproval || isApprovalRequestDisabled()} className={approvalAction === 'accept' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}>
-                {submittingApproval ? '처리 중...' : approvalAction === 'accept' ? '결재 요청' : '거절 확정'}
+              <Button variant="outline" onClick={() => setApprovalOpen(false)} disabled={submitting}>취소</Button>
+              <Button onClick={handleSubmitApproval} disabled={submitting || isApprovalDisabled()} className={approvalAction === 'accept' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}>
+                {submitting ? '처리 중...' : approvalAction === 'accept' ? '결재 요청' : '거절 확정'}
               </Button>
             </DialogFooter>
           </DialogContent>
