@@ -72,6 +72,7 @@ export default function RecommendationReviewPage() {
   const [shipFilter, setShipFilter] = useState<string>('all');
   const [rankFilter, setRankFilter] = useState<string>('all');
   const [agencyFilter, setAgencyFilter] = useState<string>('all');
+  const [shipSupervisorMap, setShipSupervisorMap] = useState<Map<string, string[]>>(new Map());
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { applyFilters(); }, [recommendations, searchTerm, statusFilter, dateFilter, ownerFilter, fleetFilter, shipFilter, rankFilter, agencyFilter]);
@@ -186,6 +187,39 @@ export default function RecommendationReviewPage() {
 
         const uniqueShipIds = [...new Set(allRecs.map(r => r.ship_id))];
         const permissionsMap = new Map<string, boolean>();
+        const supervisorNamesMap = new Map<string, string[]>();
+
+        // 선박별 담당 supervisor 조회
+        const { data: allSupervisorAssignments } = await supabase
+          .from('supervisor_assignments')
+          .select('supervisor_id, ship_id, fleet_id, owner_id');
+
+        const { data: allSupervisorUsers } = await supabase
+          .from('users')
+          .select('id, name');
+
+        const supervisorUserMap = new Map((allSupervisorUsers || []).map(u => [u.id, u.name]));
+
+        // 각 선박별 supervisor 이름 목록 구성
+        for (const shipId of uniqueShipIds) {
+          const ship = shipsMap.get(shipId);
+          const names: string[] = [];
+
+          for (const sa of allSupervisorAssignments || []) {
+            const isForShip = sa.ship_id === shipId;
+            const isForFleet = ship && sa.fleet_id && sa.fleet_id === ship.fleet_id;
+            const isForOwner = ship && sa.owner_id && sa.owner_id === ship.owner_id;
+            if (isForShip || isForFleet || isForOwner) {
+              const name = supervisorUserMap.get(sa.supervisor_id);
+              if (name && !names.includes(name)) names.push(name);
+            }
+          }
+
+          supervisorNamesMap.set(shipId, names);
+        }
+
+        setShipSupervisorMap(supervisorNamesMap);
+
         await Promise.all(
           uniqueShipIds.map(async (shipId) => {
             const result = await supervisorService.isSupervisorForShip(user.id, shipId);
@@ -418,6 +452,7 @@ export default function RecommendationReviewPage() {
                 <TableHead className="text-xs py-2">희망조건</TableHead>
                 <TableHead className="text-xs py-2 w-24">출국가능일</TableHead>
                 <TableHead className="text-xs py-2">결재 진행 현황</TableHead>
+                <TableHead className="text-xs py-2 w-32">결재 시작 담당자</TableHead>
                 <TableHead className="text-right text-xs py-2 w-40">작업</TableHead>
               </TableRow>
             </TableHeader>
@@ -450,6 +485,30 @@ export default function RecommendationReviewPage() {
                       {rec.status === 'reviewed'
                         ? <ApprovalProgress recId={rec.id} />
                         : <span className="text-xs text-gray-300">-</span>}
+                    </TableCell>
+                    <TableCell className="py-2">
+                      {rec.status === 'pending' ? (
+                        (() => {
+                          const names = shipSupervisorMap.get(rec.ship_id) || [];
+                          if (names.length === 0) {
+                            return <span className="text-xs text-red-400">담당자 미지정</span>;
+                          }
+                          return (
+                            <div className="flex flex-wrap gap-1">
+                              {names.map(name => (
+                                <span key={name} className={`text-xs px-1.5 py-0.5 rounded font-medium
+                                  ${canApproveRecommendation(rec) && name === currentUser?.name
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-gray-100 text-gray-600'}`}>
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-xs text-gray-300">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right py-2">
                       <div className="flex justify-end gap-1">
