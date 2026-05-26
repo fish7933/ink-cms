@@ -23,7 +23,6 @@ interface Company {
 interface CrewRecommendationDialogProps {
   open: boolean;
   onClose: (saved: boolean) => void;
-  // From job posting
   jobPostingGroupId?: string;
   companyId?: string;
   companyName?: string;
@@ -60,7 +59,7 @@ export function CrewRecommendationDialog({
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     crew_name: '',
     crew_birth_date: '',
@@ -78,7 +77,6 @@ export function CrewRecommendationDialog({
   useEffect(() => {
     if (open) {
       loadInitialData();
-      // Reset form when dialog opens
       setFormData({
         crew_name: '',
         crew_birth_date: '',
@@ -96,19 +94,15 @@ export function CrewRecommendationDialog({
 
   const loadInitialData = async () => {
     try {
-      // Load ranks
       const { data: ranksData } = await supabase
         .from('ranks')
         .select('*')
         .order('display_order');
-      
       if (ranksData) setRanks(ranksData);
 
-      // Load nationalities
       const nationalitiesData = await getNationalities(true);
       setNationalities(nationalitiesData);
 
-      // Get current user and their company to set default nationality
       const currentUser = await getCurrentUser();
       if (currentUser && currentUser.company_id) {
         const { data: companyData } = await supabase
@@ -116,26 +110,23 @@ export function CrewRecommendationDialog({
           .select('*')
           .eq('id', currentUser.company_id)
           .single();
-        
+
         if (companyData) {
           const company = companyData as Company;
           if (company.country) {
             const companyCountry = company.country;
-            // Try to find matching nationality by code or name
-            const matchedNationality = nationalitiesData.find(n => 
-              n.country_code === companyCountry || 
-              n.country_name_en === companyCountry || 
+            const matchedNationality = nationalitiesData.find(n =>
+              n.country_code === companyCountry ||
+              n.country_name_en === companyCountry ||
               n.country_name_ko === companyCountry
             );
-
             if (matchedNationality) {
               setFormData(prev => ({ ...prev, nationality_id: matchedNationality.country_name_ko }));
             } else {
-              const looseMatch = nationalitiesData.find(n => 
+              const looseMatch = nationalitiesData.find(n =>
                 n.country_name_en.toLowerCase().includes(companyCountry.toLowerCase()) ||
                 n.country_name_ko.includes(companyCountry)
               );
-              
               if (looseMatch) {
                 setFormData(prev => ({ ...prev, nationality_id: looseMatch.country_name_ko }));
               }
@@ -151,7 +142,6 @@ export function CrewRecommendationDialog({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      // Check file size (max 10MB per file)
       const validFiles = newFiles.filter(file => {
         if (file.size > 10 * 1024 * 1024) {
           alert(`${file.name}은(는) 10MB를 초과합니다.`);
@@ -169,89 +159,43 @@ export function CrewRecommendationDialog({
 
   const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
     const uploadedPaths: string[] = [];
-    
     for (const file of files) {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `crew-recommendations/${fileName}`;
-      
-      const { error } = await supabase.storage
-        .from('documents')
-        .upload(filePath, file);
-      
+      const { error } = await supabase.storage.from('documents').upload(filePath, file);
       if (error) {
         console.error('File upload error:', error);
         throw new Error(`파일 업로드 실패: ${file.name}`);
       }
-      
       uploadedPaths.push(filePath);
     }
-    
     return uploadedPaths;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validation
-    if (!formData.crew_name.trim()) {
-      alert('선원 성명을 입력해주세요.');
-      return;
-    }
 
-    if (!formData.crew_birth_date) {
-      alert('선원 생년월일을 입력해주세요.');
-      return;
-    }
-
-    if (!formData.nationality_id) {
-      alert('국적을 선택해주세요.');
-      return;
-    }
-
-    if (!formData.selected_rank_id) {
-      alert('직급을 선택해주세요.');
-      return;
-    }
-
-    if (!formData.available_date) {
-      alert('출국 가능일을 입력해주세요.');
-      return;
-    }
-
-    if (!formData.desired_salary || formData.desired_salary <= 0) {
-      alert('희망 급여를 입력해주세요.');
-      return;
-    }
-
-    if (!formData.desired_contract_months || formData.desired_contract_months <= 0) {
-      alert('희망 계약 기간을 입력해주세요.');
-      return;
-    }
-
-    if (!hasJobPostingInfo) {
-      alert('구인 공고 정보가 없습니다.');
-      return;
-    }
-
-    if (uploadedFiles.length === 0) {
-      alert('선원 이력서를 첨부해주세요.');
-      return;
-    }
+    if (!formData.crew_name.trim()) { alert('선원 성명을 입력해주세요.'); return; }
+    if (!formData.crew_birth_date) { alert('선원 생년월일을 입력해주세요.'); return; }
+    if (!formData.nationality_id) { alert('국적을 선택해주세요.'); return; }
+    if (!formData.selected_rank_id) { alert('직급을 선택해주세요.'); return; }
+    if (!formData.available_date) { alert('출국 가능일을 입력해주세요.'); return; }
+    if (!formData.desired_salary || formData.desired_salary <= 0) { alert('희망 급여를 입력해주세요.'); return; }
+    if (!formData.desired_contract_months || formData.desired_contract_months <= 0) { alert('희망 계약 기간을 입력해주세요.'); return; }
+    if (!hasJobPostingInfo) { alert('구인 공고 정보가 없습니다.'); return; }
+    if (uploadedFiles.length === 0) { alert('선원 이력서를 첨부해주세요.'); return; }
 
     try {
       setUploading(true);
-      
-      // Get current user (manning agency)
+
       const currentUser = await getCurrentUser();
       if (!currentUser || !currentUser.company_id) {
         throw new Error('사용자 정보를 찾을 수 없습니다.');
       }
 
-      // Upload files to storage
       const uploadedFilePaths = await uploadFilesToStorage(uploadedFiles);
-      
-      // Create resume files array with metadata, then serialize to JSON string
+
       const resumeFilesData = uploadedFiles.map((file, index) => ({
         name: file.name,
         path: uploadedFilePaths[index],
@@ -259,25 +203,22 @@ export function CrewRecommendationDialog({
         type: file.type,
       }));
 
-      // Ensure all IDs are proper integers for the backend
-      // The backend expects integer types for foreign key fields
-      const toInt = (val: string | undefined | null): number | null => {
+      // UUID 타입 ID는 String으로, null이면 제외
+      const toStr = (val: string | undefined | null): string | null => {
         if (!val) return null;
-        const parsed = parseInt(String(val), 10);
-        return isNaN(parsed) ? null : parsed;
+        return String(val);
       };
 
-      // Build the insert data with correct types
       const insertData: Record<string, unknown> = {
         crew_name: formData.crew_name.trim(),
         crew_birth_date: formData.crew_birth_date,
         nationality: formData.nationality_id,
-        rank_id: toInt(formData.selected_rank_id),
-        manning_agency_id: toInt(currentUser.company_id),
-        company_id: toInt(companyId),
-        fleet_id: toInt(fleetId),
-        ship_id: toInt(shipId),
-        job_posting_group_id: toInt(jobPostingGroupId),
+        rank_id: toStr(formData.selected_rank_id),
+        manning_agency_id: toStr(currentUser.company_id),
+        company_id: toStr(companyId),
+        fleet_id: toStr(fleetId),
+        ship_id: toStr(shipId),
+        job_posting_group_id: toStr(jobPostingGroupId),
         available_date: formData.available_date,
         desired_salary: formData.desired_salary,
         desired_currency: formData.desired_currency,
@@ -285,12 +226,12 @@ export function CrewRecommendationDialog({
         resume_files: JSON.stringify(resumeFilesData),
         remarks: formData.remarks.trim() || null,
         status: 'pending',
-        created_by: String(currentUser.id),
+        created_by: toStr(currentUser.id),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
-      // Remove null values to avoid sending nulls for non-nullable fields
+      // null 값 제거
       const cleanedData: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(insertData)) {
         if (value !== null && value !== undefined) {
@@ -335,7 +276,7 @@ export function CrewRecommendationDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Crew Basic Information */}
+          {/* 선원 기본 정보 */}
           <div>
             <Label className="text-sm font-semibold">선원 기본 정보</Label>
             <div className="mt-2 grid grid-cols-2 gap-3">
@@ -382,7 +323,7 @@ export function CrewRecommendationDialog({
             </div>
           </div>
 
-          {/* Ship Information */}
+          {/* 선박 정보 */}
           <div>
             <Label className="text-sm font-semibold">선박 정보</Label>
             <div className="mt-2 p-3 bg-gray-50 rounded-md space-y-1">
@@ -403,7 +344,7 @@ export function CrewRecommendationDialog({
             </div>
           </div>
 
-          {/* Rank Information */}
+          {/* 직급 정보 */}
           <div>
             <Label className="text-sm font-semibold">직급 정보</Label>
             {rankId ? (
@@ -448,7 +389,7 @@ export function CrewRecommendationDialog({
             )}
           </div>
 
-          {/* Salary and Contract */}
+          {/* 희망 조건 */}
           <div>
             <Label className="text-sm font-semibold">희망 조건</Label>
             <div className="mt-2 grid grid-cols-3 gap-3">
@@ -495,7 +436,7 @@ export function CrewRecommendationDialog({
             </div>
           </div>
 
-          {/* Available Date */}
+          {/* 출국 가능일 */}
           <div>
             <Label>출국 가능일 *</Label>
             <Input
@@ -507,7 +448,7 @@ export function CrewRecommendationDialog({
             />
           </div>
 
-          {/* Remarks */}
+          {/* 비고 */}
           <div>
             <Label>비고</Label>
             <Textarea
@@ -520,7 +461,7 @@ export function CrewRecommendationDialog({
             />
           </div>
 
-          {/* Resume Upload */}
+          {/* 이력서 첨부 */}
           <div>
             <Label>선원 이력서 *</Label>
             <div className="mt-1 space-y-2">
@@ -540,29 +481,20 @@ export function CrewRecommendationDialog({
                 >
                   <Upload className="w-8 h-8 text-gray-400" />
                   <div className="text-sm text-gray-600">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">
-                      파일 선택
-                    </span>
+                    <span className="text-blue-600 hover:text-blue-700 font-medium">파일 선택</span>
                     {' '}또는 드래그 앤 드롭
                   </div>
-                  <div className="text-xs text-gray-500">
-                    PDF, DOC, DOCX, JPG, PNG (최대 10MB)
-                  </div>
+                  <div className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (최대 10MB)</div>
                 </label>
               </div>
 
               {uploadedFiles.length > 0 && (
                 <div className="space-y-2">
                   {uploadedFiles.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
-                    >
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className="text-sm truncate">{file.name}</div>
-                        <div className="text-xs text-gray-500 shrink-0">
-                          ({(file.size / 1024).toFixed(1)} KB)
-                        </div>
+                        <div className="text-xs text-gray-500 shrink-0">({(file.size / 1024).toFixed(1)} KB)</div>
                       </div>
                       <Button
                         type="button"
@@ -581,14 +513,9 @@ export function CrewRecommendationDialog({
             </div>
           </div>
 
-          {/* Action Buttons */}
+          {/* 버튼 */}
           <div className="flex justify-end gap-2 pt-4">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => onClose(false)}
-              disabled={uploading}
-            >
+            <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={uploading}>
               취소
             </Button>
             <Button type="submit" disabled={uploading}>
