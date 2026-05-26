@@ -11,6 +11,18 @@ import type { Company, Fleet, Ship, JobPostingGroupWithDetails } from '@/types/m
 import type { RankWithSalary, SelectedRankDetail, DuplicateWarning } from './types';
 import { departmentLabels, departmentColors } from './utils';
 
+const NATIONALITIES = [
+  { code: 'ID', label: 'Indonesia' },
+  { code: 'MM', label: 'Myanmar' },
+  { code: 'PH', label: 'Philippines' },
+  { code: 'IN', label: 'India' },
+  { code: 'KR', label: 'Korea' },
+  { code: 'CN', label: 'China' },
+  { code: 'VN', label: 'Vietnam' },
+  { code: 'UA', label: 'Ukraine' },
+  { code: 'RU', label: 'Russia' },
+];
+
 interface JobPostingFormProps {
   formData: {
     company_id: string;
@@ -38,6 +50,7 @@ interface JobPostingFormProps {
   onShipChange: (shipId: string) => void;
   onRankToggle: (rank: RankWithSalary) => void;
   onUpdateRankDetail: (rankId: string, field: keyof SelectedRankDetail, value: number) => void;
+  onUpdateRankNationalities: (rankId: string, nationalities: string[]) => void;
   onRemoveRank: (rankId: string) => void;
   onFormDataChange: (field: string, value: string | string[]) => void;
   onAgencyToggle: (agencyId: string) => void;
@@ -63,6 +76,7 @@ export function JobPostingForm({
   onShipChange,
   onRankToggle,
   onUpdateRankDetail,
+  onUpdateRankNationalities,
   onRemoveRank,
   onFormDataChange,
   onAgencyToggle,
@@ -70,17 +84,21 @@ export function JobPostingForm({
   onCancel,
 }: JobPostingFormProps) {
   const groupedRanks = availableRanks.reduce((acc, rank) => {
-    if (!acc[rank.department]) {
-      acc[rank.department] = [];
-    }
+    if (!acc[rank.department]) acc[rank.department] = [];
     acc[rank.department].push(rank);
     return acc;
   }, {} as Record<string, RankWithSalary[]>);
 
-  // Ensure all IDs are strings for Select component matching
   const companyValue = formData.company_id ? String(formData.company_id) : '';
   const fleetValue = formData.fleet_id ? String(formData.fleet_id) : 'none';
   const shipValue = formData.ship_id ? String(formData.ship_id) : '';
+
+  const toggleNationality = (rankId: string, current: string[], nat: string) => {
+    const next = current.includes(nat)
+      ? current.filter(n => n !== nat)
+      : [...current, nat];
+    onUpdateRankNationalities(rankId, next);
+  };
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -88,14 +106,10 @@ export function JobPostingForm({
         <div>
           <Label>선주사 *</Label>
           <Select value={companyValue} onValueChange={onCompanyChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="선주사 선택" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="선주사 선택" /></SelectTrigger>
             <SelectContent>
               {filteredCompanies.map(company => (
-                <SelectItem key={String(company.id)} value={String(company.id)}>
-                  {company.name}
-                </SelectItem>
+                <SelectItem key={String(company.id)} value={String(company.id)}>{company.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -103,20 +117,12 @@ export function JobPostingForm({
 
         <div>
           <Label>선대</Label>
-          <Select 
-            value={fleetValue} 
-            onValueChange={onFleetChange} 
-            disabled={!formData.company_id || filteredFleets.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="선대 선택 (선택사항)" />
-            </SelectTrigger>
+          <Select value={fleetValue} onValueChange={onFleetChange} disabled={!formData.company_id || filteredFleets.length === 0}>
+            <SelectTrigger><SelectValue placeholder="선대 선택 (선택사항)" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="none">선대 없음</SelectItem>
               {filteredFleets.map(fleet => (
-                <SelectItem key={String(fleet.id)} value={String(fleet.id)}>
-                  {fleet.name}
-                </SelectItem>
+                <SelectItem key={String(fleet.id)} value={String(fleet.id)}>{fleet.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -124,19 +130,11 @@ export function JobPostingForm({
 
         <div>
           <Label>선박 *</Label>
-          <Select 
-            value={shipValue} 
-            onValueChange={onShipChange} 
-            disabled={!formData.company_id || filteredShips.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="선박 선택" />
-            </SelectTrigger>
+          <Select value={shipValue} onValueChange={onShipChange} disabled={!formData.company_id || filteredShips.length === 0}>
+            <SelectTrigger><SelectValue placeholder="선박 선택" /></SelectTrigger>
             <SelectContent>
               {filteredShips.map(ship => (
-                <SelectItem key={String(ship.id)} value={String(ship.id)}>
-                  {ship.name}
-                </SelectItem>
+                <SelectItem key={String(ship.id)} value={String(ship.id)}>{ship.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -146,9 +144,7 @@ export function JobPostingForm({
       {hasTemplate === false && formData.ship_id && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            선택한 선박에 할당된 급여 템플릿이 없습니다.
-          </AlertDescription>
+          <AlertDescription>선택한 선박에 할당된 급여 템플릿이 없습니다.</AlertDescription>
         </Alert>
       )}
 
@@ -191,8 +187,8 @@ export function JobPostingForm({
                       key={rank.id}
                       variant={selectedRankDetails.some(r => r.rank_id === rank.id) ? "default" : "outline"}
                       className={`cursor-pointer px-3 py-1.5 text-sm ${
-                        selectedRankDetails.some(r => r.rank_id === rank.id) 
-                          ? '' 
+                        selectedRankDetails.some(r => r.rank_id === rank.id)
+                          ? ''
                           : departmentColors[department as keyof typeof departmentColors]
                       }`}
                       onClick={() => onRankToggle(rank)}
@@ -215,50 +211,78 @@ export function JobPostingForm({
           <Label>선택된 직급 상세 ({selectedRankDetails.length}개 직급)</Label>
           <div className="border rounded-md divide-y">
             {selectedRankDetails.map((detail) => (
-              <div key={detail.rank_id} className="p-2 flex items-center gap-3">
-                <Badge className={`${departmentColors[detail.department as keyof typeof departmentColors]} shrink-0`}>
-                  {detail.rank_code}
-                </Badge>
-                <div className="flex-1 grid grid-cols-3 gap-2">
-                  <div>
-                    <Label className="text-xs">급여</Label>
-                    <Input
-                      type="number"
-                      value={detail.base_salary}
-                      onChange={(e) => onUpdateRankDetail(detail.rank_id, 'base_salary', parseFloat(e.target.value) || 0)}
-                      className="h-7 text-xs"
-                    />
+              <div key={detail.rank_id} className="p-3">
+                <div className="flex items-center gap-3 mb-3">
+                  <Badge className={`${departmentColors[detail.department as keyof typeof departmentColors]} shrink-0`}>
+                    {detail.rank_code}
+                  </Badge>
+                  <div className="flex-1 grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs">급여</Label>
+                      <Input
+                        type="number"
+                        value={detail.base_salary}
+                        onChange={(e) => onUpdateRankDetail(detail.rank_id, 'base_salary', parseFloat(e.target.value) || 0)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">계약(월)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={detail.contract_months}
+                        onChange={(e) => onUpdateRankDetail(detail.rank_id, 'contract_months', parseInt(e.target.value) || 0)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">인원</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={detail.positions_available}
+                        onChange={(e) => onUpdateRankDetail(detail.rank_id, 'positions_available', parseInt(e.target.value) || 1)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-xs">계약(월)</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={detail.contract_months}
-                      onChange={(e) => onUpdateRankDetail(detail.rank_id, 'contract_months', parseInt(e.target.value) || 0)}
-                      className="h-7 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">인원</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={detail.positions_available}
-                      onChange={(e) => onUpdateRankDetail(detail.rank_id, 'positions_available', parseInt(e.target.value) || 1)}
-                      className="h-7 text-xs"
-                    />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemoveRank(detail.rank_id)}
+                    className="h-7 w-7 p-0 shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* 선호 국적 선택 */}
+                <div>
+                  <Label className="text-xs text-gray-500 mb-1 block">
+                    선호 국적 <span className="text-gray-400 font-normal">(복수 선택 가능, 미선택 시 국적 무관)</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {NATIONALITIES.map(nat => {
+                      const selected = (detail.preferred_nationalities || []).includes(nat.label);
+                      return (
+                        <button
+                          key={nat.code}
+                          type="button"
+                          onClick={() => toggleNationality(detail.rank_id, detail.preferred_nationalities || [], nat.label)}
+                          className={`px-2.5 py-1 rounded-md text-xs border transition-colors font-medium ${
+                            selected
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {nat.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onRemoveRank(detail.rank_id)}
-                  className="h-7 w-7 p-0 shrink-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
             ))}
           </div>
@@ -274,7 +298,6 @@ export function JobPostingForm({
             onChange={(e) => onFormDataChange('embarkation_date', e.target.value)}
           />
         </div>
-
         <div>
           <Label>공고마감일</Label>
           <Input
@@ -283,7 +306,6 @@ export function JobPostingForm({
             onChange={(e) => onFormDataChange('application_deadline', e.target.value)}
           />
         </div>
-
         <div>
           <Label>긴급 여부</Label>
           <div className="flex items-center space-x-2 h-10">
@@ -292,10 +314,7 @@ export function JobPostingForm({
               checked={formData.urgency === 'urgent'}
               onCheckedChange={(checked) => onFormDataChange('urgency', checked ? 'urgent' : 'normal')}
             />
-            <label
-              htmlFor="urgency"
-              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
+            <label htmlFor="urgency" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
               긴급 구인
             </label>
           </div>
@@ -331,9 +350,7 @@ export function JobPostingForm({
             })}
           </div>
           {manningAgencies.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-2">
-              등록된 매닝사가 없습니다.
-            </p>
+            <p className="text-sm text-muted-foreground text-center py-2">등록된 매닝사가 없습니다.</p>
           )}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
@@ -342,9 +359,7 @@ export function JobPostingForm({
       </div>
 
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          취소
-        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>취소</Button>
         <Button type="submit" disabled={selectedRankDetails.length === 0 || isLoadingExistingData}>
           {posting ? '수정' : `${selectedRankDetails.length}개 직급 공고 등록`}
         </Button>

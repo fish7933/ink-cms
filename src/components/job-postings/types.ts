@@ -15,6 +15,7 @@ export interface SelectedRankDetail {
   currency: string;
   contract_months: number;
   positions_available: number;
+  preferred_nationalities: string[];
 }
 
 export interface SalaryComponent {

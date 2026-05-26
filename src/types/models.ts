@@ -37,7 +37,6 @@ export interface Ship {
   flag?: string;
   gross_tonnage?: number;
   built_year?: number;
-  // Extended fields from db-ships-extended.sql
   call_sign?: string;
   mmsi?: string;
   classification_society?: string;
@@ -56,7 +55,6 @@ export interface Ship {
   draft?: number;
   builder?: string;
   shipyard?: string;
-  // Fields from db-init.sql
   dwt?: number;
   gt?: number;
   fleet_group?: string;
@@ -114,6 +112,7 @@ export interface JobPostingGroup {
   status: 'active' | 'filled' | 'cancelled';
   urgency: 'urgent' | 'normal';
   visible_to_agencies: string[];
+  preferred_nationalities: string[];
   created_by: string;
   created_at: string;
 }
@@ -127,6 +126,7 @@ export interface JobPostingGroupRank {
   salary_template_id?: string;
   salary_amount?: number;
   salary_currency: string;
+  preferred_nationalities: string[];
   salary_components?: Array<{
     component_id: string;
     component_name: string;
@@ -148,6 +148,7 @@ export interface JobPostingGroupWithDetails extends JobPostingGroup {
     contract_months: number;
     salary_amount?: number;
     salary_currency: string;
+    preferred_nationalities: string[];
     salary_components?: Array<{
       component_id: string;
       component_name: string;

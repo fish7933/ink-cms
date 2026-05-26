@@ -48,15 +48,10 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
   const handleCompanyChange = async (companyId: string) => {
     const cid = String(companyId);
     setFormData(prev => ({ ...prev, company_id: cid, fleet_id: 'none', ship_id: '' }));
-    
     const company = companies.find(c => String(c.id) === cid);
     setSelectedCompany(company || null);
-    
     if (cid) {
-      await Promise.all([
-        loadFleets(cid),
-        loadShips(cid),
-      ]);
+      await Promise.all([loadFleets(cid), loadShips(cid)]);
     }
   };
 
@@ -71,7 +66,6 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
   const handleShipChange = async (shipId: string) => {
     const sid = String(shipId);
     setFormData(prev => ({ ...prev, ship_id: sid }));
-    
     if (sid) {
       await checkShipTemplate(sid);
     }
@@ -85,11 +79,10 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
       } else {
         let contractMonths = 0;
         if (selectedCompany) {
-          contractMonths = rank.rank_category === 'officer' 
+          contractMonths = rank.rank_category === 'officer'
             ? (selectedCompany.default_officer_contract_months || 0)
             : (selectedCompany.default_rating_contract_months || 0);
         }
-
         return [...prev, {
           rank_id: rank.id,
           rank_name: rank.name,
@@ -99,14 +92,21 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
           currency: rank.currency,
           contract_months: contractMonths,
           positions_available: 1,
+          preferred_nationalities: [],
         }];
       }
     });
   };
 
   const handleUpdateRankDetail = (rankId: string, field: keyof SelectedRankDetail, value: number) => {
-    setSelectedRankDetails(prev => 
+    setSelectedRankDetails(prev =>
       prev.map(r => r.rank_id === rankId ? { ...r, [field]: value } : r)
+    );
+  };
+
+  const handleUpdateRankNationalities = (rankId: string, nationalities: string[]) => {
+    setSelectedRankDetails(prev =>
+      prev.map(r => r.rank_id === rankId ? { ...r, preferred_nationalities: nationalities } : r)
     );
   };
 
@@ -136,14 +136,12 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
   const handleCrewRecommendationClose = (saved: boolean) => {
     setCrewRecommendationOpen(false);
     setSelectedRankForRecommendation(null);
-    if (saved) {
-      onClose(true);
-    }
+    if (saved) onClose(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.company_id || !formData.ship_id || !formData.embarkation_date) {
       alert('필수 항목을 모두 입력해주세요.');
       return;
@@ -154,37 +152,29 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
       return;
     }
 
-    // Validate that at least one manning agency is selected
     if (formData.visible_to_agencies.length === 0) {
       alert('공개 대상 매닝사를 최소 1개 이상 선택해주세요.');
       return;
     }
 
     if (duplicateWarnings.length > 0) {
-      const warningMessage = duplicateWarnings.map(w => 
+      const warningMessage = duplicateWarnings.map(w =>
         `${w.rank_code}: ${w.existing_postings.length}개의 유사한 공고 존재`
       ).join('\n');
-      
       const confirmed = confirm(
         `중복 가능성이 있는 공고가 발견되었습니다:\n\n${warningMessage}\n\n그래도 등록하시겠습니까?`
       );
-      
-      if (!confirmed) {
-        return;
-      }
+      if (!confirmed) return;
     }
 
     try {
       const authUser = await getCurrentUser();
-      
+
       const ranksData = await Promise.all(
         selectedRankDetails.map(async (rankDetail) => {
           const { data: templateItems } = await supabase
             .from('salary_template_items')
-            .select(`
-              *,
-              component:salary_components(*)
-            `)
+            .select(`*, component:salary_components(*)`)
             .eq('template_id', templateId)
             .eq('rank', rankDetail.rank_name);
 
@@ -202,6 +192,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
             salary_amount: rankDetail.base_salary,
             salary_currency: rankDetail.currency,
             salary_components: components,
+            preferred_nationalities: rankDetail.preferred_nationalities || [],
           };
         })
       );
@@ -214,6 +205,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
         application_deadline: formData.application_deadline || undefined,
         requirements: formData.remarks,
         visible_to_agencies: formData.visible_to_agencies,
+        preferred_nationalities: [],
         status: formData.status,
         urgency: formData.urgency,
         created_by: authUser?.id,
@@ -225,7 +217,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
       } else {
         await jobPostingGroupService.create(postingData);
       }
-      
+
       onClose(true);
     } catch (error) {
       console.error('Failed to save job posting:', error);
@@ -256,13 +248,13 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
         <DialogHeader>
           <DialogTitle>{posting ? '구인 공고 수정' : '다직급 구인 공고 등록'}</DialogTitle>
         </DialogHeader>
-        
+
         {isLoadingExistingData && (
           <div className="text-center py-4 text-muted-foreground">
             기존 데이터를 불러오는 중...
           </div>
         )}
-        
+
         <JobPostingForm
           formData={formData}
           filteredCompanies={filteredCompanies}
@@ -281,6 +273,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
           onShipChange={handleShipChange}
           onRankToggle={handleRankToggle}
           onUpdateRankDetail={handleUpdateRankDetail}
+          onUpdateRankNationalities={handleUpdateRankNationalities}
           onRemoveRank={handleRemoveRank}
           onFormDataChange={handleFormDataChange}
           onAgencyToggle={handleAgencyToggle}
