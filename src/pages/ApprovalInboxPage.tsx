@@ -32,16 +32,10 @@ interface ApprovalRequest {
   created_at: string;
   crew_recommendation: {
     crew_name: string;
-    rank: {
-      name: string;
-    };
-    ship: {
-      name: string;
-    };
+    rank: { name: string };
+    ship: { name: string };
   };
-  requester: {
-    name: string;
-  };
+  requester: { name: string };
   approval_line: {
     name: string;
     steps: ApprovalStep[];
@@ -67,26 +61,18 @@ export default function ApprovalInboxPage() {
   const [processing, setProcessing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
-  useEffect(() => {
-    loadApprovalRequests();
-  }, []);
+  useEffect(() => { loadApprovalRequests(); }, []);
 
   const loadApprovalRequests = async () => {
     try {
       setLoading(true);
-      
-      // Use custom getCurrentUser instead of supabase.auth.getUser
+
       const currentUser = await getCurrentUser();
-      if (!currentUser) {
-        console.log('❌ No user found in ApprovalInboxPage, redirecting to login');
-        navigate('/login');
-        return;
-      }
+      if (!currentUser) { navigate('/login'); return; }
 
       console.log('✅ User authenticated in ApprovalInboxPage:', currentUser.username);
       setCurrentUserId(currentUser.id);
 
-      // Use the approval service to get pending approvals
       const pendingApprovals = await approvalService.getMyPendingApprovals(currentUser.id);
 
       if (!pendingApprovals || pendingApprovals.length === 0) {
@@ -95,22 +81,33 @@ export default function ApprovalInboxPage() {
         return;
       }
 
-      // Get crew recommendation details
       const crewRecommendationIds = pendingApprovals.map(a => a.crew_recommendation_id);
-      
+
+      // FK 없이 별도 조회
       const { data: crewRecs, error: crewRecsError } = await supabase
         .from('crew_recommendations')
-        .select(`
-          id,
-          crew_name,
-          rank:ranks!inner(name),
-          ship:ships!inner(name)
-        `)
+        .select('id, crew_name, rank_id, ship_id')
         .in('id', crewRecommendationIds);
 
       if (crewRecsError) throw crewRecsError;
 
-      // Get requester details
+      const rankIds = [...new Set((crewRecs || []).map((r: { rank_id: string }) => r.rank_id).filter(Boolean))];
+      const shipIds = [...new Set((crewRecs || []).map((r: { ship_id: string }) => r.ship_id).filter(Boolean))];
+
+      const [ranksRes, shipsRes] = await Promise.all([
+        rankIds.length > 0 ? supabase.from('ranks').select('id, name').in('id', rankIds) : { data: [] },
+        shipIds.length > 0 ? supabase.from('ships').select('id, name').in('id', shipIds) : { data: [] },
+      ]);
+
+      const ranksMap = new Map((ranksRes.data || []).map((r: { id: string; name: string }) => [r.id, r.name]));
+      const shipsMap = new Map((shipsRes.data || []).map((s: { id: string; name: string }) => [s.id, s.name]));
+
+      const crewRecsEnriched = (crewRecs || []).map((r: { id: string; crew_name: string; rank_id: string; ship_id: string }) => ({
+        ...r,
+        rank: { name: ranksMap.get(r.rank_id) || 'Unknown' },
+        ship: { name: shipsMap.get(r.ship_id) || 'Unknown' },
+      }));
+
       const requesterIds = [...new Set(pendingApprovals.map(a => a.requester_id))];
       const { data: requesters, error: requestersError } = await supabase
         .from('users')
@@ -119,13 +116,12 @@ export default function ApprovalInboxPage() {
 
       if (requestersError) throw requestersError;
 
-      const requestersMap = new Map((requesters || []).map(r => [r.id, r]));
+      const requestersMap = new Map((requesters || []).map((r: { id: string; name: string }) => [r.id, r]));
 
-      // Merge the data
       const mergedRequests = pendingApprovals.map(approval => {
-        const crewRec = crewRecs?.find(cr => cr.id === approval.crew_recommendation_id);
+        const crewRec = crewRecsEnriched?.find(cr => cr.id === approval.crew_recommendation_id);
         const requester = requestersMap.get(approval.requester_id);
-        
+
         return {
           id: approval.id,
           crew_recommendation_id: approval.crew_recommendation_id,
@@ -138,11 +134,9 @@ export default function ApprovalInboxPage() {
           crew_recommendation: crewRec || {
             crew_name: 'Unknown',
             rank: { name: 'Unknown' },
-            ship: { name: 'Unknown' }
+            ship: { name: 'Unknown' },
           },
-          requester: {
-            name: requester?.name || approval.requester_name || 'Unknown'
-          },
+          requester: { name: (requester as { name?: string } | undefined)?.name || approval.requester_name || 'Unknown' },
           approval_line: {
             name: approval.approval_line.name,
             steps: approval.approval_line.steps.map(step => ({
@@ -150,7 +144,7 @@ export default function ApprovalInboxPage() {
               approver_name: step.approver_name,
               approver_role: step.approver_role || '',
               approver_id: step.approver_id,
-            }))
+            })),
           },
           actions: approval.actions.map(action => ({
             step_order: action.step_order,
@@ -158,84 +152,50 @@ export default function ApprovalInboxPage() {
             comment: action.comment || null,
             approver_name: action.approver_name || 'Unknown',
             created_at: action.created_at,
-          }))
+          })),
         };
       });
 
       setRequests(mergedRequests);
     } catch (error) {
       console.error('Error loading approval requests:', error);
-      toast({
-        title: '오류',
-        description: '결재 요청을 불러오는 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      toast({ title: '오류', description: '결재 요청을 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
   const openActionDialog = (request: ApprovalRequest, action: 'approved' | 'rejected') => {
-    setSelectedRequest(request);
-    setActionType(action);
-    setComment('');
-    setActionDialog(true);
+    setSelectedRequest(request); setActionType(action); setComment(''); setActionDialog(true);
   };
 
   const handleAction = async () => {
     if (!selectedRequest) return;
-
     try {
       setProcessing(true);
-      
-      // Use custom getCurrentUser instead of supabase.auth.getUser
       const currentUser = await getCurrentUser();
       if (!currentUser) throw new Error('User not authenticated');
 
-      // Check if it's the user's turn
-      const currentStep = selectedRequest.approval_line.steps.find(
-        s => s.step_order === selectedRequest.current_step
-      );
-
+      const currentStep = selectedRequest.approval_line.steps.find(s => s.step_order === selectedRequest.current_step);
       if (!currentStep || currentStep.approver_id !== currentUser.id) {
-        toast({
-          title: '오류',
-          description: '현재 결재 순서가 아닙니다.',
-          variant: 'destructive',
-        });
+        toast({ title: '오류', description: '현재 결재 순서가 아닙니다.', variant: 'destructive' });
         return;
       }
 
-      // Use approval service to handle the action
       if (actionType === 'rejected') {
-        if (!comment.trim()) {
-          toast({
-            title: '오류',
-            description: '반려 사유를 입력해주세요.',
-            variant: 'destructive',
-          });
-          return;
-        }
+        if (!comment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
         await approvalService.rejectStep(selectedRequest.id, currentUser.id, comment);
       } else {
         await approvalService.approveStep(selectedRequest.id, currentUser.id, comment || undefined);
       }
 
-      toast({
-        title: '성공',
-        description: actionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.',
-      });
-
+      toast({ title: '성공', description: actionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.' });
       setActionDialog(false);
       setSelectedRequest(null);
       loadApprovalRequests();
     } catch (error) {
       console.error('Error processing action:', error);
-      toast({
-        title: '오류',
-        description: '결재 처리 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setProcessing(false);
     }
@@ -243,22 +203,16 @@ export default function ApprovalInboxPage() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <Badge variant="outline" className="bg-yellow-50"><Clock className="h-3 w-3 mr-1" />대기중</Badge>;
-      case 'approved':
-        return <Badge variant="outline" className="bg-green-50"><CheckCircle className="h-3 w-3 mr-1" />승인</Badge>;
-      case 'rejected':
-        return <Badge variant="outline" className="bg-red-50"><XCircle className="h-3 w-3 mr-1" />반려</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+      case 'pending': return <Badge variant="outline" className="bg-yellow-50"><Clock className="h-3 w-3 mr-1" />대기중</Badge>;
+      case 'approved': return <Badge variant="outline" className="bg-green-50"><CheckCircle className="h-3 w-3 mr-1" />승인</Badge>;
+      case 'rejected': return <Badge variant="outline" className="bg-red-50"><XCircle className="h-3 w-3 mr-1" />반려</Badge>;
+      default: return <Badge variant="outline">{status}</Badge>;
     }
   };
 
   const isMyTurn = (request: ApprovalRequest, userId: string) => {
     if (request.status !== 'pending') return false;
-    const currentStep = request.approval_line.steps.find(
-      s => s.step_order === request.current_step
-    );
+    const currentStep = request.approval_line.steps.find(s => s.step_order === request.current_step);
     return currentStep?.approver_id === userId;
   };
 
@@ -281,9 +235,8 @@ export default function ApprovalInboxPage() {
           </Card>
         ) : (
           <div className="grid gap-4">
-            {requests.map((request) => {
+            {requests.map(request => {
               const myTurn = isMyTurn(request, currentUserId);
-
               return (
                 <Card key={request.id} className={myTurn ? 'border-blue-500 border-2' : ''}>
                   <CardHeader>
@@ -299,9 +252,7 @@ export default function ApprovalInboxPage() {
                         <div className="space-y-1 text-sm text-gray-600">
                           <div className="flex items-center gap-2">
                             <Ship className="h-4 w-4" />
-                            <span>
-                              {request.crew_recommendation.ship.name}
-                            </span>
+                            <span>{request.crew_recommendation.ship.name}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <User className="h-4 w-4" />
@@ -309,31 +260,17 @@ export default function ApprovalInboxPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4" />
-                            <span>
-                              {format(new Date(request.created_at), 'PPP', { locale: ko })}
-                            </span>
+                            <span>{format(new Date(request.created_at), 'PPP', { locale: ko })}</span>
                           </div>
                         </div>
                       </div>
                       {myTurn && (
                         <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-green-600 border-green-600"
-                            onClick={() => openActionDialog(request, 'approved')}
-                          >
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            승인
+                          <Button size="sm" variant="outline" className="text-green-600 border-green-600" onClick={() => openActionDialog(request, 'approved')}>
+                            <CheckCircle className="h-4 w-4 mr-1" />승인
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-600 border-red-600"
-                            onClick={() => openActionDialog(request, 'rejected')}
-                          >
-                            <XCircle className="h-4 w-4 mr-1" />
-                            반려
+                          <Button size="sm" variant="outline" className="text-red-600 border-red-600" onClick={() => openActionDialog(request, 'rejected')}>
+                            <XCircle className="h-4 w-4 mr-1" />반려
                           </Button>
                         </div>
                       )}
@@ -347,7 +284,6 @@ export default function ApprovalInboxPage() {
                           <p className="text-sm text-gray-700">{request.requester_comment}</p>
                         </div>
                       )}
-
                       <div>
                         <p className="text-sm font-semibold mb-2">결재 진행 상황:</p>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -355,40 +291,25 @@ export default function ApprovalInboxPage() {
                             const action = request.actions.find(a => a.step_order === step.step_order);
                             const isCurrent = step.step_order === request.current_step;
                             const isPast = step.step_order < request.current_step;
-
                             return (
                               <div key={step.step_order} className="flex items-center">
-                                <div
-                                  className={`px-3 py-2 rounded border ${
-                                    action
-                                      ? action.action === 'approved'
-                                        ? 'bg-green-50 border-green-500'
-                                        : 'bg-red-50 border-red-500'
-                                      : isCurrent
-                                      ? 'bg-blue-50 border-blue-500'
-                                      : isPast
-                                      ? 'bg-gray-100 border-gray-300'
-                                      : 'bg-white border-gray-300'
-                                  }`}
-                                >
-                                  <div className="text-xs font-semibold">
-                                    {step.step_order}. {step.approver_name}
-                                  </div>
+                                <div className={`px-3 py-2 rounded border ${
+                                  action
+                                    ? action.action === 'approved' ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'
+                                    : isCurrent ? 'bg-blue-50 border-blue-500'
+                                    : isPast ? 'bg-gray-100 border-gray-300'
+                                    : 'bg-white border-gray-300'
+                                }`}>
+                                  <div className="text-xs font-semibold">{step.step_order}. {step.approver_name}</div>
                                   <div className="text-xs text-gray-600">{step.approver_role}</div>
                                   {action && (
                                     <div className="text-xs mt-1">
                                       {action.action === 'approved' ? '✓ 승인' : '✗ 반려'}
-                                      {action.comment && (
-                                        <div className="text-xs text-gray-600 mt-1">
-                                          {action.comment}
-                                        </div>
-                                      )}
+                                      {action.comment && <div className="text-xs text-gray-600 mt-1">{action.comment}</div>}
                                     </div>
                                   )}
                                 </div>
-                                {index < request.approval_line.steps.length - 1 && (
-                                  <span className="mx-2 text-gray-400">→</span>
-                                )}
+                                {index < request.approval_line.steps.length - 1 && <span className="mx-2 text-gray-400">→</span>}
                               </div>
                             );
                           })}
@@ -405,9 +326,7 @@ export default function ApprovalInboxPage() {
         <Dialog open={actionDialog} onOpenChange={setActionDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>
-                {actionType === 'approved' ? '결재 승인' : '결재 반려'}
-              </DialogTitle>
+              <DialogTitle>{actionType === 'approved' ? '결재 승인' : '결재 반려'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               {selectedRequest && (
@@ -415,32 +334,21 @@ export default function ApprovalInboxPage() {
                   <p className="text-sm font-semibold">
                     {selectedRequest.crew_recommendation.crew_name} - {selectedRequest.crew_recommendation.rank.name}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    {selectedRequest.crew_recommendation.ship.name}
-                  </p>
+                  <p className="text-sm text-gray-600">{selectedRequest.crew_recommendation.ship.name}</p>
                 </div>
               )}
               <div>
-                <label className="text-sm font-semibold mb-2 block">
-                  의견 {actionType === 'rejected' && '(필수)'}
-                </label>
+                <label className="text-sm font-semibold mb-2 block">의견 {actionType === 'rejected' && '(필수)'}</label>
                 <Textarea
                   value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder={
-                    actionType === 'approved'
-                      ? '승인 의견을 입력하세요 (선택사항)'
-                      : '반려 사유를 입력하세요'
-                  }
+                  onChange={e => setComment(e.target.value)}
+                  placeholder={actionType === 'approved' ? '승인 의견을 입력하세요 (선택사항)' : '반려 사유를 입력하세요'}
                   rows={4}
-                  required={actionType === 'rejected'}
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setActionDialog(false)}>
-                취소
-              </Button>
+              <Button variant="outline" onClick={() => setActionDialog(false)}>취소</Button>
               <Button
                 onClick={handleAction}
                 disabled={processing || (actionType === 'rejected' && !comment.trim())}
