@@ -83,8 +83,11 @@ export default function RecommendationReviewPage() {
     try {
       setLoading(true);
 
-      const [currentUserData, companiesData, fleetsData, shipsData, ranksData] = await Promise.all([
-        getCurrentUser(), getCompanies(), getFleets(), getShips(), getRanks(),
+      const currentUserData = await getCurrentUser();
+      console.log('👤 getCurrentUser result:', currentUserData);
+
+      const [companiesData, fleetsData, shipsData, ranksData] = await Promise.all([
+        getCompanies(), getFleets(), getShips(), getRanks(),
       ]);
 
       setCurrentUser(currentUserData);
@@ -94,7 +97,14 @@ export default function RecommendationReviewPage() {
       setShips(shipsData);
       setRanks(ranksData);
 
-      if (!currentUserData || currentUserData.role !== 'ship_manager') return;
+      if (!currentUserData) {
+        console.log('❌ currentUserData is null - not logged in');
+        return;
+      }
+      if (currentUserData.role !== 'ship_manager') {
+        console.log('❌ role is not ship_manager:', currentUserData.role);
+        return;
+      }
 
       // 기본 결재선 로드
       const { data: pref } = await supabase
