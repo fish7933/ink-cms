@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { getNationalities } from '@/services/nationality.service';
@@ -18,6 +18,14 @@ interface Company {
   name: string;
   country?: string;
   [key: string]: unknown;
+}
+
+interface Certificate {
+  name: string;
+  number: string;
+  issued_date: string;
+  expiry_date: string;
+  issuing_authority: string;
 }
 
 interface CrewRecommendationDialogProps {
@@ -38,22 +46,37 @@ interface CrewRecommendationDialogProps {
   contractMonths?: number;
 }
 
+const CERT_TEMPLATES = [
+  'STCW Basic Safety Training',
+  'STCW Advanced Fire Fighting',
+  'STCW Medical First Aid',
+  'STCW Proficiency in Survival Craft',
+  'Officer of the Watch (Navigation)',
+  'Chief Mate Certificate',
+  'Master Certificate',
+  'Chief Engineer Certificate',
+  'GMDSS General Operator Certificate',
+  'Medical Fitness Certificate',
+  'Continuous Discharge Certificate (Seaman Book)',
+  'Passport',
+];
+
+const EDUCATION_OPTIONS = [
+  '고등학교 졸업',
+  '해양고등학교 졸업',
+  '전문대학 졸업',
+  '해양대학교 졸업',
+  '대학교 졸업',
+  '대학원 졸업',
+  '기타',
+];
+
 export function CrewRecommendationDialog({
-  open,
-  onClose,
-  jobPostingGroupId,
-  companyId,
-  companyName,
-  fleetId,
-  fleetName,
-  shipId,
-  shipName,
-  rankId,
-  rankCode,
-  rankName,
-  salary,
-  currency,
-  contractMonths,
+  open, onClose,
+  jobPostingGroupId, companyId, companyName,
+  fleetId, fleetName, shipId, shipName,
+  rankId, rankCode, rankName,
+  salary, currency, contractMonths,
 }: CrewRecommendationDialogProps) {
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
@@ -69,8 +92,11 @@ export function CrewRecommendationDialog({
     desired_currency: currency || 'USD',
     desired_contract_months: contractMonths || 0,
     available_date: '',
+    education: '',
     remarks: '',
   });
+
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
 
   const hasJobPostingInfo = Boolean(jobPostingGroupId && companyId && shipId);
 
@@ -86,51 +112,33 @@ export function CrewRecommendationDialog({
         desired_currency: currency || 'USD',
         desired_contract_months: contractMonths || 0,
         available_date: '',
+        education: '',
         remarks: '',
       });
       setUploadedFiles([]);
+      setCertificates([]);
     }
   }, [open, rankId, salary, currency, contractMonths]);
 
   const loadInitialData = async () => {
     try {
-      const { data: ranksData } = await supabase
-        .from('ranks')
-        .select('*')
-        .order('display_order');
+      const { data: ranksData } = await supabase.from('ranks').select('*').order('display_order');
       if (ranksData) setRanks(ranksData);
 
       const nationalitiesData = await getNationalities(true);
       setNationalities(nationalitiesData);
 
       const currentUser = await getCurrentUser();
-      if (currentUser && currentUser.company_id) {
-        const { data: companyData } = await supabase
-          .from('companies')
-          .select('*')
-          .eq('id', currentUser.company_id)
-          .single();
-
+      if (currentUser?.company_id) {
+        const { data: companyData } = await supabase.from('companies').select('*').eq('id', currentUser.company_id).single();
         if (companyData) {
-          const company = companyData as Company;
-          if (company.country) {
-            const companyCountry = company.country;
-            const matchedNationality = nationalitiesData.find(n =>
-              n.country_code === companyCountry ||
-              n.country_name_en === companyCountry ||
-              n.country_name_ko === companyCountry
+          const country = (companyData as Company).country;
+          if (country) {
+            const match = nationalitiesData.find(n =>
+              n.country_code === country || n.country_name_en === country || n.country_name_ko === country ||
+              n.country_name_en.toLowerCase().includes(country.toLowerCase())
             );
-            if (matchedNationality) {
-              setFormData(prev => ({ ...prev, nationality_id: matchedNationality.country_name_ko }));
-            } else {
-              const looseMatch = nationalitiesData.find(n =>
-                n.country_name_en.toLowerCase().includes(companyCountry.toLowerCase()) ||
-                n.country_name_ko.includes(companyCountry)
-              );
-              if (looseMatch) {
-                setFormData(prev => ({ ...prev, nationality_id: looseMatch.country_name_ko }));
-              }
-            }
+            if (match) setFormData(prev => ({ ...prev, nationality_id: match.country_name_ko }));
           }
         }
       }
@@ -139,45 +147,52 @@ export function CrewRecommendationDialog({
     }
   };
 
+  const addCertificate = (name?: string) => {
+    setCertificates(prev => [...prev, {
+      name: name || '',
+      number: '',
+      issued_date: '',
+      expiry_date: '',
+      issuing_authority: '',
+    }]);
+  };
+
+  const updateCertificate = (idx: number, field: keyof Certificate, value: string) => {
+    setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  };
+
+  const removeCertificate = (idx: number) => {
+    setCertificates(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      const validFiles = newFiles.filter(file => {
-        if (file.size > 10 * 1024 * 1024) {
-          alert(`${file.name}은(는) 10MB를 초과합니다.`);
-          return false;
-        }
+      const files = Array.from(e.target.files).filter(f => {
+        if (f.size > 10 * 1024 * 1024) { alert(`${f.name}은 10MB를 초과합니다.`); return false; }
         return true;
       });
-      setUploadedFiles(prev => [...prev, ...validFiles]);
+      setUploadedFiles(prev => [...prev, ...files]);
     }
   };
 
-  const removeFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-  };
+  const removeFile = (idx: number) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
 
-  const uploadFilesToStorage = async (files: File[]): Promise<string[]> => {
-    const uploadedPaths: string[] = [];
+  const uploadFiles = async (files: File[]): Promise<string[]> => {
+    const paths: string[] = [];
     for (const file of files) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `crew-recommendations/${fileName}`;
-      const { error } = await supabase.storage.from('documents').upload(filePath, file);
-      if (error) {
-        console.error('File upload error:', error);
-        throw new Error(`파일 업로드 실패: ${file.name}`);
-      }
-      uploadedPaths.push(filePath);
+      const ext = file.name.split('.').pop();
+      const path = `crew-recommendations/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const { error } = await supabase.storage.from('documents').upload(path, file);
+      if (error) throw new Error(`파일 업로드 실패: ${file.name}`);
+      paths.push(path);
     }
-    return uploadedPaths;
+    return paths;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!formData.crew_name.trim()) { alert('선원 성명을 입력해주세요.'); return; }
-    if (!formData.crew_birth_date) { alert('선원 생년월일을 입력해주세요.'); return; }
+    if (!formData.crew_birth_date) { alert('생년월일을 입력해주세요.'); return; }
     if (!formData.nationality_id) { alert('국적을 선택해주세요.'); return; }
     if (!formData.selected_rank_id) { alert('직급을 선택해주세요.'); return; }
     if (!formData.available_date) { alert('출국 가능일을 입력해주세요.'); return; }
@@ -188,26 +203,13 @@ export function CrewRecommendationDialog({
 
     try {
       setUploading(true);
-
       const currentUser = await getCurrentUser();
-      if (!currentUser || !currentUser.company_id) {
-        throw new Error('사용자 정보를 찾을 수 없습니다.');
-      }
+      if (!currentUser?.company_id) throw new Error('사용자 정보를 찾을 수 없습니다.');
 
-      const uploadedFilePaths = await uploadFilesToStorage(uploadedFiles);
+      const paths = await uploadFiles(uploadedFiles);
+      const resumeFilesData = uploadedFiles.map((f, i) => ({ name: f.name, path: paths[i], size: f.size, type: f.type }));
 
-      const resumeFilesData = uploadedFiles.map((file, index) => ({
-        name: file.name,
-        path: uploadedFilePaths[index],
-        size: file.size,
-        type: file.type,
-      }));
-
-      // UUID 타입 ID는 String으로, null이면 제외
-      const toStr = (val: string | undefined | null): string | null => {
-        if (!val) return null;
-        return String(val);
-      };
+      const toStr = (v: string | undefined | null) => v ? String(v) : null;
 
       const insertData: Record<string, unknown> = {
         crew_name: formData.crew_name.trim(),
@@ -224,6 +226,8 @@ export function CrewRecommendationDialog({
         desired_currency: formData.desired_currency,
         desired_contract_months: formData.desired_contract_months,
         resume_files: JSON.stringify(resumeFilesData),
+        education: formData.education || null,
+        certificates: JSON.stringify(certificates.filter(c => c.name)),
         remarks: formData.remarks.trim() || null,
         status: 'pending',
         created_by: toStr(currentUser.id),
@@ -231,24 +235,13 @@ export function CrewRecommendationDialog({
         updated_at: new Date().toISOString(),
       };
 
-      // null 값 제거
-      const cleanedData: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(insertData)) {
-        if (value !== null && value !== undefined) {
-          cleanedData[key] = value;
-        }
+      const cleaned: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(insertData)) {
+        if (v !== null && v !== undefined) cleaned[k] = v;
       }
 
-      const { error } = await supabase
-        .from('crew_recommendations')
-        .insert(cleanedData)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Insert error:', error);
-        throw new Error(error.message || '선원 추천 제출에 실패했습니다.');
-      }
+      const { error } = await supabase.from('crew_recommendations').insert(cleaned).select().single();
+      if (error) throw new Error(error.message);
 
       alert('선원 추천이 성공적으로 제출되었습니다.');
       onClose(true);
@@ -261,8 +254,7 @@ export function CrewRecommendationDialog({
   };
 
   const selectedRank = ranks.find(r => r.id === formData.selected_rank_id);
-
-  const departmentColors = {
+  const deptColors: Record<string, string> = {
     deck: 'bg-blue-100 text-blue-700 border-blue-300',
     engine: 'bg-green-100 text-green-700 border-green-300',
     catering: 'bg-orange-100 text-orange-700 border-orange-300',
@@ -270,54 +262,29 @@ export function CrewRecommendationDialog({
 
   return (
     <Dialog open={open} onOpenChange={() => !uploading && onClose(false)}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>선원 추천</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>선원 추천</DialogTitle></DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
+
           {/* 선원 기본 정보 */}
           <div>
-            <Label className="text-sm font-semibold">선원 기본 정보</Label>
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">성명 *</Label>
-                <Input
-                  type="text"
-                  value={formData.crew_name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, crew_name: e.target.value }))}
-                  placeholder="선원 성명"
-                  className="h-9 mt-1"
-                  disabled={uploading}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">생년월일 *</Label>
-                <Input
-                  type="date"
-                  value={formData.crew_birth_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, crew_birth_date: e.target.value }))}
-                  className="h-9 mt-1"
-                  disabled={uploading}
-                />
-              </div>
+            <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">선원 기본 정보</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">성명 *</Label><Input value={formData.crew_name} onChange={e => setFormData(p => ({ ...p, crew_name: e.target.value }))} placeholder="Full Name" className="h-9 mt-1" disabled={uploading} /></div>
+              <div><Label className="text-xs">생년월일 *</Label><Input type="date" value={formData.crew_birth_date} onChange={e => setFormData(p => ({ ...p, crew_birth_date: e.target.value }))} className="h-9 mt-1" disabled={uploading} /></div>
               <div>
                 <Label className="text-xs">국적 *</Label>
-                <Select
-                  value={formData.nationality_id}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, nationality_id: value }))}
-                  disabled={uploading}
-                >
-                  <SelectTrigger className="h-9 mt-1">
-                    <SelectValue placeholder="국적 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nationalities.map(nat => (
-                      <SelectItem key={nat.id} value={nat.country_name_ko}>
-                        {nat.country_name_ko} ({nat.country_name_en})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select value={formData.nationality_id} onValueChange={v => setFormData(p => ({ ...p, nationality_id: v }))} disabled={uploading}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                  <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">최종 학력</Label>
+                <Select value={formData.education} onValueChange={v => setFormData(p => ({ ...p, education: v }))} disabled={uploading}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="학력 선택" /></SelectTrigger>
+                  <SelectContent>{EDUCATION_OPTIONS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -325,65 +292,34 @@ export function CrewRecommendationDialog({
 
           {/* 선박 정보 */}
           <div>
-            <Label className="text-sm font-semibold">선박 정보</Label>
-            <div className="mt-2 p-3 bg-gray-50 rounded-md space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">선주사:</span>
-                <span className="text-sm font-medium">{companyName}</span>
-              </div>
-              {fleetName && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">선대:</span>
-                  <span className="text-sm font-medium">{fleetName}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">선박:</span>
-                <span className="text-sm font-medium">{shipName}</span>
-              </div>
+            <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">선박 정보</h3>
+            <div className="p-3 bg-gray-50 rounded-md space-y-1 text-sm">
+              <div><span className="text-gray-500">선주사:</span> <span className="font-medium">{companyName}</span></div>
+              {fleetName && <div><span className="text-gray-500">선대:</span> <span className="font-medium">{fleetName}</span></div>}
+              <div><span className="text-gray-500">선박:</span> <span className="font-medium">{shipName}</span></div>
             </div>
           </div>
 
           {/* 직급 정보 */}
           <div>
-            <Label className="text-sm font-semibold">직급 정보</Label>
+            <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">직급 정보</h3>
             {rankId ? (
-              <div className="mt-2 p-3 bg-gray-50 rounded-md">
+              <div className="p-3 bg-gray-50 rounded-md">
                 <div className="flex items-center gap-2 mb-2">
-                  <Badge className={departmentColors[selectedRank?.department as keyof typeof departmentColors] || ''}>
-                    {rankCode}
-                  </Badge>
+                  <Badge className={deptColors[selectedRank?.department || ''] || ''}>{rankCode}</Badge>
                   <span className="text-sm">{rankName}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <span className="text-gray-600">제시 급여:</span>
-                    <span className="ml-1 font-medium">{currency} {salary?.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">제시 계약:</span>
-                    <span className="ml-1 font-medium">{contractMonths}개월</span>
-                  </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-gray-500">제시 급여:</span> <span className="font-medium">{currency} {salary?.toLocaleString()}</span></div>
+                  <div><span className="text-gray-500">계약 기간:</span> <span className="font-medium">{contractMonths}개월</span></div>
                 </div>
               </div>
             ) : (
-              <div className="mt-2">
+              <div>
                 <Label className="text-xs">직급 *</Label>
-                <Select
-                  value={formData.selected_rank_id}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, selected_rank_id: value }))}
-                  disabled={uploading}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="직급 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ranks.map(rank => (
-                      <SelectItem key={rank.id} value={String(rank.id)}>
-                        {rank.rank_code} - {rank.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Select value={formData.selected_rank_id} onValueChange={v => setFormData(p => ({ ...p, selected_rank_id: v }))} disabled={uploading}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                  <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code} - {r.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
@@ -391,74 +327,85 @@ export function CrewRecommendationDialog({
 
           {/* 희망 조건 */}
           <div>
-            <Label className="text-sm font-semibold">희망 조건</Label>
-            <div className="mt-2 grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs">희망 급여 *</Label>
-                <Input
-                  type="number"
-                  value={formData.desired_salary || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, desired_salary: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0"
-                  className="h-9"
-                  disabled={uploading}
-                />
-              </div>
+            <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">희망 조건</h3>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label className="text-xs">희망 급여 *</Label><Input type="number" value={formData.desired_salary || ''} onChange={e => setFormData(p => ({ ...p, desired_salary: parseFloat(e.target.value) || 0 }))} className="h-9 mt-1" placeholder="0" disabled={uploading} /></div>
               <div>
                 <Label className="text-xs">통화</Label>
-                <Select
-                  value={formData.desired_currency}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, desired_currency: value }))}
-                  disabled={uploading}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                    <SelectItem value="KRW">KRW</SelectItem>
-                  </SelectContent>
+                <Select value={formData.desired_currency} onValueChange={v => setFormData(p => ({ ...p, desired_currency: v }))} disabled={uploading}>
+                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="EUR">EUR</SelectItem><SelectItem value="KRW">KRW</SelectItem></SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-xs">희망 계약 월수 *</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.desired_contract_months || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, desired_contract_months: parseInt(e.target.value) || 0 }))}
-                  placeholder="0"
-                  className="h-9"
-                  disabled={uploading}
-                />
-              </div>
+              <div><Label className="text-xs">희망 계약 월수 *</Label><Input type="number" min="1" value={formData.desired_contract_months || ''} onChange={e => setFormData(p => ({ ...p, desired_contract_months: parseInt(e.target.value) || 0 }))} className="h-9 mt-1" placeholder="0" disabled={uploading} /></div>
             </div>
           </div>
 
           {/* 출국 가능일 */}
           <div>
             <Label>출국 가능일 *</Label>
-            <Input
-              type="date"
-              value={formData.available_date}
-              onChange={(e) => setFormData(prev => ({ ...prev, available_date: e.target.value }))}
-              className="mt-1"
-              disabled={uploading}
-            />
+            <Input type="date" value={formData.available_date} onChange={e => setFormData(p => ({ ...p, available_date: e.target.value }))} className="mt-1" disabled={uploading} />
+          </div>
+
+          {/* 보유 증서 */}
+          <div>
+            <div className="flex items-center justify-between mb-2 border-b pb-1">
+              <h3 className="text-sm font-semibold text-gray-700">보유 증서</h3>
+              <div className="flex gap-2">
+                <Select onValueChange={v => addCertificate(v)}>
+                  <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="증서 선택 추가" /></SelectTrigger>
+                  <SelectContent>{CERT_TEMPLATES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="sm" onClick={() => addCertificate()} className="h-7 text-xs gap-1">
+                  <Plus className="h-3 w-3" />직접 입력
+                </Button>
+              </div>
+            </div>
+
+            {certificates.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-3">증서를 추가하세요.</p>
+            ) : (
+              <div className="space-y-3">
+                {certificates.map((cert, idx) => (
+                  <div key={idx} className="p-3 border rounded-md bg-gray-50">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-600">증서 {idx + 1}</span>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeCertificate(idx)} className="h-6 w-6 p-0 text-red-500">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="col-span-2">
+                        <Label className="text-xs">증서명 *</Label>
+                        <Input value={cert.name} onChange={e => updateCertificate(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="Certificate Name" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">증서 번호</Label>
+                        <Input value={cert.number} onChange={e => updateCertificate(idx, 'number', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="번호" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">발급 기관</Label>
+                        <Input value={cert.issuing_authority} onChange={e => updateCertificate(idx, 'issuing_authority', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="발급 기관" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">발급일</Label>
+                        <Input type="date" value={cert.issued_date} onChange={e => updateCertificate(idx, 'issued_date', e.target.value)} className="h-8 text-xs mt-0.5" />
+                      </div>
+                      <div>
+                        <Label className="text-xs">만료일</Label>
+                        <Input type="date" value={cert.expiry_date} onChange={e => updateCertificate(idx, 'expiry_date', e.target.value)} className="h-8 text-xs mt-0.5" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 비고 */}
           <div>
             <Label>비고</Label>
-            <Textarea
-              value={formData.remarks}
-              onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-              placeholder="추가 정보나 특이사항을 입력하세요"
-              rows={3}
-              className="mt-1"
-              disabled={uploading}
-            />
+            <Textarea value={formData.remarks} onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))} placeholder="추가 정보나 특이사항을 입력하세요" rows={3} className="mt-1" disabled={uploading} />
           </div>
 
           {/* 이력서 첨부 */}
@@ -466,44 +413,24 @@ export function CrewRecommendationDialog({
             <Label>선원 이력서 *</Label>
             <div className="mt-1 space-y-2">
               <div className="border-2 border-dashed rounded-md p-4 text-center">
-                <input
-                  type="file"
-                  id="resume-upload"
-                  multiple
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  disabled={uploading}
-                />
-                <label
-                  htmlFor="resume-upload"
-                  className={`cursor-pointer flex flex-col items-center gap-2 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
-                >
+                <input type="file" id="resume-upload" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" disabled={uploading} />
+                <label htmlFor="resume-upload" className={`cursor-pointer flex flex-col items-center gap-2 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Upload className="w-8 h-8 text-gray-400" />
                   <div className="text-sm text-gray-600">
-                    <span className="text-blue-600 hover:text-blue-700 font-medium">파일 선택</span>
-                    {' '}또는 드래그 앤 드롭
+                    <span className="text-blue-600 font-medium">파일 선택</span> 또는 드래그 앤 드롭
                   </div>
                   <div className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (최대 10MB)</div>
                 </label>
               </div>
-
               {uploadedFiles.length > 0 && (
                 <div className="space-y-2">
-                  {uploadedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                  {uploadedFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="text-sm truncate">{file.name}</div>
-                        <div className="text-xs text-gray-500 shrink-0">({(file.size / 1024).toFixed(1)} KB)</div>
+                        <span className="text-sm truncate">{file.name}</span>
+                        <span className="text-xs text-gray-500 shrink-0">({(file.size / 1024).toFixed(1)} KB)</span>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFile(index)}
-                        className="h-7 w-7 p-0 shrink-0"
-                        disabled={uploading}
-                      >
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeFile(idx)} className="h-7 w-7 p-0 shrink-0" disabled={uploading}>
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
@@ -515,12 +442,8 @@ export function CrewRecommendationDialog({
 
           {/* 버튼 */}
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={uploading}>
-              취소
-            </Button>
-            <Button type="submit" disabled={uploading}>
-              {uploading ? '제출 중...' : '선원 추천 제출'}
-            </Button>
+            <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={uploading}>취소</Button>
+            <Button type="submit" disabled={uploading}>{uploading ? '제출 중...' : '선원 추천 제출'}</Button>
           </div>
         </form>
       </DialogContent>
