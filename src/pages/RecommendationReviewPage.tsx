@@ -83,28 +83,28 @@ export default function RecommendationReviewPage() {
     try {
       setLoading(true);
 
-      const [user, companiesData, fleetsData, shipsData, ranksData] = await Promise.all([
+      const [currentUserData, companiesData, fleetsData, shipsData, ranksData] = await Promise.all([
         getCurrentUser(), getCompanies(), getFleets(), getShips(), getRanks(),
       ]);
 
-      setCurrentUser(user);
+      setCurrentUser(currentUserData);
       setCompanies(companiesData.filter((c: Company) => c.type === 'owner'));
       setManningAgencies(companiesData.filter((c: Company) => c.type === 'manning'));
       setFleets(fleetsData);
       setShips(shipsData);
       setRanks(ranksData);
 
-      if (!user || user.role !== 'ship_manager') return;
+      if (!currentUserData || currentUserData.role !== 'ship_manager') return;
 
       // 기본 결재선 로드
       const { data: pref } = await supabase
-        .from('users').select('default_approval_line_id').eq('id', user.id).single();
+        .from('users').select('default_approval_line_id').eq('id', currentUserData.id).single();
       if (pref?.default_approval_line_id) {
         setDefaultApprovalLineId(pref.default_approval_line_id);
         setSelectedApprovalLine(pref.default_approval_line_id);
       }
-      if (user.company_id) {
-        const lines = await approvalService.getApprovalLines(user.company_id);
+      if (currentUserData.company_id) {
+        const lines = await approvalService.getApprovalLines(currentUserData.company_id);
         setApprovalLines(lines);
         if (!pref?.default_approval_line_id) setSelectedApprovalLine('');
       }
@@ -116,11 +116,11 @@ export default function RecommendationReviewPage() {
       if (!allRecs || allRecs.length === 0) { setLoading(false); return; }
 
       // 관련 데이터 배치 조회
-      const rankIds = [...new Set(allRecs.map(r => r.rank_id).filter(Boolean))];
-      const companyIds = [...new Set(allRecs.map(r => r.company_id).filter(Boolean))];
-      const fleetIds = [...new Set(allRecs.map(r => r.fleet_id).filter(Boolean))];
-      const shipIds = [...new Set(allRecs.map(r => r.ship_id).filter(Boolean))];
-      const agencyIds = [...new Set(allRecs.map(r => r.manning_agency_id).filter(Boolean))];
+      const rankIds = [...new Set(allRecs.map((r: { rank_id: string }) => r.rank_id).filter(Boolean))];
+      const companyIds = [...new Set(allRecs.map((r: { company_id: string }) => r.company_id).filter(Boolean))];
+      const fleetIds = [...new Set(allRecs.map((r: { fleet_id: string | null }) => r.fleet_id).filter(Boolean))];
+      const shipIds = [...new Set(allRecs.map((r: { ship_id: string }) => r.ship_id).filter(Boolean))];
+      const agencyIds = [...new Set(allRecs.map((r: { manning_agency_id: string }) => r.manning_agency_id).filter(Boolean))];
 
       const [ranksRes, companiesRes, fleetsRes, shipsRes, agenciesRes] = await Promise.all([
         rankIds.length > 0 ? supabase.from('ranks').select('id, name, rank_code, department').in('id', rankIds) : { data: [] },
@@ -136,7 +136,7 @@ export default function RecommendationReviewPage() {
       const shipsMap = new Map((shipsRes.data || []).map((s: { id: string; name: string }) => [s.id, s]));
       const agenciesMap = new Map((agenciesRes.data || []).map((a: { id: string; name: string }) => [a.id, a]));
 
-      const enrichedRecs = allRecs.map(rec => {
+      const enrichedRecs = allRecs.map((rec: Record<string, unknown>) => {
         let resumeFiles = rec.resume_files;
         if (typeof resumeFiles === 'string') {
           try { resumeFiles = JSON.parse(resumeFiles); } catch { resumeFiles = []; }
@@ -145,23 +145,23 @@ export default function RecommendationReviewPage() {
         return {
           ...rec,
           resume_files: resumeFiles,
-          manning_agency_name: (agenciesMap.get(rec.manning_agency_id) as { name: string } | undefined)?.name || '',
-          rank_name: (ranksMap.get(rec.rank_id) as { name: string } | undefined)?.name || '',
-          rank_code: (ranksMap.get(rec.rank_id) as { rank_code: string } | undefined)?.rank_code || '',
-          department: (ranksMap.get(rec.rank_id) as { department: string } | undefined)?.department || '',
-          company_name: (companiesMap.get(rec.company_id) as { name: string } | undefined)?.name || '',
-          fleet_name: rec.fleet_id ? (fleetsMap.get(rec.fleet_id) as { name: string } | undefined)?.name || '' : '',
-          ship_name: (shipsMap.get(rec.ship_id) as { name: string } | undefined)?.name || '',
+          manning_agency_name: (agenciesMap.get(rec.manning_agency_id as string) as { name: string } | undefined)?.name || '',
+          rank_name: (ranksMap.get(rec.rank_id as string) as { name: string } | undefined)?.name || '',
+          rank_code: (ranksMap.get(rec.rank_id as string) as { rank_code: string } | undefined)?.rank_code || '',
+          department: (ranksMap.get(rec.rank_id as string) as { department: string } | undefined)?.department || '',
+          company_name: (companiesMap.get(rec.company_id as string) as { name: string } | undefined)?.name || '',
+          fleet_name: rec.fleet_id ? (fleetsMap.get(rec.fleet_id as string) as { name: string } | undefined)?.name || '' : '',
+          ship_name: (shipsMap.get(rec.ship_id as string) as { name: string } | undefined)?.name || '',
         };
       });
 
       setRecommendations(enrichedRecs);
 
       // 결재 진행 현황 로드
-      const reviewedRecs = allRecs.filter(r => r.status === 'reviewed');
+      const reviewedRecs = allRecs.filter((r: { status: string }) => r.status === 'reviewed');
       if (reviewedRecs.length > 0) {
         const newApprovalMap = new Map<string, CrewRecommendationApprovalWithDetails>();
-        await Promise.all(reviewedRecs.map(async rec => {
+        await Promise.all(reviewedRecs.map(async (rec: { id: string }) => {
           try {
             const approvals = await approvalService.getApprovalsByRecommendation(rec.id);
             if (approvals.length > 0) newApprovalMap.set(rec.id, approvals[0]);
@@ -171,7 +171,7 @@ export default function RecommendationReviewPage() {
       }
 
       // 선박별 supervisor 정보 로드
-      const uniqueShipIds = [...new Set(allRecs.map(r => r.ship_id).filter(Boolean))];
+      const uniqueShipIds = [...new Set(allRecs.map((r: { ship_id: string }) => r.ship_id).filter(Boolean))];
 
       const [saRes, suRes, shipsDetailRes] = await Promise.all([
         supabase.from('supervisor_assignments').select('supervisor_id, ship_id, fleet_id, owner_id'),
@@ -185,7 +185,7 @@ export default function RecommendationReviewPage() {
 
       const supervisorNamesMap = new Map<string, string[]>();
       for (const shipId of uniqueShipIds) {
-        const ship = shipsDetailMap.get(shipId);
+        const ship = shipsDetailMap.get(shipId as string);
         const names: string[] = [];
         for (const sa of allSA) {
           const isForShip = sa.ship_id === shipId;
@@ -193,18 +193,18 @@ export default function RecommendationReviewPage() {
           const isForOwner = ship?.owner_id && sa.owner_id === ship.owner_id;
           if (isForShip || isForFleet || isForOwner) {
             const name = supervisorUserMap.get(sa.supervisor_id);
-            if (name && !names.includes(name)) names.push(name);
+            if (name && !names.includes(name as string)) names.push(name as string);
           }
         }
-        supervisorNamesMap.set(shipId, names);
+        supervisorNamesMap.set(shipId as string, names);
       }
       setShipSupervisorMap(supervisorNamesMap);
 
       // supervisor 권한 확인
       const permissionsMap = new Map<string, boolean>();
-      await Promise.all(uniqueShipIds.map(async shipId => {
-        const result = await supervisorService.isSupervisorForShip(user.id, shipId);
-        permissionsMap.set(shipId, result.is_supervisor);
+      await Promise.all(uniqueShipIds.map(async (shipId) => {
+        const result = await supervisorService.isSupervisorForShip(currentUserData.id, shipId as string);
+        permissionsMap.set(shipId as string, result.is_supervisor);
       }));
       setSupervisorPermissions(permissionsMap);
 
@@ -511,7 +511,6 @@ export default function RecommendationReviewPage() {
                     {statusBadge(selectedRec.status)}
                   </div>
 
-                  {/* 결재 진행 현황 */}
                   {selectedRec.status === 'reviewed' && approval && (
                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                       <div className="text-sm font-semibold text-yellow-800 mb-3 flex items-center gap-2">
@@ -549,7 +548,6 @@ export default function RecommendationReviewPage() {
                     </div>
                   )}
 
-                  {/* 결재 시작 담당자 */}
                   {selectedRec.status === 'pending' && (() => {
                     const names = shipSupervisorMap.get(selectedRec.ship_id) || [];
                     return (
@@ -562,7 +560,7 @@ export default function RecommendationReviewPage() {
                                 ${canApprove(selectedRec) && name === currentUser?.name
                                   ? 'bg-blue-600 text-white'
                                   : 'bg-white text-blue-700 border border-blue-300'}`}>
-                                {name} {canApprove(selectedRec) && name === currentUser?.name ? '(본인)' : ''}
+                                {name}{canApprove(selectedRec) && name === currentUser?.name ? ' (본인)' : ''}
                               </span>
                             ))}</div>}
                       </div>
