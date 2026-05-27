@@ -58,7 +58,8 @@ export default function MyRecommendationsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedRecommendation, setSelectedRecommendation] = useState<CrewRecommendationWithDetails | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  
+  const [certDialogOpen, setCertDialogOpen] = useState(false);
+  const [selectedRecForCert, setSelectedRecForCert] = useState<CrewRecommendationWithDetails | null>(null);
   // Filter data
   const [companies, setCompanies] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
@@ -336,6 +337,23 @@ export default function MyRecommendationsPage() {
     return (
     <Layout>
       <div className="p-8">로딩 중...</div>
+      {selectedRecForCert && (
+            <CertificateUploadDialog
+              open={certDialogOpen}
+              onClose={(saved) => {
+                setCertDialogOpen(false);
+                setSelectedRecForCert(null);
+                if (saved) loadRecommendations();
+              }}
+              recommendationId={selectedRecForCert.id}
+              crewName={selectedRecForCert.crew_name}
+              existingCertificates={
+                typeof selectedRecForCert.certificates === 'string'
+                  ? JSON.parse(selectedRecForCert.certificates || '[]')
+                  : (selectedRecForCert.certificates || [])
+              }
+            />
+          )}
     </Layout>
   );
   }
@@ -546,15 +564,35 @@ export default function MyRecommendationsPage() {
                   <TableCell className="text-right py-2">
                     <div className="flex justify-end gap-1.5">
                       {rec.status === 'accepted' && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleInputDetails(rec)}
-                          className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700"
-                        >
-                          <UserPlus className="w-3.5 h-3.5 mr-1.5" />
-                          상세입력
-                        </Button>
+                        <>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleInputDetails(rec)}
+                            className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700"
+                          >
+                            <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                            상세입력
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setSelectedRecForCert(rec); setCertDialogOpen(true); }}
+                            className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50"
+                          >
+                            <Award className="w-3.5 h-3.5 mr-1.5" />
+                            증서 등록
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setSelectedRecForCert(rec); setCertDialogOpen(true); }}
+                            className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50"
+                          >
+                            <Award className="w-3.5 h-3.5 mr-1.5" />
+                            증서 등록
+                          </Button>
+                        </>
                       )}
                       <Button
                         variant="outline"

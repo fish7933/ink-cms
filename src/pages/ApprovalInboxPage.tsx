@@ -369,6 +369,7 @@ export default function ApprovalInboxPage() {
           </DialogContent>
         </Dialog>
       </div>
+      
     </Layout>
   );
 }
