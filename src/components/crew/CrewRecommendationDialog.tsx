@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Upload, X, Plus, Trash2 } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { getNationalities } from '@/services/nationality.service';
@@ -18,14 +18,6 @@ interface Company {
   name: string;
   country?: string;
   [key: string]: unknown;
-}
-
-interface Certificate {
-  name: string;
-  number: string;
-  issued_date: string;
-  expiry_date: string;
-  issuing_authority: string;
 }
 
 interface CrewRecommendationDialogProps {
@@ -46,29 +38,9 @@ interface CrewRecommendationDialogProps {
   contractMonths?: number;
 }
 
-const CERT_TEMPLATES = [
-  'STCW Basic Safety Training',
-  'STCW Advanced Fire Fighting',
-  'STCW Medical First Aid',
-  'STCW Proficiency in Survival Craft',
-  'Officer of the Watch (Navigation)',
-  'Chief Mate Certificate',
-  'Master Certificate',
-  'Chief Engineer Certificate',
-  'GMDSS General Operator Certificate',
-  'Medical Fitness Certificate',
-  'Continuous Discharge Certificate (Seaman Book)',
-  'Passport',
-];
-
 const EDUCATION_OPTIONS = [
-  '고등학교 졸업',
-  '해양고등학교 졸업',
-  '전문대학 졸업',
-  '해양대학교 졸업',
-  '대학교 졸업',
-  '대학원 졸업',
-  '기타',
+  '고등학교 졸업', '해양고등학교 졸업', '전문대학 졸업',
+  '해양대학교 졸업', '대학교 졸업', '대학원 졸업', '기타',
 ];
 
 export function CrewRecommendationDialog({
@@ -96,10 +68,6 @@ export function CrewRecommendationDialog({
     remarks: '',
   });
 
-  const [certificates, setCertificates] = useState<Certificate[]>([]);
-
-  const hasJobPostingInfo = Boolean(jobPostingGroupId && companyId && shipId);
-
   useEffect(() => {
     if (open) {
       loadInitialData();
@@ -116,7 +84,6 @@ export function CrewRecommendationDialog({
         remarks: '',
       });
       setUploadedFiles([]);
-      setCertificates([]);
     }
   }, [open, rankId, salary, currency, contractMonths]);
 
@@ -135,8 +102,8 @@ export function CrewRecommendationDialog({
           const country = (companyData as Company).country;
           if (country) {
             const match = nationalitiesData.find(n =>
-              n.country_code === country || n.country_name_en === country || n.country_name_ko === country ||
-              n.country_name_en.toLowerCase().includes(country.toLowerCase())
+              n.country_code === country || n.country_name_en === country ||
+              n.country_name_ko === country || n.country_name_en.toLowerCase().includes(country.toLowerCase())
             );
             if (match) setFormData(prev => ({ ...prev, nationality_id: match.country_name_ko }));
           }
@@ -145,24 +112,6 @@ export function CrewRecommendationDialog({
     } catch (error) {
       console.error('Failed to load initial data:', error);
     }
-  };
-
-  const addCertificate = (name?: string) => {
-    setCertificates(prev => [...prev, {
-      name: name || '',
-      number: '',
-      issued_date: '',
-      expiry_date: '',
-      issuing_authority: '',
-    }]);
-  };
-
-  const updateCertificate = (idx: number, field: keyof Certificate, value: string) => {
-    setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
-  };
-
-  const removeCertificate = (idx: number) => {
-    setCertificates(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -227,7 +176,6 @@ export function CrewRecommendationDialog({
         desired_contract_months: formData.desired_contract_months,
         resume_files: JSON.stringify(resumeFilesData),
         education: formData.education || null,
-        certificates: JSON.stringify(certificates.filter(c => c.name)),
         remarks: formData.remarks.trim() || null,
         status: 'pending',
         created_by: toStr(currentUser.id),
@@ -253,6 +201,7 @@ export function CrewRecommendationDialog({
     }
   };
 
+  const hasJobPostingInfo = Boolean(jobPostingGroupId && companyId && shipId);
   const selectedRank = ranks.find(r => r.id === formData.selected_rank_id);
   const deptColors: Record<string, string> = {
     deck: 'bg-blue-100 text-blue-700 border-blue-300',
@@ -262,9 +211,8 @@ export function CrewRecommendationDialog({
 
   return (
     <Dialog open={open} onOpenChange={() => !uploading && onClose(false)}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>선원 추천</DialogTitle></DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-5">
 
           {/* 선원 기본 정보 */}
@@ -347,61 +295,6 @@ export function CrewRecommendationDialog({
             <Input type="date" value={formData.available_date} onChange={e => setFormData(p => ({ ...p, available_date: e.target.value }))} className="mt-1" disabled={uploading} />
           </div>
 
-          {/* 보유 증서 */}
-          <div>
-            <div className="flex items-center justify-between mb-2 border-b pb-1">
-              <h3 className="text-sm font-semibold text-gray-700">보유 증서</h3>
-              <div className="flex gap-2">
-                <Select onValueChange={v => addCertificate(v)}>
-                  <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="증서 선택 추가" /></SelectTrigger>
-                  <SelectContent>{CERT_TEMPLATES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
-                </Select>
-                <Button type="button" variant="outline" size="sm" onClick={() => addCertificate()} className="h-7 text-xs gap-1">
-                  <Plus className="h-3 w-3" />직접 입력
-                </Button>
-              </div>
-            </div>
-
-            {certificates.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-3">증서를 추가하세요.</p>
-            ) : (
-              <div className="space-y-3">
-                {certificates.map((cert, idx) => (
-                  <div key={idx} className="p-3 border rounded-md bg-gray-50">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-gray-600">증서 {idx + 1}</span>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeCertificate(idx)} className="h-6 w-6 p-0 text-red-500">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="col-span-2">
-                        <Label className="text-xs">증서명 *</Label>
-                        <Input value={cert.name} onChange={e => updateCertificate(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="Certificate Name" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">증서 번호</Label>
-                        <Input value={cert.number} onChange={e => updateCertificate(idx, 'number', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="번호" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">발급 기관</Label>
-                        <Input value={cert.issuing_authority} onChange={e => updateCertificate(idx, 'issuing_authority', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="발급 기관" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">발급일</Label>
-                        <Input type="date" value={cert.issued_date} onChange={e => updateCertificate(idx, 'issued_date', e.target.value)} className="h-8 text-xs mt-0.5" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">만료일</Label>
-                        <Input type="date" value={cert.expiry_date} onChange={e => updateCertificate(idx, 'expiry_date', e.target.value)} className="h-8 text-xs mt-0.5" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* 비고 */}
           <div>
             <Label>비고</Label>
@@ -416,9 +309,7 @@ export function CrewRecommendationDialog({
                 <input type="file" id="resume-upload" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" disabled={uploading} />
                 <label htmlFor="resume-upload" className={`cursor-pointer flex flex-col items-center gap-2 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   <Upload className="w-8 h-8 text-gray-400" />
-                  <div className="text-sm text-gray-600">
-                    <span className="text-blue-600 font-medium">파일 선택</span> 또는 드래그 앤 드롭
-                  </div>
+                  <div className="text-sm text-gray-600"><span className="text-blue-600 font-medium">파일 선택</span> 또는 드래그 앤 드롭</div>
                   <div className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (최대 10MB)</div>
                 </label>
               </div>
@@ -440,7 +331,10 @@ export function CrewRecommendationDialog({
             </div>
           </div>
 
-          {/* 버튼 */}
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md text-xs text-yellow-800">
+            ※ 증서 등록은 선박관리사 승인 후 가능합니다.
+          </div>
+
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={uploading}>취소</Button>
             <Button type="submit" disabled={uploading}>{uploading ? '제출 중...' : '선원 추천 제출'}</Button>
