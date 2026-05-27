@@ -287,6 +287,15 @@ export default function ApprovalInboxPage() {
                       <div>
                         <p className="text-sm font-semibold mb-2">결재 진행 상황:</p>
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* 요청자 */}
+                          <div className="flex items-center">
+                            <div className="px-3 py-2 rounded border bg-purple-50 border-purple-400">
+                              <div className="text-xs font-semibold">요청자</div>
+                              <div className="text-xs text-gray-600">{request.requester.name}</div>
+                              <div className="text-xs mt-1 text-purple-600">✓ 요청완료</div>
+                            </div>
+                            <span className="mx-2 text-gray-400">→</span>
+                          </div>
                           {request.approval_line.steps.map((step, index) => {
                             const action = request.actions.find(a => a.step_order === step.step_order);
                             const isCurrent = step.step_order === request.current_step;
