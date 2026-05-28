@@ -19,6 +19,7 @@ interface Certificate {
   issued_date: string;
   expiry_date: string;
   issuing_authority: string;
+  no_expiry: boolean;
 }
 
 const CERT_TEMPLATES = [
@@ -140,8 +141,28 @@ export default function CrewInputPage() {
   };
 
   // 증서 관련
-  const addCert = (name?: string) => {
-    setCertificates(prev => [...prev, { name: name || '', number: '', issued_date: '', expiry_date: '', issuing_authority: '' }]);
+const addCert = (name?: string) => {
+    setCertificates(prev => [...prev, { name: name || '', number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: false }]);
+  };
+
+  const handleIssuedDateChange = (idx: number, value: string) => {
+    setCertificates(prev => prev.map((c, i) => {
+      if (i !== idx) return c;
+      // 발급일 입력 시 만료일 자동 계산 (5년 후)
+      let expiry = c.expiry_date;
+      if (value && !c.no_expiry) {
+        const d = new Date(value);
+        d.setFullYear(d.getFullYear() + 5);
+        expiry = d.toISOString().split('T')[0];
+      }
+      return { ...c, issued_date: value, expiry_date: expiry };
+    }));
+  };
+
+  const handleNoExpiryChange = (idx: number, checked: boolean) => {
+    setCertificates(prev => prev.map((c, i) =>
+      i === idx ? { ...c, no_expiry: checked, expiry_date: checked ? '' : c.expiry_date } : c
+    ));
   };
 
   const updateCert = (idx: number, field: keyof Certificate, value: string) => {
@@ -377,13 +398,31 @@ export default function CrewInputPage() {
                               <Label className="text-xs">발급 기관</Label>
                               <Input value={cert.issuing_authority} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="발급 기관" />
                             </div>
-                            <div>
+                        <div>
                               <Label className="text-xs">발급일</Label>
-                              <Input type="date" value={cert.issued_date} onChange={e => updateCert(idx, 'issued_date', e.target.value)} className="h-8 text-xs mt-0.5" />
+                              <Input type="date" value={cert.issued_date} onChange={e => handleIssuedDateChange(idx, e.target.value)} className="h-8 text-xs mt-0.5" />
                             </div>
                             <div>
-                              <Label className="text-xs">만료일</Label>
-                              <Input type="date" value={cert.expiry_date} onChange={e => updateCert(idx, 'expiry_date', e.target.value)} className="h-8 text-xs mt-0.5" />
+                              <div className="flex items-center justify-between mb-0.5">
+                                <Label className="text-xs">만료일</Label>
+                                <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={cert.no_expiry || false}
+                                    onChange={e => handleNoExpiryChange(idx, e.target.checked)}
+                                    className="accent-blue-600 w-3 h-3"
+                                  />
+                                  만료일 없음
+                                </label>
+                              </div>
+                              <Input
+                                type="date"
+                                value={cert.expiry_date}
+                                onChange={e => updateCert(idx, 'expiry_date', e.target.value)}
+                                className="h-8 text-xs"
+                                disabled={cert.no_expiry}
+                                placeholder={cert.no_expiry ? '만료일 없음' : ''}
+                              />
                             </div>
                           </div>
                         </div>
