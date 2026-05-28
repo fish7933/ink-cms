@@ -307,7 +307,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                     <Upload className="w-4 h-4" />사진 업로드
                   </div>
                 </Label>
-                <Input id="photo" type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+                <Input id="photo" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
