@@ -186,17 +186,53 @@ export interface SalaryTemplateItem {
 
 export interface CrewMember {
   id: string;
-  agency_id: string;
-  full_name: string;
+  agency_id?: string;
+  full_name?: string;
+  name?: string;
   date_of_birth: string;
   nationality?: string;
-  rank_id: string;
+  rank_id?: string;
+  rank?: string;
   email?: string;
   phone?: string;
   passport_number?: string;
   seaman_book_number?: string;
-  availability_status: 'available' | 'on_board' | 'on_leave' | 'unavailable';
+  contact_phone?: string;
+  contact_email?: string;
+  availability_status?: 'available' | 'on_board' | 'on_leave' | 'unavailable';
+  current_status?: string;
   created_at: string;
+  updated_at?: string;
+  // Bio-Data
+  photo_url?: string;
+  height?: number;
+  weight?: number;
+  blood_type?: string;
+  shoe_size?: string;
+  coverall_size?: string;
+  place_of_birth?: string;
+  // Contacts
+  emergency_contact?: string;
+  emergency_contacts?: Array<{ name: string; relationship: string; phone: string; note?: string }>;
+  next_of_kin?: string;
+  next_of_kin_relationship?: string;
+  next_of_kin_contact?: string;
+  // Certificates
+  certificates?: Array<{
+    name: string;
+    number?: string;
+    issued_date?: string;
+    expiry_date?: string;
+    issuing_authority?: string;
+    no_expiry?: boolean;
+    file_path?: string;
+    file_name?: string;
+  }>;
+  // Assignment
+  owner_id?: string;
+  fleet_id?: string;
+  current_ship_id?: string;
+  manning_agency_id?: string;
 }
 
 export interface CrewMemberWithDetails extends CrewMember {

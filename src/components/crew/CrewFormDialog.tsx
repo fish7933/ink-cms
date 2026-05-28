@@ -5,37 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { crewService } from '@/services/crew.service';
 import { supabase } from '@/lib/supabase';
 import type { Rank } from '@/types/models';
 import { Upload, User, X, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
-
-interface CrewMember {
-  id: string;
-  name: string;
-  rank_id?: string;
-  rank?: string;
-  nationality?: string;
-  date_of_birth?: string;
-  passport_number?: string;
-  seaman_book_number?: string;
-  contact_phone?: string;
-  contact_email?: string;
-  current_status: 'registered' | 'available' | 'on_board' | 'on_leave' | 'retired';
-  photo_url?: string;
-  height?: number;
-  weight?: number;
-  blood_type?: string;
-  shoe_size?: string;
-  coverall_size?: string;
-  place_of_birth?: string;
-  emergency_contacts?: EmergencyContact[];
-  certificates?: Certificate[];
-  [key: string]: unknown;
-}
 
 interface EmergencyContact {
   name: string;
@@ -55,10 +30,32 @@ interface Certificate {
   file_name?: string;
 }
 
+interface CrewMember {
+  id: string;
+  name?: string;
+  rank_id?: string;
+  rank?: string;
+  nationality?: string;
+  date_of_birth?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  current_status?: string;
+  photo_url?: string;
+  height?: number;
+  weight?: number;
+  blood_type?: string;
+  shoe_size?: string;
+  coverall_size?: string;
+  place_of_birth?: string;
+  emergency_contacts?: EmergencyContact[];
+  certificates?: Certificate[];
+  [key: string]: unknown;
+}
+
 interface CrewFormDialogProps {
   open: boolean;
   crew: CrewMember | null;
-  onClose: (saved: boolean) => void;
+  onClose: (saved: boolean, crewId?: string) => void;
 }
 
 const CERT_TEMPLATES = [
@@ -77,7 +74,7 @@ const CERT_TEMPLATES = [
 ];
 
 const RELATIONSHIPS = ['배우자', '부', '모', '자', '녀', '형', '제', '자매', '친구', '기타'];
-const SHOE_SIZES = ['235', '240', '245', '250', '255', '260', '265', '270', '275', '280', '285', '290', '295', '300'];
+const SHOE_SIZES = ['235','240','245','250','255','260','265','270','275','280','285','290','295','300'];
 const COVERALL_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
 export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
@@ -86,7 +83,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
-  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
@@ -109,40 +106,36 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
 
   useEffect(() => {
     if (open) {
-      loadRanks();
+      supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
       getNationalities(true).then(setNationalities).catch(console.error);
 
       if (crew) {
         setFormData({
-          name: crew.name,
+          name: crew.name || '',
           rank_id: crew.rank_id || '',
           nationality: crew.nationality || '',
           date_of_birth: crew.date_of_birth || '',
-          contact_phone: crew.contact_phone || '',
-          contact_email: crew.contact_email || '',
-          photo_url: crew.photo_url || '',
+          contact_phone: (crew.contact_phone as string) || '',
+          contact_email: (crew.contact_email as string) || '',
+          photo_url: (crew.photo_url as string) || '',
           height: crew.height?.toString() || '',
           weight: crew.weight?.toString() || '',
-          blood_type: crew.blood_type || 'none',
-          shoe_size: crew.shoe_size || '',
-          coverall_size: crew.coverall_size || '',
-          place_of_birth: crew.place_of_birth || '',
+          blood_type: (crew.blood_type as string) || 'none',
+          shoe_size: (crew.shoe_size as string) || '',
+          coverall_size: (crew.coverall_size as string) || '',
+          place_of_birth: (crew.place_of_birth as string) || '',
         });
-        setPreviewUrl(crew.photo_url || '');
+        setPreviewUrl((crew.photo_url as string) || '');
 
-        // 증서 로드
         try {
           const certs = typeof crew.certificates === 'string'
-            ? JSON.parse(crew.certificates as string)
-            : (crew.certificates || []);
+            ? JSON.parse(crew.certificates) : (crew.certificates || []);
           setCertificates(Array.isArray(certs) ? certs : []);
         } catch { setCertificates([]); }
 
-        // 비상연락처 로드
         try {
           const contacts = typeof crew.emergency_contacts === 'string'
-            ? JSON.parse(crew.emergency_contacts as string)
-            : (crew.emergency_contacts || []);
+            ? JSON.parse(crew.emergency_contacts as string) : (crew.emergency_contacts || []);
           setEmergencyContacts(Array.isArray(contacts) ? contacts : []);
         } catch { setEmergencyContacts([]); }
 
@@ -157,23 +150,12 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
     }
   }, [open, crew]);
 
-  const loadRanks = async () => {
-    const { data } = await supabase.from('ranks').select('*').order('display_order');
-    if (data) setRanks(data);
-  };
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
       const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-      if (!allowed.includes(file.type)) {
-        alert('JPG, PNG, WEBP 형식의 이미지만 업로드 가능합니다.');
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        alert('5MB 이하의 이미지만 업로드 가능합니다.');
-        return;
-      }
+      if (!allowed.includes(file.type)) { alert('JPG, PNG, WEBP 형식만 가능합니다.'); return; }
+      if (file.size > 5 * 1024 * 1024) { alert('5MB 이하만 가능합니다.'); return; }
       setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setPreviewUrl(reader.result as string);
@@ -184,7 +166,6 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   const uploadPhoto = async (): Promise<string | null> => {
     if (!selectedFile) return formData.photo_url || null;
     try {
-      setUploading(true);
       const ext = selectedFile.name.split('.').pop();
       const path = `crew-photos/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
       const { error } = await supabase.storage.from('crew-documents').upload(path, selectedFile);
@@ -192,31 +173,31 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
       const { data: { publicUrl } } = supabase.storage.from('crew-documents').getPublicUrl(path);
       return publicUrl;
     } catch (e) { console.error(e); return null; }
-    finally { setUploading(false); }
   };
 
   // 증서
   const addCert = (name?: string) => setCertificates(prev => [...prev, { name: name || '', number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: false }]);
   const updateCert = (idx: number, field: keyof Certificate, value: string | boolean) => setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
   const removeCert = (idx: number) => setCertificates(prev => prev.filter((_, i) => i !== idx));
-  const handleIssuedDateChange = (idx: number, value: string) => {
+  const handleIssuedDate = (idx: number, value: string) => {
     setCertificates(prev => prev.map((c, i) => {
       if (i !== idx) return c;
       let expiry = c.expiry_date;
       if (value && !c.no_expiry) {
-        const d = new Date(value);
-        d.setFullYear(d.getFullYear() + 5);
+        const d = new Date(value); d.setFullYear(d.getFullYear() + 5);
         expiry = d.toISOString().split('T')[0];
       }
       return { ...c, issued_date: value, expiry_date: expiry };
     }));
   };
-  const handleNoExpiryChange = (idx: number, checked: boolean) => setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, no_expiry: checked, expiry_date: checked ? '' : c.expiry_date } : c));
+  const handleNoExpiry = (idx: number, checked: boolean) => setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, no_expiry: checked, expiry_date: checked ? '' : c.expiry_date } : c));
 
-  // 비상연락처
+  // 연락처
   const addContact = () => setEmergencyContacts(prev => [...prev, { name: '', relationship: '', phone: '', note: '' }]);
   const updateContact = (idx: number, field: keyof EmergencyContact, value: string) => setEmergencyContacts(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
   const removeContact = (idx: number) => setEmergencyContacts(prev => prev.filter((_, i) => i !== idx));
+
+  const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,6 +206,8 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
       return;
     }
     try {
+      setSaving(true);
+
       let photoUrl = formData.photo_url;
       if (selectedFile) { const u = await uploadPhoto(); if (u) photoUrl = u; }
 
@@ -242,39 +225,60 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
         })
       );
 
-      const crewData = {
+      // rank 이름 조회
+      let rankName = '';
+      if (formData.rank_id) {
+        const { data: rd } = await supabase.from('ranks').select('name').eq('id', formData.rank_id).single();
+        if (rd) rankName = rd.name;
+      }
+
+      const updateData: Record<string, unknown> = {
         name: formData.name,
         rank_id: formData.rank_id,
-        nationality: formData.nationality || undefined,
-        date_of_birth: formData.date_of_birth || undefined,
-        contact_phone: formData.contact_phone || undefined,
-        contact_email: formData.contact_email || undefined,
-        photo_url: photoUrl || undefined,
-        height: formData.height ? parseFloat(formData.height) : undefined,
-        weight: formData.weight ? parseFloat(formData.weight) : undefined,
-        blood_type: formData.blood_type !== 'none' ? formData.blood_type : undefined,
-        shoe_size: formData.shoe_size || undefined,
-        coverall_size: formData.coverall_size || undefined,
-        place_of_birth: formData.place_of_birth || undefined,
+        rank: rankName,
+        nationality: formData.nationality || null,
+        date_of_birth: formData.date_of_birth || null,
+        phone: formData.contact_phone || null,
+        email: formData.contact_email || null,
+        photo_url: photoUrl || null,
+        height: formData.height ? parseFloat(formData.height) : null,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
+        blood_type: formData.blood_type !== 'none' ? formData.blood_type : null,
+        shoe_size: formData.shoe_size || null,
+        coverall_size: formData.coverall_size || null,
+        place_of_birth: formData.place_of_birth || null,
         emergency_contacts: emergencyContacts.filter(c => c.name || c.phone),
         certificates: certsWithFiles,
+        updated_at: new Date().toISOString(),
       };
 
       if (crew) {
-        await crewService.update(crew.id, crewData as Parameters<typeof crewService.update>[1]);
+        const { error } = await supabase
+          .from('crew_members')
+          .update(updateData)
+          .eq('id', crew.id);
+
+        if (error) throw new Error(error.message);
         toast({ title: '수정 완료', description: '선원 정보가 수정되었습니다.' });
+        onClose(true, crew.id);
       } else {
-        await crewService.create({ ...crewData, current_status: 'registered' } as Parameters<typeof crewService.create>[0]);
+        const { data: newCrew, error } = await supabase
+          .from('crew_members')
+          .insert({ ...updateData, current_status: 'registered', created_at: new Date().toISOString() })
+          .select()
+          .single();
+
+        if (error) throw new Error(error.message);
         toast({ title: '등록 완료', description: '선원이 등록되었습니다.' });
+        onClose(true, newCrew?.id);
       }
-      onClose(true);
     } catch (error) {
       console.error('Failed to save crew member:', error);
       toast({ title: '저장 실패', description: '선원 정보 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
-
-  const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
 
   return (
     <Dialog open={open} onOpenChange={() => onClose(false)}>
@@ -290,7 +294,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
               <TabsTrigger value="biodata" className="text-xs">Bio-Data</TabsTrigger>
               <TabsTrigger value="emergency" className="text-xs">연락처</TabsTrigger>
               <TabsTrigger value="certificates" className="text-xs">
-                증서 {certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5 text-xs">{certificates.length}</span>}
+                증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5 text-xs">{certificates.length}</span>}
               </TabsTrigger>
             </TabsList>
 
@@ -317,6 +321,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                   </div>
                 </Label>
                 <Input id="photo" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+                {selectedFile && <p className="text-xs text-gray-500">{selectedFile.name}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -382,7 +387,6 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                   <Plus className="h-3 w-3" />추가
                 </Button>
               </div>
-
               {emergencyContacts.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">연락처를 추가하세요.</div>
               ) : (
@@ -396,10 +400,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                         </Button>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs text-gray-500">이름</Label>
-                          <Input value={contact.name} onChange={e => updateContact(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="이름" />
-                        </div>
+                        <div><Label className="text-xs text-gray-500">이름</Label><Input value={contact.name} onChange={e => updateContact(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="이름" /></div>
                         <div>
                           <Label className="text-xs text-gray-500">관계</Label>
                           <Select value={contact.relationship} onValueChange={v => updateContact(idx, 'relationship', v)}>
@@ -407,14 +408,8 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                             <SelectContent>{RELATIONSHIPS.map(r => <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
-                        <div>
-                          <Label className="text-xs text-gray-500">연락처</Label>
-                          <Input value={contact.phone} onChange={e => updateContact(idx, 'phone', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="전화번호" />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-gray-500">비고</Label>
-                          <Input value={contact.note || ''} onChange={e => updateContact(idx, 'note', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="비고" />
-                        </div>
+                        <div><Label className="text-xs text-gray-500">연락처</Label><Input value={contact.phone} onChange={e => updateContact(idx, 'phone', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="전화번호" /></div>
+                        <div><Label className="text-xs text-gray-500">비고</Label><Input value={contact.note || ''} onChange={e => updateContact(idx, 'note', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="비고" /></div>
                       </div>
                     </div>
                   ))}
@@ -436,7 +431,6 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                   </Button>
                 </div>
               </div>
-
               {certificates.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">증서를 추가하세요.</div>
               ) : (
@@ -455,12 +449,12 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                           <div><Label className="text-xs text-gray-500">증서 번호</Label><Input value={cert.number || ''} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs mt-0.5" placeholder="번호" /></div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <div><Label className="text-xs text-gray-500">발급일</Label><Input type="date" value={cert.issued_date || ''} onChange={e => handleIssuedDateChange(idx, e.target.value)} className="h-7 text-xs mt-0.5" /></div>
+                          <div><Label className="text-xs text-gray-500">발급일</Label><Input type="date" value={cert.issued_date || ''} onChange={e => handleIssuedDate(idx, e.target.value)} className="h-7 text-xs mt-0.5" /></div>
                           <div>
                             <div className="flex items-center justify-between mt-0.5 mb-0.5">
                               <Label className="text-xs text-gray-500">만료일</Label>
                               <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
-                                <input type="checkbox" checked={cert.no_expiry || false} onChange={e => handleNoExpiryChange(idx, e.target.checked)} className="accent-blue-600 w-3 h-3" />
+                                <input type="checkbox" checked={cert.no_expiry || false} onChange={e => handleNoExpiry(idx, e.target.checked)} className="accent-blue-600 w-3 h-3" />
                                 만료일 없음
                               </label>
                             </div>
@@ -475,20 +469,19 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                               {cert.file_name ? (
                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs h-7">
                                   <span className="flex-1 truncate text-blue-700">{cert.file_name}</span>
-                                  <button type="button" onClick={() => { updateCert(idx, 'file_path', ''); updateCert(idx, 'file_name', ''); setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; }); }} className="text-red-400 hover:text-red-600 shrink-0"><X className="h-3 w-3" /></button>
+                                  <button type="button" onClick={() => { updateCert(idx, 'file_path', ''); updateCert(idx, 'file_name', ''); setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; }); }} className="text-red-400 hover:text-red-600"><X className="h-3 w-3" /></button>
                                 </div>
                               ) : certFiles[idx] ? (
                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded text-xs h-7">
                                   <span className="flex-1 truncate text-green-700">{certFiles[idx].name}</span>
-                                  <button type="button" onClick={() => setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; })} className="text-red-400 hover:text-red-600 shrink-0"><X className="h-3 w-3" /></button>
+                                  <button type="button" onClick={() => setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; })} className="text-red-400 hover:text-red-600"><X className="h-3 w-3" /></button>
                                 </div>
                               ) : (
                                 <label className="flex items-center gap-1.5 px-2 py-1 border border-dashed rounded cursor-pointer hover:bg-gray-50 text-xs text-gray-400 h-7">
-                                  <Upload className="h-3 w-3 shrink-0" />
-                                  <span className="truncate">파일 선택</span>
+                                  <Upload className="h-3 w-3 shrink-0" /><span className="truncate">파일 선택</span>
                                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => {
                                     const file = e.target.files?.[0];
-                                    if (file) { if (file.size > 10 * 1024 * 1024) { alert('10MB를 초과합니다.'); return; } setCertFiles(prev => ({ ...prev, [idx]: file })); }
+                                    if (file) { if (file.size > 10 * 1024 * 1024) { alert('10MB 초과'); return; } setCertFiles(prev => ({ ...prev, [idx]: file })); }
                                   }} />
                                 </label>
                               )}
@@ -504,11 +497,13 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
           </Tabs>
 
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={uploading}>취소</Button>
-            <Button type="submit" disabled={uploading}>{uploading ? '업로드 중...' : (crew ? '수정' : '등록')}</Button>
+            <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={saving}>취소</Button>
+            <Button type="submit" disabled={saving}>{saving ? '저장 중...' : crew ? '수정' : '등록'}</Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
   );
 }
+
+export default CrewFormDialog;

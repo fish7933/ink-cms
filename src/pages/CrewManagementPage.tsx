@@ -746,7 +746,23 @@ export function CrewManagementPage() {
       <CrewFormDialog
         open={crewDialogOpen}
         crew={selectedCrew}
-        onClose={handleDialogClose}
+        onClose={(saved, crewId) => {
+  setCrewDialogOpen(false);
+  if (saved) {
+    loadData().then(() => {
+      if (crewId) {
+        setTimeout(() => {
+          setCrewMembers(prev => {
+            const updated = prev.find(c => c.id === crewId);
+            if (updated) { setViewingCrew(updated); setDetailDialogOpen(true); }
+            return prev;
+          });
+        }, 300);
+      }
+    });
+  }
+  setSelectedCrew(null);
+}}
       />
 
       <CrewStatusDialog
