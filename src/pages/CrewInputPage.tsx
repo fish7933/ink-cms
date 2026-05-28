@@ -50,6 +50,7 @@ export default function CrewInputPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [certFiles, setCertFiles] = useState<Record<number, File>>({});
 
   const [formData, setFormData] = useState({
     name: '',
