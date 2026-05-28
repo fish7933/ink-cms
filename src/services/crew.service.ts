@@ -288,17 +288,28 @@ export const crewService = {
     const updateData: Record<string, string | undefined | CrewExperience[]> = {};
     
     if (updates.name) updateData.name = updates.name;
-    if (updates.nationality) updateData.nationality = updates.nationality;
-    if (updates.date_of_birth) updateData.date_of_birth = updates.date_of_birth;
-    if (updates.passport_number) updateData.passport_no = updates.passport_number;
-    if (updates.seaman_book_number) updateData.seaman_book_no = updates.seaman_book_number;
-    if (updates.contact_phone) updateData.phone = updates.contact_phone;
-    if (updates.contact_email) updateData.email = updates.contact_email;
+    if (updates.nationality !== undefined) updateData.nationality = updates.nationality;
+    if (updates.date_of_birth !== undefined) updateData.date_of_birth = updates.date_of_birth;
+    if (updates.passport_number !== undefined) updateData.passport_no = updates.passport_number;
+    if (updates.seaman_book_number !== undefined) updateData.seaman_book_no = updates.seaman_book_number;
+    if (updates.contact_phone !== undefined) updateData.phone = updates.contact_phone;
+    if (updates.contact_email !== undefined) updateData.email = updates.contact_email;
     if (updates.manning_agency_id !== undefined) updateData.manning_agency_id = updates.manning_agency_id;
     if (updates.owner_id !== undefined) updateData.owner_id = updates.owner_id;
     if (updates.fleet_id !== undefined) updateData.fleet_id = updates.fleet_id;
     if (updates.current_ship_id !== undefined) updateData.current_ship_id = updates.current_ship_id;
-    if (updates.experience) updateData.experience = updates.experience;
+    if (updates.experience !== undefined) updateData.experience = updates.experience;
+    if (updates.photo_url !== undefined) updateData.photo_url = updates.photo_url;
+    if (updates.height !== undefined) updateData.height = updates.height as unknown as string;
+    if (updates.weight !== undefined) updateData.weight = updates.weight as unknown as string;
+    if (updates.blood_type !== undefined) updateData.blood_type = updates.blood_type;
+    if (updates.shoe_size !== undefined) updateData.shoe_size = updates.shoe_size;
+    if (updates.coverall_size !== undefined) updateData.coverall_size = updates.coverall_size;
+    if (updates.place_of_birth !== undefined) updateData.place_of_birth = updates.place_of_birth;
+    if (updates.emergency_contacts !== undefined) updateData.emergency_contacts = updates.emergency_contacts as unknown as string;
+    if (updates.certificates !== undefined) updateData.certificates = updates.certificates as unknown as string;
+    if (updates.rank_id !== undefined) updateData.rank_id = updates.rank_id;
+    if (updates.current_status !== undefined) updateData.current_status = updates.current_status;
     
     // Get rank name from rank_id if provided
     if (updates.rank_id) {
