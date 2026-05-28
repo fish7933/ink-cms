@@ -165,6 +165,15 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
+      const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowed.includes(file.type)) {
+        alert('JPG, PNG, WEBP 형식의 이미지만 업로드 가능합니다.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('5MB 이하의 이미지만 업로드 가능합니다.');
+        return;
+      }
       setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setPreviewUrl(reader.result as string);

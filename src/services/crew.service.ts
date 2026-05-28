@@ -285,9 +285,20 @@ export const crewService = {
   },
 
   async update(id: string, updates: Partial<CrewMember>): Promise<CrewMember | null> {
-    const updateData: Record<string, string | undefined | CrewExperience[]> = {};
-    
-    if (updates.name) updateData.name = updates.name;
+    // rank_id → rank 이름 조회
+    let rankName: string | undefined;
+    if (updates.rank_id) {
+      const { data: rankData } = await supabase
+        .from('ranks')
+        .select('name')
+        .eq('id', updates.rank_id)
+        .single();
+      if (rankData) rankName = rankData.name;
+    }
+
+    const updateData: Record<string, unknown> = {};
+
+    if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.nationality !== undefined) updateData.nationality = updates.nationality;
     if (updates.date_of_birth !== undefined) updateData.date_of_birth = updates.date_of_birth;
     if (updates.passport_number !== undefined) updateData.passport_no = updates.passport_number;
@@ -299,28 +310,24 @@ export const crewService = {
     if (updates.fleet_id !== undefined) updateData.fleet_id = updates.fleet_id;
     if (updates.current_ship_id !== undefined) updateData.current_ship_id = updates.current_ship_id;
     if (updates.experience !== undefined) updateData.experience = updates.experience;
+    if (updates.rank_id !== undefined) updateData.rank_id = updates.rank_id;
+    if (rankName) updateData.rank = rankName;
+    if (updates.current_status !== undefined) updateData.current_status = updates.current_status;
+
+    // Bio-Data
     if (updates.photo_url !== undefined) updateData.photo_url = updates.photo_url;
-    if (updates.height !== undefined) updateData.height = updates.height as unknown as string;
-    if (updates.weight !== undefined) updateData.weight = updates.weight as unknown as string;
+    if (updates.height !== undefined) updateData.height = updates.height;
+    if (updates.weight !== undefined) updateData.weight = updates.weight;
     if (updates.blood_type !== undefined) updateData.blood_type = updates.blood_type;
     if (updates.shoe_size !== undefined) updateData.shoe_size = updates.shoe_size;
     if (updates.coverall_size !== undefined) updateData.coverall_size = updates.coverall_size;
     if (updates.place_of_birth !== undefined) updateData.place_of_birth = updates.place_of_birth;
-    if (updates.emergency_contacts !== undefined) updateData.emergency_contacts = updates.emergency_contacts as unknown as string;
-    if (updates.certificates !== undefined) updateData.certificates = updates.certificates as unknown as string;
-    if (updates.rank_id !== undefined) updateData.rank_id = updates.rank_id;
-    if (updates.current_status !== undefined) updateData.current_status = updates.current_status;
-    
-    // Get rank name from rank_id if provided
-    if (updates.rank_id) {
-      const { data: rankData } = await supabase
-        .from('ranks')
-        .select('name')
-        .eq('id', updates.rank_id)
-        .single();
-      
-      if (rankData) updateData.rank = rankData.name;
-    }
+
+    // 연락처 및 증서
+    if (updates.emergency_contacts !== undefined) updateData.emergency_contacts = updates.emergency_contacts;
+    if (updates.certificates !== undefined) updateData.certificates = updates.certificates;
+
+    updateData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
       .from('crew_members')
