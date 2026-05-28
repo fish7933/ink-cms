@@ -20,6 +20,8 @@ interface Certificate {
   expiry_date: string;
   issuing_authority: string;
   no_expiry: boolean;
+  file_path?: string;
+  file_name?: string;
 }
 
 const CERT_TEMPLATES = [
@@ -188,11 +190,24 @@ const addCert = (name?: string) => {
       }
 
       // 증서 저장 (crew_recommendations 테이블 업데이트)
+// 증서 파일 업로드 후 저장
       const validCerts = certificates.filter(c => c.name.trim());
-      if (validCerts.length > 0) {
+      const certsWithFiles = await Promise.all(
+        validCerts.map(async (cert, idx) => {
+          const file = certFiles[idx];
+          if (file) {
+            const ext = file.name.split('.').pop();
+            const path = `crew-certificates/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+            const { error } = await supabase.storage.from('documents').upload(path, file);
+            if (!error) return { ...cert, file_path: path, file_name: file.name };
+          }
+          return cert;
+        })
+      );
+      if (certsWithFiles.length > 0) {
         await supabase
           .from('crew_recommendations')
-          .update({ certificates: JSON.stringify(validCerts), updated_at: new Date().toISOString() })
+          .update({ certificates: JSON.stringify(certsWithFiles), updated_at: new Date().toISOString() })
           .eq('id', recommendation.id);
       }
 
@@ -394,9 +409,58 @@ const addCert = (name?: string) => {
                               <Label className="text-xs">증서 번호</Label>
                               <Input value={cert.number} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="번호" />
                             </div>
-                            <div>
+                           <div>
                               <Label className="text-xs">발급 기관</Label>
                               <Input value={cert.issuing_authority} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="발급 기관" />
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs">증서 사본</Label>
+                              <div className="mt-0.5">
+                                {cert.file_name ? (
+                                  <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                                    <span className="flex-1 truncate text-blue-700">{cert.file_name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateCert(idx, 'file_path', '');
+                                        updateCert(idx, 'file_name', '');
+                                        setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; });
+                                      }}
+                                      className="text-red-400 hover:text-red-600 shrink-0"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                ) : certFiles[idx] ? (
+                                  <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                                    <span className="flex-1 truncate text-green-700">{certFiles[idx].name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; })}
+                                      className="text-red-400 hover:text-red-600 shrink-0"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <label className="flex items-center gap-2 px-3 py-1.5 border border-dashed rounded cursor-pointer hover:bg-gray-50 text-xs text-gray-500">
+                                    <Upload className="h-3.5 w-3.5" />
+                                    <span>파일 선택 (PDF, JPG, PNG)</span>
+                                    <input
+                                      type="file"
+                                      accept=".pdf,.jpg,.jpeg,.png"
+                                      className="hidden"
+                                      onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          if (file.size > 10 * 1024 * 1024) { alert('10MB를 초과합니다.'); return; }
+                                          setCertFiles(prev => ({ ...prev, [idx]: file }));
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
                             </div>
                         <div>
                               <Label className="text-xs">발급일</Label>
