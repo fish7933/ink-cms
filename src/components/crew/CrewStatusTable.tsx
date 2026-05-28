@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, RefreshCw } from 'lucide-react';
+import { Edit, RefreshCw, Eye } from 'lucide-react';
 import type { CrewWithDetails } from '@/services/crew.service';
 import CrewStatusBadge from './CrewStatusBadge';
 
@@ -11,17 +11,19 @@ interface CrewStatusTableProps {
   selectedCrewIds: string[];
   onSelectionChange: (crewId: string, checked: boolean) => void;
   onSelectAll: (checked: boolean) => void;
+  onView: (crew: CrewWithDetails) => void;
   onEdit: (crew: CrewWithDetails) => void;
   onChangeStatus: (crew: CrewWithDetails) => void;
 }
 
-export function CrewStatusTable({ 
-  crew, 
+export function CrewStatusTable({
+  crew,
   selectedCrewIds,
   onSelectionChange,
   onSelectAll,
-  onEdit, 
-  onChangeStatus 
+  onView,
+  onEdit,
+  onChangeStatus,
 }: CrewStatusTableProps) {
   const allSelected = crew.length > 0 && selectedCrewIds.length === crew.length;
   const someSelected = selectedCrewIds.length > 0 && selectedCrewIds.length < crew.length;
@@ -32,12 +34,7 @@ export function CrewStatusTable({
         <TableHeader>
           <TableRow>
             <TableHead className="w-12">
-              <Checkbox
-                checked={allSelected}
-                onCheckedChange={onSelectAll}
-                aria-label="전체 선택"
-                className={someSelected ? "data-[state=checked]:bg-blue-600" : ""}
-              />
+              <Checkbox checked={allSelected} onCheckedChange={onSelectAll} aria-label="전체 선택" className={someSelected ? 'data-[state=checked]:bg-blue-600' : ''} />
             </TableHead>
             <TableHead>선주사</TableHead>
             <TableHead>플릿</TableHead>
@@ -55,19 +52,13 @@ export function CrewStatusTable({
         <TableBody>
           {crew.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
-                등록된 선원이 없습니다
-              </TableCell>
+              <TableCell colSpan={12} className="text-center text-muted-foreground py-8">등록된 선원이 없습니다</TableCell>
             </TableRow>
           ) : (
-            crew.map((member) => (
+            crew.map(member => (
               <TableRow key={member.id}>
                 <TableCell>
-                  <Checkbox
-                    checked={selectedCrewIds.includes(member.id)}
-                    onCheckedChange={(checked) => onSelectionChange(member.id, checked as boolean)}
-                    aria-label={`${member.name} 선택`}
-                  />
+                  <Checkbox checked={selectedCrewIds.includes(member.id)} onCheckedChange={c => onSelectionChange(member.id, c as boolean)} aria-label={`${member.name} 선택`} />
                 </TableCell>
                 <TableCell>{member.owner_name || '-'}</TableCell>
                 <TableCell>{member.fleet_name || '-'}</TableCell>
@@ -83,36 +74,27 @@ export function CrewStatusTable({
                   {member.date_of_birth ? (
                     <div className="flex flex-col">
                       <span>{member.date_of_birth}</span>
-                      {member.age && (
-                        <span className="text-xs text-muted-foreground">({member.age}세)</span>
-                      )}
+                      {member.age && <span className="text-xs text-muted-foreground">({member.age}세)</span>}
                     </div>
                   ) : '-'}
                 </TableCell>
                 <TableCell>{member.nationality || '-'}</TableCell>
                 <TableCell>{member.manning_agency_name || '-'}</TableCell>
-                <TableCell>
-                  <CrewStatusBadge status={member.current_status} />
-                </TableCell>
+                <TableCell><CrewStatusBadge status={member.current_status} /></TableCell>
                 <TableCell>
                   <Badge variant={member.rank_category === 'officer' ? 'default' : 'secondary'}>
                     {member.rank_category === 'officer' ? '사관' : '부원'}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(member)}
-                    >
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => onView(member)} title="상세보기">
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => onEdit(member)} title="수정">
                       <Edit className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onChangeStatus(member)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => onChangeStatus(member)} title="상태변경">
                       <RefreshCw className="w-4 h-4" />
                     </Button>
                   </div>

@@ -24,6 +24,7 @@ import { supabase } from '@/lib/supabase';
 import type { Rank, Company, Fleet, Ship } from '@/types/models';
 import Layout from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
+import { CrewDetailDialog } from '@/components/crew/CrewDetailDialog';
 
 export function CrewManagementPage() {
   const { toast } = useToast();
@@ -61,6 +62,8 @@ export function CrewManagementPage() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [viewingCrew, setViewingCrew] = useState<CrewWithDetails | null>(null);
 
   useEffect(() => {
     loadData();
@@ -230,6 +233,10 @@ export function CrewManagementPage() {
     }
 
     setFilteredCrew(filtered);
+  };
+  const handleView = (crew: CrewWithDetails) => {
+  setViewingCrew(crew);
+  setDetailDialogOpen(true);
   };
 
   const handleAddCrew = () => {
@@ -614,6 +621,7 @@ export function CrewManagementPage() {
                   selectedCrewIds={selectedCrewIds}
                   onSelectionChange={handleSelectionChange}
                   onSelectAll={handleSelectAll}
+                  onView={handleView}
                   onEdit={handleEditCrew}
                   onChangeStatus={handleChangeStatus}
                 />
@@ -625,6 +633,7 @@ export function CrewManagementPage() {
                   selectedCrewIds={selectedCrewIds}
                   onSelectionChange={handleSelectionChange}
                   onSelectAll={handleSelectAll}
+                  onView={handleView}
                   onEdit={handleEditCrew}
                   onChangeStatus={handleChangeStatus}
                 />
@@ -636,6 +645,7 @@ export function CrewManagementPage() {
                   selectedCrewIds={selectedCrewIds}
                   onSelectionChange={handleSelectionChange}
                   onSelectAll={handleSelectAll}
+                  onView={handleView}
                   onEdit={handleEditCrew}
                   onChangeStatus={handleChangeStatus}
                 />
@@ -647,6 +657,7 @@ export function CrewManagementPage() {
                   selectedCrewIds={selectedCrewIds}
                   onSelectionChange={handleSelectionChange}
                   onSelectAll={handleSelectAll}
+                  onView={handleView}
                   onEdit={handleEditCrew}
                   onChangeStatus={handleChangeStatus}
                 />
@@ -658,6 +669,7 @@ export function CrewManagementPage() {
                   selectedCrewIds={selectedCrewIds}
                   onSelectionChange={handleSelectionChange}
                   onSelectAll={handleSelectAll}
+                  onView={handleView}
                   onEdit={handleEditCrew}
                   onChangeStatus={handleChangeStatus}
                 />
@@ -669,6 +681,7 @@ export function CrewManagementPage() {
                   selectedCrewIds={selectedCrewIds}
                   onSelectionChange={handleSelectionChange}
                   onSelectAll={handleSelectAll}
+                  onView={handleView}
                   onEdit={handleEditCrew}
                   onChangeStatus={handleChangeStatus}
                 />
@@ -759,6 +772,13 @@ export function CrewManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CrewDetailDialog
+        open={detailDialogOpen}
+        crew={viewingCrew}
+        onClose={() => { setDetailDialogOpen(false); setViewingCrew(null); }}
+        onEdit={(crew) => { setSelectedCrew(crew); setCrewDialogOpen(true); }}
+        onDelete={(crew) => { setSelectedCrew(crew); setShowDeleteDialog(true); }}
+      />
     </Layout>
   );
 }
