@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Upload, User, X } from 'lucide-react';
+import { ArrowLeft, Save, Upload, User, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,29 @@ import { crewService } from '@/services/crew.service';
 import Layout from '@/components/Layout';
 import type { CrewRecommendationWithDetails, Rank } from '@/types/models';
 
+interface Certificate {
+  name: string;
+  number: string;
+  issued_date: string;
+  expiry_date: string;
+  issuing_authority: string;
+}
+
+const CERT_TEMPLATES = [
+  'STCW Basic Safety Training',
+  'STCW Advanced Fire Fighting',
+  'STCW Medical First Aid',
+  'STCW Proficiency in Survival Craft',
+  'Officer of the Watch (Navigation)',
+  'Chief Mate Certificate',
+  'Master Certificate',
+  'Chief Engineer Certificate',
+  'GMDSS General Operator Certificate',
+  'Medical Fitness Certificate',
+  'Continuous Discharge Certificate (Seaman Book)',
+  'Passport',
+];
+
 export default function CrewInputPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -23,6 +46,7 @@ export default function CrewInputPage() {
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -44,8 +68,6 @@ export default function CrewInputPage() {
     next_of_kin: '',
     next_of_kin_relationship: '',
     next_of_kin_contact: '',
-    
-    // Additional fields from recommendation
     owner_id: '',
     fleet_id: '',
     current_ship_id: '',
@@ -54,18 +76,11 @@ export default function CrewInputPage() {
 
   useEffect(() => {
     if (!recommendation) {
-      toast({
-        title: '잘못된 접근',
-        description: '추천 선원 정보가 없습니다.',
-        variant: 'destructive',
-      });
+      toast({ title: '잘못된 접근', description: '추천 선원 정보가 없습니다.', variant: 'destructive' });
       navigate('/my-recommendations');
       return;
     }
-
     loadRanks();
-    
-    // Pre-fill form with recommendation data
     setFormData(prev => ({
       ...prev,
       name: recommendation.crew_name,
@@ -76,6 +91,16 @@ export default function CrewInputPage() {
       current_ship_id: recommendation.ship_id || '',
       manning_agency_id: recommendation.manning_agency_id,
     }));
+
+    // 기존 증서 로드
+    if (recommendation.certificates) {
+      try {
+        const certs = typeof recommendation.certificates === 'string'
+          ? JSON.parse(recommendation.certificates)
+          : recommendation.certificates;
+        if (Array.isArray(certs)) setCertificates(certs);
+      } catch (e) { console.error(e); }
+    }
   }, [recommendation, navigate, toast]);
 
   const loadRanks = async () => {
@@ -87,11 +112,8 @@ export default function CrewInputPage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setSelectedFile(file);
-      
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string);
-      };
+      reader.onloadend = () => setPreviewUrl(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -104,48 +126,53 @@ export default function CrewInputPage() {
 
   const uploadPhoto = async (): Promise<string | null> => {
     if (!selectedFile) return null;
-
     try {
-      const fileExt = selectedFile.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `crew-photos/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('crew-documents')
-        .upload(filePath, selectedFile);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('crew-documents')
-        .getPublicUrl(filePath);
-
+      const ext = selectedFile.name.split('.').pop();
+      const path = `crew-photos/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const { error } = await supabase.storage.from('crew-documents').upload(path, selectedFile);
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('crew-documents').getPublicUrl(path);
       return publicUrl;
-    } catch (error) {
-      console.error('Error uploading photo:', error);
+    } catch (e) {
+      console.error('Error uploading photo:', e);
       return null;
     }
   };
 
+  // 증서 관련
+  const addCert = (name?: string) => {
+    setCertificates(prev => [...prev, { name: name || '', number: '', issued_date: '', expiry_date: '', issuing_authority: '' }]);
+  };
+
+  const updateCert = (idx: number, field: keyof Certificate, value: string) => {
+    setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  };
+
+  const removeCert = (idx: number) => {
+    setCertificates(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!formData.name || !formData.rank_id) {
-      toast({
-        title: '필수 항목 누락',
-        description: '이름과 직급은 필수 항목입니다.',
-        variant: 'destructive',
-      });
+      toast({ title: '필수 항목 누락', description: '이름과 직급은 필수 항목입니다.', variant: 'destructive' });
       return;
     }
-
     try {
       setLoading(true);
-
       let photoUrl = formData.photo_url;
       if (selectedFile) {
-        const uploadedUrl = await uploadPhoto();
-        if (uploadedUrl) photoUrl = uploadedUrl;
+        const uploaded = await uploadPhoto();
+        if (uploaded) photoUrl = uploaded;
+      }
+
+      // 증서 저장 (crew_recommendations 테이블 업데이트)
+      const validCerts = certificates.filter(c => c.name.trim());
+      if (validCerts.length > 0) {
+        await supabase
+          .from('crew_recommendations')
+          .update({ certificates: JSON.stringify(validCerts), updated_at: new Date().toISOString() })
+          .eq('id', recommendation.id);
       }
 
       const crewData = {
@@ -168,8 +195,6 @@ export default function CrewInputPage() {
         next_of_kin: formData.next_of_kin || undefined,
         next_of_kin_relationship: formData.next_of_kin_relationship || undefined,
         next_of_kin_contact: formData.next_of_kin_contact || undefined,
-        
-        // Assignment info
         owner_id: formData.owner_id || undefined,
         fleet_id: formData.fleet_id || undefined,
         current_ship_id: formData.current_ship_id || undefined,
@@ -178,20 +203,11 @@ export default function CrewInputPage() {
       };
 
       await crewService.create(crewData);
-
-      toast({
-        title: '등록 완료',
-        description: '선원 정보가 성공적으로 등록되었습니다.',
-      });
-
+      toast({ title: '등록 완료', description: '선원 정보가 성공적으로 등록되었습니다.' });
       navigate('/crew/management');
     } catch (error) {
       console.error('Failed to save crew member:', error);
-      toast({
-        title: '저장 실패',
-        description: '선원 정보 저장 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      toast({ title: '저장 실패', description: '선원 정보 저장 중 오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -208,66 +224,41 @@ export default function CrewInputPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold">선원 상세 정보 입력</h1>
-            <p className="text-sm text-muted-foreground">
-              추천된 선원의 상세 정보를 입력하여 등록합니다.
-            </p>
+            <p className="text-sm text-muted-foreground">추천된 선원의 상세 정보를 입력하여 등록합니다.</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Assignment Info Card */}
+          {/* 배정 정보 */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">배정 정보</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">배정 정보</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-muted-foreground">선주사</Label>
-                <div className="font-medium mt-1">{recommendation.company_name || '-'}</div>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">선박</Label>
-                <div className="font-medium mt-1">{recommendation.ship_name || '-'}</div>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">직급</Label>
-                <div className="font-medium mt-1">
-                  {recommendation.rank_code} ({recommendation.rank_name})
-                </div>
-              </div>
-              <div>
-                <Label className="text-muted-foreground">매닝사</Label>
-                <div className="font-medium mt-1">{recommendation.manning_agency_name}</div>
-              </div>
+              <div><Label className="text-muted-foreground">선주사</Label><div className="font-medium mt-1">{recommendation.company_name || '-'}</div></div>
+              <div><Label className="text-muted-foreground">선박</Label><div className="font-medium mt-1">{recommendation.ship_name || '-'}</div></div>
+              <div><Label className="text-muted-foreground">직급</Label><div className="font-medium mt-1">{recommendation.rank_code} ({recommendation.rank_name})</div></div>
+              <div><Label className="text-muted-foreground">매닝사</Label><div className="font-medium mt-1">{recommendation.manning_agency_name}</div></div>
             </CardContent>
           </Card>
 
-          {/* Crew Details Tabs */}
+          {/* 탭 */}
           <Card>
             <CardContent className="pt-6">
               <Tabs defaultValue="basic" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 mb-6">
+                <TabsList className="grid w-full grid-cols-4 mb-6">
                   <TabsTrigger value="basic">기본 정보</TabsTrigger>
                   <TabsTrigger value="biodata">Bio-Data</TabsTrigger>
                   <TabsTrigger value="emergency">비상 연락처</TabsTrigger>
+                  <TabsTrigger value="certificates">증서</TabsTrigger>
                 </TabsList>
 
+                {/* 기본 정보 */}
                 <TabsContent value="basic" className="space-y-6">
-                  {/* Photo Upload */}
                   <div className="flex flex-col items-center space-y-4 pb-6 border-b">
                     <div className="relative">
                       {previewUrl ? (
                         <div className="relative">
-                          <img
-                            src={previewUrl}
-                            alt="선원 사진"
-                            className="w-32 h-32 rounded-full object-cover border-4 border-gray-100 shadow-sm"
-                          />
-                          <button
-                            type="button"
-                            onClick={removePhoto}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 shadow-sm"
-                          >
+                          <img src={previewUrl} alt="선원 사진" className="w-32 h-32 rounded-full object-cover border-4 border-gray-100 shadow-sm" />
+                          <button type="button" onClick={removePhoto} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 shadow-sm">
                             <X className="w-4 h-4" />
                           </button>
                         </div>
@@ -284,225 +275,128 @@ export default function CrewInputPage() {
                           <span className="text-sm font-medium text-gray-700">사진 업로드</span>
                         </div>
                       </Label>
-                      <Input
-                        id="photo"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                      {selectedFile && (
-                        <p className="text-xs text-gray-500 mt-2">
-                          {selectedFile.name}
-                        </p>
-                      )}
+                      <Input id="photo" type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+                      {selectedFile && <p className="text-xs text-gray-500 mt-2">{selectedFile.name}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label>이름 *</Label>
-                      <Input
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        required
-                      />
-                    </div>
-
+                    <div className="space-y-2"><Label>이름 *</Label><Input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} required /></div>
                     <div className="space-y-2">
                       <Label>직급 *</Label>
-                      <Select 
-                        value={formData.rank_id} 
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, rank_id: value }))}
-                        disabled // Rank is fixed from recommendation
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="직급 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ranks.map(rank => (
-                            <SelectItem key={rank.id} value={String(rank.id)}>
-                              {rank.name} ({rank.rank_code})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                      <Select value={formData.rank_id} onValueChange={v => setFormData(p => ({ ...p, rank_id: v }))} disabled>
+                        <SelectTrigger><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                        <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label>국적</Label>
-                      <Input
-                        value={formData.nationality}
-                        onChange={(e) => setFormData(prev => ({ ...prev, nationality: e.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>생년월일</Label>
-                      <Input
-                        type="date"
-                        value={formData.date_of_birth}
-                        onChange={(e) => setFormData(prev => ({ ...prev, date_of_birth: e.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>여권번호</Label>
-                      <Input
-                        value={formData.passport_number}
-                        onChange={(e) => setFormData(prev => ({ ...prev, passport_number: e.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>선원수첩번호</Label>
-                      <Input
-                        value={formData.seaman_book_number}
-                        onChange={(e) => setFormData(prev => ({ ...prev, seaman_book_number: e.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>연락처</Label>
-                      <Input
-                        value={formData.contact_phone}
-                        onChange={(e) => setFormData(prev => ({ ...prev, contact_phone: e.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>이메일</Label>
-                      <Input
-                        type="email"
-                        value={formData.contact_email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, contact_email: e.target.value }))}
-                      />
-                    </div>
+                    <div className="space-y-2"><Label>국적</Label><Input value={formData.nationality} onChange={e => setFormData(p => ({ ...p, nationality: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>여권번호</Label><Input value={formData.passport_number} onChange={e => setFormData(p => ({ ...p, passport_number: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>선원수첩번호</Label><Input value={formData.seaman_book_number} onChange={e => setFormData(p => ({ ...p, seaman_book_number: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>연락처</Label><Input value={formData.contact_phone} onChange={e => setFormData(p => ({ ...p, contact_phone: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>이메일</Label><Input type="email" value={formData.contact_email} onChange={e => setFormData(p => ({ ...p, contact_email: e.target.value }))} /></div>
                   </div>
                 </TabsContent>
 
+                {/* Bio-Data */}
                 <TabsContent value="biodata" className="space-y-6">
                   <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label>출생지</Label>
-                      <Input
-                        value={formData.place_of_birth}
-                        onChange={(e) => setFormData(prev => ({ ...prev, place_of_birth: e.target.value }))}
-                        placeholder="예: 서울, 대한민국"
-                      />
-                    </div>
-
+                    <div className="space-y-2"><Label>출생지</Label><Input value={formData.place_of_birth} onChange={e => setFormData(p => ({ ...p, place_of_birth: e.target.value }))} placeholder="예: 서울, 대한민국" /></div>
                     <div className="space-y-2">
                       <Label>혈액형</Label>
-                      <Select value={formData.blood_type} onValueChange={(value) => setFormData(prev => ({ ...prev, blood_type: value }))}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="혈액형 선택" />
-                        </SelectTrigger>
+                      <Select value={formData.blood_type} onValueChange={v => setFormData(p => ({ ...p, blood_type: v }))}>
+                        <SelectTrigger><SelectValue placeholder="혈액형 선택" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">선택 안함</SelectItem>
-                          <SelectItem value="A+">A+</SelectItem>
-                          <SelectItem value="A-">A-</SelectItem>
-                          <SelectItem value="B+">B+</SelectItem>
-                          <SelectItem value="B-">B-</SelectItem>
-                          <SelectItem value="AB+">AB+</SelectItem>
-                          <SelectItem value="AB-">AB-</SelectItem>
-                          <SelectItem value="O+">O+</SelectItem>
-                          <SelectItem value="O-">O-</SelectItem>
+                          {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label>키 (cm)</Label>
-                      <Input
-                        type="number"
-                        value={formData.height}
-                        onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
-                        placeholder="170"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>몸무게 (kg)</Label>
-                      <Input
-                        type="number"
-                        value={formData.weight}
-                        onChange={(e) => setFormData(prev => ({ ...prev, weight: e.target.value }))}
-                        placeholder="70"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>신발 사이즈</Label>
-                      <Input
-                        value={formData.shoe_size}
-                        onChange={(e) => setFormData(prev => ({ ...prev, shoe_size: e.target.value }))}
-                        placeholder="예: 270mm, US 9"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>작업복 사이즈</Label>
-                      <Input
-                        value={formData.coverall_size}
-                        onChange={(e) => setFormData(prev => ({ ...prev, coverall_size: e.target.value }))}
-                        placeholder="예: L, XL"
-                      />
-                    </div>
+                    <div className="space-y-2"><Label>키 (cm)</Label><Input type="number" value={formData.height} onChange={e => setFormData(p => ({ ...p, height: e.target.value }))} placeholder="170" /></div>
+                    <div className="space-y-2"><Label>몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => setFormData(p => ({ ...p, weight: e.target.value }))} placeholder="70" /></div>
+                    <div className="space-y-2"><Label>신발 사이즈</Label><Input value={formData.shoe_size} onChange={e => setFormData(p => ({ ...p, shoe_size: e.target.value }))} placeholder="예: 270mm, US 9" /></div>
+                    <div className="space-y-2"><Label>작업복 사이즈</Label><Input value={formData.coverall_size} onChange={e => setFormData(p => ({ ...p, coverall_size: e.target.value }))} placeholder="예: L, XL" /></div>
                   </div>
                 </TabsContent>
 
+                {/* 비상 연락처 */}
                 <TabsContent value="emergency" className="space-y-6">
                   <div className="space-y-2">
                     <Label>비상연락처 (본인)</Label>
-                    <Input
-                      value={formData.emergency_contact}
-                      onChange={(e) => setFormData(prev => ({ ...prev, emergency_contact: e.target.value }))}
-                      placeholder="비상 시 연락 가능한 본인 연락처"
-                    />
+                    <Input value={formData.emergency_contact} onChange={e => setFormData(p => ({ ...p, emergency_contact: e.target.value }))} placeholder="비상 시 연락 가능한 본인 연락처" />
                   </div>
-
                   <div className="pt-6 border-t">
                     <h3 className="font-semibold mb-4 text-lg">가족 연락처</h3>
-                    
                     <div className="grid gap-4">
-                      <div className="space-y-2">
-                        <Label>이름</Label>
-                        <Input
-                          value={formData.next_of_kin}
-                          onChange={(e) => setFormData(prev => ({ ...prev, next_of_kin: e.target.value }))}
-                          placeholder="가족 이름"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>관계</Label>
-                        <Input
-                          value={formData.next_of_kin_relationship}
-                          onChange={(e) => setFormData(prev => ({ ...prev, next_of_kin_relationship: e.target.value }))}
-                          placeholder="예: 배우자, 부모, 형제"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>연락처</Label>
-                        <Input
-                          value={formData.next_of_kin_contact}
-                          onChange={(e) => setFormData(prev => ({ ...prev, next_of_kin_contact: e.target.value }))}
-                          placeholder="가족 연락처"
-                        />
-                      </div>
+                      <div className="space-y-2"><Label>이름</Label><Input value={formData.next_of_kin} onChange={e => setFormData(p => ({ ...p, next_of_kin: e.target.value }))} placeholder="가족 이름" /></div>
+                      <div className="space-y-2"><Label>관계</Label><Input value={formData.next_of_kin_relationship} onChange={e => setFormData(p => ({ ...p, next_of_kin_relationship: e.target.value }))} placeholder="예: 배우자, 부모, 형제" /></div>
+                      <div className="space-y-2"><Label>연락처</Label><Input value={formData.next_of_kin_contact} onChange={e => setFormData(p => ({ ...p, next_of_kin_contact: e.target.value }))} placeholder="가족 연락처" /></div>
                     </div>
                   </div>
+                </TabsContent>
+
+                {/* 증서 탭 */}
+                <TabsContent value="certificates" className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">보유 증서를 입력하세요. ({certificates.length}건)</p>
+                    <div className="flex gap-2">
+                      <Select onValueChange={v => addCert(v)}>
+                        <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="증서 선택 추가" /></SelectTrigger>
+                        <SelectContent>{CERT_TEMPLATES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1">
+                        <Plus className="h-3 w-3" />직접 입력
+                      </Button>
+                    </div>
+                  </div>
+
+                  {certificates.length === 0 ? (
+                    <div className="text-center py-8 text-sm text-gray-400 border-2 border-dashed rounded-md">
+                      증서를 추가하세요.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {certificates.map((cert, idx) => (
+                        <div key={idx} className="p-3 border rounded-md bg-gray-50">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-gray-600">증서 {idx + 1}</span>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeCert(idx)} className="h-6 w-6 p-0 text-red-500">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="col-span-2">
+                              <Label className="text-xs">증서명 *</Label>
+                              <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="Certificate Name" />
+                            </div>
+                            <div>
+                              <Label className="text-xs">증서 번호</Label>
+                              <Input value={cert.number} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="번호" />
+                            </div>
+                            <div>
+                              <Label className="text-xs">발급 기관</Label>
+                              <Input value={cert.issuing_authority} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="발급 기관" />
+                            </div>
+                            <div>
+                              <Label className="text-xs">발급일</Label>
+                              <Input type="date" value={cert.issued_date} onChange={e => updateCert(idx, 'issued_date', e.target.value)} className="h-8 text-xs mt-0.5" />
+                            </div>
+                            <div>
+                              <Label className="text-xs">만료일</Label>
+                              <Input type="date" value={cert.expiry_date} onChange={e => updateCert(idx, 'expiry_date', e.target.value)} className="h-8 text-xs mt-0.5" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={loading}>
-              취소
-            </Button>
+            <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={loading}>취소</Button>
             <Button type="submit" disabled={loading} className="min-w-[100px]">
               {loading ? (
                 <div className="flex items-center gap-2">
