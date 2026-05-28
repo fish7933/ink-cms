@@ -401,93 +401,84 @@ const addCert = (name?: string) => {
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="col-span-2">
-                              <Label className="text-xs">증서명 *</Label>
-                              <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="Certificate Name" />
+                          <div className="space-y-1.5">
+                            {/* 증서명 + 증서번호 */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs text-gray-500">증서명 *</Label>
+                                <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-7 text-xs mt-0.5" placeholder="Certificate Name" />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-500">증서 번호</Label>
+                                <Input value={cert.number} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs mt-0.5" placeholder="번호" />
+                              </div>
                             </div>
-                            <div>
-                              <Label className="text-xs">증서 번호</Label>
-                              <Input value={cert.number} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="번호" />
-                            </div>
-                           <div>
-                              <Label className="text-xs">발급 기관</Label>
-                              <Input value={cert.issuing_authority} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-8 text-xs mt-0.5" placeholder="발급 기관" />
-                            </div>
-                            <div className="col-span-2">
-                              <Label className="text-xs">증서 사본</Label>
-                              <div className="mt-0.5">
-                                {cert.file_name ? (
-                                  <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-                                    <span className="flex-1 truncate text-blue-700">{cert.file_name}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        updateCert(idx, 'file_path', '');
-                                        updateCert(idx, 'file_name', '');
-                                        setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; });
-                                      }}
-                                      className="text-red-400 hover:text-red-600 shrink-0"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                ) : certFiles[idx] ? (
-                                  <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
-                                    <span className="flex-1 truncate text-green-700">{certFiles[idx].name}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; })}
-                                      className="text-red-400 hover:text-red-600 shrink-0"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <label className="flex items-center gap-2 px-3 py-1.5 border border-dashed rounded cursor-pointer hover:bg-gray-50 text-xs text-gray-500">
-                                    <Upload className="h-3.5 w-3.5" />
-                                    <span>파일 선택 (PDF, JPG, PNG)</span>
+                            {/* 발급일 + 만료일 */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs text-gray-500">발급일</Label>
+                                <Input type="date" value={cert.issued_date} onChange={e => handleIssuedDateChange(idx, e.target.value)} className="h-7 text-xs mt-0.5" />
+                              </div>
+                              <div>
+                                <div className="flex items-center justify-between mt-0.5 mb-0.5">
+                                  <Label className="text-xs text-gray-500">만료일</Label>
+                                  <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
                                     <input
-                                      type="file"
-                                      accept=".pdf,.jpg,.jpeg,.png"
-                                      className="hidden"
-                                      onChange={e => {
+                                      type="checkbox"
+                                      checked={cert.no_expiry || false}
+                                      onChange={e => handleNoExpiryChange(idx, e.target.checked)}
+                                      className="accent-blue-600 w-3 h-3"
+                                    />
+                                    만료일 없음
+                                  </label>
+                                </div>
+                                <Input
+                                  type="date"
+                                  value={cert.expiry_date}
+                                  onChange={e => updateCert(idx, 'expiry_date', e.target.value)}
+                                  className="h-7 text-xs"
+                                  disabled={cert.no_expiry}
+                                />
+                              </div>
+                            </div>
+                            {/* 발급기관 + 증서 사본 */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs text-gray-500">발급 기관</Label>
+                                <Input value={cert.issuing_authority} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-7 text-xs mt-0.5" placeholder="발급 기관" />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-gray-500">증서 사본</Label>
+                                <div className="mt-0.5">
+                                  {cert.file_name ? (
+                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs h-7">
+                                      <span className="flex-1 truncate text-blue-700">{cert.file_name}</span>
+                                      <button type="button" onClick={() => { updateCert(idx, 'file_path', ''); updateCert(idx, 'file_name', ''); setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; }); }} className="text-red-400 hover:text-red-600 shrink-0">
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ) : certFiles[idx] ? (
+                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded text-xs h-7">
+                                      <span className="flex-1 truncate text-green-700">{certFiles[idx].name}</span>
+                                      <button type="button" onClick={() => setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; })} className="text-red-400 hover:text-red-600 shrink-0">
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <label className="flex items-center gap-1.5 px-2 py-1 border border-dashed rounded cursor-pointer hover:bg-gray-50 text-xs text-gray-400 h-7">
+                                      <Upload className="h-3 w-3 shrink-0" />
+                                      <span className="truncate">파일 선택</span>
+                                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => {
                                         const file = e.target.files?.[0];
                                         if (file) {
                                           if (file.size > 10 * 1024 * 1024) { alert('10MB를 초과합니다.'); return; }
                                           setCertFiles(prev => ({ ...prev, [idx]: file }));
                                         }
-                                      }}
-                                    />
-                                  </label>
-                                )}
+                                      }} />
+                                    </label>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                        <div>
-                              <Label className="text-xs">발급일</Label>
-                              <Input type="date" value={cert.issued_date} onChange={e => handleIssuedDateChange(idx, e.target.value)} className="h-8 text-xs mt-0.5" />
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-0.5">
-                                <Label className="text-xs">만료일</Label>
-                                <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={cert.no_expiry || false}
-                                    onChange={e => handleNoExpiryChange(idx, e.target.checked)}
-                                    className="accent-blue-600 w-3 h-3"
-                                  />
-                                  만료일 없음
-                                </label>
-                              </div>
-                              <Input
-                                type="date"
-                                value={cert.expiry_date}
-                                onChange={e => updateCert(idx, 'expiry_date', e.target.value)}
-                                className="h-8 text-xs"
-                                disabled={cert.no_expiry}
-                                placeholder={cert.no_expiry ? '만료일 없음' : ''}
-                              />
                             </div>
                           </div>
                         </div>
