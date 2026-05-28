@@ -370,6 +370,23 @@ export default function SupervisorManagementPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+      {selectedRecForCert && (
+            <CertificateUploadDialog
+              open={certDialogOpen}
+              onClose={(saved) => {
+                setCertDialogOpen(false);
+                setSelectedRecForCert(null);
+                if (saved) loadRecommendations();
+              }}
+              recommendationId={selectedRecForCert.id}
+              crewName={selectedRecForCert.crew_name}
+              existingCertificates={
+                typeof selectedRecForCert.certificates === 'string'
+                  ? JSON.parse(selectedRecForCert.certificates || '[]')
+                  : (selectedRecForCert.certificates || [])
+              }
+            />
+          )}
     </Layout>
   );
 }
