@@ -80,7 +80,13 @@ export default function MyRecommendationsPage() {
       setRanks(allRanks);
       if (!user?.company_id) return;
       const recs = await crewRecommendationService.getByManningAgency(user.company_id);
-      setRecommendations(recs);
+      // 등록 완료된 선원(crew_member_id 있는 것) 제외
+      const { data: rawRecs } = await supabase
+        .from('crew_recommendations')
+        .select('id, crew_member_id')
+        .eq('manning_agency_id', user.company_id);
+      const registeredIds = new Set((rawRecs || []).filter(r => r.crew_member_id).map(r => r.id));
+      setRecommendations(recs.filter((r: CrewRecommendationWithDetails) => !registeredIds.has(r.id)));
     } catch (e) {
       console.error('Failed to load recommendations:', e);
     } finally {

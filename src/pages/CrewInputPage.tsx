@@ -176,22 +176,36 @@ const addCert = (name?: string) => {
     setCertificates(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.rank_id) {
       toast({ title: '필수 항목 누락', description: '이름과 직급은 필수 항목입니다.', variant: 'destructive' });
       return;
     }
+
     try {
       setLoading(true);
+
+      // 이미 등록된 선원인지 확인
+      const { data: existing } = await supabase
+        .from('crew_recommendations')
+        .select('crew_member_id')
+        .eq('id', recommendation.id)
+        .single();
+
+      if (existing?.crew_member_id) {
+        toast({ title: '이미 등록됨', description: '이 선원은 이미 등록되어 있습니다. 선원 목록에서 수정하세요.', variant: 'destructive' });
+        navigate('/crew/management');
+        return;
+      }
+
       let photoUrl = formData.photo_url;
       if (selectedFile) {
         const uploaded = await uploadPhoto();
         if (uploaded) photoUrl = uploaded;
       }
 
-      // 증서 저장 (crew_recommendations 테이블 업데이트)
-// 증서 파일 업로드 후 저장
+      // 증서 파일 업로드
       const validCerts = certificates.filter(c => c.name.trim());
       const certsWithFiles = await Promise.all(
         validCerts.map(async (cert, idx) => {
@@ -205,6 +219,8 @@ const addCert = (name?: string) => {
           return cert;
         })
       );
+
+      // 증서 저장
       if (certsWithFiles.length > 0) {
         await supabase
           .from('crew_recommendations')
@@ -212,6 +228,7 @@ const addCert = (name?: string) => {
           .eq('id', recommendation.id);
       }
 
+      // 선원 등록
       const crewData = {
         name: formData.name,
         rank_id: formData.rank_id,
@@ -239,7 +256,16 @@ const addCert = (name?: string) => {
         current_status: 'registered' as const,
       };
 
-      await crewService.create(crewData);
+      const newCrew = await crewService.create(crewData);
+
+      // crew_recommendations 에 crew_member_id 저장 (중복 방지)
+      if (newCrew?.id) {
+        await supabase
+          .from('crew_recommendations')
+          .update({ crew_member_id: newCrew.id, updated_at: new Date().toISOString() })
+          .eq('id', recommendation.id);
+      }
+
       toast({ title: '등록 완료', description: '선원 정보가 성공적으로 등록되었습니다.' });
       navigate('/crew/management');
     } catch (error) {
