@@ -262,7 +262,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
     <Dialog open={open} onOpenChange={() => onClose(false)}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{crew ? '선원 정보 수정' : '선원 등록'}</DialogTitle>
+          <DialogTitle>{crew ? '✅ 선원 정보 수정 v2' : '✅ 선원 등록 v2'}</DialogTitle>
         </DialogHeader>
 
         {/* 선원 요약 (수정 시) */}
