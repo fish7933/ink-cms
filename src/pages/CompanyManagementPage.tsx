@@ -26,13 +26,10 @@ export function CrewManagementPage() {
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [ships, setShips] = useState<Ship[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOwner, setSelectedOwner] = useState('all');
   const [selectedFleet, setSelectedFleet] = useState('all');
@@ -45,7 +42,6 @@ export function CrewManagementPage() {
   const [maxAge, setMaxAge] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-
   const [crewDialogOpen, setCrewDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
@@ -77,7 +73,7 @@ export function CrewManagementPage() {
         setOwners(companiesData.data.filter((c: Company) => c.type === 'owner'));
         setManningAgencies(companiesData.data.filter((c: Company) => c.type === 'manning'));
       }
-    } catch (e) { console.error('Failed to load data:', e); }
+    } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
@@ -113,7 +109,9 @@ export function CrewManagementPage() {
     if (selectedRank !== 'all') filtered = filtered.filter(c => c.rank_id === selectedRank);
     if (selectedRankCategory !== 'all') filtered = filtered.filter(c => c.rank_category === selectedRankCategory);
     if (selectedManningAgency !== 'all') filtered = filtered.filter(c => c.manning_agency_id === selectedManningAgency);
-    if (selectedShipType !== 'all') filtered = filtered.filter(c => c.experience?.some((e: { ship_type: string }) => e.ship_type?.toLowerCase().includes(selectedShipType.toLowerCase())));
+    if (selectedShipType !== 'all') filtered = filtered.filter(c =>
+      c.experience?.some((e: { ship_type: string }) => e.ship_type?.toLowerCase().includes(selectedShipType.toLowerCase()))
+    );
     if (minAge || maxAge) {
       filtered = filtered.filter(c => {
         if (!c.age) return false;
@@ -133,23 +131,23 @@ export function CrewManagementPage() {
   const handleAddCrew = () => { setSelectedCrew(null); setCrewDialogOpen(true); };
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
-  const handleDialogClose = async (saved: boolean, crewId?: string) => {
+  const handleCrewDialogClose = async (saved: boolean, crewId?: string) => {
     setCrewDialogOpen(false);
-    setStatusDialogOpen(false);
+    setSelectedCrew(null);
     if (saved) {
       await loadData();
-      // 수정 완료 후 해당 선원 다이얼로그 다시 열기
       if (crewId) {
         setTimeout(() => {
           setCrewMembers(prev => {
             const updated = prev.find(c => c.id === crewId);
-            if (updated) { setSelectedCrew(updated); setCrewDialogOpen(true); }
+            if (updated) {
+              setSelectedCrew(updated);
+              setCrewDialogOpen(true);
+            }
             return prev;
           });
         }, 400);
       }
-    } else {
-      setSelectedCrew(null);
     }
   };
 
@@ -191,8 +189,7 @@ export function CrewManagementPage() {
     status === 'all' ? crewMembers.length : crewMembers.filter(c => c.current_status === status).length;
 
   const totalPages = Math.ceil(filteredCrew.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedCrew = filteredCrew.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedCrew = filteredCrew.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const goToPage = (page: number) => setCurrentPage(Math.max(1, Math.min(page, totalPages)));
 
   const shipTypes = ['Tanker', 'Bulk Carrier', 'Container', 'General Cargo', 'LNG/LPG'];
@@ -388,7 +385,7 @@ export function CrewManagementPage() {
       <CrewFormDialog
         open={crewDialogOpen}
         crew={selectedCrew}
-        onClose={handleDialogClose}
+        onClose={handleCrewDialogClose}
       />
 
       <CrewStatusDialog
