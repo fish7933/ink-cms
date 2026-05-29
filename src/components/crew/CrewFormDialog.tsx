@@ -5,14 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import type { Rank } from '@/types/models';
-import { Upload, User, X, Plus, Trash2, Edit, ExternalLink } from 'lucide-react';
+import { Upload, User, X, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
-import CrewStatusBadge from './CrewStatusBadge';
 
 interface EmergencyContact {
   name: string;
@@ -88,7 +86,6 @@ const COVERALL_SIZES = ['XS','S','M','L','XL','XXL','XXXL'];
 
 export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   const { toast } = useToast();
-  const [editMode, setEditMode] = useState(false);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -106,18 +103,13 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   });
 
   useEffect(() => {
-    if (open) {
-      // 신규 등록이면 바로 편집 모드, 수정이면 보기 모드
-      setEditMode(!crew);
-      supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
-      getNationalities(true).then(setNationalities).catch(console.error);
-      loadCrewData();
-      setSelectedFile(null);
-      setCertFiles({});
-    }
-  }, [open, crew]);
+    if (!open) return;
 
-  const loadCrewData = () => {
+    supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
+    getNationalities(true).then(setNationalities).catch(console.error);
+    setSelectedFile(null);
+    setCertFiles({});
+
     if (crew) {
       setFormData({
         name: crew.name || '',
@@ -136,11 +128,13 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
       });
       setPreviewUrl((crew.photo_url as string) || '');
       try {
-        const certs = typeof crew.certificates === 'string' ? JSON.parse(crew.certificates) : (crew.certificates || []);
+        const certs = typeof crew.certificates === 'string'
+          ? JSON.parse(crew.certificates) : (crew.certificates || []);
         setCertificates(Array.isArray(certs) ? certs : []);
       } catch { setCertificates([]); }
       try {
-        const contacts = typeof crew.emergency_contacts === 'string' ? JSON.parse(crew.emergency_contacts as string) : (crew.emergency_contacts || []);
+        const contacts = typeof crew.emergency_contacts === 'string'
+          ? JSON.parse(crew.emergency_contacts as string) : (crew.emergency_contacts || []);
         setEmergencyContacts(Array.isArray(contacts) ? contacts : []);
       } catch { setEmergencyContacts([]); }
     } else {
@@ -149,7 +143,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
       setCertificates([]);
       setEmergencyContacts([]);
     }
-  };
+  }, [open, crew]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -192,13 +186,6 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   const updateContact = (idx: number, field: keyof EmergencyContact, value: string) => setEmergencyContacts(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
   const removeContact = (idx: number) => setEmergencyContacts(prev => prev.filter((_, i) => i !== idx));
   const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
-
-  const formatDate = (d?: string) => { if (!d) return '-'; try { return new Date(d).toLocaleDateString('ko-KR'); } catch { return d; } };
-
-  const openCertFile = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
-  };
 
   const handleSave = async () => {
     if (!formData.name || !formData.rank_id) {
@@ -253,59 +240,44 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
         const { error } = await supabase.from('crew_members').update(updateData).eq('id', crew.id);
         if (error) throw new Error(error.message);
         toast({ title: '수정 완료', description: '선원 정보가 수정되었습니다.' });
-        setEditMode(false);
         onClose(true, crew.id);
       } else {
-        const { data: newCrew, error } = await supabase.from('crew_members').insert({ ...updateData, current_status: 'registered', created_at: new Date().toISOString() }).select().single();
+        const { data: newCrew, error } = await supabase
+          .from('crew_members')
+          .insert({ ...updateData, current_status: 'registered', created_at: new Date().toISOString() })
+          .select().single();
         if (error) throw new Error(error.message);
         toast({ title: '등록 완료', description: '선원이 등록되었습니다.' });
         onClose(true, newCrew?.id);
       }
     } catch (error) {
-      console.error('Failed to save crew member:', error);
+      console.error('Failed to save:', error);
       toast({ title: '저장 실패', description: String(error instanceof Error ? error.message : error), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
   };
 
-  const viewRow = (label: string, value: string | undefined | null) =>
-    <div className="flex py-1.5 border-b last:border-0">
-      <span className="text-xs text-gray-500 w-32 shrink-0">{label}</span>
-      <span className="text-sm">{value || '-'}</span>
-    </div>;
-
   return (
     <Dialog open={open} onOpenChange={() => onClose(false)}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>{!crew ? '선원 등록' : editMode ? '선원 정보 수정' : '선원 상세 정보'}</DialogTitle>
-            {crew && !editMode && (
-              <Button variant="outline" size="sm" onClick={() => setEditMode(true)} className="gap-1.5 mr-6">
-                <Edit className="w-4 h-4" />수정
-              </Button>
-            )}
-          </div>
+          <DialogTitle>{crew ? '선원 정보 수정' : '선원 등록'}</DialogTitle>
         </DialogHeader>
 
-        {/* 상단 요약 (보기 모드) */}
-        {crew && !editMode && (
-          <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg mb-2">
-            {crew.photo_url ? (
-              <img src={crew.photo_url as string} alt={crew.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" />
+        {/* 선원 요약 (수정 시) */}
+        {crew && (
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            {previewUrl ? (
+              <img src={previewUrl} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-gray-200" />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
-                <User className="w-8 h-8 text-gray-400" />
+              <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                <User className="w-6 h-6 text-gray-400" />
               </div>
             )}
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg font-bold">{crew.name}</span>
-                <Badge variant="outline" className="text-xs">{crew.rank_code}</Badge>
-                {crew.current_status && <CrewStatusBadge status={crew.current_status as string} />}
-              </div>
-              <div className="text-sm text-gray-500">{crew.rank_name} · {crew.manning_agency_name}</div>
+            <div>
+              <div className="font-semibold text-sm">{crew.name}</div>
+              <div className="text-xs text-gray-500">{crew.rank_code} · {crew.rank_name}</div>
             </div>
           </div>
         )}
@@ -320,123 +292,98 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
             </TabsTrigger>
           </TabsList>
 
-          {/* ── 기본 정보 ── */}
-          <TabsContent value="basic" className="mt-4">
-            {editMode ? (
-              <div className="space-y-4">
-                <div className="flex flex-col items-center space-y-3 pb-4 border-b">
+          {/* 기본 정보 */}
+          <TabsContent value="basic" className="space-y-4 mt-4">
+            <div className="flex flex-col items-center space-y-2 pb-4 border-b">
+              <div className="relative">
+                {previewUrl ? (
                   <div className="relative">
-                    {previewUrl ? (
-                      <div className="relative">
-                        <img src={previewUrl} alt="" className="w-28 h-28 rounded-full object-cover border-4 border-gray-200" />
-                        <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1"><X className="w-3.5 h-3.5" /></button>
-                      </div>
-                    ) : (
-                      <div className="w-28 h-28 rounded-full bg-gray-100 flex items-center justify-center border-4 border-gray-200"><User className="w-14 h-14 text-gray-400" /></div>
-                    )}
+                    <img src={previewUrl} alt="" className="w-24 h-24 rounded-full object-cover border-4 border-gray-200" />
+                    <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600">
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
-                  <Label htmlFor="photo-edit" className="cursor-pointer">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-md hover:bg-gray-200 text-sm"><Upload className="w-4 h-4" />사진 업로드</div>
-                  </Label>
-                  <Input id="photo-edit" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label className="text-xs">이름 *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1" /></div>
-                  <div>
-                    <Label className="text-xs">직급 *</Label>
-                    <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="직급 선택" /></SelectTrigger>
-                      <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
-                    </Select>
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center border-4 border-gray-200">
+                    <User className="w-12 h-12 text-gray-400" />
                   </div>
-                  <div>
-                    <Label className="text-xs">국적</Label>
-                    <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
-                      <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label className="text-xs">생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1" /></div>
-                  <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1" /></div>
-                  <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1" /></div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="bg-gray-50 rounded-md px-3">
-                  {viewRow('국적', crew?.nationality)}
-                  {viewRow('생년월일', crew?.date_of_birth ? `${formatDate(crew.date_of_birth)} (${crew.age}세)` : undefined)}
-                  {viewRow('연락처', crew?.contact_phone as string)}
-                  {viewRow('이메일', crew?.contact_email as string)}
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-gray-500 mb-1">배정 정보</h4>
-                  <div className="bg-gray-50 rounded-md px-3">
-                    {viewRow('선주사', crew?.owner_name)}
-                    {viewRow('플릿', crew?.fleet_name)}
-                    {viewRow('선박', crew?.ship_name)}
-                    {viewRow('매닝사', crew?.manning_agency_name)}
-                  </div>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* ── Bio-Data ── */}
-          <TabsContent value="biodata" className="mt-4">
-            {editMode ? (
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label className="text-xs">출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1" placeholder="예: Jakarta, Indonesia" /></div>
-                <div>
-                  <Label className="text-xs">혈액형</Label>
-                  <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="none">선택 안함</SelectItem>{['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div><Label className="text-xs">키 (cm)</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1" placeholder="170" /></div>
-                <div><Label className="text-xs">몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1" placeholder="70" /></div>
-                <div>
-                  <Label className="text-xs">신발 사이즈 (mm)</Label>
-                  <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="신발 사이즈" /></SelectTrigger>
-                    <SelectContent>{SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s} mm</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">작업복 사이즈</Label>
-                  <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="작업복 사이즈" /></SelectTrigger>
-                    <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-md px-3">
-                {viewRow('출생지', crew?.place_of_birth as string)}
-                {viewRow('혈액형', crew?.blood_type as string)}
-                {viewRow('키', crew?.height ? `${crew.height} cm` : undefined)}
-                {viewRow('몸무게', crew?.weight ? `${crew.weight} kg` : undefined)}
-                {viewRow('신발 사이즈', crew?.shoe_size as string)}
-                {viewRow('작업복 사이즈', crew?.coverall_size as string)}
-                {!crew?.height && !crew?.weight && !crew?.blood_type && !crew?.place_of_birth && (
-                  <div className="text-center py-4 text-sm text-gray-400">입력된 Bio-Data가 없습니다.</div>
                 )}
               </div>
-            )}
+              <Label htmlFor="photo-input" className="cursor-pointer">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-md hover:bg-gray-200 text-sm">
+                  <Upload className="w-3.5 h-3.5" />사진 업로드
+                </div>
+              </Label>
+              <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">이름 *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1" /></div>
+              <div>
+                <Label className="text-xs">직급 *</Label>
+                <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                  <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">국적</Label>
+                <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                  <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1" /></div>
+              <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1" /></div>
+              <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1" /></div>
+            </div>
           </TabsContent>
 
-          {/* ── 연락처 ── */}
-          <TabsContent value="emergency" className="mt-4">
-            {editMode ? (
+          {/* Bio-Data */}
+          <TabsContent value="biodata" className="space-y-3 mt-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1" placeholder="예: Jakarta, Indonesia" /></div>
+              <div>
+                <Label className="text-xs">혈액형</Label>
+                <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안함</SelectItem>
+                    {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">키 (cm)</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1" placeholder="170" /></div>
+              <div><Label className="text-xs">몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1" placeholder="70" /></div>
+              <div>
+                <Label className="text-xs">신발 사이즈 (mm)</Label>
+                <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="신발 사이즈" /></SelectTrigger>
+                  <SelectContent>{SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s} mm</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">작업복 사이즈</Label>
+                <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="작업복 사이즈" /></SelectTrigger>
+                  <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* 연락처 */}
+          <TabsContent value="emergency" className="space-y-3 mt-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">비상 연락처 및 가족 연락처</span>
+              <Button type="button" variant="outline" size="sm" onClick={addContact} className="h-7 text-xs gap-1">
+                <Plus className="h-3 w-3" />추가
+              </Button>
+            </div>
+            {emergencyContacts.length === 0 ? (
+              <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">연락처를 추가하세요.</div>
+            ) : (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">비상 연락처 및 가족 연락처</span>
-                  <Button type="button" variant="outline" size="sm" onClick={addContact} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
-                </div>
-                {emergencyContacts.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">연락처를 추가하세요.</div>
-                ) : emergencyContacts.map((contact, idx) => (
+                {emergencyContacts.map((contact, idx) => (
                   <div key={idx} className="p-3 border rounded-md bg-gray-50">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-gray-600">연락처 {idx + 1}</span>
@@ -457,43 +404,26 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                   </div>
                 ))}
               </div>
-            ) : (
-              emergencyContacts.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400">입력된 연락처가 없습니다.</div>
-              ) : (
-                <div className="space-y-2">
-                  {emergencyContacts.map((c, i) => (
-                    <div key={i} className="p-3 bg-gray-50 rounded-md">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium">{c.name}</span>
-                        {c.relationship && <Badge variant="outline" className="text-xs">{c.relationship}</Badge>}
-                      </div>
-                      <div className="text-sm text-gray-600">{c.phone}</div>
-                      {c.note && <div className="text-xs text-gray-400 mt-0.5">{c.note}</div>}
-                    </div>
-                  ))}
-                </div>
-              )
             )}
           </TabsContent>
 
-          {/* ── 증서 ── */}
-          <TabsContent value="certificates" className="mt-4">
-            {editMode ? (
+          {/* 증서 */}
+          <TabsContent value="certificates" className="space-y-3 mt-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold">보유 증서 ({certificates.length}건)</span>
+              <div className="flex gap-2">
+                <Select onValueChange={v => addCert(v)}>
+                  <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="증서 선택 추가" /></SelectTrigger>
+                  <SelectContent>{CERT_TEMPLATES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />직접 입력</Button>
+              </div>
+            </div>
+            {certificates.length === 0 ? (
+              <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">증서를 추가하세요.</div>
+            ) : (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">보유 증서 ({certificates.length}건)</span>
-                  <div className="flex gap-2">
-                    <Select onValueChange={v => addCert(v)}>
-                      <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="증서 선택 추가" /></SelectTrigger>
-                      <SelectContent>{CERT_TEMPLATES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />직접 입력</Button>
-                  </div>
-                </div>
-                {certificates.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">증서를 추가하세요.</div>
-                ) : certificates.map((cert, idx) => (
+                {certificates.map((cert, idx) => (
                   <div key={idx} className="p-3 border rounded-md bg-gray-50">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-gray-600">증서 {idx + 1}</span>
@@ -544,65 +474,15 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
                   </div>
                 ))}
               </div>
-            ) : (
-              certificates.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400">등록된 증서가 없습니다.</div>
-              ) : (
-                <div className="space-y-2">
-                  {certificates.map((cert, idx) => (
-                    <div key={idx} className="border rounded-md p-3 bg-gray-50">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold">{cert.name}</span>
-                            {cert.no_expiry && <Badge variant="outline" className="text-xs">만료일 없음</Badge>}
-                          </div>
-                          <div className="grid grid-cols-2 gap-x-4 text-xs text-gray-600">
-                            {cert.number && <div><span className="text-gray-400">번호: </span>{cert.number}</div>}
-                            {cert.issuing_authority && <div><span className="text-gray-400">발급기관: </span>{cert.issuing_authority}</div>}
-                            {cert.issued_date && <div><span className="text-gray-400">발급일: </span>{formatDate(cert.issued_date)}</div>}
-                            {!cert.no_expiry && cert.expiry_date && (
-                              <div>
-                                <span className="text-gray-400">만료일: </span>
-                                <span className={new Date(cert.expiry_date) < new Date() ? 'text-red-500 font-medium' : ''}>
-                                  {formatDate(cert.expiry_date)}{new Date(cert.expiry_date) < new Date() && ' (만료)'}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {cert.file_path && (
-                          <Button variant="ghost" size="sm" onClick={() => openCertFile(cert.file_path!)} className="h-7 text-xs gap-1 text-blue-600">
-                            <ExternalLink className="h-3.5 w-3.5" />사본
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
             )}
           </TabsContent>
         </Tabs>
 
-        {/* 하단 버튼 */}
         <div className="flex justify-between pt-4 border-t">
-          {editMode && crew ? (
-            <>
-              <Button variant="outline" onClick={() => { setEditMode(false); loadCrewData(); }} disabled={saving}>취소</Button>
-              <Button onClick={handleSave} disabled={saving}>{saving ? '저장 중...' : '저장'}</Button>
-            </>
-          ) : editMode && !crew ? (
-            <>
-              <Button variant="outline" onClick={() => onClose(false)} disabled={saving}>취소</Button>
-              <Button onClick={handleSave} disabled={saving}>{saving ? '저장 중...' : '등록'}</Button>
-            </>
-          ) : (
-            <div className="flex w-full justify-between">
-              <div />
-              <Button variant="outline" onClick={() => onClose(false)}>닫기</Button>
-            </div>
-          )}
+          <Button variant="outline" onClick={() => onClose(false)} disabled={saving}>취소</Button>
+          <Button onClick={handleSave} disabled={saving} className="min-w-24">
+            {saving ? '저장 중...' : crew ? '저장' : '등록'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
