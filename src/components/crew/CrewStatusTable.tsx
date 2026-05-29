@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Edit, RefreshCw, Eye } from 'lucide-react';
+import { Eye, RefreshCw } from 'lucide-react';
 import type { CrewWithDetails } from '@/services/crew.service';
 import CrewStatusBadge from './CrewStatusBadge';
 
@@ -22,7 +22,6 @@ export function CrewStatusTable({
   onSelectionChange,
   onSelectAll,
   onView,
-  onEdit,
   onChangeStatus,
 }: CrewStatusTableProps) {
   const allSelected = crew.length > 0 && selectedCrewIds.length === crew.length;
@@ -56,21 +55,21 @@ export function CrewStatusTable({
             </TableRow>
           ) : (
             crew.map(member => (
-              <TableRow key={member.id}>
-                <TableCell>
+              <TableRow key={member.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => onView(member)}>
+                <TableCell onClick={e => e.stopPropagation()}>
                   <Checkbox checked={selectedCrewIds.includes(member.id)} onCheckedChange={c => onSelectionChange(member.id, c as boolean)} aria-label={`${member.name} 선택`} />
                 </TableCell>
-                <TableCell>{member.owner_name || '-'}</TableCell>
-                <TableCell>{member.fleet_name || '-'}</TableCell>
-                <TableCell>{member.ship_name || '-'}</TableCell>
+                <TableCell className="text-sm">{member.owner_name || '-'}</TableCell>
+                <TableCell className="text-sm">{member.fleet_name || '-'}</TableCell>
+                <TableCell className="text-sm">{member.ship_name || '-'}</TableCell>
                 <TableCell>
                   <div className="flex flex-col">
-                    <span className="font-medium">{member.rank_name}</span>
+                    <span className="font-medium text-sm">{member.rank_name}</span>
                     <span className="text-xs text-muted-foreground">{member.rank_code}</span>
                   </div>
                 </TableCell>
-                <TableCell className="font-medium">{member.name}</TableCell>
-                <TableCell>
+                <TableCell className="font-medium text-sm">{member.name}</TableCell>
+                <TableCell className="text-sm">
                   {member.date_of_birth ? (
                     <div className="flex flex-col">
                       <span>{member.date_of_birth}</span>
@@ -78,23 +77,20 @@ export function CrewStatusTable({
                     </div>
                   ) : '-'}
                 </TableCell>
-                <TableCell>{member.nationality || '-'}</TableCell>
-                <TableCell>{member.manning_agency_name || '-'}</TableCell>
+                <TableCell className="text-sm">{member.nationality || '-'}</TableCell>
+                <TableCell className="text-sm">{member.manning_agency_name || '-'}</TableCell>
                 <TableCell><CrewStatusBadge status={member.current_status} /></TableCell>
                 <TableCell>
-                  <Badge variant={member.rank_category === 'officer' ? 'default' : 'secondary'}>
+                  <Badge variant={member.rank_category === 'officer' ? 'default' : 'secondary'} className="text-xs">
                     {member.rank_category === 'officer' ? '사관' : '부원'}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => onView(member)} title="상세보기">
+                    <Button variant="ghost" size="sm" onClick={() => onView(member)} title="상세보기 / 수정" className="h-8 w-8 p-0">
                       <Eye className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onEdit(member)} title="수정">
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onChangeStatus(member)} title="상태변경">
+                    <Button variant="ghost" size="sm" onClick={() => onChangeStatus(member)} title="상태변경" className="h-8 w-8 p-0">
                       <RefreshCw className="w-4 h-4" />
                     </Button>
                   </div>
