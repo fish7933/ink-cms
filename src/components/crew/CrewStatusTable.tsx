@@ -16,6 +16,13 @@ interface CrewStatusTableProps {
   onChangeStatus: (crew: CrewWithDetails) => void;
 }
 
+const deptColor = (dept: string) => {
+  if (dept === 'deck') return 'bg-blue-100 text-blue-700 border-blue-300';
+  if (dept === 'engine') return 'bg-green-100 text-green-700 border-green-300';
+  if (dept === 'catering') return 'bg-orange-100 text-orange-700 border-orange-300';
+  return 'bg-gray-100 text-gray-700 border-gray-300';
+};
+
 export function CrewStatusTable({
   crew,
   selectedCrewIds,
@@ -28,70 +35,108 @@ export function CrewStatusTable({
   const someSelected = selectedCrewIds.length > 0 && selectedCrewIds.length < crew.length;
 
   return (
-    <div className="border rounded-lg">
+    <div className="border rounded-lg overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">
-              <Checkbox checked={allSelected} onCheckedChange={onSelectAll} aria-label="전체 선택" className={someSelected ? 'data-[state=checked]:bg-blue-600' : ''} />
+          <TableRow className="bg-gray-50">
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={onSelectAll}
+                className={someSelected ? 'data-[state=checked]:bg-blue-600' : ''}
+              />
             </TableHead>
-            <TableHead>선주사</TableHead>
-            <TableHead>플릿</TableHead>
-            <TableHead>선박</TableHead>
-            <TableHead>직급</TableHead>
-            <TableHead>이름</TableHead>
-            <TableHead>생년월일 (나이)</TableHead>
-            <TableHead>국적</TableHead>
-            <TableHead>매닝사</TableHead>
-            <TableHead>상태</TableHead>
-            <TableHead>구분</TableHead>
-            <TableHead className="text-right">작업</TableHead>
+            <TableHead className="text-xs">이름</TableHead>
+            <TableHead className="text-xs">직급</TableHead>
+            <TableHead className="text-xs">국적</TableHead>
+            <TableHead className="text-xs">생년월일 / 나이</TableHead>
+            <TableHead className="text-xs">매닝사</TableHead>
+            <TableHead className="text-xs">선박</TableHead>
+            <TableHead className="text-xs">상태</TableHead>
+            <TableHead className="text-xs">구분</TableHead>
+            <TableHead className="text-right text-xs w-20">작업</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {crew.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12} className="text-center text-muted-foreground py-8">등록된 선원이 없습니다</TableCell>
+              <TableCell colSpan={10} className="text-center text-muted-foreground py-10 text-sm">
+                등록된 선원이 없습니다
+              </TableCell>
             </TableRow>
           ) : (
             crew.map(member => (
-              <TableRow key={member.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => onView(member)}>
+              <TableRow
+                key={member.id}
+                className="hover:bg-muted/50 cursor-pointer"
+                onClick={() => onView(member)}
+              >
                 <TableCell onClick={e => e.stopPropagation()}>
-                  <Checkbox checked={selectedCrewIds.includes(member.id)} onCheckedChange={c => onSelectionChange(member.id, c as boolean)} aria-label={`${member.name} 선택`} />
+                  <Checkbox
+                    checked={selectedCrewIds.includes(member.id)}
+                    onCheckedChange={c => onSelectionChange(member.id, c as boolean)}
+                  />
                 </TableCell>
-                <TableCell className="text-sm">{member.owner_name || '-'}</TableCell>
-                <TableCell className="text-sm">{member.fleet_name || '-'}</TableCell>
-                <TableCell className="text-sm">{member.ship_name || '-'}</TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-medium text-sm">{member.rank_name}</span>
-                    <span className="text-xs text-muted-foreground">{member.rank_code}</span>
-                  </div>
+                <TableCell className="font-medium text-sm py-2">
+                  {member.name}
                 </TableCell>
-                <TableCell className="font-medium text-sm">{member.name}</TableCell>
-                <TableCell className="text-sm">
+                <TableCell className="py-2">
+                  <Badge variant="outline" className={`text-xs ${deptColor(member.department || '')}`}>
+                    {member.rank_code || '-'}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm py-2 text-muted-foreground">
+                  {member.nationality || '-'}
+                </TableCell>
+                <TableCell className="py-2">
                   {member.date_of_birth ? (
-                    <div className="flex flex-col">
-                      <span>{member.date_of_birth}</span>
-                      {member.age && <span className="text-xs text-muted-foreground">({member.age}세)</span>}
+                    <div className="text-xs">
+                      <div>{member.date_of_birth}</div>
+                      {member.age && <div className="text-muted-foreground">({member.age}세)</div>}
                     </div>
-                  ) : '-'}
+                  ) : <span className="text-xs text-muted-foreground">-</span>}
                 </TableCell>
-                <TableCell className="text-sm">{member.nationality || '-'}</TableCell>
-                <TableCell className="text-sm">{member.manning_agency_name || '-'}</TableCell>
-                <TableCell><CrewStatusBadge status={member.current_status} /></TableCell>
-                <TableCell>
-                  <Badge variant={member.rank_category === 'officer' ? 'default' : 'secondary'} className="text-xs">
+                <TableCell className="text-xs py-2 text-muted-foreground max-w-[100px] truncate">
+                  {member.manning_agency_name || '-'}
+                </TableCell>
+                <TableCell className="py-2">
+                  {member.ship_name ? (
+                    <div className="text-xs">
+                      <div className="font-medium">{member.ship_name}</div>
+                      {member.owner_name && <div className="text-muted-foreground">{member.owner_name}</div>}
+                    </div>
+                  ) : <span className="text-xs text-muted-foreground">미배정</span>}
+                </TableCell>
+                <TableCell className="py-2">
+                  <CrewStatusBadge status={member.current_status} />
+                </TableCell>
+                <TableCell className="py-2">
+                  <Badge
+                    variant={member.rank_category === 'officer' ? 'default' : 'secondary'}
+                    className="text-xs"
+                  >
                     {member.rank_category === 'officer' ? '사관' : '부원'}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                <TableCell className="text-right py-2" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => onView(member)} title="상세보기 / 수정" className="h-8 w-8 p-0">
-                      <Eye className="w-4 h-4" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onView(member)}
+                      title="상세보기 / 수정"
+                      className="h-7 w-7 p-0"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => onChangeStatus(member)} title="상태변경" className="h-8 w-8 p-0">
-                      <RefreshCw className="w-4 h-4" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onChangeStatus(member)}
+                      title="상태변경"
+                      className="h-7 w-7 p-0"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
                     </Button>
                   </div>
                 </TableCell>
