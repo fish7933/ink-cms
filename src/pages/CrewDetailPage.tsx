@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, User, Upload, X, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Upload, User, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import Layout from '@/components/Layout';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
+import Layout from '@/components/Layout';
+import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
 
 interface EmergencyContact {
   name: string;
@@ -30,6 +31,12 @@ interface Certificate {
   no_expiry?: boolean;
   file_path?: string;
   file_name?: string;
+}
+
+interface Rank {
+  id: string;
+  name: string;
+  rank_code: string;
 }
 
 const CERT_TEMPLATES = [
@@ -55,17 +62,17 @@ export default function CrewDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const isNew = id === 'new';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [ranks, setRanks] = useState<Array<{ id: string; name: string; rank_code: string }>>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
+  const [crewInfo, setCrewInfo] = useState<Record<string, unknown>>({});
 
   const [formData, setFormData] = useState({
     name: '', rank_id: '', nationality: '', date_of_birth: '',
@@ -74,30 +81,24 @@ export default function CrewDetailPage() {
     shoe_size: '', coverall_size: '', place_of_birth: '',
   });
 
-  const [crewInfo, setCrewInfo] = useState<{
-    rank_code?: string;
-    rank_name?: string;
-    current_status?: string;
-  }>({});
-
   useEffect(() => {
-    supabase.from('ranks').select('id, name, rank_code').order('display_order').then(({ data }) => {
-      if (data) setRanks(data);
-    });
+    supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
     getNationalities(true).then(setNationalities).catch(console.error);
-    if (!isNew && id) loadCrew(id);
-    else setLoading(false);
+    if (id && id !== 'new') {
+      loadCrew(id);
+    } else {
+      setLoading(false);
+    }
   }, [id]);
 
   const loadCrew = async (crewId: string) => {
     try {
       setLoading(true);
       const { data, error } = await supabase.from('crew_members').select('*').eq('id', crewId).single();
-      if (error || !data) { toast({ title: '선원 정보를 찾을 수 없습니다.', variant: 'destructive' }); navigate('/crew/management'); return; }
+      if (error) throw error;
+      if (!data) { toast({ title: '선원을 찾을 수 없습니다.', variant: 'destructive' }); navigate('/crew/management'); return; }
 
-      const rank = ranks.find(r => r.id === data.rank_id);
-      setCrewInfo({ rank_code: rank?.rank_code, rank_name: rank?.name || data.rank, current_status: data.current_status || data.status });
-
+      setCrewInfo(data);
       setFormData({
         name: data.name || '',
         rank_id: data.rank_id || '',
@@ -127,7 +128,7 @@ export default function CrewDetailPage() {
 
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '선원 정보 로딩 실패', variant: 'destructive' });
+      toast({ title: '데이터 로드 실패', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -148,12 +149,14 @@ export default function CrewDetailPage() {
 
   const uploadPhoto = async (): Promise<string | null> => {
     if (!selectedFile) return formData.photo_url || null;
-    const ext = selectedFile.name.split('.').pop();
-    const path = `crew-photos/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-    const { error } = await supabase.storage.from('crew-documents').upload(path, selectedFile);
-    if (error) { console.error(error); return null; }
-    const { data: { publicUrl } } = supabase.storage.from('crew-documents').getPublicUrl(path);
-    return publicUrl;
+    try {
+      const ext = selectedFile.name.split('.').pop();
+      const path = `crew-photos/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const { error } = await supabase.storage.from('crew-documents').upload(path, selectedFile);
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('crew-documents').getPublicUrl(path);
+      return publicUrl;
+    } catch (e) { console.error(e); return null; }
   };
 
   const addCert = (name?: string) => setCertificates(prev => [...prev, { name: name || '', number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: false }]);
@@ -168,18 +171,21 @@ export default function CrewDetailPage() {
     }));
   };
   const handleNoExpiry = (idx: number, checked: boolean) => setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, no_expiry: checked, expiry_date: checked ? '' : c.expiry_date } : c));
+
   const addContact = () => setEmergencyContacts(prev => [...prev, { name: '', relationship: '', phone: '', note: '' }]);
   const updateContact = (idx: number, field: keyof EmergencyContact, value: string) => setEmergencyContacts(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
   const removeContact = (idx: number) => setEmergencyContacts(prev => prev.filter((_, i) => i !== idx));
+
   const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
 
   const handleSave = async () => {
     if (!formData.name || !formData.rank_id) {
-      toast({ title: '필수 항목 누락', description: '이름과 직급은 필수입니다.', variant: 'destructive' });
+      toast({ title: '필수 항목 누락', description: '이름과 직급은 필수 항목입니다.', variant: 'destructive' });
       return;
     }
     try {
       setSaving(true);
+
       let photoUrl = formData.photo_url;
       if (selectedFile) { const u = await uploadPhoto(); if (u) photoUrl = u; }
 
@@ -197,10 +203,12 @@ export default function CrewDetailPage() {
       );
 
       let rankName = '';
-      const { data: rd } = await supabase.from('ranks').select('name').eq('id', formData.rank_id).single();
-      if (rd) rankName = rd.name;
+      if (formData.rank_id) {
+        const { data: rd } = await supabase.from('ranks').select('name').eq('id', formData.rank_id).single();
+        if (rd) rankName = rd.name;
+      }
 
-      const saveData: Record<string, unknown> = {
+      const updateData: Record<string, unknown> = {
         name: formData.name,
         rank_id: formData.rank_id,
         rank: rankName,
@@ -220,20 +228,21 @@ export default function CrewDetailPage() {
         updated_at: new Date().toISOString(),
       };
 
-      if (isNew) {
-        const { data: newCrew, error } = await supabase.from('crew_members')
-          .insert({ ...saveData, status: 'registered', current_status: 'registered', created_at: new Date().toISOString() })
+      if (id && id !== 'new') {
+        const { error } = await supabase.from('crew_members').update(updateData).eq('id', id);
+        if (error) throw new Error(error.message);
+        await loadCrew(id);
+        setSelectedFile(null);
+        setCertFiles({});
+        toast({ title: '저장 완료', description: '선원 정보가 수정되었습니다.' });
+      } else {
+        const { data: newCrew, error } = await supabase
+          .from('crew_members')
+          .insert({ ...updateData, current_status: 'registered', status: 'registered', created_at: new Date().toISOString() })
           .select().single();
         if (error) throw new Error(error.message);
         toast({ title: '등록 완료', description: '선원이 등록되었습니다.' });
-        navigate(`/crew/${newCrew.id}`);
-      } else {
-        const { error } = await supabase.from('crew_members').update(saveData).eq('id', id!);
-        if (error) throw new Error(error.message);
-        toast({ title: '수정 완료', description: '선원 정보가 저장되었습니다.' });
-        setSelectedFile(null);
-        setCertFiles({});
-        await loadCrew(id!);
+        navigate(`/crew/${newCrew.id}`, { replace: true });
       }
     } catch (error) {
       console.error(error);
@@ -247,6 +256,8 @@ export default function CrewDetailPage() {
     const { data } = supabase.storage.from('documents').getPublicUrl(path);
     if (data?.publicUrl) window.open(data.publicUrl, '_blank');
   };
+
+  const selectedRank = ranks.find(r => r.id === formData.rank_id);
 
   if (loading) {
     return (
@@ -268,132 +279,141 @@ export default function CrewDetailPage() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold">{isNew ? '선원 등록' : formData.name || '선원 정보'}</h1>
-              {!isNew && crewInfo.rank_code && (
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Badge variant="outline" className="text-xs">{crewInfo.rank_code}</Badge>
-                  <span className="text-sm text-gray-500">{crewInfo.rank_name}</span>
-                </div>
-              )}
+              <h1 className="text-xl font-bold">{id === 'new' ? '선원 등록' : (formData.name || '선원 정보')}</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}
+                <CrewStatusBadge status={crewInfo.current_status as string || crewInfo.status as string || 'registered'} />
+              </div>
             </div>
           </div>
-          <Button onClick={handleSave} disabled={saving} className="gap-2">
+          <Button onClick={handleSave} disabled={saving} className="gap-1.5">
             <Save className="w-4 h-4" />
             {saving ? '저장 중...' : '저장'}
           </Button>
         </div>
 
-        <Card>
-          <CardContent className="pt-6">
-            <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-6">
-                <TabsTrigger value="basic">기본 정보</TabsTrigger>
-                <TabsTrigger value="biodata">Bio-Data</TabsTrigger>
-                <TabsTrigger value="emergency">연락처</TabsTrigger>
-                <TabsTrigger value="certificates">
-                  증서 {certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5 text-xs">{certificates.length}</span>}
-                </TabsTrigger>
-              </TabsList>
-
-              {/* 기본 정보 */}
-              <TabsContent value="basic" className="space-y-6">
-                <div className="flex flex-col items-center space-y-3 pb-6 border-b">
+        {/* 사진 + 이름 요약 */}
+        <Card className="mb-4">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                {previewUrl ? (
                   <div className="relative">
-                    {previewUrl ? (
-                      <div className="relative">
-                        <img src={previewUrl} alt="" className="w-28 h-28 rounded-full object-cover border-4 border-gray-200" />
-                        <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="w-28 h-28 rounded-full bg-gray-100 flex items-center justify-center border-4 border-gray-200">
-                        <User className="w-14 h-14 text-gray-300" />
-                      </div>
-                    )}
+                    <img src={previewUrl} alt="" className="w-20 h-20 rounded-full object-cover border-4 border-gray-200" />
+                    <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1">
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
-                  <Label htmlFor="photo-file" className="cursor-pointer">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-md hover:bg-gray-200 text-sm">
-                      <Upload className="w-3.5 h-3.5" />사진 업로드
-                    </div>
-                  </Label>
-                  <Input id="photo-file" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
-                </div>
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center border-4 border-gray-200">
+                    <User className="w-10 h-10 text-gray-400" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="photo-input" className="cursor-pointer">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-md hover:bg-gray-200 text-sm">
+                    <Upload className="w-3.5 h-3.5" />사진 변경
+                  </div>
+                </Label>
+                <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+                <div className="mt-1 text-xs text-gray-400">JPG, PNG, WEBP · 최대 5MB</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>이름 *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1" /></div>
-                  <div>
-                    <Label>직급 *</Label>
-                    <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="직급 선택" /></SelectTrigger>
-                      <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>국적</Label>
-                    <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
-                      <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label>생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1" /></div>
-                  <div><Label>연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1" /></div>
-                  <div><Label>이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1" /></div>
-                </div>
-              </TabsContent>
+        {/* 탭 */}
+        <Tabs defaultValue="basic" className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
+            <TabsTrigger value="basic">기본 정보</TabsTrigger>
+            <TabsTrigger value="biodata">Bio-Data</TabsTrigger>
+            <TabsTrigger value="emergency">연락처</TabsTrigger>
+            <TabsTrigger value="certificates">
+              증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5 text-xs">{certificates.length}</span>}
+            </TabsTrigger>
+          </TabsList>
 
-              {/* Bio-Data */}
-              <TabsContent value="biodata" className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1" placeholder="예: Jakarta, Indonesia" /></div>
-                  <div>
-                    <Label>혈액형</Label>
-                    <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">선택 안함</SelectItem>
-                        {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label>키 (cm)</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1" placeholder="170" /></div>
-                  <div><Label>몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1" placeholder="70" /></div>
-                  <div>
-                    <Label>신발 사이즈 (mm)</Label>
-                    <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="신발 사이즈" /></SelectTrigger>
-                      <SelectContent>{SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s} mm</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>작업복 사이즈</Label>
-                    <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="작업복 사이즈" /></SelectTrigger>
-                      <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
+          {/* 기본 정보 */}
+          <TabsContent value="basic">
+            <Card>
+              <CardContent className="pt-4 grid grid-cols-2 gap-4">
+                <div><Label className="text-xs">이름 *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1" /></div>
+                <div>
+                  <Label className="text-xs">직급 *</Label>
+                  <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                    <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+                  </Select>
                 </div>
-              </TabsContent>
+                <div>
+                  <Label className="text-xs">국적</Label>
+                  <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                    <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs">생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1" /></div>
+                <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1" /></div>
+                <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1" /></div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {/* 연락처 */}
-              <TabsContent value="emergency" className="space-y-4">
+          {/* Bio-Data */}
+          <TabsContent value="biodata">
+            <Card>
+              <CardContent className="pt-4 grid grid-cols-2 gap-4">
+                <div><Label className="text-xs">출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1" placeholder="예: Jakarta, Indonesia" /></div>
+                <div>
+                  <Label className="text-xs">혈액형</Label>
+                  <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">선택 안함</SelectItem>
+                      {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div><Label className="text-xs">키 (cm)</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1" placeholder="170" /></div>
+                <div><Label className="text-xs">몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1" placeholder="70" /></div>
+                <div>
+                  <Label className="text-xs">신발 사이즈 (mm)</Label>
+                  <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="신발 사이즈" /></SelectTrigger>
+                    <SelectContent>{SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s} mm</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">작업복 사이즈</Label>
+                  <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="작업복 사이즈" /></SelectTrigger>
+                    <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* 연락처 */}
+          <TabsContent value="emergency">
+            <Card>
+              <CardContent className="pt-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold">비상 연락처 및 가족 연락처</span>
-                  <Button type="button" variant="outline" size="sm" onClick={addContact} className="gap-1">
-                    <Plus className="h-3.5 w-3.5" />추가
+                  <span className="text-sm font-semibold">비상 연락처 및 가족 연락처</span>
+                  <Button type="button" variant="outline" size="sm" onClick={addContact} className="h-7 text-xs gap-1">
+                    <Plus className="h-3 w-3" />추가
                   </Button>
                 </div>
                 {emergencyContacts.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-400 border-2 border-dashed rounded-md">연락처를 추가하세요.</div>
+                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">연락처를 추가하세요.</div>
                 ) : (
                   <div className="space-y-3">
                     {emergencyContacts.map((contact, idx) => (
                       <div key={idx} className="p-3 border rounded-md bg-gray-50">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-gray-600">연락처 {idx + 1}</span>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeContact(idx)} className="h-6 w-6 p-0 text-red-500">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeContact(idx)} className="h-6 w-6 p-0 text-red-500"><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div><Label className="text-xs text-gray-500">이름</Label><Input value={contact.name} onChange={e => updateContact(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
@@ -411,33 +431,33 @@ export default function CrewDetailPage() {
                     ))}
                   </div>
                 )}
-              </TabsContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {/* 증서 */}
-              <TabsContent value="certificates" className="space-y-4">
+          {/* 증서 */}
+          <TabsContent value="certificates">
+            <Card>
+              <CardContent className="pt-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold">보유 증서 ({certificates.length}건)</span>
+                  <span className="text-sm font-semibold">보유 증서 ({certificates.length}건)</span>
                   <div className="flex gap-2">
                     <Select onValueChange={v => addCert(v)}>
                       <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="증서 선택 추가" /></SelectTrigger>
                       <SelectContent>{CERT_TEMPLATES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1">
-                      <Plus className="h-3 w-3" />직접 입력
-                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />직접 입력</Button>
                   </div>
                 </div>
                 {certificates.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-400 border-2 border-dashed rounded-md">증서를 추가하세요.</div>
+                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">증서를 추가하세요.</div>
                 ) : (
                   <div className="space-y-3">
                     {certificates.map((cert, idx) => (
                       <div key={idx} className="p-3 border rounded-md bg-gray-50">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-semibold text-gray-600">증서 {idx + 1}</span>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeCert(idx)} className="h-6 w-6 p-0 text-red-500">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeCert(idx)} className="h-6 w-6 p-0 text-red-500"><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>
                         <div className="space-y-1.5">
                           <div className="grid grid-cols-2 gap-2">
@@ -463,7 +483,7 @@ export default function CrewDetailPage() {
                               <div className="mt-0.5">
                                 {cert.file_name ? (
                                   <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs h-7">
-                                    <button type="button" onClick={() => cert.file_path && openCertFile(cert.file_path)} className="flex-1 truncate text-blue-700 text-left">{cert.file_name}</button>
+                                    <span className="flex-1 truncate text-blue-700 cursor-pointer" onClick={() => cert.file_path && openCertFile(cert.file_path)}>{cert.file_name}</span>
                                     <button type="button" onClick={() => { updateCert(idx, 'file_path', ''); updateCert(idx, 'file_name', ''); }} className="text-red-400"><X className="h-3 w-3" /></button>
                                   </div>
                                 ) : certFiles[idx] ? (
@@ -474,10 +494,7 @@ export default function CrewDetailPage() {
                                 ) : (
                                   <label className="flex items-center gap-1.5 px-2 py-1 border border-dashed rounded cursor-pointer hover:bg-gray-50 text-xs text-gray-400 h-7">
                                     <Upload className="h-3 w-3 shrink-0" /><span className="truncate">파일 선택</span>
-                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => {
-                                      const file = e.target.files?.[0];
-                                      if (file) { if (file.size > 10 * 1024 * 1024) { alert('10MB 초과'); return; } setCertFiles(prev => ({ ...prev, [idx]: file })); }
-                                    }} />
+                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) { if (file.size > 10 * 1024 * 1024) { alert('10MB 초과'); return; } setCertFiles(prev => ({ ...prev, [idx]: file })); } }} />
                                   </label>
                                 )}
                               </div>
@@ -488,10 +505,21 @@ export default function CrewDetailPage() {
                     ))}
                   </div>
                 )}
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* 하단 저장 버튼 */}
+        <div className="flex justify-between mt-6 pt-4 border-t">
+          <Button variant="outline" onClick={() => navigate('/crew/management')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />목록으로
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="min-w-24">
+            <Save className="w-4 h-4 mr-2" />
+            {saving ? '저장 중...' : '저장'}
+          </Button>
+        </div>
       </div>
     </Layout>
   );

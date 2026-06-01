@@ -45,6 +45,7 @@ function App() {
         <Route path="/crew" element={<CrewManagementPage />} />
         <Route path="/crew/management" element={<CrewManagementPage />} />
         <Route path="/crew/input" element={<CrewInputPage />} />
+        <Route path="/crew/new" element={<CrewDetailPage />} />
         <Route path="/crew/:id" element={<CrewDetailPage />} />
         <Route path="/assignments" element={<CrewAssignmentPage />} />
         <Route path="/ships" element={<ShipManagementPage />} />
