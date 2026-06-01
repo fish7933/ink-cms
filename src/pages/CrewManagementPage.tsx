@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 
 export function CrewManagementPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [crewMembers, setCrewMembers] = useState<CrewWithDetails[]>([]);
   const [filteredCrew, setFilteredCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
