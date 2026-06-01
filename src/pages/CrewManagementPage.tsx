@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Filter, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 export function CrewManagementPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+
   const [crewMembers, setCrewMembers] = useState<CrewWithDetails[]>([]);
   const [filteredCrew, setFilteredCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
@@ -26,11 +27,14 @@ export function CrewManagementPage() {
   const [manningAgencies, setManningAgencies] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [ships, setShips] = useState<Ship[]>([]);
+  const [nationalityOptions, setNationalityOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOwner, setSelectedOwner] = useState('all');
   const [selectedFleet, setSelectedFleet] = useState('all');
@@ -38,15 +42,14 @@ export function CrewManagementPage() {
   const [selectedRank, setSelectedRank] = useState('all');
   const [selectedRankCategory, setSelectedRankCategory] = useState('all');
   const [selectedManningAgency, setSelectedManningAgency] = useState('all');
-  const [minAge, setMinAge] = useState('');
-  const [maxAge, setMaxAge] = useState('');
+  const [selectedNationality, setSelectedNationality] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
+
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
 
   useEffect(() => { loadData(); }, []);
-  useEffect(() => { filterCrew(); }, [crewMembers, searchTerm, selectedOwner, selectedFleet, selectedShip, selectedRank, selectedRankCategory, selectedManningAgency, minAge, maxAge, activeTab]);
+  useEffect(() => { filterCrew(); }, [crewMembers, searchTerm, selectedOwner, selectedFleet, selectedShip, selectedRank, selectedRankCategory, selectedManningAgency, selectedNationality, activeTab]);
   useEffect(() => { setCurrentPage(1); }, [filteredCrew.length]);
   useEffect(() => {
     if (selectedOwner !== 'all') loadFleets(selectedOwner);
@@ -72,6 +75,8 @@ export function CrewManagementPage() {
         setOwners(companiesData.data.filter((c: Company) => c.type === 'owner'));
         setManningAgencies(companiesData.data.filter((c: Company) => c.type === 'manning'));
       }
+      const nats = [...new Set(crewData.map((c: CrewWithDetails) => c.nationality).filter(Boolean))] as string[];
+      setNationalityOptions(nats.sort());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -108,35 +113,27 @@ export function CrewManagementPage() {
     if (selectedRank !== 'all') filtered = filtered.filter(c => c.rank_id === selectedRank);
     if (selectedRankCategory !== 'all') filtered = filtered.filter(c => c.rank_category === selectedRankCategory);
     if (selectedManningAgency !== 'all') filtered = filtered.filter(c => c.manning_agency_id === selectedManningAgency);
-    if (minAge || maxAge) {
-      filtered = filtered.filter(c => {
-        if (!c.age) return false;
-        if (minAge && c.age < parseInt(minAge)) return false;
-        if (maxAge && c.age > parseInt(maxAge)) return false;
-        return true;
-      });
-    }
+    if (selectedNationality !== 'all') filtered = filtered.filter(c => c.nationality === selectedNationality);
     setFilteredCrew(filtered);
   };
 
-  const handleView = (crew: CrewWithDetails) => {
-    navigate(`/crew/${crew.id}`);
+  const isFiltered = selectedOwner !== 'all' || selectedFleet !== 'all' || selectedShip !== 'all' ||
+    selectedRank !== 'all' || selectedRankCategory !== 'all' || selectedManningAgency !== 'all' || selectedNationality !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm(''); setSelectedOwner('all'); setSelectedFleet('all'); setSelectedShip('all');
+    setSelectedRank('all'); setSelectedRankCategory('all'); setSelectedManningAgency('all');
+    setSelectedNationality('all');
   };
 
-  const handleAddCrew = () => {
-    navigate('/crew/new');
-  };
-
-  const handleChangeStatus = (crew: CrewWithDetails) => {
-    setSelectedCrew(crew);
-    setStatusDialogOpen(true);
-  };
+  const handleView = (crew: CrewWithDetails) => navigate(`/crew/${crew.id}`);
+  const handleAddCrew = () => navigate('/crew/new');
+  const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
     if (checked) setSelectedCrewIds(prev => [...prev, crewId]);
     else setSelectedCrewIds(prev => prev.filter(id => id !== crewId));
   };
-
   const handleSelectAll = (checked: boolean) => {
     if (checked) setSelectedCrewIds(paginatedCrew.map(c => c.id));
     else setSelectedCrewIds([]);
@@ -159,12 +156,6 @@ export function CrewManagementPage() {
       console.error(e);
       toast({ title: '삭제 실패', variant: 'destructive' });
     }
-  };
-
-  const clearFilters = () => {
-    setSearchTerm(''); setSelectedOwner('all'); setSelectedFleet('all'); setSelectedShip('all');
-    setSelectedRank('all'); setSelectedRankCategory('all'); setSelectedManningAgency('all');
-    setMinAge(''); setMaxAge('');
   };
 
   const getStatusCount = (status: string) =>
@@ -221,119 +212,103 @@ export function CrewManagementPage() {
           </CardHeader>
 
           <CardContent className="pt-0 space-y-3">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
-              <TabsList>
-                <TabsTrigger value="all">전체 ({getStatusCount('all')})</TabsTrigger>
-                <TabsTrigger value="registered">등록 ({getStatusCount('registered')})</TabsTrigger>
-                <TabsTrigger value="available">대기 ({getStatusCount('available')})</TabsTrigger>
-                <TabsTrigger value="on_board">승선 ({getStatusCount('on_board')})</TabsTrigger>
-                <TabsTrigger value="on_leave">휴가 ({getStatusCount('on_leave')})</TabsTrigger>
-                <TabsTrigger value="retired">퇴직 ({getStatusCount('retired')})</TabsTrigger>
+            {/* 검색 */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="이름, 직급, 여권번호, 선원수첩번호로 검색..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="pl-10 h-9 text-sm"
+              />
+            </div>
+
+            {/* 필터 드롭다운 */}
+            <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
+              <Select value={selectedOwner} onValueChange={setSelectedOwner}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선주사" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">전체 선주사</SelectItem>{owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
+              </Select>
+
+              <Select value={selectedFleet} onValueChange={setSelectedFleet} disabled={selectedOwner === 'all'}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="플릿" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent>
+              </Select>
+
+              <Select value={selectedShip} onValueChange={setSelectedShip} disabled={selectedOwner === 'all'}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선박" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
+              </Select>
+
+              <Select value={selectedRank} onValueChange={setSelectedRank}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="직급" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+              </Select>
+
+              <Select value={selectedRankCategory} onValueChange={setSelectedRankCategory}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="사관/부원" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">사관/부원 전체</SelectItem>
+                  <SelectItem value="officer">사관</SelectItem>
+                  <SelectItem value="rating">부원</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedManningAgency} onValueChange={setSelectedManningAgency}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="매닝사" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">전체 매닝사</SelectItem>{manningAgencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
+              </Select>
+
+              <Select value={selectedNationality} onValueChange={setSelectedNationality}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="국적" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">전체 국적</SelectItem>{nationalityOptions.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+              </Select>
+
+              {isFiltered && (
+                <Button variant="outline" size="sm" onClick={clearFilters} className="h-8 text-xs gap-1">
+                  <X className="w-3 h-3" />초기화
+                </Button>
+              )}
+            </div>
+
+            {/* 상태 탭 */}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="h-8">
+                <TabsTrigger value="all" className="text-xs h-7">전체 ({getStatusCount('all')})</TabsTrigger>
+                <TabsTrigger value="registered" className="text-xs h-7">등록 ({getStatusCount('registered')})</TabsTrigger>
+                <TabsTrigger value="available" className="text-xs h-7">대기 ({getStatusCount('available')})</TabsTrigger>
+                <TabsTrigger value="on_board" className="text-xs h-7">승선 ({getStatusCount('on_board')})</TabsTrigger>
+                <TabsTrigger value="on_leave" className="text-xs h-7">휴가 ({getStatusCount('on_leave')})</TabsTrigger>
+                <TabsTrigger value="retired" className="text-xs h-7">퇴직 ({getStatusCount('retired')})</TabsTrigger>
               </TabsList>
 
-              <div className="space-y-3">
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                    <Input
-                      placeholder="이름, 직급, 여권번호, 선원수첩번호로 검색..."
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                      className="pl-10 h-9 text-sm"
-                    />
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="h-9 text-sm">
-                    <Filter className="w-4 h-4 mr-2" />필터 {showFilters ? '숨기기' : '표시'}
-                  </Button>
-                  {(selectedOwner !== 'all' || selectedFleet !== 'all' || selectedShip !== 'all' || selectedRank !== 'all' || selectedRankCategory !== 'all' || selectedManningAgency !== 'all' || minAge || maxAge) && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-sm">
-                      <X className="w-4 h-4 mr-2" />초기화
-                    </Button>
-                  )}
-                </div>
-
-                {showFilters && (
-                  <div className="grid grid-cols-4 gap-3 p-3 border rounded-lg bg-muted/50">
-                    <div>
-                      <Label className="text-xs">선주사</Label>
-                      <Select value={selectedOwner} onValueChange={setSelectedOwner}>
-                        <SelectTrigger className="h-9 text-sm mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">전체</SelectItem>{owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">플릿</Label>
-                      <Select value={selectedFleet} onValueChange={setSelectedFleet} disabled={selectedOwner === 'all'}>
-                        <SelectTrigger className="h-9 text-sm mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">전체</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">선박</Label>
-                      <Select value={selectedShip} onValueChange={setSelectedShip} disabled={selectedOwner === 'all'}>
-                        <SelectTrigger className="h-9 text-sm mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">전체</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">직급</Label>
-                      <Select value={selectedRank} onValueChange={setSelectedRank}>
-                        <SelectTrigger className="h-9 text-sm mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">전체</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">사관/부원</Label>
-                      <Select value={selectedRankCategory} onValueChange={setSelectedRankCategory}>
-                        <SelectTrigger className="h-9 text-sm mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">전체</SelectItem><SelectItem value="officer">사관</SelectItem><SelectItem value="rating">부원</SelectItem></SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">매닝사</Label>
-                      <Select value={selectedManningAgency} onValueChange={setSelectedManningAgency}>
-                        <SelectTrigger className="h-9 text-sm mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="all">전체</SelectItem>{manningAgencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">나이 범위</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input type="number" placeholder="최소" value={minAge} onChange={e => setMinAge(e.target.value)} className="w-20 h-9 text-sm" />
-                        <span className="self-center text-sm">-</span>
-                        <Input type="number" placeholder="최대" value={maxAge} onChange={e => setMaxAge(e.target.value)} className="w-20 h-9 text-sm" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex justify-between items-center">
-                  <p className="text-xs text-gray-500">
-                    총 {filteredCrew.length}명 (페이지 {currentPage}/{Math.max(1, totalPages)})
-                    {selectedCrewIds.length > 0 && ` · ${selectedCrewIds.length}명 선택됨`}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs">페이지당:</Label>
-                    <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(parseInt(v)); setCurrentPage(1); }}>
-                      <SelectTrigger className="h-8 w-20 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="20">20</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
-                        <SelectItem value="100">100</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="flex justify-between items-center mt-2 mb-1">
+                <p className="text-xs text-gray-500">
+                  총 {filteredCrew.length}명
+                  {selectedCrewIds.length > 0 && ` · ${selectedCrewIds.length}명 선택됨`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">페이지당:</Label>
+                  <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(parseInt(v)); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               {['all','registered','available','on_board','on_leave','retired'].map(tab => (
-                <TabsContent key={tab} value={tab}>
+                <TabsContent key={tab} value={tab} className="mt-0">
                   <CrewStatusTable {...tableProps} />
                 </TabsContent>
               ))}
             </Tabs>
 
+            {/* 페이지네이션 */}
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-2 pt-3 border-t">
                 <Button variant="outline" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="h-8">
@@ -375,8 +350,7 @@ export function CrewManagementPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>선원 삭제 확인</AlertDialogTitle>
             <AlertDialogDescription>
-              선택한 {selectedCrewIds.length}명의 선원을 삭제하시겠습니까?
-              이 작업은 되돌릴 수 없습니다.
+              선택한 {selectedCrewIds.length}명의 선원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
