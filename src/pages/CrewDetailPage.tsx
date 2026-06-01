@@ -1,761 +1,498 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getCurrentUser } from '@/services/auth.service';
-import { getCrewMembers } from '@/services/crew.service';
-import { getShips } from '@/services/ship.service';
-import {
-  getSeaServiceRecords,
-  getTrainingRecords,
-  getMedicalRecords,
-  getCrewSalaryRecords,
-  deleteSeaServiceRecord,
-} from '@/services/crew-extended.service';
-import { updateCrewStatus, getCrewStatusHistory } from '@/services/crew-status.service';
-import { getCrewCertificates, deleteCrewCertificate } from '@/services/crew-certificate.service';
-import { getAppointmentsByCrew } from '@/services/crew-appointment.service';
-import type { User, CrewMember, Ship } from '@/types/models';
-import type {
-  SeaServiceRecord,
-  TrainingRecord,
-  MedicalRecord,
-  CrewSalaryRecord,
-} from '@/types/crew-extended';
-import type { CrewStatus, CrewStatusHistory } from '@/types/crew-status';
-import type { CrewCertificateWithType } from '@/types/crew-certificate';
-import type { CrewAppointment } from '@/types/crew-appointment';
+import { ArrowLeft, Save, User, Upload, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Layout from '@/components/Layout';
-import { ArrowLeft, Plus, RefreshCw, History, Trash2, FileText, AlertCircle, Edit } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
-import CrewStatusDialog from '@/components/crew/CrewStatusDialog';
-import CrewCertificateDialog from '@/components/crew/CrewCertificateDialog';
-import SeaServiceDialog from '@/components/crew/SeaServiceDialog';
-import { CREW_STATUS_LABELS } from '@/types/crew-status';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { getNationalities } from '@/services/nationality.service';
+import type { Nationality } from '@/types/nationality';
 
-interface AdditionalStatusData {
-  current_ship_id?: string;
-  onboard_date?: string;
-  offboard_date?: string;
+interface EmergencyContact {
+  name: string;
+  relationship: string;
+  phone: string;
+  note?: string;
 }
 
+interface Certificate {
+  name: string;
+  number?: string;
+  issued_date?: string;
+  expiry_date?: string;
+  issuing_authority?: string;
+  no_expiry?: boolean;
+  file_path?: string;
+  file_name?: string;
+}
+
+const CERT_TEMPLATES = [
+  'Passport',
+  'Continuous Discharge Certificate (Seaman Book)',
+  'STCW Basic Safety Training',
+  'STCW Advanced Fire Fighting',
+  'STCW Medical First Aid',
+  'STCW Proficiency in Survival Craft',
+  'Officer of the Watch (Navigation)',
+  'Chief Mate Certificate',
+  'Master Certificate',
+  'Chief Engineer Certificate',
+  'GMDSS General Operator Certificate',
+  'Medical Fitness Certificate',
+];
+
+const RELATIONSHIPS = ['배우자', '부', '모', '자', '녀', '형', '제', '자매', '친구', '기타'];
+const SHOE_SIZES = ['235','240','245','250','255','260','265','270','275','280','285','290','295','300'];
+const COVERALL_SIZES = ['XS','S','M','L','XL','XXL','XXXL'];
+
 export default function CrewDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { crewId } = useParams<{ crewId: string }>();
   const { toast } = useToast();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [crewMember, setCrewMember] = useState<CrewMember | null>(null);
-  const [certificates, setCertificates] = useState<CrewCertificateWithType[]>([]);
-  const [seaService, setSeaService] = useState<SeaServiceRecord[]>([]);
-  const [training, setTraining] = useState<TrainingRecord[]>([]);
-  const [medical, setMedical] = useState<MedicalRecord[]>([]);
-  const [salary, setSalary] = useState<CrewSalaryRecord[]>([]);
-  const [appointments, setAppointments] = useState<CrewAppointment[]>([]);
-  const [statusHistory, setStatusHistory] = useState<CrewStatusHistory[]>([]);
-  const [ships, setShips] = useState<Ship[]>([]);
+  const isNew = id === 'new';
+
   const [loading, setLoading] = useState(true);
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
-  const [isCertificateDialogOpen, setIsCertificateDialogOpen] = useState(false);
-  const [isSeaServiceDialogOpen, setIsSeaServiceDialogOpen] = useState(false);
-  const [editingCertificate, setEditingCertificate] = useState<CrewCertificateWithType | undefined>(undefined);
-  const [editingSeaService, setEditingSeaService] = useState<SeaServiceRecord | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
+  const [ranks, setRanks] = useState<Array<{ id: string; name: string; rank_code: string }>>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [certFiles, setCertFiles] = useState<Record<number, File>>({});
+  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
+
+  const [formData, setFormData] = useState({
+    name: '', rank_id: '', nationality: '', date_of_birth: '',
+    contact_phone: '', contact_email: '', photo_url: '',
+    height: '', weight: '', blood_type: 'none',
+    shoe_size: '', coverall_size: '', place_of_birth: '',
+  });
+
+  const [crewInfo, setCrewInfo] = useState<{
+    rank_code?: string;
+    rank_name?: string;
+    current_status?: string;
+  }>({});
 
   useEffect(() => {
-    const loadUser = async () => {
-      const user = await getCurrentUser();
-      if (!user || !['ship_manager', 'ship_owner', 'manning_agency'].includes(user.role)) {
-        navigate('/dashboard');
-        return;
-      }
-      setCurrentUser(user);
-      if (crewId) {
-        loadData(crewId);
-      }
-    };
-    
-    loadUser();
-  }, [navigate, crewId]);
+    supabase.from('ranks').select('id, name, rank_code').order('display_order').then(({ data }) => {
+      if (data) setRanks(data);
+    });
+    getNationalities(true).then(setNationalities).catch(console.error);
+    if (!isNew && id) loadCrew(id);
+    else setLoading(false);
+  }, [id]);
 
-  const loadData = async (id: string) => {
+  const loadCrew = async (crewId: string) => {
     try {
-      const [crewData, shipsData] = await Promise.all([
-        getCrewMembers(),
-        getShips(),
-      ]);
-      
-      const crew = crewData.find(c => c.id === id);
-      if (!crew) {
-        navigate('/crew');
-        return;
-      }
-      setCrewMember(crew);
-      setShips(shipsData);
+      setLoading(true);
+      const { data, error } = await supabase.from('crew_members').select('*').eq('id', crewId).single();
+      if (error || !data) { toast({ title: '선원 정보를 찾을 수 없습니다.', variant: 'destructive' }); navigate('/crew/management'); return; }
 
-      const [certsData, seaData, trainData, medData, salData, appointData, historyData] = await Promise.all([
-        getCrewCertificates(id),
-        getSeaServiceRecords(id),
-        getTrainingRecords(id),
-        getMedicalRecords(id),
-        getCrewSalaryRecords(id),
-        getAppointmentsByCrew(id),
-        getCrewStatusHistory(id),
-      ]);
+      const rank = ranks.find(r => r.id === data.rank_id);
+      setCrewInfo({ rank_code: rank?.rank_code, rank_name: rank?.name || data.rank, current_status: data.current_status || data.status });
 
-      setCertificates(certsData);
-      setSeaService(seaData);
-      setTraining(trainData);
-      setMedical(medData);
-      setSalary(salData);
-      setAppointments(appointData);
-      setStatusHistory(historyData);
-    } catch (error) {
-      console.error('Error loading crew data:', error);
+      setFormData({
+        name: data.name || '',
+        rank_id: data.rank_id || '',
+        nationality: data.nationality || '',
+        date_of_birth: data.date_of_birth || '',
+        contact_phone: data.phone || '',
+        contact_email: data.email || '',
+        photo_url: data.photo_url || '',
+        height: data.height?.toString() || '',
+        weight: data.weight?.toString() || '',
+        blood_type: data.blood_type || 'none',
+        shoe_size: data.shoe_size || '',
+        coverall_size: data.coverall_size || '',
+        place_of_birth: data.place_of_birth || '',
+      });
+      setPreviewUrl(data.photo_url || '');
+
+      try {
+        const certs = typeof data.certificates === 'string' ? JSON.parse(data.certificates) : (data.certificates || []);
+        setCertificates(Array.isArray(certs) ? certs : []);
+      } catch { setCertificates([]); }
+
+      try {
+        const contacts = typeof data.emergency_contacts === 'string' ? JSON.parse(data.emergency_contacts) : (data.emergency_contacts || []);
+        setEmergencyContacts(Array.isArray(contacts) ? contacts : []);
+      } catch { setEmergencyContacts([]); }
+
+    } catch (e) {
+      console.error(e);
+      toast({ title: '오류', description: '선원 정보 로딩 실패', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusChange = async (newStatus: CrewStatus, notes: string, additionalData?: AdditionalStatusData) => {
-    if (!crewMember || !currentUser) return;
-
-    try {
-      await updateCrewStatus(crewMember.id, newStatus, currentUser.id, notes, additionalData);
-      await loadData(crewMember.id);
-    } catch (error) {
-      console.error('Error updating status:', error);
-      throw error;
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+      const allowed = ['image/jpeg','image/jpg','image/png','image/webp'];
+      if (!allowed.includes(file.type)) { alert('JPG, PNG, WEBP 형식만 가능합니다.'); return; }
+      if (file.size > 5 * 1024 * 1024) { alert('5MB 이하만 가능합니다.'); return; }
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setPreviewUrl(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
-  const handleDeleteCertificate = async (certId: string) => {
-    if (!confirm('이 증서를 삭제하시겠습니까?')) return;
+  const uploadPhoto = async (): Promise<string | null> => {
+    if (!selectedFile) return formData.photo_url || null;
+    const ext = selectedFile.name.split('.').pop();
+    const path = `crew-photos/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+    const { error } = await supabase.storage.from('crew-documents').upload(path, selectedFile);
+    if (error) { console.error(error); return null; }
+    const { data: { publicUrl } } = supabase.storage.from('crew-documents').getPublicUrl(path);
+    return publicUrl;
+  };
 
+  const addCert = (name?: string) => setCertificates(prev => [...prev, { name: name || '', number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: false }]);
+  const updateCert = (idx: number, field: keyof Certificate, value: string | boolean) => setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  const removeCert = (idx: number) => setCertificates(prev => prev.filter((_, i) => i !== idx));
+  const handleIssuedDate = (idx: number, value: string) => {
+    setCertificates(prev => prev.map((c, i) => {
+      if (i !== idx) return c;
+      let expiry = c.expiry_date;
+      if (value && !c.no_expiry) { const d = new Date(value); d.setFullYear(d.getFullYear() + 5); expiry = d.toISOString().split('T')[0]; }
+      return { ...c, issued_date: value, expiry_date: expiry };
+    }));
+  };
+  const handleNoExpiry = (idx: number, checked: boolean) => setCertificates(prev => prev.map((c, i) => i === idx ? { ...c, no_expiry: checked, expiry_date: checked ? '' : c.expiry_date } : c));
+  const addContact = () => setEmergencyContacts(prev => [...prev, { name: '', relationship: '', phone: '', note: '' }]);
+  const updateContact = (idx: number, field: keyof EmergencyContact, value: string) => setEmergencyContacts(prev => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  const removeContact = (idx: number) => setEmergencyContacts(prev => prev.filter((_, i) => i !== idx));
+  const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
+
+  const handleSave = async () => {
+    if (!formData.name || !formData.rank_id) {
+      toast({ title: '필수 항목 누락', description: '이름과 직급은 필수입니다.', variant: 'destructive' });
+      return;
+    }
     try {
-      await deleteCrewCertificate(certId);
-      if (crewId) {
-        await loadData(crewId);
+      setSaving(true);
+      let photoUrl = formData.photo_url;
+      if (selectedFile) { const u = await uploadPhoto(); if (u) photoUrl = u; }
+
+      const certsWithFiles = await Promise.all(
+        certificates.filter(c => c.name.trim()).map(async (cert, idx) => {
+          const file = certFiles[idx];
+          if (file) {
+            const ext = file.name.split('.').pop();
+            const path = `crew-certificates/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+            const { error } = await supabase.storage.from('documents').upload(path, file);
+            if (!error) return { ...cert, file_path: path, file_name: file.name };
+          }
+          return cert;
+        })
+      );
+
+      let rankName = '';
+      const { data: rd } = await supabase.from('ranks').select('name').eq('id', formData.rank_id).single();
+      if (rd) rankName = rd.name;
+
+      const saveData: Record<string, unknown> = {
+        name: formData.name,
+        rank_id: formData.rank_id,
+        rank: rankName,
+        nationality: formData.nationality || null,
+        date_of_birth: formData.date_of_birth || null,
+        phone: formData.contact_phone || null,
+        email: formData.contact_email || null,
+        photo_url: photoUrl || null,
+        height: formData.height ? parseFloat(formData.height) : null,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
+        blood_type: formData.blood_type !== 'none' ? formData.blood_type : null,
+        shoe_size: formData.shoe_size || null,
+        coverall_size: formData.coverall_size || null,
+        place_of_birth: formData.place_of_birth || null,
+        emergency_contacts: emergencyContacts.filter(c => c.name || c.phone),
+        certificates: certsWithFiles,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (isNew) {
+        const { data: newCrew, error } = await supabase.from('crew_members')
+          .insert({ ...saveData, status: 'registered', current_status: 'registered', created_at: new Date().toISOString() })
+          .select().single();
+        if (error) throw new Error(error.message);
+        toast({ title: '등록 완료', description: '선원이 등록되었습니다.' });
+        navigate(`/crew/${newCrew.id}`);
+      } else {
+        const { error } = await supabase.from('crew_members').update(saveData).eq('id', id!);
+        if (error) throw new Error(error.message);
+        toast({ title: '수정 완료', description: '선원 정보가 저장되었습니다.' });
+        setSelectedFile(null);
+        setCertFiles({});
+        await loadCrew(id!);
       }
     } catch (error) {
-      console.error('Error deleting certificate:', error);
-      toast({
-        title: '삭제 실패',
-        description: '증서 삭제 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
+      console.error(error);
+      toast({ title: '저장 실패', description: String(error instanceof Error ? error.message : error), variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleEditCertificate = (cert: CrewCertificateWithType) => {
-    setEditingCertificate(cert);
-    setIsCertificateDialogOpen(true);
+  const openCertFile = (path: string) => {
+    const { data } = supabase.storage.from('documents').getPublicUrl(path);
+    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
   };
 
-  const handleAddCertificate = () => {
-    setEditingCertificate(undefined);
-    setIsCertificateDialogOpen(true);
-  };
-
-  const handleAddSeaService = () => {
-    setEditingSeaService(undefined);
-    setIsSeaServiceDialogOpen(true);
-  };
-
-  const handleEditSeaService = (record: SeaServiceRecord) => {
-    setEditingSeaService(record);
-    setIsSeaServiceDialogOpen(true);
-  };
-
-  const handleDeleteSeaService = async (recordId: string) => {
-    if (!confirm('이 승선 기록을 삭제하시겠습니까?')) return;
-
-    try {
-      await deleteSeaServiceRecord(recordId);
-      if (crewId) {
-        await loadData(crewId);
-        toast({
-          title: '삭제 완료',
-          description: '승선 기록이 삭제되었습니다.',
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting sea service record:', error);
-      toast({
-        title: '삭제 실패',
-        description: '승선 기록 삭제 중 오류가 발생했습니다.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const getCertificateStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; color: string }> = {
-      valid: { label: '유효', color: 'bg-green-500' },
-      expiring_soon: { label: '만료임박', color: 'bg-yellow-500' },
-      expired: { label: '만료', color: 'bg-red-500' },
-      pending: { label: '대기중', color: 'bg-gray-500' },
-    };
-    const info = statusMap[status] || { label: status, color: 'bg-gray-500' };
-    return <Badge className={`text-xs ${info.color}`}>{info.label}</Badge>;
-  };
-
-  const getRecordTypeBadge = (type: string) => {
-    return type === 'pre_company' ? (
-      <Badge variant="outline" className="text-xs">입사 전</Badge>
-    ) : (
-      <Badge className="text-xs bg-blue-500">회사 배치</Badge>
-    );
-  };
-
-  const getAppointmentTypeBadge = (type: string) => {
-    return type === 'boarding' ? (
-      <Badge className="text-xs bg-blue-500">승선</Badge>
-    ) : (
-      <Badge className="text-xs bg-orange-500">하선</Badge>
-    );
-  };
-
-  const getAppointmentStatusBadge = (status: string) => {
-    const statusMap: Record<string, { label: string; color: string }> = {
-      draft: { label: '초안', color: 'bg-gray-500' },
-      pending_approval: { label: '승인대기', color: 'bg-yellow-500' },
-      approved: { label: '승인됨', color: 'bg-green-500' },
-      rejected: { label: '거절됨', color: 'bg-red-500' },
-      executed: { label: '실행됨', color: 'bg-blue-500' },
-      cancelled: { label: '취소됨', color: 'bg-gray-400' },
-    };
-    const info = statusMap[status] || { label: status, color: 'bg-gray-500' };
-    return <Badge className={`text-xs ${info.color}`}>{info.label}</Badge>;
-  };
-
-  const calculateServiceDuration = (signOn: string, signOff?: string) => {
-    const startDate = new Date(signOn);
-    const endDate = signOff ? new Date(signOff) : new Date();
-    const months = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30));
-    return `${months}개월`;
-  };
-
-  if (!currentUser || loading || !crewMember) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">데이터를 불러오는 중...</p>
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
     <Layout>
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        <div className="mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/crew')}
-            className="gap-1.5 h-8 mb-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            선원 목록으로
-          </Button>
-          <div className="flex justify-between items-start">
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/crew/management')}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
             <div>
-              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                {crewMember.name}
-                <CrewStatusBadge status={crewMember.status as CrewStatus} />
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">
-                {crewMember.rank} | {crewMember.nationality}
-              </p>
-              {crewMember.reviewer_name && crewMember.status === 'under_review' && (
-                <p className="text-xs text-blue-600 mt-1">
-                  검토자: {crewMember.reviewer_name}
-                </p>
-              )}
-              {crewMember.current_ship_name && crewMember.status === 'onboard' && (
-                <p className="text-xs text-cyan-600 mt-1">
-                  승선 선박: {crewMember.current_ship_name}
-                </p>
+              <h1 className="text-xl font-bold">{isNew ? '선원 등록' : formData.name || '선원 정보'}</h1>
+              {!isNew && crewInfo.rank_code && (
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge variant="outline" className="text-xs">{crewInfo.rank_code}</Badge>
+                  <span className="text-sm text-gray-500">{crewInfo.rank_name}</span>
+                </div>
               )}
             </div>
-            <Button
-              size="sm"
-              onClick={() => setIsStatusDialogOpen(true)}
-              className="gap-1.5 h-8"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              상태 변경
-            </Button>
           </div>
+          <Button onClick={handleSave} disabled={saving} className="gap-2">
+            <Save className="w-4 h-4" />
+            {saving ? '저장 중...' : '저장'}
+          </Button>
         </div>
 
-        <Tabs defaultValue="status" className="w-full">
-          <TabsList className="grid w-full grid-cols-8 h-9">
-            <TabsTrigger value="status" className="text-xs">상태</TabsTrigger>
-            <TabsTrigger value="biodata" className="text-xs">Bio-Data</TabsTrigger>
-            <TabsTrigger value="certificates" className="text-xs">
-              증서 ({certificates.length})
-            </TabsTrigger>
-            <TabsTrigger value="sea_service" className="text-xs">
-              승선기록 ({seaService.length})
-            </TabsTrigger>
-            <TabsTrigger value="training" className="text-xs">
-              교육훈련 ({training.length})
-            </TabsTrigger>
-            <TabsTrigger value="medical" className="text-xs">
-              상병 ({medical.length})
-            </TabsTrigger>
-            <TabsTrigger value="salary" className="text-xs">
-              급여 ({salary.length})
-            </TabsTrigger>
-            <TabsTrigger value="appointments" className="text-xs">
-              발령 ({appointments.length})
-            </TabsTrigger>
-          </TabsList>
+        <Card>
+          <CardContent className="pt-6">
+            <Tabs defaultValue="basic" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 mb-6">
+                <TabsTrigger value="basic">기본 정보</TabsTrigger>
+                <TabsTrigger value="biodata">Bio-Data</TabsTrigger>
+                <TabsTrigger value="emergency">연락처</TabsTrigger>
+                <TabsTrigger value="certificates">
+                  증서 {certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5 text-xs">{certificates.length}</span>}
+                </TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="status" className="mt-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">현재 상태</CardTitle>
-                  <CardDescription className="text-xs">선원의 현재 처리 상태</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">상태:</span>
-                      <CrewStatusBadge status={crewMember.status as CrewStatus} />
-                    </div>
-                    {crewMember.reviewer_name && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">검토자:</span>
-                        <span className="text-sm font-medium">{crewMember.reviewer_name}</span>
+              {/* 기본 정보 */}
+              <TabsContent value="basic" className="space-y-6">
+                <div className="flex flex-col items-center space-y-3 pb-6 border-b">
+                  <div className="relative">
+                    {previewUrl ? (
+                      <div className="relative">
+                        <img src={previewUrl} alt="" className="w-28 h-28 rounded-full object-cover border-4 border-gray-200" />
+                        <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1">
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
-                    )}
-                    {crewMember.review_started_at && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">검토 시작:</span>
-                        <span className="text-sm">{new Date(crewMember.review_started_at).toLocaleString('ko-KR')}</span>
-                      </div>
-                    )}
-                    {crewMember.current_ship_name && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">현재 선박:</span>
-                        <span className="text-sm font-medium">{crewMember.current_ship_name}</span>
-                      </div>
-                    )}
-                    {crewMember.status_notes && (
-                      <div className="pt-2 border-t">
-                        <span className="text-sm text-gray-600 block mb-1">비고:</span>
-                        <p className="text-sm">{crewMember.status_notes}</p>
+                    ) : (
+                      <div className="w-28 h-28 rounded-full bg-gray-100 flex items-center justify-center border-4 border-gray-200">
+                        <User className="w-14 h-14 text-gray-300" />
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <History className="w-4 h-4" />
-                    상태 변경 이력
-                  </CardTitle>
-                  <CardDescription className="text-xs">선원 상태의 모든 변경 기록</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {statusHistory.length === 0 ? (
-                    <div className="text-center py-8 text-sm text-gray-500">
-                      상태 변경 이력이 없습니다
+                  <Label htmlFor="photo-file" className="cursor-pointer">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-md hover:bg-gray-200 text-sm">
+                      <Upload className="w-3.5 h-3.5" />사진 업로드
                     </div>
-                  ) : (
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                      {statusHistory.map((history) => (
-                        <div key={history.id} className="p-3 bg-gray-50 rounded-lg border text-xs">
-                          <div className="flex justify-between items-start mb-1">
-                            <div className="flex gap-2">
-                              {history.from_status && (
-                                <>
-                                  <Badge variant="outline" className="text-xs">
-                                    {CREW_STATUS_LABELS[history.from_status as CrewStatus]}
-                                  </Badge>
-                                  <span className="text-gray-400">→</span>
-                                </>
-                              )}
-                              <CrewStatusBadge status={history.to_status as CrewStatus} />
+                  </Label>
+                  <Input id="photo-file" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div><Label>이름 *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1" /></div>
+                  <div>
+                    <Label>직급 *</Label>
+                    <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                      <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>국적</Label>
+                    <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                      <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1" /></div>
+                  <div><Label>연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1" /></div>
+                  <div><Label>이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1" /></div>
+                </div>
+              </TabsContent>
+
+              {/* Bio-Data */}
+              <TabsContent value="biodata" className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div><Label>출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1" placeholder="예: Jakarta, Indonesia" /></div>
+                  <div>
+                    <Label>혈액형</Label>
+                    <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">선택 안함</SelectItem>
+                        {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>키 (cm)</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1" placeholder="170" /></div>
+                  <div><Label>몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1" placeholder="70" /></div>
+                  <div>
+                    <Label>신발 사이즈 (mm)</Label>
+                    <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="신발 사이즈" /></SelectTrigger>
+                      <SelectContent>{SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s} mm</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>작업복 사이즈</Label>
+                    <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="작업복 사이즈" /></SelectTrigger>
+                      <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* 연락처 */}
+              <TabsContent value="emergency" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">비상 연락처 및 가족 연락처</span>
+                  <Button type="button" variant="outline" size="sm" onClick={addContact} className="gap-1">
+                    <Plus className="h-3.5 w-3.5" />추가
+                  </Button>
+                </div>
+                {emergencyContacts.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-gray-400 border-2 border-dashed rounded-md">연락처를 추가하세요.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {emergencyContacts.map((contact, idx) => (
+                      <div key={idx} className="p-3 border rounded-md bg-gray-50">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-gray-600">연락처 {idx + 1}</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeContact(idx)} className="h-6 w-6 p-0 text-red-500">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><Label className="text-xs text-gray-500">이름</Label><Input value={contact.name} onChange={e => updateContact(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
+                          <div>
+                            <Label className="text-xs text-gray-500">관계</Label>
+                            <Select value={contact.relationship} onValueChange={v => updateContact(idx, 'relationship', v)}>
+                              <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue placeholder="관계 선택" /></SelectTrigger>
+                              <SelectContent>{RELATIONSHIPS.map(r => <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div><Label className="text-xs text-gray-500">연락처</Label><Input value={contact.phone} onChange={e => updateContact(idx, 'phone', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
+                          <div><Label className="text-xs text-gray-500">비고</Label><Input value={contact.note || ''} onChange={e => updateContact(idx, 'note', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* 증서 */}
+              <TabsContent value="certificates" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">보유 증서 ({certificates.length}건)</span>
+                  <div className="flex gap-2">
+                    <Select onValueChange={v => addCert(v)}>
+                      <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="증서 선택 추가" /></SelectTrigger>
+                      <SelectContent>{CERT_TEMPLATES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1">
+                      <Plus className="h-3 w-3" />직접 입력
+                    </Button>
+                  </div>
+                </div>
+                {certificates.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-gray-400 border-2 border-dashed rounded-md">증서를 추가하세요.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {certificates.map((cert, idx) => (
+                      <div key={idx} className="p-3 border rounded-md bg-gray-50">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-gray-600">증서 {idx + 1}</span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeCert(idx)} className="h-6 w-6 p-0 text-red-500">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div><Label className="text-xs text-gray-500">증서명 *</Label><Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-7 text-xs mt-0.5" /></div>
+                            <div><Label className="text-xs text-gray-500">증서 번호</Label><Input value={cert.number || ''} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs mt-0.5" /></div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div><Label className="text-xs text-gray-500">발급일</Label><Input type="date" value={cert.issued_date || ''} onChange={e => handleIssuedDate(idx, e.target.value)} className="h-7 text-xs mt-0.5" /></div>
+                            <div>
+                              <div className="flex items-center justify-between mt-0.5 mb-0.5">
+                                <Label className="text-xs text-gray-500">만료일</Label>
+                                <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
+                                  <input type="checkbox" checked={cert.no_expiry || false} onChange={e => handleNoExpiry(idx, e.target.checked)} className="accent-blue-600 w-3 h-3" />만료일 없음
+                                </label>
+                              </div>
+                              <Input type="date" value={cert.expiry_date || ''} onChange={e => updateCert(idx, 'expiry_date', e.target.value)} className="h-7 text-xs" disabled={cert.no_expiry} />
                             </div>
                           </div>
-                          <p className="text-gray-600">
-                            {new Date(history.changed_at).toLocaleString('ko-KR')}
-                          </p>
-                          {history.notes && (
-                            <p className="mt-1 text-gray-700">{history.notes}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="biodata" className="mt-3">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Bio-Data</CardTitle>
-                <CardDescription className="text-xs">선원의 기본 신체 정보 및 비상 연락처</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm">신체 정보</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">키:</span>
-                        <span>{crewMember.height ? `${crewMember.height}cm` : '-'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">몸무게:</span>
-                        <span>{crewMember.weight ? `${crewMember.weight}kg` : '-'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">혈액형:</span>
-                        <span>{crewMember.blood_type || '-'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-sm">비상 연락처</h3>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-gray-600 block">가족 연락처:</span>
-                        <span className="font-medium">{crewMember.next_of_kin || '-'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="certificates" className="mt-3">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-base">증서 관리</CardTitle>
-                    <CardDescription className="text-xs">선원의 각종 증서 및 자격증</CardDescription>
-                  </div>
-                  <Button size="sm" className="gap-1.5 h-8" onClick={handleAddCertificate}>
-                    <Plus className="w-3.5 h-3.5" />
-                    증서 추가
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {certificates.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-500">
-                    등록된 증서가 없습니다
-                  </div>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">증서 유형</TableHead>
-                          <TableHead className="text-xs">증서번호</TableHead>
-                          <TableHead className="text-xs">발급일</TableHead>
-                          <TableHead className="text-xs">만료일</TableHead>
-                          <TableHead className="text-xs">발급기관</TableHead>
-                          <TableHead className="text-xs">상태</TableHead>
-                          <TableHead className="text-right text-xs w-32">작업</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {certificates.map(cert => (
-                          <TableRow key={cert.id}>
-                            <TableCell className="text-sm">
-                              <div>
-                                <div className="font-medium">{cert.certificate_type?.type_name_ko}</div>
-                                <Badge variant="outline" className="text-xs mt-1">
-                                  {cert.certificate_type?.category}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-sm">{cert.certificate_number}</TableCell>
-                            <TableCell className="text-sm">
-                              {new Date(cert.issue_date).toLocaleDateString('ko-KR')}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {new Date(cert.expiry_date).toLocaleDateString('ko-KR')}
-                            </TableCell>
-                            <TableCell className="text-sm">{cert.issuing_authority || '-'}</TableCell>
-                            <TableCell>
-                              {getCertificateStatusBadge(cert.status)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex gap-1 justify-end">
-                                {cert.file_url && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => window.open(cert.file_url!, '_blank')}
-                                    className="h-7 px-2"
-                                  >
-                                    <FileText className="w-3 h-3" />
-                                  </Button>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div><Label className="text-xs text-gray-500">발급 기관</Label><Input value={cert.issuing_authority || ''} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-7 text-xs mt-0.5" /></div>
+                            <div>
+                              <Label className="text-xs text-gray-500">증서 사본</Label>
+                              <div className="mt-0.5">
+                                {cert.file_name ? (
+                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs h-7">
+                                    <button type="button" onClick={() => cert.file_path && openCertFile(cert.file_path)} className="flex-1 truncate text-blue-700 text-left">{cert.file_name}</button>
+                                    <button type="button" onClick={() => { updateCert(idx, 'file_path', ''); updateCert(idx, 'file_name', ''); }} className="text-red-400"><X className="h-3 w-3" /></button>
+                                  </div>
+                                ) : certFiles[idx] ? (
+                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded text-xs h-7">
+                                    <span className="flex-1 truncate text-green-700">{certFiles[idx].name}</span>
+                                    <button type="button" onClick={() => setCertFiles(prev => { const n = { ...prev }; delete n[idx]; return n; })} className="text-red-400"><X className="h-3 w-3" /></button>
+                                  </div>
+                                ) : (
+                                  <label className="flex items-center gap-1.5 px-2 py-1 border border-dashed rounded cursor-pointer hover:bg-gray-50 text-xs text-gray-400 h-7">
+                                    <Upload className="h-3 w-3 shrink-0" /><span className="truncate">파일 선택</span>
+                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => {
+                                      const file = e.target.files?.[0];
+                                      if (file) { if (file.size > 10 * 1024 * 1024) { alert('10MB 초과'); return; } setCertFiles(prev => ({ ...prev, [idx]: file })); }
+                                    }} />
+                                  </label>
                                 )}
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEditCertificate(cert)}
-                                  className="h-7 px-2"
-                                >
-                                  수정
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDeleteCertificate(cert.id)}
-                                  className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="sea_service" className="mt-3">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-base">승선 기록</CardTitle>
-                    <CardDescription className="text-xs">선원의 승선 이력 관리</CardDescription>
-                  </div>
-                  <Button size="sm" className="gap-1.5 h-8" onClick={handleAddSeaService}>
-                    <Plus className="w-3.5 h-3.5" />
-                    승선 기록 추가
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {seaService.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-500">
-                    등록된 승선 기록이 없습니다
-                  </div>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">유형</TableHead>
-                          <TableHead className="text-xs">선박명</TableHead>
-                          <TableHead className="text-xs">선종</TableHead>
-                          <TableHead className="text-xs">직급</TableHead>
-                          <TableHead className="text-xs">승선일</TableHead>
-                          <TableHead className="text-xs">하선일</TableHead>
-                          <TableHead className="text-xs">기간</TableHead>
-                          <TableHead className="text-right text-xs w-24">작업</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {seaService.map(record => (
-                          <TableRow key={record.id}>
-                            <TableCell>
-                              {getRecordTypeBadge(record.record_type)}
-                            </TableCell>
-                            <TableCell className="text-sm font-medium">{record.ship_name}</TableCell>
-                            <TableCell className="text-sm">{record.ship_type || '-'}</TableCell>
-                            <TableCell className="text-sm">{record.rank}</TableCell>
-                            <TableCell className="text-sm">
-                              {new Date(record.sign_on_date).toLocaleDateString('ko-KR')}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {record.sign_off_date ? new Date(record.sign_off_date).toLocaleDateString('ko-KR') : '승선 중'}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {calculateServiceDuration(record.sign_on_date, record.sign_off_date)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex gap-1 justify-end">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEditSeaService(record)}
-                                  className="h-7 px-2"
-                                >
-                                  <Edit className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDeleteSeaService(record.id)}
-                                  className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="training" className="mt-3">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">교육훈련 기록</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-sm text-gray-500">
-                  교육훈련 내용
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="medical" className="mt-3">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">상병 기록</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-sm text-gray-500">
-                  상병 내용
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="salary" className="mt-3">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">급여 기록</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-sm text-gray-500">
-                  급여 내용
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="appointments" className="mt-3">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle className="text-base">승/하선 발령</CardTitle>
-                    <CardDescription className="text-xs">선원의 승선 및 하선 발령 기록</CardDescription>
-                  </div>
-                  <Button size="sm" className="gap-1.5 h-8">
-                    <Plus className="w-3.5 h-3.5" />
-                    발령 추가
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {appointments.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-500">
-                    발령 기록이 없습니다
-                  </div>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">발령 유형</TableHead>
-                          <TableHead className="text-xs">선박</TableHead>
-                          <TableHead className="text-xs">직급</TableHead>
-                          <TableHead className="text-xs">발령일</TableHead>
-                          <TableHead className="text-xs">항구</TableHead>
-                          <TableHead className="text-xs">상태</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {appointments.map(appointment => {
-                          const ship = ships.find(s => s.id === appointment.ship_id);
-                          return (
-                            <TableRow key={appointment.id}>
-                              <TableCell>
-                                {getAppointmentTypeBadge(appointment.appointment_type)}
-                              </TableCell>
-                              <TableCell className="text-sm">{ship?.name || '-'}</TableCell>
-                              <TableCell className="text-sm">{appointment.rank_id}</TableCell>
-                              <TableCell className="text-sm">
-                                {new Date(appointment.appointment_date).toLocaleDateString('ko-KR')}
-                              </TableCell>
-                              <TableCell className="text-sm">
-                                {appointment.port_name ? `${appointment.port_name}, ${appointment.port_country}` : '-'}
-                              </TableCell>
-                              <TableCell>
-                                {getAppointmentStatusBadge(appointment.status)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </main>
-
-      <CrewStatusDialog
-        open={isStatusDialogOpen}
-        onOpenChange={setIsStatusDialogOpen}
-        currentStatus={crewMember.status as CrewStatus}
-        onSubmit={handleStatusChange}
-        ships={ships}
-      />
-
-      {crewId && (
-        <>
-          <CrewCertificateDialog
-            open={isCertificateDialogOpen}
-            onOpenChange={setIsCertificateDialogOpen}
-            crewId={crewId}
-            certificate={editingCertificate}
-            onSuccess={() => {
-              loadData(crewId);
-              setIsCertificateDialogOpen(false);
-            }}
-          />
-
-          <SeaServiceDialog
-            open={isSeaServiceDialogOpen}
-            onOpenChange={setIsSeaServiceDialogOpen}
-            crewId={crewId}
-            record={editingSeaService}
-            onSuccess={() => {
-              loadData(crewId);
-              setIsSeaServiceDialogOpen(false);
-            }}
-          />
-        </>
-      )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
     </Layout>
   );
 }
