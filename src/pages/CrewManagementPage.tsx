@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import type { Rank, Company, Fleet, Ship } from '@/types/models';
 import Layout from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 export function CrewManagementPage() {
   const { toast } = useToast();
@@ -121,11 +122,12 @@ export function CrewManagementPage() {
   };
 
   const handleView = (crew: CrewWithDetails) => {
-    setSelectedCrew(crew);
-    setCrewDialogOpen(true);
+    navigate(`/crew/${crew.id}`);
   };
 
-  const handleAddCrew = () => { setSelectedCrew(null); setCrewDialogOpen(true); };
+  const handleAddCrew = () => {
+    navigate('/crew/new');
+  };
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleCrewDialogClose = async (saved: boolean, crewId?: string) => {
