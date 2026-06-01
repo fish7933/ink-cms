@@ -15,11 +15,16 @@ export default function Sidebar({ menuStructure, currentRole }: SidebarProps) {
   const location = useLocation();
 
   const isItemActive = (item: MenuItem) => {
-    if (item.path?.includes('?')) {
-      const [path, query] = item.path.split('?');
+    if (item.query) {
+      const path = item.path?.split('?')[0];
+      const query = item.query;
       return location.pathname === path && location.search.includes(query);
     }
-    return location.pathname === item.path;
+    if (!item.path) return false;
+    if (location.pathname === item.path) return true;
+    // 하위 경로도 활성으로 처리 (예: /crew/uuid → /crew/management 활성)
+    if (item.path !== '/' && location.pathname.startsWith(item.path.replace('/management', ''))) return true;
+    return false;
   };
 
   const filterItemsByRole = (items: MenuItem[]) => {
