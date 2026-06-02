@@ -1,4 +1,13 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, Component } from 'react';
+
+class PanelErrorBoundary extends Component<{children: React.ReactNode}, {error: string | null}> {
+  constructor(props: {children: React.ReactNode}) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e: Error) { return { error: e?.message || String(e) }; }
+  render() {
+    if (this.state.error) return <div style={{padding:'20px',color:'red',whiteSpace:'pre-wrap'}}>패널 오류: {this.state.error}</div>;
+    return this.props.children;
+  }
+}
 import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { CrewDetailPanel } from '@/components/crew/CrewDetailPanel';
 import { Button } from '@/components/ui/button';
@@ -127,8 +136,8 @@ export function CrewManagementPage() {
     setSelectedNationality('all');
   };
 
-  const handleView = (crew: CrewWithDetails) => { alert('handleView: ' + crew.id); setPanelView({ id: crew.id }); };
-  const handleAddCrew = () => { alert('handleAddCrew called'); setPanelView({}); };
+  const handleView = (crew: CrewWithDetails) => setPanelView({ id: crew.id });
+  const handleAddCrew = () => setPanelView({});
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
@@ -179,10 +188,13 @@ export function CrewManagementPage() {
   if (panelView !== null) {
     return (
       <Layout>
-        <div style={{padding: '40px', fontSize: '24px', color: 'red'}}>
-          DEBUG: panelView = {JSON.stringify(panelView)}
-          <button onClick={() => setPanelView(null)}>닫기</button>
-        </div>
+        <PanelErrorBoundary>
+          <CrewDetailPanel
+            id={panelView.id}
+            onBack={() => { setPanelView(null); loadData(); }}
+            onSaved={(savedId) => { setPanelView({ id: savedId }); loadData(); }}
+          />
+        </PanelErrorBoundary>
       </Layout>
     );
   }
