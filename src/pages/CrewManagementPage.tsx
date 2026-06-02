@@ -127,8 +127,8 @@ export function CrewManagementPage() {
     setSelectedNationality('all');
   };
 
-  const handleView = (crew: CrewWithDetails) => setPanelView({ id: crew.id });
-  const handleAddCrew = () => setPanelView({});
+  const handleView = (crew: CrewWithDetails) => { alert('handleView: ' + crew.id); setPanelView({ id: crew.id }); };
+  const handleAddCrew = () => { alert('handleAddCrew called'); setPanelView({}); };
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
