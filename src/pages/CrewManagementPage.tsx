@@ -179,11 +179,10 @@ export function CrewManagementPage() {
   if (panelView !== null) {
     return (
       <Layout>
-        <CrewDetailPanel
-          id={panelView.id}
-          onBack={() => { setPanelView(null); loadData(); }}
-          onSaved={(savedId) => { setPanelView({ id: savedId }); loadData(); }}
-        />
+        <div style={{padding: '40px', fontSize: '24px', color: 'red'}}>
+          DEBUG: panelView = {JSON.stringify(panelView)}
+          <button onClick={() => setPanelView(null)}>닫기</button>
+        </div>
       </Layout>
     );
   }
