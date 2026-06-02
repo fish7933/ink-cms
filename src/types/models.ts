@@ -2,7 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew';
+  role: 'admin' | 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew';
   company_id?: string;
   created_at: string;
 }

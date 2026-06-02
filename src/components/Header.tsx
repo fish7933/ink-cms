@@ -50,13 +50,14 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
 
   const filterCategoriesByRole = (categories: MenuCategory[]) => {
     if (!currentUser) return [];
+    const isAdmin = currentUser.role === 'admin';
     return categories
       .filter(c => c.is_active)
       .map(c => ({
         ...c,
         items: c.items.filter(item =>
           item.is_active &&
-          (!item.roles || item.roles.length === 0 || item.roles.includes(currentUser.role))
+          (isAdmin || !item.roles || item.roles.length === 0 || item.roles.includes(currentUser.role))
         ),
       }))
       .filter(c => c.items.length > 0)
@@ -64,6 +65,7 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
   };
 
   const roleLabels: Record<string, string> = {
+    admin: '슈퍼관리자',
     ship_owner: '선주',
     ship_manager: '선박관리사',
     manning_agency: '선원 매닝사',
