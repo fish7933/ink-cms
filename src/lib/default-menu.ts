@@ -157,7 +157,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         label: '완료 문서함',
         path: '/approval-archive',
         icon: 'Archive',
-        roles: [],
+        roles: ['ship_manager', 'manning_agency'],
         order: 2,
         is_active: true,
       },
