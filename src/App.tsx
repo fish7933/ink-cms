@@ -14,6 +14,7 @@ import MyRecommendationsPage from '@/pages/MyRecommendationsPage';
 import RecommendationReviewPage from '@/pages/RecommendationReviewPage';
 import ApprovalLineManagementPage from '@/pages/ApprovalLineManagementPage';
 import ApprovalInboxPage from '@/pages/ApprovalInboxPage';
+import ApprovalArchivePage from '@/pages/ApprovalArchivePage';
 import ApprovalManagementPage from '@/pages/ApprovalManagementPage';
 import SupervisorManagementPage from '@/pages/SupervisorManagementPage';
 import RanksPage from '@/pages/RanksPage';
@@ -59,6 +60,7 @@ function App() {
         <Route path="/recommendation-review" element={<RecommendationReviewPage />} />
         <Route path="/approval-lines" element={<ApprovalLineManagementPage />} />
         <Route path="/approval-inbox" element={<ApprovalInboxPage />} />
+        <Route path="/approval-archive" element={<ApprovalArchivePage />} />
         <Route path="/approval-management" element={<ApprovalManagementPage />} />
         <Route path="/supervisor-management" element={<SupervisorManagementPage />} />
         <Route path="/ranks" element={<RanksPage />} />
