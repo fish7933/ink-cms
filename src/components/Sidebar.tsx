@@ -1,9 +1,10 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { MenuCategory, MenuItem } from '@/types/menu';
 import { getIconComponent } from '@/lib/icon-utils';
+import { useTabContext } from '@/contexts/TabContext';
 
 interface SidebarProps {
   menuStructure: MenuCategory[];
@@ -11,7 +12,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ menuStructure, currentRole }: SidebarProps) {
-  const navigate = useNavigate();
+  const { openTab } = useTabContext();
   const location = useLocation();
 
   const isItemActive = (item: MenuItem) => {
@@ -100,7 +101,7 @@ export default function Sidebar({ menuStructure, currentRole }: SidebarProps) {
                     'w-full justify-start h-9 px-3 text-sm',
                     isActive && 'bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium'
                   )}
-                  onClick={() => item.path && navigate(item.path)}
+                  onClick={() => item.path && openTab(item.path, item.label)}
                 >
                   {ItemIcon && <ItemIcon className="h-4 w-4 mr-2" />}
                   {item.label}

@@ -2,6 +2,7 @@ import { ReactNode, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
+import TabBar from '@/components/TabBar';
 import { defaultMenuStructure } from '@/lib/default-menu';
 import { getCurrentUser } from '@/lib/store';
 import type { User } from '@/lib/store';
@@ -75,6 +76,7 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
+      <TabBar />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar menuStructure={menuStructure} currentRole={currentUser?.role || 'crew'} />
         <main className="flex-1 overflow-y-auto">

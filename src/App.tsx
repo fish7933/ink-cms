@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { TabProvider } from '@/contexts/TabContext';
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import CrewManagementPage from '@/pages/CrewManagementPage';
@@ -37,6 +38,7 @@ import { Toaster } from '@/components/ui/toaster';
 function App() {
   return (
     <Router>
+      <TabProvider>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
@@ -76,6 +78,7 @@ function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Toaster />
+      </TabProvider>
     </Router>
   );
 }

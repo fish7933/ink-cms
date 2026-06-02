@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTabContext } from '@/contexts/TabContext';
 import { getCurrentUser, logout as logoutUser } from '@/lib/store';
 import type { User } from '@/lib/store';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import type { MenuCategory } from '@/types/menu';
 export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { openTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
@@ -123,7 +125,7 @@ export default function Header() {
                     return (
                       <DropdownMenuItem
                         key={item.id}
-                        onClick={() => item.path && navigate(item.path)}
+                        onClick={() => item.path && openTab(item.path, item.label)}
                         className="cursor-pointer"
                       >
                         {ItemIcon && <ItemIcon className="h-4 w-4 mr-2" />}
@@ -152,7 +154,7 @@ export default function Header() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
+            <DropdownMenuItem onClick={() => openTab('/profile', '내 프로필')} className="cursor-pointer">
               <UserIcon className="h-4 w-4 mr-2" />
               내 프로필
             </DropdownMenuItem>
