@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { CrewDetailPanel } from '@/components/crew/CrewDetailPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,7 +17,6 @@ import Layout from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
 
 export function CrewManagementPage() {
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   const [crewMembers, setCrewMembers] = useState<CrewWithDetails[]>([]);
@@ -47,6 +46,8 @@ export function CrewManagementPage() {
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
+
+  const [panelView, setPanelView] = useState<{ id?: string } | null>(null);
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { filterCrew(); }, [crewMembers, searchTerm, selectedOwner, selectedFleet, selectedShip, selectedRank, selectedRankCategory, selectedManningAgency, selectedNationality, activeTab]);
@@ -126,8 +127,8 @@ export function CrewManagementPage() {
     setSelectedNationality('all');
   };
 
-  const handleView = (crew: CrewWithDetails) => navigate(`/crew/${crew.id}`);
-  const handleAddCrew = () => navigate('/crew/new');
+  const handleView = (crew: CrewWithDetails) => setPanelView({ id: crew.id });
+  const handleAddCrew = () => setPanelView({});
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
@@ -174,6 +175,18 @@ export function CrewManagementPage() {
     onEdit: handleView,
     onChangeStatus: handleChangeStatus,
   };
+
+  if (panelView !== null) {
+    return (
+      <Layout>
+        <CrewDetailPanel
+          id={panelView.id}
+          onBack={() => { setPanelView(null); loadData(); }}
+          onSaved={(savedId) => { setPanelView({ id: savedId }); loadData(); }}
+        />
+      </Layout>
+    );
+  }
 
   if (loading) {
     return (
