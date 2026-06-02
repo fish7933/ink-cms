@@ -58,62 +58,68 @@ export default function ApprovalManagementPage() {
 
       let approvalDetails: CrewRecommendationApprovalWithDetails[];
 
+      // 완료된 문서(승인/반려)는 모든 사용자에게 공개
+      const { data: completedData, error: completedError } = await supabase
+        .from('crew_recommendation_approvals')
+        .select('*')
+        .in('status', ['approved', 'rejected', 'cancelled'])
+        .order('created_at', { ascending: false });
+
+      if (completedError) throw completedError;
+
+      // 대기 중 문서: 본인 관련 것만 (관리자는 전체)
+      let pendingData: CrewRecommendationApproval[] = [];
       if (currentUser.role === 'admin') {
-        // 관리자: 모든 결재 문서 조회
-        const { data: allData, error } = await supabase
+        const { data, error } = await supabase
           .from('crew_recommendation_approvals')
           .select('*')
-          .order('created_at', { ascending: false });
-
+          .eq('status', 'pending');
         if (error) throw error;
-        if (!allData || allData.length === 0) {
-          setAllApprovals([]);
-          setLoading(false);
-          return;
-        }
-        approvalDetails = await approvalService.getApprovalDetails(allData.map(a => a.id));
+        pendingData = data || [];
       } else {
-        // 일반 사용자: 본인이 요청하거나 결재자인 문서만
-        const { data: myRequestedApprovals, error: requestedError } = await supabase
+        const { data: myRequested } = await supabase
           .from('crew_recommendation_approvals')
           .select('*')
-          .eq('requester_id', currentUser.id);
+          .eq('requester_id', currentUser.id)
+          .eq('status', 'pending');
 
-        if (requestedError) throw requestedError;
-
-        const { data: myApproverSteps, error: stepsError } = await supabase
+        const { data: mySteps } = await supabase
           .from('approval_line_steps')
           .select('approval_line_id')
           .eq('approver_id', currentUser.id);
 
-        if (stepsError) throw stepsError;
-
-        const myApprovalLineIds = [...new Set((myApproverSteps || []).map(s => s.approval_line_id))];
-
-        let myApproverApprovals: CrewRecommendationApproval[] = [];
-        if (myApprovalLineIds.length > 0) {
-          const { data, error: approverApprovalsError } = await supabase
+        const lineIds = [...new Set((mySteps || []).map(s => s.approval_line_id))];
+        let approverPending: CrewRecommendationApproval[] = [];
+        if (lineIds.length > 0) {
+          const { data } = await supabase
             .from('crew_recommendation_approvals')
             .select('*')
-            .in('approval_line_id', myApprovalLineIds);
-
-          if (approverApprovalsError) throw approverApprovalsError;
-          myApproverApprovals = data || [];
+            .in('approval_line_id', lineIds)
+            .eq('status', 'pending');
+          approverPending = data || [];
         }
-
-        const allApprovalIds = new Set([
-          ...(myRequestedApprovals || []).map(a => a.id),
-          ...myApproverApprovals.map(a => a.id),
+        const pendingIds = new Set([
+          ...(myRequested || []).map(a => a.id),
+          ...approverPending.map(a => a.id),
         ]);
-
-        if (allApprovalIds.size === 0) {
-          setAllApprovals([]);
-          setLoading(false);
-          return;
-        }
-
-        approvalDetails = await approvalService.getApprovalDetails(Array.from(allApprovalIds));
+        pendingData = [...(myRequested || []), ...approverPending].filter(
+          (a, i, arr) => arr.findIndex(x => x.id === a.id) === i
+        );
+        void pendingIds;
       }
+
+      const allIds = new Set([
+        ...(completedData || []).map(a => a.id),
+        ...pendingData.map(a => a.id),
+      ]);
+
+      if (allIds.size === 0) {
+        setAllApprovals([]);
+        setLoading(false);
+        return;
+      }
+
+      approvalDetails = await approvalService.getApprovalDetails(Array.from(allIds));
 
       // Get crew recommendation details
       const crewRecIds = [...new Set(approvalDetails.map(a => a.crew_recommendation_id))];
