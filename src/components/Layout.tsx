@@ -18,44 +18,40 @@ export default function Layout({ children }: LayoutProps) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-
     const loadUser = async () => {
       try {
         const user = await getCurrentUser();
-        
         if (!isMounted) return;
-        
-        if (!user) {
-          console.log('❌ No user found, redirecting to login from:', location.pathname);
-          navigate('/login', { replace: true });
-          return;
-        }
-        
-        console.log('✅ User loaded in Layout:', user.username);
+        if (!user) { navigate('/login', { replace: true }); return; }
         setCurrentUser(user);
-      } catch (error) {
-        console.error('Error loading user in Layout:', error);
-        if (isMounted) {
-          navigate('/login', { replace: true });
-        }
+      } catch {
+        if (isMounted) navigate('/login', { replace: true });
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
-    
     loadUser();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [navigate, location.pathname]);
 
-  // Show loading state while checking authentication
+  // URL 변경 시 카테고리 자동 동기화
+  useEffect(() => {
+    const found = menuStructure.find(category =>
+      category.items.some(item => {
+        if (!item.path) return false;
+        const itemPath = item.path.split('?')[0];
+        const base = '/' + itemPath.split('/').filter(Boolean)[0];
+        return location.pathname === itemPath ||
+          (base.length > 1 && location.pathname.startsWith(base));
+      })
+    );
+    if (found) setSelectedCategoryId(found.id);
+  }, [location.pathname, menuStructure]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -67,21 +63,26 @@ export default function Layout({ children }: LayoutProps) {
     );
   }
 
-  // Don't render anything if no user (will redirect)
-  if (!currentUser) {
-    return null;
-  }
+  if (!currentUser) return null;
 
-  // Render the full layout with user data
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
-      <TabBar />
+      <Header
+        selectedCategoryId={selectedCategoryId}
+        onCategorySelect={setSelectedCategoryId}
+      />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar menuStructure={menuStructure} currentRole={currentUser?.role || 'crew'} />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+        <Sidebar
+          menuStructure={menuStructure}
+          currentRole={currentUser?.role || 'crew'}
+          selectedCategoryId={selectedCategoryId}
+        />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <TabBar />
+          <main className="flex-1 overflow-y-auto">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );
