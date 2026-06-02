@@ -48,63 +48,72 @@ export default function ApprovalManagementPage() {
     try {
       setLoading(true);
 
-      // Use custom getCurrentUser instead of supabase.auth.getUser
       const currentUser = await getCurrentUser();
       if (!currentUser) {
-        console.log('❌ No user found in ApprovalManagementPage, redirecting to login');
         navigate('/login');
         return;
       }
 
-      console.log('✅ User authenticated in ApprovalManagementPage:', currentUser.username);
       setCurrentUserId(currentUser.id);
 
-      // Get all approvals where:
-      // 1. User is the requester
-      // 2. User is an approver in the approval line
-      const { data: myRequestedApprovals, error: requestedError } = await supabase
-        .from('crew_recommendation_approvals')
-        .select('*')
-        .eq('requester_id', currentUser.id);
+      let approvalDetails: CrewRecommendationApprovalWithDetails[];
 
-      if (requestedError) throw requestedError;
-
-      // Get approval lines where user is an approver
-      const { data: myApproverSteps, error: stepsError } = await supabase
-        .from('approval_line_steps')
-        .select('approval_line_id')
-        .eq('approver_id', currentUser.id);
-
-      if (stepsError) throw stepsError;
-
-      const myApprovalLineIds = [...new Set((myApproverSteps || []).map(s => s.approval_line_id))];
-
-      // Get approvals for those approval lines
-      let myApproverApprovals: CrewRecommendationApproval[] = [];
-      if (myApprovalLineIds.length > 0) {
-        const { data, error: approverApprovalsError } = await supabase
+      if (currentUser.role === 'admin') {
+        // 관리자: 모든 결재 문서 조회
+        const { data: allData, error } = await supabase
           .from('crew_recommendation_approvals')
           .select('*')
-          .in('approval_line_id', myApprovalLineIds);
+          .order('created_at', { ascending: false });
 
-        if (approverApprovalsError) throw approverApprovalsError;
-        myApproverApprovals = data || [];
+        if (error) throw error;
+        if (!allData || allData.length === 0) {
+          setAllApprovals([]);
+          setLoading(false);
+          return;
+        }
+        approvalDetails = await approvalService.getApprovalDetails(allData.map(a => a.id));
+      } else {
+        // 일반 사용자: 본인이 요청하거나 결재자인 문서만
+        const { data: myRequestedApprovals, error: requestedError } = await supabase
+          .from('crew_recommendation_approvals')
+          .select('*')
+          .eq('requester_id', currentUser.id);
+
+        if (requestedError) throw requestedError;
+
+        const { data: myApproverSteps, error: stepsError } = await supabase
+          .from('approval_line_steps')
+          .select('approval_line_id')
+          .eq('approver_id', currentUser.id);
+
+        if (stepsError) throw stepsError;
+
+        const myApprovalLineIds = [...new Set((myApproverSteps || []).map(s => s.approval_line_id))];
+
+        let myApproverApprovals: CrewRecommendationApproval[] = [];
+        if (myApprovalLineIds.length > 0) {
+          const { data, error: approverApprovalsError } = await supabase
+            .from('crew_recommendation_approvals')
+            .select('*')
+            .in('approval_line_id', myApprovalLineIds);
+
+          if (approverApprovalsError) throw approverApprovalsError;
+          myApproverApprovals = data || [];
+        }
+
+        const allApprovalIds = new Set([
+          ...(myRequestedApprovals || []).map(a => a.id),
+          ...myApproverApprovals.map(a => a.id),
+        ]);
+
+        if (allApprovalIds.size === 0) {
+          setAllApprovals([]);
+          setLoading(false);
+          return;
+        }
+
+        approvalDetails = await approvalService.getApprovalDetails(Array.from(allApprovalIds));
       }
-
-      // Combine and deduplicate approvals
-      const allApprovalIds = new Set([
-        ...(myRequestedApprovals || []).map(a => a.id),
-        ...myApproverApprovals.map(a => a.id),
-      ]);
-
-      if (allApprovalIds.size === 0) {
-        setAllApprovals([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get full details for all approvals
-      const approvalDetails = await approvalService.getApprovalDetails(Array.from(allApprovalIds));
 
       // Get crew recommendation details
       const crewRecIds = [...new Set(approvalDetails.map(a => a.crew_recommendation_id))];
