@@ -208,7 +208,7 @@ export function CrewManagementPage() {
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="text-base">선원 관리</CardTitle>
+                <CardTitle className="text-base">선원 관리 v2</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">선원 정보와 승하선 이력을 관리합니다</p>
               </div>
               <div className="flex gap-2">
