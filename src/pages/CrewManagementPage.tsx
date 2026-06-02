@@ -1,14 +1,5 @@
-﻿import { useState, useEffect, Component } from 'react';
-
-class PanelErrorBoundary extends Component<{children: React.ReactNode}, {error: string | null}> {
-  constructor(props: {children: React.ReactNode}) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(e: Error) { return { error: e?.message || String(e) }; }
-  render() {
-    if (this.state.error) return <div style={{padding:'20px',color:'red',whiteSpace:'pre-wrap'}}>패널 오류: {this.state.error}</div>;
-    return this.props.children;
-  }
-}
-import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
 import { CrewDetailPanel } from '@/components/crew/CrewDetailPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,6 +47,7 @@ export function CrewManagementPage() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
 
+  // null = 목록, {} = 신규등록, { id } = 수정
   const [panelView, setPanelView] = useState<{ id?: string } | null>(null);
 
   useEffect(() => { loadData(); }, []);
@@ -138,6 +130,7 @@ export function CrewManagementPage() {
 
   const handleView = (crew: CrewWithDetails) => setPanelView({ id: crew.id });
   const handleAddCrew = () => setPanelView({});
+  const handleClosePanel = () => { setPanelView(null); loadData(); };
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
@@ -185,20 +178,6 @@ export function CrewManagementPage() {
     onChangeStatus: handleChangeStatus,
   };
 
-  if (panelView !== null) {
-    return (
-      <Layout>
-        <PanelErrorBoundary>
-          <CrewDetailPanel
-            id={panelView.id}
-            onBack={() => { setPanelView(null); loadData(); }}
-            onSaved={(savedId) => { setPanelView({ id: savedId }); loadData(); }}
-          />
-        </PanelErrorBoundary>
-      </Layout>
-    );
-  }
-
   if (loading) {
     return (
       <Layout>
@@ -218,19 +197,32 @@ export function CrewManagementPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
-              <div>
-                <CardTitle className="text-base">선원 관리 v2</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">선원 정보와 승하선 이력을 관리합니다</p>
+              <div className="flex items-center gap-2">
+                {panelView !== null && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleClosePanel}>
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                )}
+                <div>
+                  <CardTitle className="text-base">선원 관리</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {panelView !== null
+                      ? (panelView.id ? '선원 정보 수정' : '새 선원 등록')
+                      : '선원 정보와 승하선 이력을 관리합니다'}
+                  </p>
+                </div>
               </div>
               <div className="flex gap-2">
-                {selectedCrewIds.length > 0 && (
+                {panelView === null && selectedCrewIds.length > 0 && (
                   <Button onClick={handleBulkDelete} size="sm" variant="destructive" className="gap-1.5 h-8">
                     <Trash2 className="w-4 h-4" />선택 삭제 ({selectedCrewIds.length})
                   </Button>
                 )}
-                <Button onClick={handleAddCrew} size="sm" className="gap-1.5 h-8">
-                  <Plus className="w-4 h-4" />선원 등록
-                </Button>
+                {panelView === null && (
+                  <Button onClick={handleAddCrew} size="sm" className="gap-1.5 h-8">
+                    <Plus className="w-4 h-4" />선원 등록
+                  </Button>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -295,65 +287,77 @@ export function CrewManagementPage() {
               )}
             </div>
 
-            {/* 상태 탭 */}
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="h-8">
-                <TabsTrigger value="all" className="text-xs h-7">전체 ({getStatusCount('all')})</TabsTrigger>
-                <TabsTrigger value="registered" className="text-xs h-7">등록 ({getStatusCount('registered')})</TabsTrigger>
-                <TabsTrigger value="available" className="text-xs h-7">대기 ({getStatusCount('available')})</TabsTrigger>
-                <TabsTrigger value="on_board" className="text-xs h-7">승선 ({getStatusCount('on_board')})</TabsTrigger>
-                <TabsTrigger value="on_leave" className="text-xs h-7">휴가 ({getStatusCount('on_leave')})</TabsTrigger>
-                <TabsTrigger value="retired" className="text-xs h-7">퇴직 ({getStatusCount('retired')})</TabsTrigger>
-              </TabsList>
+            {/* 목록 또는 등록/수정 폼 */}
+            {panelView !== null ? (
+              <CrewDetailPanel
+                id={panelView.id}
+                onBack={handleClosePanel}
+                onSaved={(savedId) => { setPanelView({ id: savedId }); loadData(); }}
+                embedded={true}
+              />
+            ) : (
+              <>
+                {/* 상태 탭 */}
+                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="all" className="text-xs h-7">전체 ({getStatusCount('all')})</TabsTrigger>
+                    <TabsTrigger value="registered" className="text-xs h-7">등록 ({getStatusCount('registered')})</TabsTrigger>
+                    <TabsTrigger value="available" className="text-xs h-7">대기 ({getStatusCount('available')})</TabsTrigger>
+                    <TabsTrigger value="on_board" className="text-xs h-7">승선 ({getStatusCount('on_board')})</TabsTrigger>
+                    <TabsTrigger value="on_leave" className="text-xs h-7">휴가 ({getStatusCount('on_leave')})</TabsTrigger>
+                    <TabsTrigger value="retired" className="text-xs h-7">퇴직 ({getStatusCount('retired')})</TabsTrigger>
+                  </TabsList>
 
-              <div className="flex justify-between items-center mt-2 mb-1">
-                <p className="text-xs text-gray-500">
-                  총 {filteredCrew.length}명
-                  {selectedCrewIds.length > 0 && ` · ${selectedCrewIds.length}명 선택됨`}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs">페이지당:</Label>
-                  <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(parseInt(v)); setCurrentPage(1); }}>
-                    <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                  <div className="flex justify-between items-center mt-2 mb-1">
+                    <p className="text-xs text-gray-500">
+                      총 {filteredCrew.length}명
+                      {selectedCrewIds.length > 0 && ` · ${selectedCrewIds.length}명 선택됨`}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs">페이지당:</Label>
+                      <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(parseInt(v)); setCurrentPage(1); }}>
+                        <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-              {['all','registered','available','on_board','on_leave','retired'].map(tab => (
-                <TabsContent key={tab} value={tab} className="mt-0">
-                  <CrewStatusTable {...tableProps} />
-                </TabsContent>
-              ))}
-            </Tabs>
+                  {['all','registered','available','on_board','on_leave','retired'].map(tab => (
+                    <TabsContent key={tab} value={tab} className="mt-0">
+                      <CrewStatusTable {...tableProps} />
+                    </TabsContent>
+                  ))}
+                </Tabs>
 
-            {/* 페이지네이션 */}
-            {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 pt-3 border-t">
-                <Button variant="outline" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="h-8">
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <div className="flex gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let p: number;
-                    if (totalPages <= 5) p = i + 1;
-                    else if (currentPage <= 3) p = i + 1;
-                    else if (currentPage >= totalPages - 2) p = totalPages - 4 + i;
-                    else p = currentPage - 2 + i;
-                    return (
-                      <Button key={p} variant={currentPage === p ? 'default' : 'outline'} size="sm" onClick={() => goToPage(p)} className="h-8 w-8 p-0">{p}</Button>
-                    );
-                  })}
-                </div>
-                <Button variant="outline" size="sm" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="h-8">
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
+                {/* 페이지네이션 */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-2 pt-3 border-t">
+                    <Button variant="outline" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="h-8">
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <div className="flex gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let p: number;
+                        if (totalPages <= 5) p = i + 1;
+                        else if (currentPage <= 3) p = i + 1;
+                        else if (currentPage >= totalPages - 2) p = totalPages - 4 + i;
+                        else p = currentPage - 2 + i;
+                        return (
+                          <Button key={p} variant={currentPage === p ? 'default' : 'outline'} size="sm" onClick={() => goToPage(p)} className="h-8 w-8 p-0">{p}</Button>
+                        );
+                      })}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="h-8">
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
