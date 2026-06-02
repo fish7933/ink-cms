@@ -60,6 +60,7 @@ export default function ApprovalInboxPage() {
   const [comment, setComment] = useState('');
   const [processing, setProcessing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => { loadApprovalRequests(); }, []);
 
@@ -70,10 +71,13 @@ export default function ApprovalInboxPage() {
       const currentUser = await getCurrentUser();
       if (!currentUser) { navigate('/login'); return; }
 
-      console.log('✅ User authenticated in ApprovalInboxPage:', currentUser.username);
       setCurrentUserId(currentUser.id);
+      const admin = currentUser.role === 'admin';
+      setIsAdmin(admin);
 
-      const pendingApprovals = await approvalService.getMyPendingApprovals(currentUser.id);
+      const pendingApprovals = admin
+        ? await approvalService.getAllPendingApprovals()
+        : await approvalService.getMyPendingApprovals(currentUser.id);
 
       if (!pendingApprovals || pendingApprovals.length === 0) {
         setRequests([]);
@@ -176,17 +180,27 @@ export default function ApprovalInboxPage() {
       const currentUser = await getCurrentUser();
       if (!currentUser) throw new Error('User not authenticated');
 
-      const currentStep = selectedRequest.approval_line.steps.find(s => s.step_order === selectedRequest.current_step);
-      if (!currentStep || currentStep.approver_id !== currentUser.id) {
-        toast({ title: '오류', description: '현재 결재 순서가 아닙니다.', variant: 'destructive' });
-        return;
-      }
-
-      if (actionType === 'rejected') {
-        if (!comment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
-        await approvalService.rejectStep(selectedRequest.id, currentUser.id, comment);
+      if (currentUser.role === 'admin') {
+        // 관리자: 결재라인 무관하게 즉시 처리
+        if (actionType === 'rejected') {
+          if (!comment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+          await approvalService.adminForceReject(selectedRequest.id, currentUser.id, comment);
+        } else {
+          await approvalService.adminForceApprove(selectedRequest.id, currentUser.id, comment || undefined);
+        }
       } else {
-        await approvalService.approveStep(selectedRequest.id, currentUser.id, comment || undefined);
+        // 일반 결재자: 기존 로직
+        const currentStep = selectedRequest.approval_line.steps.find(s => s.step_order === selectedRequest.current_step);
+        if (!currentStep || currentStep.approver_id !== currentUser.id) {
+          toast({ title: '오류', description: '현재 결재 순서가 아닙니다.', variant: 'destructive' });
+          return;
+        }
+        if (actionType === 'rejected') {
+          if (!comment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+          await approvalService.rejectStep(selectedRequest.id, currentUser.id, comment);
+        } else {
+          await approvalService.approveStep(selectedRequest.id, currentUser.id, comment || undefined);
+        }
       }
 
       toast({ title: '성공', description: actionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.' });
@@ -212,6 +226,7 @@ export default function ApprovalInboxPage() {
 
   const isMyTurn = (request: ApprovalRequest, userId: string) => {
     if (request.status !== 'pending') return false;
+    if (isAdmin) return true; // 관리자는 항상 처리 가능
     const currentStep = request.approval_line.steps.find(s => s.step_order === request.current_step);
     return currentStep?.approver_id === userId;
   };
@@ -222,6 +237,11 @@ export default function ApprovalInboxPage() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold">결재함</h1>
           <p className="text-gray-600 mt-1">나에게 할당된 결재 요청을 처리합니다</p>
+          {isAdmin && (
+            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700 font-medium">
+              🔑 슈퍼관리자 모드 — 결재라인 무관하게 모든 요청을 즉시 승인/반려할 수 있습니다
+            </div>
+          )}
         </div>
 
         {loading ? (

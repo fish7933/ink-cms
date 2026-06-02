@@ -588,6 +588,86 @@ class ApprovalService {
 
     if (error) throw error;
   }
+
+  // 관리자 전용: 결재라인 무관하게 모든 대기 결재 조회
+  async getAllPendingApprovals(): Promise<CrewRecommendationApprovalWithDetails[]> {
+    const { data: approvals, error } = await supabase
+      .from('crew_recommendation_approvals')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (!approvals || approvals.length === 0) return [];
+
+    return this.getApprovalDetails(approvals.map(a => a.id));
+  }
+
+  // 관리자 전용: 결재라인 무관하게 즉시 승인
+  async adminForceApprove(approvalId: string, adminId: string, comment?: string): Promise<void> {
+    const { data: approval, error: approvalError } = await supabase
+      .from('crew_recommendation_approvals')
+      .select('crew_recommendation_id, current_step')
+      .eq('id', approvalId)
+      .single();
+
+    if (approvalError) throw approvalError;
+
+    await supabase.from('approval_actions').insert({
+      crew_recommendation_approval_id: approvalId,
+      step_order: approval.current_step,
+      approver_id: adminId,
+      action: 'approved',
+      comment: comment || '관리자 즉시 승인',
+    });
+
+    const { error: updateError } = await supabase
+      .from('crew_recommendation_approvals')
+      .update({ status: 'approved', completed_at: new Date().toISOString() })
+      .eq('id', approvalId);
+
+    if (updateError) throw updateError;
+
+    const { error: recError } = await supabase
+      .from('crew_recommendations')
+      .update({ status: 'accepted' })
+      .eq('id', approval.crew_recommendation_id);
+
+    if (recError) throw recError;
+  }
+
+  // 관리자 전용: 결재라인 무관하게 즉시 반려
+  async adminForceReject(approvalId: string, adminId: string, comment: string): Promise<void> {
+    const { data: approval, error: approvalError } = await supabase
+      .from('crew_recommendation_approvals')
+      .select('crew_recommendation_id, current_step')
+      .eq('id', approvalId)
+      .single();
+
+    if (approvalError) throw approvalError;
+
+    await supabase.from('approval_actions').insert({
+      crew_recommendation_approval_id: approvalId,
+      step_order: approval.current_step,
+      approver_id: adminId,
+      action: 'rejected',
+      comment,
+    });
+
+    const { error: updateError } = await supabase
+      .from('crew_recommendation_approvals')
+      .update({ status: 'rejected', final_comment: comment, completed_at: new Date().toISOString() })
+      .eq('id', approvalId);
+
+    if (updateError) throw updateError;
+
+    const { error: recError } = await supabase
+      .from('crew_recommendations')
+      .update({ status: 'rejected' })
+      .eq('id', approval.crew_recommendation_id);
+
+    if (recError) throw recError;
+  }
 }
 
 export const approvalService = new ApprovalService();
