@@ -189,6 +189,8 @@ export interface CrewMember {
   agency_id?: string;
   full_name?: string;
   name?: string;
+  name_english?: string;
+  name_chinese?: string;
   date_of_birth: string;
   nationality?: string;
   rank_id?: string;
@@ -196,7 +198,12 @@ export interface CrewMember {
   email?: string;
   phone?: string;
   passport_number?: string;
+  passport_expiry?: string;
   seaman_book_number?: string;
+  seaman_book_expiry?: string;
+  seaman_book_flag_number?: string;
+  seaman_book_flag_expiry?: string;
+  sid?: string;
   contact_phone?: string;
   contact_email?: string;
   availability_status?: 'available' | 'on_board' | 'on_leave' | 'unavailable';
@@ -210,7 +217,28 @@ export interface CrewMember {
   blood_type?: string;
   shoe_size?: string;
   coverall_size?: string;
+  clothing_size?: string;
+  eye_color?: string;
+  religion?: string;
   place_of_birth?: string;
+  smoking?: boolean;
+  drinking?: boolean;
+  marital_status?: 'single' | 'married' | 'divorced' | 'widowed';
+  children_count?: number;
+  // Language & Evaluation
+  english_read_write?: 'beginner' | 'intermediate' | 'advanced' | 'excellent';
+  english_speak_listen?: 'beginner' | 'intermediate' | 'advanced' | 'excellent';
+  other_languages?: string;
+  job_ability?: string;
+  motivation?: string;
+  // Health
+  previous_illness?: string;
+  drug_test_date?: string;
+  drug_test_result?: 'pass' | 'fail' | 'pending';
+  physical_exam_date?: string;
+  physical_exam_result?: 'fit' | 'unfit' | 'pending';
+  yellow_fever_vaccination?: boolean;
+  yellow_fever_date?: string;
   // Contacts
   emergency_contact?: string;
   emergency_contacts?: Array<{ name: string; relationship: string; phone: string; note?: string }>;

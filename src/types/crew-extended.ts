@@ -1,10 +1,34 @@
 export interface CrewBioData {
+  // Physical
   height?: number;
   weight?: number;
   blood_type?: string;
   shoe_size?: string;
   coverall_size?: string;
+  clothing_size?: string;
+  eye_color?: string;
   place_of_birth?: string;
+  // Personal
+  religion?: string;
+  smoking?: boolean;
+  drinking?: boolean;
+  marital_status?: 'single' | 'married' | 'divorced' | 'widowed';
+  children_count?: number;
+  // Language
+  english_read_write?: 'beginner' | 'intermediate' | 'advanced' | 'excellent';
+  english_speak_listen?: 'beginner' | 'intermediate' | 'advanced' | 'excellent';
+  other_languages?: string;
+  job_ability?: string;
+  motivation?: string;
+  // Health
+  previous_illness?: string;
+  drug_test_date?: string;
+  drug_test_result?: 'pass' | 'fail' | 'pending';
+  physical_exam_date?: string;
+  physical_exam_result?: 'fit' | 'unfit' | 'pending';
+  yellow_fever_vaccination?: boolean;
+  yellow_fever_date?: string;
+  // Contacts
   next_of_kin?: string;
   next_of_kin_relationship?: string;
   next_of_kin_contact?: string;
