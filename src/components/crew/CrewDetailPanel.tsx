@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Upload, User, X, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -518,10 +518,23 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 </div>
               </div>
             </div>
-            <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
-              <Save className="w-4 h-4" />
-              {saving ? '저장 중...' : isNew ? '등록' : '저장'}
-            </Button>
+            <div className="flex items-center gap-2">
+              {!isNew && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 h-8 text-blue-700 border-blue-300 hover:bg-blue-50"
+                  onClick={() => window.open(`/crew/${id}/resume`, '_blank')}
+                >
+                  <FileText className="w-4 h-4" />
+                  이력서 출력
+                </Button>
+              )}
+              <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
+                <Save className="w-4 h-4" />
+                {saving ? '저장 중...' : isNew ? '등록' : '저장'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">

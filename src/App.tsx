@@ -32,6 +32,7 @@ import CertificateTypeManagementPage from '@/pages/CertificateTypeManagementPage
 import MenuConfigurationPage from '@/pages/MenuConfigurationPage';
 import { CrewRotationPage } from '@/pages/CrewRotationPage';
 import CrewInputPage from '@/pages/CrewInputPage';
+import CrewResumePage from '@/pages/CrewResumePage';
 import AuthCallback from '@/pages/AuthCallback';
 import NotFound from '@/pages/NotFound';
 import { Toaster } from '@/components/ui/toaster';
@@ -49,6 +50,7 @@ function App() {
         <Route path="/crew/management" element={<CrewManagementPage />} />
         <Route path="/crew/input" element={<CrewInputPage />} />
         <Route path="/crew/new" element={<CrewDetailPage />} />
+        <Route path="/crew/:id/resume" element={<CrewResumePage />} />
         <Route path="/crew/:id" element={<CrewDetailPage />} />
         <Route path="/assignments" element={<CrewAssignmentPage />} />
         <Route path="/ships" element={<ShipManagementPage />} />
