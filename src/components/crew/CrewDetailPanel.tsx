@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
@@ -46,22 +47,73 @@ interface CrewDetailPanelProps {
 
 const CERT_TEMPLATES = [
   'Passport',
-  'Continuous Discharge Certificate (Seaman Book)',
-  'STCW Basic Safety Training',
-  'STCW Advanced Fire Fighting',
-  'STCW Medical First Aid',
-  'STCW Proficiency in Survival Craft',
-  'Officer of the Watch (Navigation)',
+  'Seaman\'s Book (CDC) - National',
+  'Seaman\'s Book (CDC) - Flag/Marshall',
+  'STCW Basic Safety Training (BST)',
+  'STCW Advanced Fire Fighting (AFF)',
+  'STCW Medical First Aid (MFA)',
+  'STCW Medical Care on Board (MC)',
+  'STCW Proficiency in Survival Craft & Rescue Boats (SCRB)',
+  'Officer of the Watch (OOW Navigation)',
+  'Officer of the Watch (OOW Engineering)',
   'Chief Mate Certificate',
   'Master Certificate',
+  'Second Engineer Certificate',
   'Chief Engineer Certificate',
-  'GMDSS General Operator Certificate',
+  'GMDSS General Operator Certificate (GOC)',
+  'ARPA Certificate',
+  'Radar Observer Certificate',
+  'Ship Security Officer (SSO)',
+  'ISM Code Certificate',
+  'Bridge Resource Management (BRM)',
+  'ECDIS Generic Certificate',
+  'ECDIS Type-Specific Certificate',
+  'Ship\'s Cook Certificate',
+  'Watch Keeping Certificate (Rating)',
+  'Certificate of Proficiency for Ratings',
   'Medical Fitness Certificate',
+  'Yellow Fever Vaccination Certificate',
+  'Panama Endorsement',
 ];
 
 const RELATIONSHIPS = ['배우자', '부', '모', '자', '녀', '형', '제', '자매', '친구', '기타'];
 const SHOE_SIZES = ['235','240','245','250','255','260','265','270','275','280','285','290','295','300'];
 const COVERALL_SIZES = ['XS','S','M','L','XL','XXL','XXXL'];
+const EYE_COLORS = ['검정', '갈색', '파랑', '녹색', '회색', '기타'];
+const RELIGIONS = ['기독교', '천주교', '불교', '이슬람', '힌두교', '무교', '기타'];
+const MARITAL_STATUSES = [
+  { value: 'single', label: '미혼' },
+  { value: 'married', label: '기혼' },
+  { value: 'divorced', label: '이혼' },
+  { value: 'widowed', label: '사별' },
+];
+const ENGLISH_LEVELS = [
+  { value: 'beginner', label: '초급' },
+  { value: 'intermediate', label: '중급' },
+  { value: 'advanced', label: '고급' },
+  { value: 'excellent', label: '유창' },
+];
+
+const EMPTY_FORM = {
+  name: '', name_english: '', name_chinese: '',
+  rank_id: '', nationality: '', date_of_birth: '',
+  contact_phone: '', contact_email: '', photo_url: '',
+  height: '', weight: '', blood_type: 'none',
+  shoe_size: '', coverall_size: '', clothing_size: '',
+  eye_color: '', place_of_birth: '', religion: '',
+  smoking: 'none', drinking: 'none',
+  marital_status: 'none', children_count: '',
+  english_read_write: 'none', english_speak_listen: 'none',
+  other_languages: '', job_ability: '', motivation: '',
+  previous_illness: '',
+  drug_test_date: '', drug_test_result: 'none',
+  physical_exam_date: '', physical_exam_result: 'none',
+  yellow_fever_vaccination: 'none', yellow_fever_date: '',
+  passport_number: '', passport_expiry: '',
+  seaman_book_number: '', seaman_book_expiry: '',
+  seaman_book_flag_number: '', seaman_book_flag_expiry: '',
+  sid: '',
+};
 
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
   const { toast } = useToast();
@@ -77,13 +129,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
   const [crewStatus, setCrewStatus] = useState('registered');
-
-  const [formData, setFormData] = useState({
-    name: '', rank_id: '', nationality: '', date_of_birth: '',
-    contact_phone: '', contact_email: '', photo_url: '',
-    height: '', weight: '', blood_type: 'none',
-    shoe_size: '', coverall_size: '', place_of_birth: '',
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
   useEffect(() => {
     supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
@@ -91,7 +137,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     if (!isNew) loadCrew(id!);
     else {
       setLoading(false);
-      setFormData({ name: '', rank_id: '', nationality: '', date_of_birth: '', contact_phone: '', contact_email: '', photo_url: '', height: '', weight: '', blood_type: 'none', shoe_size: '', coverall_size: '', place_of_birth: '' });
+      setFormData(EMPTY_FORM);
       setPreviewUrl('');
       setCertificates([]);
       setEmergencyContacts([]);
@@ -109,6 +155,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setCrewStatus(data.current_status || data.status || 'registered');
       setFormData({
         name: data.name || '',
+        name_english: data.name_english || '',
+        name_chinese: data.name_chinese || '',
         rank_id: data.rank_id || '',
         nationality: data.nationality || '',
         date_of_birth: data.date_of_birth || '',
@@ -120,7 +168,33 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         blood_type: data.blood_type || 'none',
         shoe_size: data.shoe_size || '',
         coverall_size: data.coverall_size || '',
+        clothing_size: data.clothing_size || '',
+        eye_color: data.eye_color || '',
         place_of_birth: data.place_of_birth || '',
+        religion: data.religion || '',
+        smoking: data.smoking === true ? 'yes' : data.smoking === false ? 'no' : 'none',
+        drinking: data.drinking === true ? 'yes' : data.drinking === false ? 'no' : 'none',
+        marital_status: data.marital_status || 'none',
+        children_count: data.children_count?.toString() || '',
+        english_read_write: data.english_read_write || 'none',
+        english_speak_listen: data.english_speak_listen || 'none',
+        other_languages: data.other_languages || '',
+        job_ability: data.job_ability || '',
+        motivation: data.motivation || '',
+        previous_illness: data.previous_illness || '',
+        drug_test_date: data.drug_test_date || '',
+        drug_test_result: data.drug_test_result || 'none',
+        physical_exam_date: data.physical_exam_date || '',
+        physical_exam_result: data.physical_exam_result || 'none',
+        yellow_fever_vaccination: data.yellow_fever_vaccination === true ? 'yes' : data.yellow_fever_vaccination === false ? 'no' : 'none',
+        yellow_fever_date: data.yellow_fever_date || '',
+        passport_number: data.passport_number || '',
+        passport_expiry: data.passport_expiry || '',
+        seaman_book_number: data.seaman_book_number || '',
+        seaman_book_expiry: data.seaman_book_expiry || '',
+        seaman_book_flag_number: data.seaman_book_flag_number || '',
+        seaman_book_flag_expiry: data.seaman_book_flag_expiry || '',
+        sid: data.sid || '',
       });
       setPreviewUrl(data.photo_url || '');
 
@@ -145,8 +219,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
-      const allowed = ['image/jpeg','image/jpg','image/png','image/webp'];
-      if (!allowed.includes(file.type)) { alert('JPG, PNG, WEBP 형식만 가능합니다.'); return; }
+      if (!['image/jpeg','image/jpg','image/png','image/webp'].includes(file.type)) { alert('JPG, PNG, WEBP 형식만 가능합니다.'); return; }
       if (file.size > 5 * 1024 * 1024) { alert('5MB 이하만 가능합니다.'); return; }
       setSelectedFile(file);
       const reader = new FileReader();
@@ -184,6 +257,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const removeContact = (idx: number) => setEmergencyContacts(prev => prev.filter((_, i) => i !== idx));
   const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
 
+  const parseBool = (val: string): boolean | null => val === 'yes' ? true : val === 'no' ? false : null;
+  const parseOptional = (val: string): string | null => (val && val !== 'none') ? val : null;
+
   const handleSave = async () => {
     if (!formData.name || !formData.rank_id) {
       toast({ title: '필수 항목 누락', description: '이름과 직급은 필수입니다.', variant: 'destructive' });
@@ -215,6 +291,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
       const updateData: Record<string, unknown> = {
         name: formData.name,
+        name_english: formData.name_english || null,
+        name_chinese: formData.name_chinese || null,
         rank_id: formData.rank_id,
         rank: rankName,
         nationality: formData.nationality || null,
@@ -224,10 +302,36 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         photo_url: photoUrl || null,
         height: formData.height ? parseFloat(formData.height) : null,
         weight: formData.weight ? parseFloat(formData.weight) : null,
-        blood_type: formData.blood_type !== 'none' ? formData.blood_type : null,
+        blood_type: parseOptional(formData.blood_type),
         shoe_size: formData.shoe_size || null,
         coverall_size: formData.coverall_size || null,
+        clothing_size: formData.clothing_size || null,
+        eye_color: formData.eye_color || null,
         place_of_birth: formData.place_of_birth || null,
+        religion: formData.religion || null,
+        smoking: parseBool(formData.smoking),
+        drinking: parseBool(formData.drinking),
+        marital_status: parseOptional(formData.marital_status),
+        children_count: formData.children_count ? parseInt(formData.children_count) : null,
+        english_read_write: parseOptional(formData.english_read_write),
+        english_speak_listen: parseOptional(formData.english_speak_listen),
+        other_languages: formData.other_languages || null,
+        job_ability: formData.job_ability || null,
+        motivation: formData.motivation || null,
+        previous_illness: formData.previous_illness || null,
+        drug_test_date: formData.drug_test_date || null,
+        drug_test_result: parseOptional(formData.drug_test_result),
+        physical_exam_date: formData.physical_exam_date || null,
+        physical_exam_result: parseOptional(formData.physical_exam_result),
+        yellow_fever_vaccination: parseBool(formData.yellow_fever_vaccination),
+        yellow_fever_date: formData.yellow_fever_date || null,
+        passport_number: formData.passport_number || null,
+        passport_expiry: formData.passport_expiry || null,
+        seaman_book_number: formData.seaman_book_number || null,
+        seaman_book_expiry: formData.seaman_book_expiry || null,
+        seaman_book_flag_number: formData.seaman_book_flag_number || null,
+        seaman_book_flag_expiry: formData.seaman_book_flag_expiry || null,
+        sid: formData.sid || null,
         emergency_contacts: emergencyContacts.filter(c => c.name || c.phone),
         certificates: certsWithFiles,
         updated_at: new Date().toISOString(),
@@ -273,7 +377,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     );
   }
 
-  // 폼 콘텐츠 (사진 + 탭) - embedded/standalone 공용
   const formBody = (
     <>
       {/* 사진 */}
@@ -305,9 +408,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
       {/* 탭 */}
       <Tabs defaultValue="basic">
-        <TabsList className="grid w-full grid-cols-4 h-8">
-          <TabsTrigger value="basic" className="text-xs">기본 정보</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 h-8">
+          <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
           <TabsTrigger value="biodata" className="text-xs">Bio-Data</TabsTrigger>
+          <TabsTrigger value="lang_health" className="text-xs">언어/건강</TabsTrigger>
           <TabsTrigger value="emergency" className="text-xs">연락처</TabsTrigger>
           <TabsTrigger value="certificates" className="text-xs">
             증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
@@ -315,9 +419,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </TabsList>
 
         {/* 기본 정보 */}
-        <TabsContent value="basic">
+        <TabsContent value="basic" className="space-y-3 mt-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">이름 *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" /></div>
+            <div><Label className="text-xs">이름 (한국어) *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" /></div>
+            <div><Label className="text-xs">이름 (영문)</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
+            <div><Label className="text-xs">이름 (한자)</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" /></div>
             <div>
               <Label className="text-xs">직급 *</Label>
               <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
@@ -336,10 +442,24 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
             <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
           </div>
+
+          <div className="border-t pt-3">
+            <p className="text-xs font-semibold text-gray-600 mb-2">서류 번호</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">여권 번호</Label><Input value={formData.passport_number} onChange={e => f('passport_number', e.target.value)} className="mt-1 h-9" placeholder="M12345678" /></div>
+              <div><Label className="text-xs">여권 만료일</Label><Input type="date" value={formData.passport_expiry} onChange={e => f('passport_expiry', e.target.value)} className="mt-1 h-9" /></div>
+              <div><Label className="text-xs">선원수첩 (국내) 번호</Label><Input value={formData.seaman_book_number} onChange={e => f('seaman_book_number', e.target.value)} className="mt-1 h-9" /></div>
+              <div><Label className="text-xs">선원수첩 (국내) 만료일</Label><Input type="date" value={formData.seaman_book_expiry} onChange={e => f('seaman_book_expiry', e.target.value)} className="mt-1 h-9" /></div>
+              <div><Label className="text-xs">선원수첩 (국제/Flag) 번호</Label><Input value={formData.seaman_book_flag_number} onChange={e => f('seaman_book_flag_number', e.target.value)} className="mt-1 h-9" /></div>
+              <div><Label className="text-xs">선원수첩 (국제/Flag) 만료일</Label><Input type="date" value={formData.seaman_book_flag_expiry} onChange={e => f('seaman_book_flag_expiry', e.target.value)} className="mt-1 h-9" /></div>
+              <div><Label className="text-xs">SID (선원 ID)</Label><Input value={formData.sid} onChange={e => f('sid', e.target.value)} className="mt-1 h-9" /></div>
+            </div>
+          </div>
         </TabsContent>
 
         {/* Bio-Data */}
-        <TabsContent value="biodata">
+        <TabsContent value="biodata" className="space-y-3 mt-3">
+          <p className="text-xs font-semibold text-gray-600">신체 정보</p>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1 h-9" placeholder="예: Jakarta, Indonesia" /></div>
             <div>
@@ -355,6 +475,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             <div><Label className="text-xs">키 (cm)</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1 h-9" placeholder="170" /></div>
             <div><Label className="text-xs">몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1 h-9" placeholder="70" /></div>
             <div>
+              <Label className="text-xs">눈 색</Label>
+              <Select value={formData.eye_color} onValueChange={v => f('eye_color', v)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="눈 색 선택" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">선택 안함</SelectItem>
+                  {EYE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label className="text-xs">신발 사이즈 (mm)</Label>
               <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
                 <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="신발 사이즈" /></SelectTrigger>
@@ -368,11 +498,155 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            <div>
+              <Label className="text-xs">의류 사이즈</Label>
+              <Select value={formData.clothing_size} onValueChange={v => f('clothing_size', v)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="의류 사이즈" /></SelectTrigger>
+                <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="text-xs font-semibold text-gray-600 mb-2">인적사항</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">종교</Label>
+                <Select value={formData.religion} onValueChange={v => f('religion', v)}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="종교 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">선택 안함</SelectItem>
+                    {RELIGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">결혼 여부</Label>
+                <Select value={formData.marital_status} onValueChange={v => f('marital_status', v)}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안함</SelectItem>
+                    {MARITAL_STATUSES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">자녀 수</Label><Input type="number" min="0" value={formData.children_count} onChange={e => f('children_count', e.target.value)} className="mt-1 h-9" placeholder="0" /></div>
+              <div />
+              <div>
+                <Label className="text-xs">흡연</Label>
+                <Select value={formData.smoking} onValueChange={v => f('smoking', v)}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안함</SelectItem>
+                    <SelectItem value="yes">흡연</SelectItem>
+                    <SelectItem value="no">비흡연</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">음주</Label>
+                <Select value={formData.drinking} onValueChange={v => f('drinking', v)}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안함</SelectItem>
+                    <SelectItem value="yes">음주</SelectItem>
+                    <SelectItem value="no">비음주</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* 언어/건강 */}
+        <TabsContent value="lang_health" className="space-y-3 mt-3">
+          <p className="text-xs font-semibold text-gray-600">언어 능력</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">영어 - 읽기/쓰기</Label>
+              <Select value={formData.english_read_write} onValueChange={v => f('english_read_write', v)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="수준 선택" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">선택 안함</SelectItem>
+                  {ENGLISH_LEVELS.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">영어 - 말하기/듣기</Label>
+              <Select value={formData.english_speak_listen} onValueChange={v => f('english_speak_listen', v)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="수준 선택" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">선택 안함</SelectItem>
+                  {ENGLISH_LEVELS.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs">기타 언어</Label>
+              <Input value={formData.other_languages} onChange={e => f('other_languages', e.target.value)} className="mt-1 h-9" placeholder="예: 인도네시아어 (중급), 일본어 (초급)" />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs">업무 능력 평가</Label>
+              <Textarea value={formData.job_ability} onChange={e => f('job_ability', e.target.value)} className="mt-1 text-sm" rows={2} placeholder="업무 능력 및 경력 특이사항" />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs">지원 동기</Label>
+              <Textarea value={formData.motivation} onChange={e => f('motivation', e.target.value)} className="mt-1 text-sm" rows={2} placeholder="승선 지원 동기" />
+            </div>
+          </div>
+
+          <div className="border-t pt-3">
+            <p className="text-xs font-semibold text-gray-600 mb-2">건강 / 신체검사</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">약물/알코올 검사일</Label><Input type="date" value={formData.drug_test_date} onChange={e => f('drug_test_date', e.target.value)} className="mt-1 h-9" /></div>
+              <div>
+                <Label className="text-xs">약물/알코올 검사 결과</Label>
+                <Select value={formData.drug_test_result} onValueChange={v => f('drug_test_result', v)}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안함</SelectItem>
+                    <SelectItem value="pass">합격 (Pass)</SelectItem>
+                    <SelectItem value="fail">불합격 (Fail)</SelectItem>
+                    <SelectItem value="pending">대기 중</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">신체검사일</Label><Input type="date" value={formData.physical_exam_date} onChange={e => f('physical_exam_date', e.target.value)} className="mt-1 h-9" /></div>
+              <div>
+                <Label className="text-xs">신체검사 결과</Label>
+                <Select value={formData.physical_exam_result} onValueChange={v => f('physical_exam_result', v)}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안함</SelectItem>
+                    <SelectItem value="fit">적합 (Fit)</SelectItem>
+                    <SelectItem value="unfit">부적합 (Unfit)</SelectItem>
+                    <SelectItem value="pending">대기 중</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">황열병 예방접종</Label>
+                <Select value={formData.yellow_fever_vaccination} onValueChange={v => f('yellow_fever_vaccination', v)}>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">선택 안함</SelectItem>
+                    <SelectItem value="yes">접종 완료</SelectItem>
+                    <SelectItem value="no">미접종</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label className="text-xs">황열병 접종일</Label><Input type="date" value={formData.yellow_fever_date} onChange={e => f('yellow_fever_date', e.target.value)} className="mt-1 h-9" disabled={formData.yellow_fever_vaccination !== 'yes'} /></div>
+              <div className="col-span-2">
+                <Label className="text-xs">기왕증 (과거 병력)</Label>
+                <Textarea value={formData.previous_illness} onChange={e => f('previous_illness', e.target.value)} className="mt-1 text-sm" rows={2} placeholder="과거 질병, 수술, 특이 병력 등" />
+              </div>
+            </div>
           </div>
         </TabsContent>
 
         {/* 연락처 */}
-        <TabsContent value="emergency">
+        <TabsContent value="emergency" className="mt-3">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">비상 연락처 및 가족 연락처</span>
@@ -406,7 +680,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </TabsContent>
 
         {/* 증서 */}
-        <TabsContent value="certificates">
+        <TabsContent value="certificates" className="mt-3">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">보유 증서 ({certificates.length}건)</span>
@@ -476,7 +750,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     </>
   );
 
-  // embedded 모드: Card 없이 폼 콘텐츠만 반환 (저장 버튼 하단 포함)
   if (embedded) {
     return (
       <div className="space-y-4 pt-3 border-t">
@@ -498,7 +771,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     );
   }
 
-  // standalone 모드: 기존 Card 래퍼 포함
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <Card>
