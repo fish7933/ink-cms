@@ -402,7 +402,7 @@ const addCert = (name?: string) => {
                       {certificateTypes.length > 0 && certificates.length === 0 && (
                         <Button type="button" variant="default" size="sm" onClick={() => {
                           setCertificates(certificateTypes.map(ct => ({
-                            name: `${ct.type_name_ko} (${ct.type_name_en})`,
+                            name: `${ct.type_name_en}`,
                             number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !ct.validity_period_months,
                           })));
                         }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />전체 증서 불러오기</Button>
@@ -411,8 +411,8 @@ const addCert = (name?: string) => {
                         <Button type="button" variant="outline" size="sm" onClick={() => {
                           const existingNames = new Set(certificates.map(c => c.name));
                           const newCerts = certificateTypes
-                            .filter(ct => !existingNames.has(`${ct.type_name_ko} (${ct.type_name_en})`))
-                            .map(ct => ({ name: `${ct.type_name_ko} (${ct.type_name_en})`, number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !ct.validity_period_months }));
+                            .filter(ct => !existingNames.has(`${ct.type_name_en}`))
+                            .map(ct => ({ name: `${ct.type_name_en}`, number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !ct.validity_period_months }));
                           if (newCerts.length > 0) setCertificates(prev => [...prev, ...newCerts]);
                         }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />누락 증서 추가</Button>
                       )}
@@ -428,7 +428,7 @@ const addCert = (name?: string) => {
                       {certificateTypes.length > 0 && (
                         <Button type="button" variant="outline" size="sm" onClick={() => {
                           setCertificates(certificateTypes.map(ct => ({
-                            name: `${ct.type_name_ko} (${ct.type_name_en})`,
+                            name: `${ct.type_name_en}`,
                             number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !ct.validity_period_months,
                           })));
                         }} className="text-xs gap-1"><Plus className="h-3 w-3" />등록된 증서 유형 전체 불러오기 ({certificateTypes.length}건)</Button>
@@ -439,7 +439,7 @@ const addCert = (name?: string) => {
                       {(() => {
                         const grouped: Record<string, { cert: Certificate; idx: number }[]> = {};
                         certificates.forEach((cert, idx) => {
-                          const matchedType = certificateTypes.find(ct => cert.name === `${ct.type_name_ko} (${ct.type_name_en})`);
+                          const matchedType = certificateTypes.find(ct => cert.name === `${ct.type_name_en}`);
                           const category = matchedType?.category || 'custom';
                           if (!grouped[category]) grouped[category] = [];
                           grouped[category].push({ cert, idx });
@@ -473,7 +473,7 @@ const addCert = (name?: string) => {
                                           {category === 'custom' ? (
                                             <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-7 text-xs" placeholder="증서명" />
                                           ) : (
-                                            <span className="text-xs px-1 truncate block" title={cert.name}>{cert.name.split(' (')[0]}</span>
+                                            <span className="text-xs px-1 truncate block" title={cert.name}>{cert.name}</span>
                                           )}
                                         </td>
                                         <td className="p-1"><Input value={cert.number} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs" placeholder="번호" /></td>
