@@ -12,17 +12,9 @@ import type { CrewRecommendationApprovalWithDetails, CrewRecommendationApproval 
 import type { CrewRecommendation } from '@/types/crew-recommendation';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { CheckCircle2, XCircle, Clock, FileText, User, Ship, Calendar, Send } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, FileText, User, Ship, Calendar, Send, ArrowLeft } from 'lucide-react';
 
 type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & {
   recommendation?: CrewRecommendation;
@@ -38,6 +30,7 @@ export default function ApprovalManagementPage() {
   const [comment, setComment] = useState('');
   const [processing, setProcessing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'list' | 'detail' | 'action'>('list');
 
   useEffect(() => {
     loadApprovals();
@@ -138,7 +131,7 @@ export default function ApprovalManagementPage() {
       }));
 
       // Sort by created_at descending
-      allApprovalsData.sort((a, b) => 
+      allApprovalsData.sort((a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
@@ -155,21 +148,26 @@ export default function ApprovalManagementPage() {
     }
   };
 
+  const goBackToList = () => {
+    setViewMode('list');
+    setSelectedApproval(null);
+    setActionType(null);
+    setComment('');
+  };
+
   const handleApprove = async () => {
     if (!selectedApproval || !currentUserId) return;
 
     try {
       setProcessing(true);
       await approvalService.approveStep(selectedApproval.id, currentUserId, comment);
-      
+
       toast({
         title: '승인 완료',
         description: '결재가 승인되었습니다.',
       });
 
-      setSelectedApproval(null);
-      setActionType(null);
-      setComment('');
+      goBackToList();
       await loadApprovals();
     } catch (error) {
       console.error('Error approving:', error);
@@ -196,15 +194,13 @@ export default function ApprovalManagementPage() {
     try {
       setProcessing(true);
       await approvalService.rejectStep(selectedApproval.id, currentUserId, comment);
-      
+
       toast({
         title: '반려 완료',
         description: '결재가 반려되었습니다.',
       });
 
-      setSelectedApproval(null);
-      setActionType(null);
-      setComment('');
+      goBackToList();
       await loadApprovals();
     } catch (error) {
       console.error('Error rejecting:', error);
@@ -237,6 +233,66 @@ export default function ApprovalManagementPage() {
     if (approval.status !== 'pending' || !currentUserId) return false;
     return approval.current_approver?.approver_id === currentUserId;
   };
+
+  const renderApprovalProgress = (approval: ApprovalWithRecommendation) => (
+    <div>
+      <h4 className="text-sm font-semibold mb-2">결재 진행</h4>
+      <div className="space-y-2">
+        {/* Requester */}
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-blue-100 text-blue-700">
+            기안
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{approval.requester_name}</span>
+              <span className="text-sm text-gray-500">{approval.requester_role}</span>
+              <CheckCircle2 className="w-4 h-4 text-blue-600" />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {format(new Date(approval.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}
+            </p>
+          </div>
+        </div>
+
+        {/* Approvers */}
+        {approval.approval_line.steps.map((step, index) => {
+          const action = approval.actions.find(a => a.step_order === step.step_order);
+          const isCurrent = approval.current_step === step.step_order && approval.status === 'pending';
+
+          return (
+            <div key={step.id} className="flex items-center gap-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                action?.action === 'approved' ? 'bg-green-100 text-green-700' :
+                action?.action === 'rejected' ? 'bg-red-100 text-red-700' :
+                isCurrent ? 'bg-blue-100 text-blue-700' :
+                'bg-gray-100 text-gray-400'
+              }`}>
+                {index + 1}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{step.approver_name}</span>
+                  <span className="text-sm text-gray-500">{step.approver_role}</span>
+                  {action?.action === 'approved' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                  {action?.action === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
+                  {isCurrent && <Badge variant="outline" className="text-xs">대기중</Badge>}
+                </div>
+                {action?.comment && (
+                  <p className="text-sm text-gray-600 mt-1">{action.comment}</p>
+                )}
+                {action?.created_at && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    {format(new Date(action.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   const renderApprovalCard = (approval: ApprovalWithRecommendation) => {
     const myTurn = isMyTurn(approval);
@@ -286,63 +342,7 @@ export default function ApprovalManagementPage() {
         <CardContent>
           <div className="space-y-4">
             {/* Approval Progress */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">결재 진행</h4>
-              <div className="space-y-2">
-                {/* Requester */}
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-blue-100 text-blue-700">
-                    기안
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{approval.requester_name}</span>
-                      <span className="text-sm text-gray-500">{approval.requester_role}</span>
-                      <CheckCircle2 className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {format(new Date(approval.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Approvers */}
-                {approval.approval_line.steps.map((step, index) => {
-                  const action = approval.actions.find(a => a.step_order === step.step_order);
-                  const isCurrent = approval.current_step === step.step_order && approval.status === 'pending';
-                  
-                  return (
-                    <div key={step.id} className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                        action?.action === 'approved' ? 'bg-green-100 text-green-700' :
-                        action?.action === 'rejected' ? 'bg-red-100 text-red-700' :
-                        isCurrent ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-400'
-                      }`}>
-                        {index + 1}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{step.approver_name}</span>
-                          <span className="text-sm text-gray-500">{step.approver_role}</span>
-                          {action?.action === 'approved' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                          {action?.action === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
-                          {isCurrent && <Badge variant="outline" className="text-xs">대기중</Badge>}
-                        </div>
-                        {action?.comment && (
-                          <p className="text-sm text-gray-600 mt-1">{action.comment}</p>
-                        )}
-                        {action?.created_at && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            {format(new Date(action.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {renderApprovalProgress(approval)}
 
             {/* Action Buttons */}
             {myTurn && (
@@ -351,6 +351,7 @@ export default function ApprovalManagementPage() {
                   onClick={() => {
                     setSelectedApproval(approval);
                     setActionType('approve');
+                    setViewMode('action');
                   }}
                   className="flex-1"
                 >
@@ -360,6 +361,7 @@ export default function ApprovalManagementPage() {
                   onClick={() => {
                     setSelectedApproval(approval);
                     setActionType('reject');
+                    setViewMode('action');
                   }}
                   variant="destructive"
                   className="flex-1"
@@ -372,7 +374,10 @@ export default function ApprovalManagementPage() {
             {/* View Details Button for non-pending or not my turn */}
             {(!myTurn || approval.status !== 'pending') && (
               <Button
-                onClick={() => setSelectedApproval(approval)}
+                onClick={() => {
+                  setSelectedApproval(approval);
+                  setViewMode('detail');
+                }}
                 variant="outline"
                 className="w-full"
               >
@@ -382,6 +387,294 @@ export default function ApprovalManagementPage() {
           </div>
         </CardContent>
       </Card>
+    );
+  };
+
+  const renderDetailView = () => {
+    if (!selectedApproval) return null;
+    const approval = selectedApproval;
+    const myTurn = isMyTurn(approval);
+    const rec = approval.recommendation;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={goBackToList}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h2 className="text-2xl font-bold">결재 상세</h2>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <CardTitle className="text-lg">
+                    {rec?.crew_name || '선원 추천'}
+                  </CardTitle>
+                  {myTurn && <Badge variant="default" className="bg-blue-500">내 차례</Badge>}
+                  {getStatusBadge(approval.status)}
+                </div>
+                <CardDescription className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="w-4 h-4" />
+                    <span>결재선: {approval.approval_line.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="w-4 h-4" />
+                    <span>요청자: {approval.requester_name} {approval.requester_role}</span>
+                  </div>
+                  {rec && (
+                    <>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Ship className="w-4 h-4" />
+                        <span>선박: {rec.ship_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="w-4 h-4" />
+                        <span>승선가능일: {format(new Date(rec.available_date), 'yyyy-MM-dd', { locale: ko })}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="w-4 h-4" />
+                    <span>요청일: {format(new Date(approval.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>
+                  </div>
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Approval Progress */}
+              {renderApprovalProgress(approval)}
+
+              {/* Action Buttons if it's my turn */}
+              {myTurn && (
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    onClick={() => {
+                      setActionType('approve');
+                      setViewMode('action');
+                    }}
+                    className="flex-1"
+                  >
+                    승인
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setActionType('reject');
+                      setViewMode('action');
+                    }}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    반려
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderActionView = () => {
+    if (!selectedApproval || !actionType) return null;
+    const approval = selectedApproval;
+    const rec = approval.recommendation;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={goBackToList}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h2 className="text-2xl font-bold">
+            {actionType === 'approve' ? '결재 승인' : '결재 반려'}
+          </h2>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {rec?.crew_name || '선원 추천'}
+            </CardTitle>
+            <CardDescription className="space-y-1">
+              <div className="flex items-center gap-2 text-sm">
+                <FileText className="w-4 h-4" />
+                <span>결재선: {approval.approval_line.name}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <User className="w-4 h-4" />
+                <span>요청자: {approval.requester_name} {approval.requester_role}</span>
+              </div>
+              {rec && (
+                <>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Ship className="w-4 h-4" />
+                    <span>선박: {rec.ship_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Calendar className="w-4 h-4" />
+                    <span>승선가능일: {format(new Date(rec.available_date), 'yyyy-MM-dd', { locale: ko })}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4" />
+                <span>요청일: {format(new Date(approval.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>
+              </div>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                {actionType === 'approve'
+                  ? '이 결재를 승인하시겠습니까?'
+                  : '이 결재를 반려하시겠습니까? 반려 사유를 입력해주세요.'}
+              </p>
+              <div>
+                <Label htmlFor="comment">
+                  {actionType === 'approve' ? '의견 (선택사항)' : '반려 사유 (필수)'}
+                </Label>
+                <Textarea
+                  id="comment"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder={actionType === 'approve' ? '의견을 입력하세요...' : '반려 사유를 입력하세요...'}
+                  rows={4}
+                  className="mt-2"
+                />
+              </div>
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={goBackToList}
+                  disabled={processing}
+                  className="flex-1"
+                >
+                  취소
+                </Button>
+                <Button
+                  onClick={actionType === 'approve' ? handleApprove : handleReject}
+                  disabled={processing || (actionType === 'reject' && !comment.trim())}
+                  variant={actionType === 'approve' ? 'default' : 'destructive'}
+                  className="flex-1"
+                >
+                  {processing ? '처리중...' : actionType === 'approve' ? '승인' : '반려'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderListView = () => {
+    return (
+      <Tabs defaultValue="my-requests" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="my-requests" className="flex items-center gap-2">
+            <Send className="w-4 h-4" />
+            내가 요청한 문서 ({myRequestedApprovals.length})
+          </TabsTrigger>
+          <TabsTrigger value="all" className="flex items-center gap-2">
+            <FileText className="w-4 h-4" />
+            전체 ({allApprovals.length})
+          </TabsTrigger>
+          <TabsTrigger value="pending" className="flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            결재중 ({pendingApprovals.length})
+          </TabsTrigger>
+          <TabsTrigger value="approved" className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            승인 ({approvedApprovals.length})
+          </TabsTrigger>
+          <TabsTrigger value="rejected" className="flex items-center gap-2">
+            <XCircle className="w-4 h-4" />
+            반려 ({rejectedApprovals.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="my-requests" className="space-y-4">
+          {myRequestedApprovals.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Send className="w-12 h-12 text-gray-400 mb-4" />
+                <p className="text-gray-600">요청한 결재 문서가 없습니다.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {myRequestedApprovals.map(renderApprovalCard)}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="all" className="space-y-4">
+          {allApprovals.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <FileText className="w-12 h-12 text-gray-400 mb-4" />
+                <p className="text-gray-600">결재 문서가 없습니다.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {allApprovals.map(renderApprovalCard)}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="pending" className="space-y-4">
+          {pendingApprovals.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Clock className="w-12 h-12 text-gray-400 mb-4" />
+                <p className="text-gray-600">결재중인 문서가 없습니다.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {pendingApprovals.map(renderApprovalCard)}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="approved" className="space-y-4">
+          {approvedApprovals.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <CheckCircle2 className="w-12 h-12 text-gray-400 mb-4" />
+                <p className="text-gray-600">승인된 문서가 없습니다.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {approvedApprovals.map(renderApprovalCard)}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="rejected" className="space-y-4">
+          {rejectedApprovals.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <XCircle className="w-12 h-12 text-gray-400 mb-4" />
+                <p className="text-gray-600">반려된 문서가 없습니다.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {rejectedApprovals.map(renderApprovalCard)}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     );
   };
 
@@ -402,174 +695,9 @@ export default function ApprovalManagementPage() {
           <div className="text-center py-12">로딩 중...</div>
         ) : (
           <>
-            <Tabs defaultValue="my-requests" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="my-requests" className="flex items-center gap-2">
-                  <Send className="w-4 h-4" />
-                  내가 요청한 문서 ({myRequestedApprovals.length})
-                </TabsTrigger>
-                <TabsTrigger value="all" className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  전체 ({allApprovals.length})
-                </TabsTrigger>
-                <TabsTrigger value="pending" className="flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  결재중 ({pendingApprovals.length})
-                </TabsTrigger>
-                <TabsTrigger value="approved" className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4" />
-                  승인 ({approvedApprovals.length})
-                </TabsTrigger>
-                <TabsTrigger value="rejected" className="flex items-center gap-2">
-                  <XCircle className="w-4 h-4" />
-                  반려 ({rejectedApprovals.length})
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="my-requests" className="space-y-4">
-                {myRequestedApprovals.length === 0 ? (
-                  <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                      <Send className="w-12 h-12 text-gray-400 mb-4" />
-                      <p className="text-gray-600">요청한 결재 문서가 없습니다.</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {myRequestedApprovals.map(renderApprovalCard)}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="all" className="space-y-4">
-                {allApprovals.length === 0 ? (
-                  <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                      <FileText className="w-12 h-12 text-gray-400 mb-4" />
-                      <p className="text-gray-600">결재 문서가 없습니다.</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {allApprovals.map(renderApprovalCard)}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="pending" className="space-y-4">
-                {pendingApprovals.length === 0 ? (
-                  <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                      <Clock className="w-12 h-12 text-gray-400 mb-4" />
-                      <p className="text-gray-600">결재중인 문서가 없습니다.</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {pendingApprovals.map(renderApprovalCard)}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="approved" className="space-y-4">
-                {approvedApprovals.length === 0 ? (
-                  <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                      <CheckCircle2 className="w-12 h-12 text-gray-400 mb-4" />
-                      <p className="text-gray-600">승인된 문서가 없습니다.</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {approvedApprovals.map(renderApprovalCard)}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="rejected" className="space-y-4">
-                {rejectedApprovals.length === 0 ? (
-                  <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                      <XCircle className="w-12 h-12 text-gray-400 mb-4" />
-                      <p className="text-gray-600">반려된 문서가 없습니다.</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {rejectedApprovals.map(renderApprovalCard)}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-
-            {/* Action Dialog */}
-            <Dialog open={actionType !== null} onOpenChange={() => {
-              setActionType(null);
-              setSelectedApproval(null);
-              setComment('');
-            }}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>
-                    {actionType === 'approve' ? '결재 승인' : '결재 반려'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {actionType === 'approve' 
-                      ? '이 결재를 승인하시겠습니까?' 
-                      : '이 결재를 반려하시겠습니까? 반려 사유를 입력해주세요.'}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="comment">
-                      {actionType === 'approve' ? '의견 (선택사항)' : '반려 사유 (필수)'}
-                    </Label>
-                    <Textarea
-                      id="comment"
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder={actionType === 'approve' ? '의견을 입력하세요...' : '반려 사유를 입력하세요...'}
-                      rows={4}
-                      className="mt-2"
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setActionType(null);
-                      setSelectedApproval(null);
-                      setComment('');
-                    }}
-                    disabled={processing}
-                  >
-                    취소
-                  </Button>
-                  <Button
-                    onClick={actionType === 'approve' ? handleApprove : handleReject}
-                    disabled={processing || (actionType === 'reject' && !comment.trim())}
-                    variant={actionType === 'approve' ? 'default' : 'destructive'}
-                  >
-                    {processing ? '처리중...' : actionType === 'approve' ? '승인' : '반려'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Detail View Dialog - Simplified for brevity */}
-            <Dialog open={selectedApproval !== null && actionType === null} onOpenChange={() => setSelectedApproval(null)}>
-              <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>결재 상세</DialogTitle>
-                </DialogHeader>
-                {selectedApproval && (
-                  <div className="space-y-4">
-                    <p className="text-sm text-gray-600">결재 문서 상세 정보</p>
-                  </div>
-                )}
-              </DialogContent>
-            </Dialog>
+            {viewMode === 'list' && renderListView()}
+            {viewMode === 'detail' && renderDetailView()}
+            {viewMode === 'action' && renderActionView()}
           </>
         )}
       </div>

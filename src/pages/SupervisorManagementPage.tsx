@@ -8,11 +8,10 @@ import { supervisorService } from '@/services/supervisor.service';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import type { SupervisorAssignmentWithDetails } from '@/types/supervisor';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { UserCheck, Plus, Trash2, Building2, Layers, Ship, AlertCircle } from 'lucide-react';
+import { UserCheck, Plus, Trash2, Building2, Layers, Ship, AlertCircle, ArrowLeft, Save } from 'lucide-react';
 import { format, isValid } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -22,7 +21,7 @@ export default function SupervisorManagementPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [assignments, setAssignments] = useState<SupervisorAssignmentWithDetails[]>([]);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [formView, setFormView] = useState<{ id?: string; record?: any } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<SupervisorAssignmentWithDetails | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -107,7 +106,7 @@ export default function SupervisorManagementPage() {
       setProcessing(true);
       await supervisorService.createAssignment(selectedSupervisor, selectedEntityType, entityId, currentUserId, notes);
       toast({ title: '성공', description: '담당 감독이 지정되었습니다.' });
-      setAddDialogOpen(false);
+      setFormView(null);
       resetForm();
       await loadData();
     } catch (error) {
@@ -201,150 +200,171 @@ export default function SupervisorManagementPage() {
     <>
       <div className="container mx-auto p-6 max-w-7xl">
         <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">담당 감독 관리</h1>
-            <p className="text-gray-600 mt-2">선주사, 플릿, 선박별 담당 감독을 지정하고 관리합니다.</p>
-          </div>
-          <Button onClick={() => setAddDialogOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />담당 지정
-          </Button>
+          {formView !== null ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => { setFormView(null); resetForm(); }}>
+                  <ArrowLeft className="w-4 h-4" />뒤로
+                </Button>
+                <div>
+                  <h1 className="text-3xl font-bold">담당 감독 지정</h1>
+                  <p className="text-gray-600 mt-2">선주사, 플릿 또는 특정 선박에 대한 담당 감독을 지정합니다.</p>
+                </div>
+              </div>
+              <Button onClick={handleAddAssignment} disabled={processing}>
+                <Save className="w-4 h-4 mr-2" />{processing ? '처리중...' : '지정하기'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <div>
+                <h1 className="text-3xl font-bold">담당 감독 관리</h1>
+                <p className="text-gray-600 mt-2">선주사, 플릿, 선박별 담당 감독을 지정하고 관리합니다.</p>
+              </div>
+              <Button onClick={() => { resetForm(); setFormView({}); }}>
+                <Plus className="w-4 h-4 mr-2" />담당 지정
+              </Button>
+            </>
+          )}
         </div>
 
-        {Object.keys(groupedAssignments).length === 0 ? (
+        {formView !== null ? (
+          /* ── Inline Form ── */
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <UserCheck className="w-12 h-12 text-gray-400 mb-4" />
-              <p className="text-gray-600">현재 지정된 담당 감독이 없습니다.</p>
-              <Button variant="outline" className="mt-4" onClick={() => setAddDialogOpen(true)}>첫 담당 지정하기</Button>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>담당 감독</Label>
+                  <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor}>
+                    <SelectTrigger><SelectValue placeholder="감독 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {supervisors.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.email})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>대상 유형</Label>
+                  <Select value={selectedEntityType} onValueChange={(v: 'owner' | 'fleet' | 'ship') => { setSelectedEntityType(v); setSelectedOwner(''); setSelectedFleet(''); setSelectedShip(''); }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner">선주사 (전체 선박)</SelectItem>
+                      <SelectItem value="fleet">플릿 (소속 선박)</SelectItem>
+                      <SelectItem value="ship">개별 선박</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(selectedEntityType === 'fleet' || selectedEntityType === 'ship') && (
+                  <div className="space-y-2">
+                    <Label>선주사 (필터)</Label>
+                    <Select value={selectedOwner} onValueChange={v => { setSelectedOwner(v); setSelectedFleet(''); setSelectedShip(''); }}>
+                      <SelectTrigger><SelectValue placeholder="선주사 선택 (선택사항)" /></SelectTrigger>
+                      <SelectContent>
+                        {owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {selectedEntityType === 'owner' && (
+                  <div className="space-y-2">
+                    <Label>선주사</Label>
+                    <Select value={selectedOwner} onValueChange={setSelectedOwner}>
+                      <SelectTrigger><SelectValue placeholder="선주사 선택" /></SelectTrigger>
+                      <SelectContent>
+                        {owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {selectedEntityType === 'fleet' && (
+                  <div className="space-y-2">
+                    <Label>플릿</Label>
+                    <Select value={selectedFleet} onValueChange={setSelectedFleet}>
+                      <SelectTrigger><SelectValue placeholder="플릿 선택" /></SelectTrigger>
+                      <SelectContent>
+                        {getFilteredFleets().map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {selectedEntityType === 'ship' && (
+                  <div className="space-y-2">
+                    <Label>선박</Label>
+                    <Select value={selectedShip} onValueChange={setSelectedShip}>
+                      <SelectTrigger><SelectValue placeholder="선박 선택" /></SelectTrigger>
+                      <SelectContent>
+                        {getFilteredShips().map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>비고 (선택사항)</Label>
+                  <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="메모를 입력하세요" rows={3} />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => { setFormView(null); resetForm(); }}>취소</Button>
+                  <Button onClick={handleAddAssignment} disabled={processing}>
+                    {processing ? '처리중...' : '지정하기'}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6">
-            {Object.entries(groupedAssignments).map(([supervisorId, group]) => (
-              <Card key={supervisorId}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-5 h-5 text-blue-600" />
-                    <CardTitle>{group.supervisor_name}</CardTitle>
-                    <Badge variant="outline" className="ml-2">{group.supervisor_email}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {group.assignments.map(assignment => (
-                      <div key={assignment.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg border">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            {getEntityIcon(assignment.entity_type)}
-                            <span className="font-medium">{getEntityTypeLabel(assignment.entity_type)}: {assignment.entity_name}</span>
-                          </div>
-                          {assignment.notes && <p className="text-sm text-gray-500">{assignment.notes}</p>}
-                          <p className="text-xs text-gray-400">지정일: {formatDate(assignment.assigned_at)}</p>
-                        </div>
-                        <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => { setSelectedAssignment(assignment); setDeleteDialogOpen(true); }}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+          /* ── List View ── */
+          <>
+            {Object.keys(groupedAssignments).length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <UserCheck className="w-12 h-12 text-gray-400 mb-4" />
+                  <p className="text-gray-600">현재 지정된 담당 감독이 없습니다.</p>
+                  <Button variant="outline" className="mt-4" onClick={() => { resetForm(); setFormView({}); }}>첫 담당 지정하기</Button>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            ) : (
+              <div className="grid gap-6">
+                {Object.entries(groupedAssignments).map(([supervisorId, group]) => (
+                  <Card key={supervisorId}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="w-5 h-5 text-blue-600" />
+                        <CardTitle>{group.supervisor_name}</CardTitle>
+                        <Badge variant="outline" className="ml-2">{group.supervisor_email}</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {group.assignments.map(assignment => (
+                          <div key={assignment.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg border">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                {getEntityIcon(assignment.entity_type)}
+                                <span className="font-medium">{getEntityTypeLabel(assignment.entity_type)}: {assignment.entity_name}</span>
+                              </div>
+                              {assignment.notes && <p className="text-sm text-gray-500">{assignment.notes}</p>}
+                              <p className="text-xs text-gray-400">지정일: {formatDate(assignment.assigned_at)}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => { setSelectedAssignment(assignment); setDeleteDialogOpen(true); }}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
         )}
-
-        {/* 담당 지정 다이얼로그 */}
-        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>담당 감독 지정</DialogTitle>
-              <DialogDescription>선주사, 플릿 또는 특정 선박에 대한 담당 감독을 지정합니다.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>담당 감독</Label>
-                <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor}>
-                  <SelectTrigger><SelectValue placeholder="감독 선택" /></SelectTrigger>
-                  <SelectContent>
-                    {supervisors.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.email})</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>대상 유형</Label>
-                <Select value={selectedEntityType} onValueChange={(v: 'owner' | 'fleet' | 'ship') => { setSelectedEntityType(v); setSelectedOwner(''); setSelectedFleet(''); setSelectedShip(''); }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="owner">선주사 (전체 선박)</SelectItem>
-                    <SelectItem value="fleet">플릿 (소속 선박)</SelectItem>
-                    <SelectItem value="ship">개별 선박</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {(selectedEntityType === 'fleet' || selectedEntityType === 'ship') && (
-                <div className="space-y-2">
-                  <Label>선주사 (필터)</Label>
-                  <Select value={selectedOwner} onValueChange={v => { setSelectedOwner(v); setSelectedFleet(''); setSelectedShip(''); }}>
-                    <SelectTrigger><SelectValue placeholder="선주사 선택 (선택사항)" /></SelectTrigger>
-                    <SelectContent>
-                      {owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {selectedEntityType === 'owner' && (
-                <div className="space-y-2">
-                  <Label>선주사</Label>
-                  <Select value={selectedOwner} onValueChange={setSelectedOwner}>
-                    <SelectTrigger><SelectValue placeholder="선주사 선택" /></SelectTrigger>
-                    <SelectContent>
-                      {owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {selectedEntityType === 'fleet' && (
-                <div className="space-y-2">
-                  <Label>플릿</Label>
-                  <Select value={selectedFleet} onValueChange={setSelectedFleet}>
-                    <SelectTrigger><SelectValue placeholder="플릿 선택" /></SelectTrigger>
-                    <SelectContent>
-                      {getFilteredFleets().map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {selectedEntityType === 'ship' && (
-                <div className="space-y-2">
-                  <Label>선박</Label>
-                  <Select value={selectedShip} onValueChange={setSelectedShip}>
-                    <SelectTrigger><SelectValue placeholder="선박 선택" /></SelectTrigger>
-                    <SelectContent>
-                      {getFilteredShips().map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label>비고 (선택사항)</Label>
-                <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="메모를 입력하세요" rows={3} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setAddDialogOpen(false)}>취소</Button>
-              <Button onClick={handleAddAssignment} disabled={processing}>
-                {processing ? '처리중...' : '지정하기'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* 해제 확인 다이얼로그 */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -369,23 +389,6 @@ export default function SupervisorManagementPage() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
-      {selectedRecForCert && (
-            <CertificateUploadDialog
-              open={certDialogOpen}
-              onClose={(saved) => {
-                setCertDialogOpen(false);
-                setSelectedRecForCert(null);
-                if (saved) loadRecommendations();
-              }}
-              recommendationId={selectedRecForCert.id}
-              crewName={selectedRecForCert.crew_name}
-              existingCertificates={
-                typeof selectedRecForCert.certificates === 'string'
-                  ? JSON.parse(selectedRecForCert.certificates || '[]')
-                  : (selectedRecForCert.certificates || [])
-              }
-            />
-          )}
     </>
   );
 }

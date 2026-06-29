@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  getCurrentUser, 
-  getShips, 
-  getCrewMembers, 
-  getJobApplications, 
+import {
+  getCurrentUser,
+  getShips,
+  getCrewMembers,
+  getJobApplications,
   getRanks,
   addJobApplication,
   updateJobApplicationStatus,
@@ -16,18 +16,18 @@ import { supervisorService } from '@/services/supervisor.service';
 import type { User, Ship, CrewMember, JobPosting, JobApplication, Rank, Company, Fleet } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Briefcase, Plus, Send } from 'lucide-react';
+import { ArrowLeft, Briefcase, Plus, Send } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import Layout from '@/components/Layout';
 import JobPostingTable from '@/components/job/JobPostingTable';
 import JobPostingDialog from '@/components/job/JobPostingDialog';
 import JobApplicationTable from '@/components/job/JobApplicationTable';
 import ApplicationDetailsDialog from '@/components/job/ApplicationDetailsDialog';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
+
+type ViewMode = 'list' | 'apply';
 
 export default function JobPostingPage() {
   const navigate = useNavigate();
@@ -46,8 +46,8 @@ export default function JobPostingPage() {
 
   const permissions = usePermissions('jobs');
 
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);
-  const [isApplyDialogOpen, setIsApplyDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<JobPosting | null>(null);
@@ -79,7 +79,7 @@ export default function JobPostingPage() {
       setApplyFormData({ crew_member_id: user.role === 'crew' ? user.id : '' });
       loadData(user);
     };
-    
+
     loadUser();
   }, [navigate]);
 
@@ -94,7 +94,7 @@ export default function JobPostingPage() {
         getJobApplications(),
         getRanks(),
       ]);
-      
+
       setCompanies(companiesData);
       setFleets(fleetsData);
       setShips(shipsData);
@@ -136,7 +136,7 @@ export default function JobPostingPage() {
           setSupervisedOwners(filteredOwners);
           setSupervisedFleets(filteredFleets);
           setSupervisedShips(filteredShips);
-          
+
           console.log('✅ [JobPostingPage] 필터링 완료:', {
             owners: filteredOwners.length,
             fleets: filteredFleets.length,
@@ -156,11 +156,11 @@ export default function JobPostingPage() {
         const userCompanies = companiesData.filter(c => c.id === user.company_id);
         const userFleets = fleetsData.filter(f => f.owner_id === user.company_id);
         const userShips = shipsData.filter(s => s.owner_id === user.company_id);
-        
+
         setSupervisedOwners(userCompanies);
         setSupervisedFleets(userFleets);
         setSupervisedShips(userShips);
-        
+
         console.log('👔 [JobPostingPage] 선주 데이터:', {
           owners: userCompanies.length,
           fleets: userFleets.length,
@@ -171,7 +171,7 @@ export default function JobPostingPage() {
         setSupervisedOwners(companiesData);
         setSupervisedFleets(fleetsData);
         setSupervisedShips(shipsData);
-        
+
         console.log('🌐 [JobPostingPage] 전체 데이터 표시 (역할: ' + user.role + ')');
       }
     } catch (error) {
@@ -197,7 +197,7 @@ export default function JobPostingPage() {
   const canReview = ['ship_manager', 'ship_owner'].includes(currentUser.role);
 
   const availableJobs = jobPostings.filter(job => job.status === 'open');
-  
+
   const myApplications = currentUser.role === 'crew'
     ? jobApplications.filter(app => app.crew_member_id === currentUser.id)
     : currentUser.role === 'manning_agency'
@@ -210,7 +210,7 @@ export default function JobPostingPage() {
 
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (postFormData.positions.length === 0) {
       alert('최소 1개 이상의 직급을 추가해주세요');
       return;
@@ -230,14 +230,14 @@ export default function JobPostingPage() {
       status: postFormData.status,
       created_by: currentUser.id,
     };
-    
+
     try {
       if (editingJob) {
         await updateJobPosting(editingJob, jobData, postFormData.positions);
       } else {
         await addJobPosting(jobData, postFormData.positions);
       }
-      
+
       console.log('✅ [JobPostingPage] 구인 공고 제출 성공');
       await loadData(currentUser);
       setIsPostDialogOpen(false);
@@ -285,7 +285,7 @@ export default function JobPostingPage() {
       status: 'received',
     });
     await loadData(currentUser);
-    setIsApplyDialogOpen(false);
+    setViewMode('list');
     setSelectedJob(null);
     setSelectedRankId('');
     resetApplyForm();
@@ -329,10 +329,109 @@ export default function JobPostingPage() {
     return ranks.find(r => r.id === rankId)?.name || 'Unknown';
   };
 
-  const selectedCrewMember = selectedApplication 
-    ? crewMembers.find(c => c.id === selectedApplication.crew_member_id) 
+  const selectedCrewMember = selectedApplication
+    ? crewMembers.find(c => c.id === selectedApplication.crew_member_id)
     : null;
 
+  // --- Inline apply view ---
+  if (viewMode === 'apply') {
+    return (
+      <ProtectedRoute resource="jobs">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="mb-6">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setViewMode('list');
+                  setSelectedJob(null);
+                  setSelectedRankId('');
+                  resetApplyForm();
+                }}
+                className="gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                뒤로가기
+              </Button>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>구직 지원</CardTitle>
+                {selectedJob && selectedRankId && (
+                  <CardDescription>
+                    {getShipName(selectedJob.ship_id)} - {getRankName(selectedRankId)} 직급에 지원합니다
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent>
+                {selectedJob && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-2">
+                    <h3 className="font-semibold text-lg">{getShipName(selectedJob.ship_id)}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedJob.positions?.map((pos, idx) => (
+                        <Badge key={idx} variant={pos.rank_id === selectedRankId ? 'default' : 'secondary'}>
+                          {getRankName(pos.rank_id)} x {pos.positions_count}명
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                      <div>승선일: {selectedJob.embarkation_date}</div>
+                      <div>계약기간: {selectedJob.contract_period}</div>
+                      <div>급여: {selectedJob.salary_range}</div>
+                    </div>
+                    {selectedJob.special_requirements && (
+                      <p className="text-sm text-gray-600">
+                        <span className="font-medium">특별요구사항:</span> {selectedJob.special_requirements}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={handleApply} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="crew_member_id">선원 선택 *</Label>
+                    <select
+                      id="crew_member_id"
+                      value={applyFormData.crew_member_id}
+                      onChange={(e) => setApplyFormData({crew_member_id: e.target.value})}
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                      required
+                      disabled={currentUser.role === 'crew'}
+                    >
+                      <option value="">선택하세요</option>
+                      {currentUser.role === 'crew' ? (
+                        <option value={currentUser.id}>본인</option>
+                      ) : (
+                        myCrews.map(crew => (
+                          <option key={crew.id} value={crew.id}>
+                            {crew.name} ({crew.rank})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" className="flex-1">지원</Button>
+                    <Button type="button" variant="outline" onClick={() => {
+                      setViewMode('list');
+                      setSelectedJob(null);
+                      setSelectedRankId('');
+                      resetApplyForm();
+                    }}>
+                      취소
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </main>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  // --- Default list view ---
   return (
     <ProtectedRoute resource="jobs">
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
@@ -361,7 +460,7 @@ export default function JobPostingPage() {
                         </CardDescription>
                       </div>
                       {permissions.canCreate && (
-                        <Button 
+                        <Button
                           className="gap-2"
                           onClick={() => {
                             console.log('🔘 [JobPostingPage] 구인 공고 등록 버튼 클릭');
@@ -452,14 +551,14 @@ export default function JobPostingPage() {
                                 </div>
                                 <div className="flex flex-wrap gap-2 pt-2 border-t">
                                   {job.positions?.map((pos) => (
-                                    <Button 
+                                    <Button
                                       key={pos.id}
                                       size="sm"
                                       className="gap-2"
                                       onClick={() => {
                                         setSelectedJob(job);
                                         setSelectedRankId(pos.rank_id);
-                                        setIsApplyDialogOpen(true);
+                                        setViewMode('apply');
                                       }}
                                     >
                                       <Send className="w-4 h-4" />
@@ -516,55 +615,6 @@ export default function JobPostingPage() {
             ships={supervisedShips}
             ranks={ranks}
           />
-
-          <Dialog open={isApplyDialogOpen} onOpenChange={setIsApplyDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>구직 지원</DialogTitle>
-                <DialogDescription>
-                  {selectedJob && selectedRankId && (
-                    <span>
-                      {getShipName(selectedJob.ship_id)} - {getRankName(selectedRankId)} 직급에 지원합니다
-                    </span>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleApply} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="crew_member_id">선원 선택 *</Label>
-                  <select
-                    id="crew_member_id"
-                    value={applyFormData.crew_member_id}
-                    onChange={(e) => setApplyFormData({crew_member_id: e.target.value})}
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background"
-                    required
-                    disabled={currentUser.role === 'crew'}
-                  >
-                    <option value="">선택하세요</option>
-                    {currentUser.role === 'crew' ? (
-                      <option value={currentUser.id}>본인</option>
-                    ) : (
-                      myCrews.map(crew => (
-                        <option key={crew.id} value={crew.id}>
-                          {crew.name} ({crew.rank})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1">지원</Button>
-                  <Button type="button" variant="outline" onClick={() => {
-                    setIsApplyDialogOpen(false);
-                    setSelectedJob(null);
-                    setSelectedRankId('');
-                  }}>
-                    취소
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
 
           <ApplicationDetailsDialog
             open={isDetailsDialogOpen}

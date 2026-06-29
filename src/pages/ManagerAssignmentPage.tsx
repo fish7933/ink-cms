@@ -10,18 +10,10 @@ import type { User, Company, Fleet, Ship } from '@/types/models';
 import type { Assignment } from '@/types/assignment-approval';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Trash2, Users, Building2, Ship as ShipIcon, Layers } from 'lucide-react';
+import { Plus, Trash2, Users, Building2, Ship as ShipIcon, Layers, ArrowLeft, Save } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -40,8 +32,9 @@ export default function ManagerAssignmentPage() {
   const [ships, setShips] = useState<Ship[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  
+  const [formView, setFormView] = useState<{ id?: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     assignment_type: 'owner' as 'owner' | 'fleet' | 'ship',
@@ -60,7 +53,7 @@ export default function ManagerAssignmentPage() {
     setCurrentUser(user);
     loadData();
     };
-    
+
     loadUser();
   }, [navigate]);
 
@@ -128,26 +121,29 @@ export default function ManagerAssignmentPage() {
     return user ? `${user.name} (${user.email})` : '알 수 없음';
   };
 
-  const openAddDialog = (type: 'owner' | 'fleet' | 'ship') => {
+  const openForm = (type: 'owner' | 'fleet' | 'ship') => {
     const roleMap = {
       owner: 'owner_manager',
       fleet: 'fleet_manager',
       ship: 'ship_manager',
     };
-    
+
     setFormData({
       assignment_type: type,
       entity_id: '',
       user_id: '',
       role: roleMap[type] as 'owner_manager' | 'fleet_manager' | 'ship_manager' | 'manning_manager',
     });
-    setIsDialogOpen(true);
+    setFormView({});
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const closeForm = () => {
+    setFormView(null);
+  };
+
+  const handleSave = async () => {
     try {
+      setSaving(true);
       await addAssignment({
         assignment_type: formData.assignment_type,
         entity_id: formData.entity_id,
@@ -155,18 +151,20 @@ export default function ManagerAssignmentPage() {
         role: formData.role,
         assigned_by: currentUser?.id || null,
       });
-      
-      setIsDialogOpen(false);
+
+      closeForm();
       await loadData();
     } catch (error) {
       console.error('Error adding assignment:', error);
       alert('담당자 배정 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (assignmentId: string) => {
     if (!confirm('이 담당자 배정을 삭제하시겠습니까?')) return;
-    
+
     try {
       await deleteAssignment(assignmentId);
       await loadData();
@@ -206,7 +204,7 @@ export default function ManagerAssignmentPage() {
   const renderAssignmentTable = (type: 'owner' | 'fleet' | 'ship') => {
     const typeAssignments = getAssignmentsByType(type);
     const typeName = type === 'owner' ? '선주' : type === 'fleet' ? '플릿' : '선박';
-    
+
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -220,7 +218,7 @@ export default function ManagerAssignmentPage() {
             <Button
               size="sm"
               className="gap-1.5 h-8"
-              onClick={() => openAddDialog(type)}
+              onClick={() => openForm(type)}
             >
               <Plus className="w-3.5 h-3.5" />
               담당자 배정
@@ -285,61 +283,36 @@ export default function ManagerAssignmentPage() {
   return (
     <>
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Users className="w-6 h-6" />
-            담당자 배정 관리
-          </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            선주, 플릿, 선박별로 담당자를 배정하고 관리합니다
-          </p>
-        </div>
-
-        <Tabs defaultValue="owner" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-9">
-            <TabsTrigger value="owner" className="text-sm flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5" />
-              선주 담당자 ({getAssignmentsByType('owner').length})
-            </TabsTrigger>
-            <TabsTrigger value="fleet" className="text-sm flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5" />
-              플릿 담당자 ({getAssignmentsByType('fleet').length})
-            </TabsTrigger>
-            <TabsTrigger value="ship" className="text-sm flex items-center gap-1.5">
-              <ShipIcon className="w-3.5 h-3.5" />
-              선박 담당자 ({getAssignmentsByType('ship').length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="owner" className="mt-3">
-            {renderAssignmentTable('owner')}
-          </TabsContent>
-
-          <TabsContent value="fleet" className="mt-3">
-            {renderAssignmentTable('fleet')}
-          </TabsContent>
-
-          <TabsContent value="ship" className="mt-3">
-            {renderAssignmentTable('ship')}
-          </TabsContent>
-        </Tabs>
-
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle className="text-base">
-                {formData.assignment_type === 'owner' ? '선주' : 
-                 formData.assignment_type === 'fleet' ? '플릿' : '선박'} 담당자 배정
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                담당자를 배정하여 선원 추천 승인 권한을 부여합니다
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-3 py-3">
+        {formView !== null ? (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}>
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      {formData.assignment_type === 'owner' ? '선주' :
+                       formData.assignment_type === 'fleet' ? '플릿' : '선박'} 담당자 배정
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      담당자를 배정하여 선원 추천 승인 권한을 부여합니다
+                    </p>
+                  </div>
+                </div>
+                <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
+                  <Save className="w-4 h-4" />
+                  {saving ? '저장 중...' : '배정'}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-3 pt-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="entity" className="text-xs">
-                    {formData.assignment_type === 'owner' ? '선주사' : 
+                    {formData.assignment_type === 'owner' ? '선주사' :
                      formData.assignment_type === 'fleet' ? '플릿' : '선박'} *
                   </Label>
                   <Select
@@ -392,23 +365,50 @@ export default function ManagerAssignmentPage() {
                   </p>
                 </div>
               </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  className="h-8"
-                >
-                  취소
-                </Button>
-                <Button type="submit" size="sm" className="h-8">
-                  배정
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="mb-4">
+              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <Users className="w-6 h-6" />
+                담당자 배정 관리
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                선주, 플릿, 선박별로 담당자를 배정하고 관리합니다
+              </p>
+            </div>
+
+            <Tabs defaultValue="owner" className="w-full">
+              <TabsList className="grid w-full grid-cols-3 h-9">
+                <TabsTrigger value="owner" className="text-sm flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5" />
+                  선주 담당자 ({getAssignmentsByType('owner').length})
+                </TabsTrigger>
+                <TabsTrigger value="fleet" className="text-sm flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  플릿 담당자 ({getAssignmentsByType('fleet').length})
+                </TabsTrigger>
+                <TabsTrigger value="ship" className="text-sm flex items-center gap-1.5">
+                  <ShipIcon className="w-3.5 h-3.5" />
+                  선박 담당자 ({getAssignmentsByType('ship').length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="owner" className="mt-3">
+                {renderAssignmentTable('owner')}
+              </TabsContent>
+
+              <TabsContent value="fleet" className="mt-3">
+                {renderAssignmentTable('fleet')}
+              </TabsContent>
+
+              <TabsContent value="ship" className="mt-3">
+                {renderAssignmentTable('ship')}
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
       </main>
     </>
   );

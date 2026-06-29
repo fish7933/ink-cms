@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Eye, ExternalLink, UserPlus, Award } from 'lucide-react';
+import { Search, Filter, Eye, ExternalLink, UserPlus, Award, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { CertificateUploadDialog } from '@/components/crew/CertificateUploadDialog';
@@ -32,7 +31,7 @@ export default function MyRecommendationsPage() {
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedRec, setSelectedRec] = useState<CrewRecommendationWithDetails | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
   const [certDialogOpen, setCertDialogOpen] = useState(false);
   const [selectedRecForCert, setSelectedRecForCert] = useState<CrewRecommendationWithDetails | null>(null);
 
@@ -119,7 +118,7 @@ export default function MyRecommendationsPage() {
     setPage(1);
   };
 
-  const openDetail = (r: CrewRecommendationWithDetails) => { setSelectedRec(r); setDetailOpen(true); };
+  const openDetail = (r: CrewRecommendationWithDetails) => { setSelectedRec(r); setViewMode('detail'); };
 
   const openResume = async (r: CrewRecommendationWithDetails) => {
     if (!r.resume_files?.length) { alert('첨부된 이력서가 없습니다.'); return; }
@@ -160,206 +159,229 @@ export default function MyRecommendationsPage() {
   return (
     <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">내 추천 선원 관리</h1>
-          <p className="text-sm text-muted-foreground mt-1">우리 회사가 추천한 선원 목록을 관리합니다</p>
-        </div>
-
-        {/* 통계 */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-          {[
-            { label: '전체 추천', value: stats.total, color: 'border-blue-500', text: 'text-blue-600' },
-            { label: '검토 대기', value: stats.pending, color: 'border-gray-400', text: 'text-gray-600' },
-            { label: '결재중', value: stats.reviewed, color: 'border-blue-400', text: 'text-blue-500' },
-            { label: '수락', value: stats.accepted, color: 'border-green-500', text: 'text-green-600' },
-            { label: '거절', value: stats.rejected, color: 'border-red-500', text: 'text-red-600' },
-          ].map(s => (
-            <div key={s.label} className={`bg-white rounded-lg shadow-sm p-3 border-l-4 ${s.color}`}>
-              <div className="text-xs text-gray-600">{s.label}</div>
-              <div className={`text-2xl font-bold ${s.text}`}>{s.value}</div>
+        {viewMode === 'list' ? (
+          <>
+            <div className="mb-4">
+              <h1 className="text-2xl font-bold">내 추천 선원 관리</h1>
+              <p className="text-sm text-muted-foreground mt-1">우리 회사가 추천한 선원 목록을 관리합니다</p>
             </div>
-          ))}
-        </div>
 
-        {/* 필터 */}
-        <div className="bg-white rounded-lg shadow-sm p-3 mb-3">
-          <div className="flex items-center gap-2 mb-2"><Filter className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-sm font-medium">필터</span></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-            <div className="md:col-span-4">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input placeholder="선원명, 선박명, 직급 검색..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+            {/* 통계 */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+              {[
+                { label: '전체 추천', value: stats.total, color: 'border-blue-500', text: 'text-blue-600' },
+                { label: '검토 대기', value: stats.pending, color: 'border-gray-400', text: 'text-gray-600' },
+                { label: '결재중', value: stats.reviewed, color: 'border-blue-400', text: 'text-blue-500' },
+                { label: '수락', value: stats.accepted, color: 'border-green-500', text: 'text-green-600' },
+                { label: '거절', value: stats.rejected, color: 'border-red-500', text: 'text-red-600' },
+              ].map(s => (
+                <div key={s.label} className={`bg-white rounded-lg shadow-sm p-3 border-l-4 ${s.color}`}>
+                  <div className="text-xs text-gray-600">{s.label}</div>
+                  <div className={`text-2xl font-bold ${s.text}`}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* 필터 */}
+            <div className="bg-white rounded-lg shadow-sm p-3 mb-3">
+              <div className="flex items-center gap-2 mb-2"><Filter className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-sm font-medium">필터</span></div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div className="md:col-span-4">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input placeholder="선원명, 선박명, 직급 검색..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+                  </div>
+                </div>
+                <Select value={ownerF} onValueChange={setOwnerF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주사" /></SelectTrigger><SelectContent><SelectItem value="all">전체 선주사</SelectItem>{companies.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={fleetF} onValueChange={setFleetF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="플릿" /></SelectTrigger><SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={shipF} onValueChange={setShipF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박" /></SelectTrigger><SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={rankF} onValueChange={setRankF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급" /></SelectTrigger><SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code} - {r.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={statusF} onValueChange={setStatusF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="상태" /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem><SelectItem value="pending">검토 대기</SelectItem><SelectItem value="reviewed">결재중</SelectItem><SelectItem value="accepted">수락</SelectItem><SelectItem value="rejected">거절</SelectItem></SelectContent></Select>
+                <Select value={dateF} onValueChange={setDateF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="기간" /></SelectTrigger><SelectContent><SelectItem value="all">전체 기간</SelectItem><SelectItem value="week">최근 1주일</SelectItem><SelectItem value="month">최근 1개월</SelectItem><SelectItem value="quarter">최근 3개월</SelectItem></SelectContent></Select>
               </div>
             </div>
-            <Select value={ownerF} onValueChange={setOwnerF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주사" /></SelectTrigger><SelectContent><SelectItem value="all">전체 선주사</SelectItem>{companies.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={fleetF} onValueChange={setFleetF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="플릿" /></SelectTrigger><SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={shipF} onValueChange={setShipF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박" /></SelectTrigger><SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={rankF} onValueChange={setRankF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급" /></SelectTrigger><SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code} - {r.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={statusF} onValueChange={setStatusF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="상태" /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem><SelectItem value="pending">검토 대기</SelectItem><SelectItem value="reviewed">결재중</SelectItem><SelectItem value="accepted">수락</SelectItem><SelectItem value="rejected">거절</SelectItem></SelectContent></Select>
-            <Select value={dateF} onValueChange={setDateF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="기간" /></SelectTrigger><SelectContent><SelectItem value="all">전체 기간</SelectItem><SelectItem value="week">최근 1주일</SelectItem><SelectItem value="month">최근 1개월</SelectItem><SelectItem value="quarter">최근 3개월</SelectItem></SelectContent></Select>
-          </div>
-        </div>
 
-        {/* 테이블 */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead className="text-xs py-2 w-20">상태</TableHead>
-                <TableHead className="text-xs py-2 w-32">선박 정보</TableHead>
-                <TableHead className="text-xs py-2 w-20">직급</TableHead>
-                <TableHead className="text-xs py-2">선원명</TableHead>
-                <TableHead className="text-xs py-2 w-12">나이</TableHead>
-                <TableHead className="text-xs py-2">희망 조건</TableHead>
-                <TableHead className="text-xs py-2 w-24">출국가능일</TableHead>
-                <TableHead className="text-xs py-2 w-24">추천일</TableHead>
-                <TableHead className="text-right text-xs py-2 w-48">작업</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageRecs.map(rec => (
-                <TableRow key={rec.id} className="hover:bg-muted/50">
-                  <TableCell className="py-2">{sBadge(rec.status)}</TableCell>
-                  <TableCell className="py-2">
-                    <div className="text-sm font-medium truncate max-w-[120px]">{rec.ship_name}</div>
-                    <div className="text-xs text-muted-foreground truncate max-w-[120px]">{rec.company_name}</div>
-                  </TableCell>
-                  <TableCell className="py-2">
-                    {rec.rank_code
-                      ? <Badge variant="outline" className={`text-xs ${dc(rec.department)}`}>{rec.rank_code}</Badge>
-                      : <Badge variant="outline" className="text-xs bg-gray-100 text-gray-400">-</Badge>}
-                  </TableCell>
-                  <TableCell className="py-2"><div className="text-sm font-medium">{rec.crew_name}</div></TableCell>
-                  <TableCell className="py-2"><div className="text-xs text-muted-foreground">{calcAge(rec.crew_birth_date)}세</div></TableCell>
-                  <TableCell className="py-2">
-                    <div className="text-sm">{rec.desired_currency} {rec.desired_salary.toLocaleString()}</div>
-                    <div className="text-xs text-muted-foreground">{rec.desired_contract_months}개월</div>
-                  </TableCell>
-                  <TableCell className="text-xs py-2">{new Date(rec.available_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}</TableCell>
-                  <TableCell className="text-xs py-2">{new Date(rec.created_at).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}</TableCell>
-                  <TableCell className="text-right py-2">
-                    <div className="flex justify-end gap-1.5">
-                      {rec.status === 'accepted' && (
-                        <>
-                          <Button variant="default" size="sm" onClick={() => navigate('/crew/input', { state: { recommendation: rec } })} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
-                            <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
+            {/* 테이블 */}
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="text-xs py-2 w-20">상태</TableHead>
+                    <TableHead className="text-xs py-2 w-32">선박 정보</TableHead>
+                    <TableHead className="text-xs py-2 w-20">직급</TableHead>
+                    <TableHead className="text-xs py-2">선원명</TableHead>
+                    <TableHead className="text-xs py-2 w-12">나이</TableHead>
+                    <TableHead className="text-xs py-2">희망 조건</TableHead>
+                    <TableHead className="text-xs py-2 w-24">출국가능일</TableHead>
+                    <TableHead className="text-xs py-2 w-24">추천일</TableHead>
+                    <TableHead className="text-right text-xs py-2 w-48">작업</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pageRecs.map(rec => (
+                    <TableRow key={rec.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openDetail(rec)}>
+                      <TableCell className="py-2">{sBadge(rec.status)}</TableCell>
+                      <TableCell className="py-2">
+                        <div className="text-sm font-medium truncate max-w-[120px]">{rec.ship_name}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-[120px]">{rec.company_name}</div>
+                      </TableCell>
+                      <TableCell className="py-2">
+                        {rec.rank_code
+                          ? <Badge variant="outline" className={`text-xs ${dc(rec.department)}`}>{rec.rank_code}</Badge>
+                          : <Badge variant="outline" className="text-xs bg-gray-100 text-gray-400">-</Badge>}
+                      </TableCell>
+                      <TableCell className="py-2"><div className="text-sm font-medium">{rec.crew_name}</div></TableCell>
+                      <TableCell className="py-2"><div className="text-xs text-muted-foreground">{calcAge(rec.crew_birth_date)}세</div></TableCell>
+                      <TableCell className="py-2">
+                        <div className="text-sm">{rec.desired_currency} {rec.desired_salary.toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">{rec.desired_contract_months}개월</div>
+                      </TableCell>
+                      <TableCell className="text-xs py-2">{new Date(rec.available_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}</TableCell>
+                      <TableCell className="text-xs py-2">{new Date(rec.created_at).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}</TableCell>
+                      <TableCell className="text-right py-2">
+                        <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+                          {rec.status === 'accepted' && (
+                            <>
+                              <Button variant="default" size="sm" onClick={() => navigate('/crew/input', { state: { recommendation: rec } })} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
+                                <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => { setSelectedRecForCert(rec); setCertDialogOpen(true); }} className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50">
+                                <Award className="w-3.5 h-3.5 mr-1.5" />증서 등록
+                              </Button>
+                            </>
+                          )}
+                          <Button variant="outline" size="sm" onClick={() => openDetail(rec)} className="h-8 px-3 text-xs">
+                            <Eye className="w-3.5 h-3.5 mr-1.5" />상세
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => { setSelectedRecForCert(rec); setCertDialogOpen(true); }} className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50">
-                            <Award className="w-3.5 h-3.5 mr-1.5" />증서 등록
-                          </Button>
-                        </>
-                      )}
-                      <Button variant="outline" size="sm" onClick={() => openDetail(rec)} className="h-8 px-3 text-xs">
-                        <Eye className="w-3.5 h-3.5 mr-1.5" />상세
-                      </Button>
-                      {rec.resume_files?.length > 0 && (
-                        <Button variant="outline" size="sm" onClick={() => openResume(rec)} className="h-8 px-3 text-xs">
-                          <ExternalLink className="w-3.5 h-3.5 mr-1.5" />이력서
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {pageRecs.length === 0 && (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              {search || statusF !== 'all' ? '검색 결과가 없습니다.' : '아직 추천한 선원이 없습니다.'}
-            </div>
-          )}
-        </div>
-
-        {/* 페이지네이션 */}
-        {totalPages > 1 && (
-          <div className="mt-3 flex justify-center">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem><PaginationPrevious onClick={() => page > 1 && setPage(page - 1)} className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => {
-                  if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
-                    return <PaginationItem key={p}><PaginationLink onClick={() => setPage(p)} isActive={page === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
-                  } else if (p === page - 2 || p === page + 2) {
-                    return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
-                  }
-                  return null;
-                })}
-                <PaginationItem><PaginationNext onClick={() => page < totalPages && setPage(page + 1)} className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
-
-        {/* 상세 다이얼로그 */}
-        <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>추천 선원 상세 정보</DialogTitle></DialogHeader>
-            {selectedRec && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                  <span className="text-sm font-medium">현재 상태</span>{sBadge(selectedRec.status)}
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">선원 정보</h3>
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                    <div><span className="text-xs text-gray-600">직급</span><div className="mt-1">{selectedRec.rank_code ? <Badge className={dc(selectedRec.department)}>{selectedRec.rank_code}</Badge> : '-'}</div></div>
-                    <div><span className="text-xs text-gray-600">성명</span><p className="text-sm font-medium">{selectedRec.crew_name}</p></div>
-                    <div><span className="text-xs text-gray-600">생년월일</span><p className="text-sm font-medium">{new Date(selectedRec.crew_birth_date).toLocaleDateString('ko-KR')}</p></div>
-                    <div><span className="text-xs text-gray-600">나이</span><p className="text-sm font-medium">{calcAge(selectedRec.crew_birth_date)}세</p></div>
-                    <div><span className="text-xs text-gray-600">출국 가능일</span><p className="text-sm font-medium">{new Date(selectedRec.available_date).toLocaleDateString('ko-KR')}</p></div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">선박 정보</h3>
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                    <div><span className="text-xs text-gray-600">선주사</span><p className="text-sm font-medium">{selectedRec.company_name}</p></div>
-                    <div><span className="text-xs text-gray-600">선박명</span><p className="text-sm font-medium">{selectedRec.ship_name}</p></div>
-                    {selectedRec.fleet_name && <div><span className="text-xs text-gray-600">선대</span><p className="text-sm font-medium">{selectedRec.fleet_name}</p></div>}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">희망 계약 조건</h3>
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                    <div><span className="text-xs text-gray-600">희망 급여</span><p className="text-sm font-medium">{selectedRec.desired_currency} {selectedRec.desired_salary.toLocaleString()}</p></div>
-                    <div><span className="text-xs text-gray-600">희망 계약기간</span><p className="text-sm font-medium">{selectedRec.desired_contract_months}개월</p></div>
-                  </div>
-                </div>
-
-                {selectedRec.remarks && (
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2">비고</h3>
-                    <div className="p-3 bg-gray-50 rounded-md"><p className="text-sm whitespace-pre-wrap">{selectedRec.remarks}</p></div>
-                  </div>
-                )}
-
-                {selectedRec.resume_files?.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold mb-2">첨부 이력서</h3>
-                    <div className="space-y-2">
-                      {selectedRec.resume_files.map((f: { name: string; size: number; path: string }, i: number) => (
-                        <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
-                          <div className="flex items-center gap-2">
-                            <ExternalLink className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm">{f.name}</span>
-                            <span className="text-xs text-gray-500">({(f.size / 1024).toFixed(1)} KB)</span>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => openResume(selectedRec)} className="h-7">열기</Button>
+                          {rec.resume_files?.length > 0 && (
+                            <Button variant="outline" size="sm" onClick={() => openResume(rec)} className="h-8 px-3 text-xs">
+                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />이력서
+                            </Button>
+                          )}
                         </div>
-                      ))}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {pageRecs.length === 0 && (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  {search || statusF !== 'all' ? '검색 결과가 없습니다.' : '아직 추천한 선원이 없습니다.'}
+                </div>
+              )}
+            </div>
+
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div className="mt-3 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem><PaginationPrevious onClick={() => page > 1 && setPage(page - 1)} className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => {
+                      if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+                        return <PaginationItem key={p}><PaginationLink onClick={() => setPage(p)} isActive={page === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
+                      } else if (p === page - 2 || p === page + 2) {
+                        return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
+                      }
+                      return null;
+                    })}
+                    <PaginationItem><PaginationNext onClick={() => page < totalPages && setPage(page + 1)} className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* Detail view header */}
+            <div className="flex items-center gap-3 mb-4">
+              <Button variant="ghost" size="sm" onClick={() => { setViewMode('list'); setSelectedRec(null); }}>
+                <ArrowLeft className="w-4 h-4 mr-1" />뒤로
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold">추천 선원 상세 정보</h1>
+              </div>
+            </div>
+
+            {/* Detail view content */}
+            {selectedRec && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                    <span className="text-sm font-medium">현재 상태</span>{sBadge(selectedRec.status)}
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">선원 정보</h3>
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
+                      <div><span className="text-xs text-gray-600">직급</span><div className="mt-1">{selectedRec.rank_code ? <Badge className={dc(selectedRec.department)}>{selectedRec.rank_code}</Badge> : '-'}</div></div>
+                      <div><span className="text-xs text-gray-600">성명</span><p className="text-sm font-medium">{selectedRec.crew_name}</p></div>
+                      <div><span className="text-xs text-gray-600">생년월일</span><p className="text-sm font-medium">{new Date(selectedRec.crew_birth_date).toLocaleDateString('ko-KR')}</p></div>
+                      <div><span className="text-xs text-gray-600">나이</span><p className="text-sm font-medium">{calcAge(selectedRec.crew_birth_date)}세</p></div>
+                      <div><span className="text-xs text-gray-600">출국 가능일</span><p className="text-sm font-medium">{new Date(selectedRec.available_date).toLocaleDateString('ko-KR')}</p></div>
                     </div>
                   </div>
-                )}
 
-                <div className="flex justify-end pt-4">
-                  <Button onClick={() => setDetailOpen(false)}>닫기</Button>
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">선박 정보</h3>
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
+                      <div><span className="text-xs text-gray-600">선주사</span><p className="text-sm font-medium">{selectedRec.company_name}</p></div>
+                      <div><span className="text-xs text-gray-600">선박명</span><p className="text-sm font-medium">{selectedRec.ship_name}</p></div>
+                      {selectedRec.fleet_name && <div><span className="text-xs text-gray-600">선대</span><p className="text-sm font-medium">{selectedRec.fleet_name}</p></div>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-semibold mb-2">희망 계약 조건</h3>
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
+                      <div><span className="text-xs text-gray-600">희망 급여</span><p className="text-sm font-medium">{selectedRec.desired_currency} {selectedRec.desired_salary.toLocaleString()}</p></div>
+                      <div><span className="text-xs text-gray-600">희망 계약기간</span><p className="text-sm font-medium">{selectedRec.desired_contract_months}개월</p></div>
+                    </div>
+                  </div>
+
+                  {selectedRec.remarks && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">비고</h3>
+                      <div className="p-3 bg-gray-50 rounded-md"><p className="text-sm whitespace-pre-wrap">{selectedRec.remarks}</p></div>
+                    </div>
+                  )}
+
+                  {selectedRec.resume_files?.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-semibold mb-2">첨부 이력서</h3>
+                      <div className="space-y-2">
+                        {selectedRec.resume_files.map((f: { name: string; size: number; path: string }, i: number) => (
+                          <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                            <div className="flex items-center gap-2">
+                              <ExternalLink className="w-4 h-4 text-gray-500" />
+                              <span className="text-sm">{f.name}</span>
+                              <span className="text-xs text-gray-500">({(f.size / 1024).toFixed(1)} KB)</span>
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => openResume(selectedRec)} className="h-7">열기</Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action buttons */}
+                  <div className="flex justify-end gap-2 pt-4">
+                    {selectedRec.status === 'accepted' && (
+                      <>
+                        <Button variant="default" size="sm" onClick={() => navigate('/crew/input', { state: { recommendation: selectedRec } })} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
+                          <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => { setSelectedRecForCert(selectedRec); setCertDialogOpen(true); }} className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50">
+                          <Award className="w-3.5 h-3.5 mr-1.5" />증서 등록
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
-          </DialogContent>
-        </Dialog>
+          </>
+        )}
 
         {/* 증서 등록 다이얼로그 */}
         {selectedRecForCert && (

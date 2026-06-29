@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { CheckCircle, XCircle, Clock, User, Ship, Calendar } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, User, Ship, Calendar, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
@@ -54,7 +53,7 @@ export default function ApprovalInboxPage() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ApprovalRequest | null>(null);
-  const [actionDialog, setActionDialog] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'action'>('list');
   const [actionType, setActionType] = useState<'approved' | 'rejected'>('approved');
   const [comment, setComment] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -169,7 +168,11 @@ export default function ApprovalInboxPage() {
   };
 
   const openActionDialog = (request: ApprovalRequest, action: 'approved' | 'rejected') => {
-    setSelectedRequest(request); setActionType(action); setComment(''); setActionDialog(true);
+    setSelectedRequest(request); setActionType(action); setComment(''); setViewMode('action');
+  };
+
+  const goBackToList = () => {
+    setViewMode('list'); setSelectedRequest(null); setActionType('approved'); setComment('');
   };
 
   const handleAction = async () => {
@@ -203,8 +206,7 @@ export default function ApprovalInboxPage() {
       }
 
       toast({ title: '성공', description: actionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.' });
-      setActionDialog(false);
-      setSelectedRequest(null);
+      goBackToList();
       loadApprovalRequests();
     } catch (error) {
       console.error('Error processing action:', error);
@@ -230,153 +232,105 @@ export default function ApprovalInboxPage() {
     return currentStep?.approver_id === userId;
   };
 
-  return (
-    <>
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">결재함</h1>
-          <p className="text-gray-600 mt-1">나에게 할당된 결재 요청을 처리합니다</p>
-          {isAdmin && (
-            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700 font-medium">
-              🔑 슈퍼관리자 모드 — 결재라인 무관하게 모든 요청을 즉시 승인/반려할 수 있습니다
+  const renderApprovalProgress = (request: ApprovalRequest) => (
+    <div>
+      <p className="text-sm font-semibold mb-2">결재 진행 상황:</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* 요청자 */}
+        <div className="flex items-center">
+          <div className="px-3 py-2 rounded border bg-purple-50 border-purple-400">
+            <div className="text-xs font-semibold">요청자</div>
+            <div className="text-xs text-gray-600">{request.requester.name}</div>
+            <div className="text-xs mt-1 text-purple-600">✓ 요청완료</div>
+          </div>
+          <span className="mx-2 text-gray-400">→</span>
+        </div>
+        {request.approval_line.steps.map((step, index) => {
+          const action = request.actions.find(a => a.step_order === step.step_order);
+          const isCurrent = step.step_order === request.current_step;
+          const isPast = step.step_order < request.current_step;
+          return (
+            <div key={step.step_order} className="flex items-center">
+              <div className={`px-3 py-2 rounded border ${
+                action
+                  ? action.action === 'approved' ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'
+                  : isCurrent ? 'bg-blue-50 border-blue-500'
+                  : isPast ? 'bg-gray-100 border-gray-300'
+                  : 'bg-white border-gray-300'
+              }`}>
+                <div className="text-xs font-semibold">{step.step_order}. {step.approver_name}</div>
+                <div className="text-xs text-gray-600">{step.approver_role}</div>
+                {action && (
+                  <div className="text-xs mt-1">
+                    {action.action === 'approved' ? '✓ 승인' : '✗ 반려'}
+                    {action.comment && <div className="text-xs text-gray-600 mt-1">{action.comment}</div>}
+                  </div>
+                )}
+              </div>
+              {index < request.approval_line.steps.length - 1 && <span className="mx-2 text-gray-400">→</span>}
             </div>
-          )}
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // Action view
+  if (viewMode === 'action' && selectedRequest) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center gap-3 mb-4">
+          <Button variant="ghost" size="sm" onClick={goBackToList}>
+            <ArrowLeft className="w-4 h-4 mr-1" />뒤로
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">{actionType === 'approved' ? '결재 승인' : '결재 반려'}</h1>
+          </div>
         </div>
 
-        {loading ? (
-          <div className="text-center py-12">로딩 중...</div>
-        ) : requests.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-600">결재 대기 중인 요청이 없습니다</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
-            {requests.map(request => {
-              const myTurn = isMyTurn(request, currentUserId);
-              return (
-                <Card key={request.id} className={myTurn ? 'border-blue-500 border-2' : ''}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <CardTitle className="text-lg">
-                            {request.crew_recommendation.crew_name} - {request.crew_recommendation.rank.name}
-                          </CardTitle>
-                          {getStatusBadge(request.status)}
-                          {myTurn && <Badge className="bg-blue-500">내 차례</Badge>}
-                        </div>
-                        <div className="space-y-1 text-sm text-gray-600">
-                          <div className="flex items-center gap-2">
-                            <Ship className="h-4 w-4" />
-                            <span>{request.crew_recommendation.ship.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4" />
-                            <span>요청자: {request.requester.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>{format(new Date(request.created_at), 'PPP', { locale: ko })}</span>
-                          </div>
-                        </div>
-                      </div>
-                      {myTurn && (
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" className="text-green-600 border-green-600" onClick={() => openActionDialog(request, 'approved')}>
-                            <CheckCircle className="h-4 w-4 mr-1" />승인
-                          </Button>
-                          <Button size="sm" variant="outline" className="text-red-600 border-red-600" onClick={() => openActionDialog(request, 'rejected')}>
-                            <XCircle className="h-4 w-4 mr-1" />반려
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {request.requester_comment && (
-                        <div className="bg-gray-50 p-3 rounded">
-                          <p className="text-sm font-semibold mb-1">요청 사유:</p>
-                          <p className="text-sm text-gray-700">{request.requester_comment}</p>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-semibold mb-2">결재 진행 상황:</p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {/* 요청자 */}
-                          <div className="flex items-center">
-                            <div className="px-3 py-2 rounded border bg-purple-50 border-purple-400">
-                              <div className="text-xs font-semibold">요청자</div>
-                              <div className="text-xs text-gray-600">{request.requester.name}</div>
-                              <div className="text-xs mt-1 text-purple-600">✓ 요청완료</div>
-                            </div>
-                            <span className="mx-2 text-gray-400">→</span>
-                          </div>
-                          {request.approval_line.steps.map((step, index) => {
-                            const action = request.actions.find(a => a.step_order === step.step_order);
-                            const isCurrent = step.step_order === request.current_step;
-                            const isPast = step.step_order < request.current_step;
-                            return (
-                              <div key={step.step_order} className="flex items-center">
-                                <div className={`px-3 py-2 rounded border ${
-                                  action
-                                    ? action.action === 'approved' ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'
-                                    : isCurrent ? 'bg-blue-50 border-blue-500'
-                                    : isPast ? 'bg-gray-100 border-gray-300'
-                                    : 'bg-white border-gray-300'
-                                }`}>
-                                  <div className="text-xs font-semibold">{step.step_order}. {step.approver_name}</div>
-                                  <div className="text-xs text-gray-600">{step.approver_role}</div>
-                                  {action && (
-                                    <div className="text-xs mt-1">
-                                      {action.action === 'approved' ? '✓ 승인' : '✗ 반려'}
-                                      {action.comment && <div className="text-xs text-gray-600 mt-1">{action.comment}</div>}
-                                    </div>
-                                  )}
-                                </div>
-                                {index < request.approval_line.steps.length - 1 && <span className="mx-2 text-gray-400">→</span>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
-        <Dialog open={actionDialog} onOpenChange={setActionDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{actionType === 'approved' ? '결재 승인' : '결재 반려'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              {selectedRequest && (
-                <div className="bg-gray-50 p-3 rounded">
-                  <p className="text-sm font-semibold">
-                    {selectedRequest.crew_recommendation.crew_name} - {selectedRequest.crew_recommendation.rank.name}
-                  </p>
-                  <p className="text-sm text-gray-600">{selectedRequest.crew_recommendation.ship.name}</p>
-                </div>
-              )}
-              <div>
-                <label className="text-sm font-semibold mb-2 block">의견 {actionType === 'rejected' && '(필수)'}</label>
-                <Textarea
-                  value={comment}
-                  onChange={e => setComment(e.target.value)}
-                  placeholder={actionType === 'approved' ? '승인 의견을 입력하세요 (선택사항)' : '반려 사유를 입력하세요'}
-                  rows={4}
-                />
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            {/* Request summary */}
+            <div className="bg-gray-50 p-3 rounded">
+              <p className="text-sm font-semibold">
+                {selectedRequest.crew_recommendation.crew_name} - {selectedRequest.crew_recommendation.rank.name}
+              </p>
+              <p className="text-sm text-gray-600">{selectedRequest.crew_recommendation.ship.name}</p>
+              <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
+                <User className="h-4 w-4" />
+                <span>요청자: {selectedRequest.requester.name}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
+                <Calendar className="h-4 w-4" />
+                <span>{format(new Date(selectedRequest.created_at), 'PPP', { locale: ko })}</span>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setActionDialog(false)}>취소</Button>
+
+            {/* Requester comment */}
+            {selectedRequest.requester_comment && (
+              <div className="bg-gray-50 p-3 rounded">
+                <p className="text-sm font-semibold mb-1">요청 사유:</p>
+                <p className="text-sm text-gray-700">{selectedRequest.requester_comment}</p>
+              </div>
+            )}
+
+            {/* Approval progress */}
+            {renderApprovalProgress(selectedRequest)}
+
+            {/* Comment textarea */}
+            <div>
+              <label className="text-sm font-semibold mb-2 block">의견 {actionType === 'rejected' && '(필수)'}</label>
+              <Textarea
+                value={comment}
+                onChange={e => setComment(e.target.value)}
+                placeholder={actionType === 'approved' ? '승인 의견을 입력하세요 (선택사항)' : '반려 사유를 입력하세요'}
+                rows={4}
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={goBackToList}>취소</Button>
               <Button
                 onClick={handleAction}
                 disabled={processing || (actionType === 'rejected' && !comment.trim())}
@@ -384,11 +338,94 @@ export default function ApprovalInboxPage() {
               >
                 {processing ? '처리 중...' : actionType === 'approved' ? '승인' : '반려'}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-      
-    </>
+    );
+  }
+
+  // List view
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">결재함</h1>
+        <p className="text-gray-600 mt-1">나에게 할당된 결재 요청을 처리합니다</p>
+        {isAdmin && (
+          <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700 font-medium">
+            🔑 슈퍼관리자 모드 — 결재라인 무관하게 모든 요청을 즉시 승인/반려할 수 있습니다
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">로딩 중...</div>
+      ) : requests.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <p className="text-gray-600">결재 대기 중인 요청이 없습니다</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {requests.map(request => {
+            const myTurn = isMyTurn(request, currentUserId);
+            return (
+              <Card key={request.id} className={myTurn ? 'border-blue-500 border-2' : ''}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CardTitle className="text-lg">
+                          {request.crew_recommendation.crew_name} - {request.crew_recommendation.rank.name}
+                        </CardTitle>
+                        {getStatusBadge(request.status)}
+                        {myTurn && <Badge className="bg-blue-500">내 차례</Badge>}
+                      </div>
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <Ship className="h-4 w-4" />
+                          <span>{request.crew_recommendation.ship.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          <span>요청자: {request.requester.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>{format(new Date(request.created_at), 'PPP', { locale: ko })}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {myTurn && (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="text-green-600 border-green-600" onClick={() => openActionDialog(request, 'approved')}>
+                          <CheckCircle className="h-4 w-4 mr-1" />승인
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-red-600 border-red-600" onClick={() => openActionDialog(request, 'rejected')}>
+                          <XCircle className="h-4 w-4 mr-1" />반려
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {request.requester_comment && (
+                      <div className="bg-gray-50 p-3 rounded">
+                        <p className="text-sm font-semibold mb-1">요청 사유:</p>
+                        <p className="text-sm text-gray-700">{request.requester_comment}</p>
+                      </div>
+                    )}
+                    {renderApprovalProgress(request)}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

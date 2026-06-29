@@ -1,25 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  getCurrentUser, 
-  getCrewAssignments, 
-  getShips, 
-  getCrewMembers, 
-  addCrewAssignment, 
-  updateCrewAssignment, 
-  deleteCrewAssignment 
+import {
+  getCurrentUser,
+  getCrewAssignments,
+  getShips,
+  getCrewMembers,
+  addCrewAssignment,
+  updateCrewAssignment,
+  deleteCrewAssignment
 } from '@/lib/store';
 import type { User, CrewAssignment, Ship, CrewMember } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, X, Ship as ShipIcon, User as UserIcon } from 'lucide-react';
+import { Plus, Trash2, X, Ship as ShipIcon, User as UserIcon, ArrowLeft, Save } from 'lucide-react';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
 const RANKS = [
@@ -43,10 +42,9 @@ export default function CrewAssignmentPage() {
   const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingAssignment, setEditingAssignment] = useState<string | null>(null);
+  const [formView, setFormView] = useState<{ id?: string; record?: CrewAssignment } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Filter states
   const [selectedShip, setSelectedShip] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -75,7 +73,7 @@ export default function CrewAssignmentPage() {
       setCurrentUser(user);
       loadData();
     };
-    
+
     loadUser();
   }, [navigate]);
 
@@ -112,26 +110,26 @@ export default function CrewAssignmentPage() {
   const filteredAssignments = assignments.filter(assignment => {
     const ship = ships.find(s => s.id === assignment.ship_id);
     const crew = crewMembers.find(c => c.id === assignment.crew_member_id);
-    
-    const matchesSearch = 
+
+    const matchesSearch =
       ship?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       crew?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       assignment.rank.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     if (!matchesSearch) return false;
-    
+
     if (selectedShip !== 'all' && assignment.ship_id !== selectedShip) return false;
     if (selectedStatus !== 'all' && assignment.status !== selectedStatus) return false;
     if (selectedRank !== 'all' && assignment.rank !== selectedRank) return false;
-    
+
     return true;
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!currentUser) return;
-    
+
     const assignmentData: Omit<CrewAssignment, 'id' | 'created_at' | 'updated_at'> = {
       ship_id: formData.ship_id,
       crew_member_id: formData.crew_member_id,
@@ -147,14 +145,14 @@ export default function CrewAssignmentPage() {
     };
 
     try {
-      if (editingAssignment) {
-        await updateCrewAssignment(editingAssignment, assignmentData);
+      if (formView?.id) {
+        await updateCrewAssignment(formView.id, assignmentData);
       } else {
         await addCrewAssignment(assignmentData);
       }
 
       await loadData();
-      setIsDialogOpen(false);
+      setFormView(null);
       resetForm();
     } catch (error) {
       console.error('Error saving assignment:', error);
@@ -175,7 +173,6 @@ export default function CrewAssignmentPage() {
       currency: 'USD',
       notes: '',
     });
-    setEditingAssignment(null);
   };
 
   const handleEdit = (assignment: CrewAssignment) => {
@@ -191,8 +188,7 @@ export default function CrewAssignmentPage() {
       currency: assignment.currency || 'USD',
       notes: assignment.notes || '',
     });
-    setEditingAssignment(assignment.id);
-    setIsDialogOpen(true);
+    setFormView({ id: assignment.id, record: assignment });
   };
 
   const handleDelete = async (id: string) => {
@@ -229,362 +225,364 @@ export default function CrewAssignmentPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-center">
-                <CardTitle className="text-base">선원 발령 관리</CardTitle>
-                <Button 
-                  size="sm"
-                  className="gap-1.5 h-8"
-                  onClick={() => setIsDialogOpen(true)}
-                >
-                  <Plus className="w-4 h-4" />
-                  발령 등록
-                </Button>
+                {formView !== null ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" className="gap-1.5 h-8" onClick={() => { setFormView(null); resetForm(); }}>
+                        <ArrowLeft className="w-4 h-4" />뒤로
+                      </Button>
+                      <CardTitle className="text-base">{formView.id ? '발령 수정' : '발령 등록'}</CardTitle>
+                    </div>
+                    <Button size="sm" className="gap-1.5 h-8" type="submit" form="assignment-form">
+                      <Save className="w-4 h-4" />저장
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <CardTitle className="text-base">선원 발령 관리</CardTitle>
+                    <Button
+                      size="sm"
+                      className="gap-1.5 h-8"
+                      onClick={() => { resetForm(); setFormView({}); }}
+                    >
+                      <Plus className="w-4 h-4" />
+                      발령 등록
+                    </Button>
+                  </>
+                )}
               </div>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
-              {/* Search and Filters */}
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  <Input
-                    placeholder="선박명, 선원명, 직급으로 검색..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="max-w-xs h-9 text-sm"
-                  />
-                  
-                  <Select value={selectedShip} onValueChange={setSelectedShip}>
-                    <SelectTrigger className="w-48 h-9 text-sm">
-                      <SelectValue placeholder="선박 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-sm">전체 선박</SelectItem>
-                      {ships.map(ship => (
-                        <SelectItem key={ship.id} value={String(ship.id)} className="text-sm">
-                          {ship.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                    <SelectTrigger className="w-40 h-9 text-sm">
-                      <SelectValue placeholder="상태 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-sm">전체 상태</SelectItem>
-                      {STATUS_OPTIONS.map(status => (
-                        <SelectItem key={status.value} value={status.value} className="text-sm">
-                          {status.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select value={selectedRank} onValueChange={setSelectedRank}>
-                    <SelectTrigger className="w-40 h-9 text-sm">
-                      <SelectValue placeholder="직급 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-sm">전체 직급</SelectItem>
-                      {RANKS.map(rank => (
-                        <SelectItem key={rank} value={rank} className="text-sm">
-                          {rank}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="h-9 gap-1.5 text-sm"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      필터 초기화
-                    </Button>
-                  )}
-                </div>
-
-                {/* Active Filters Display */}
-                {hasActiveFilters && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {searchTerm && (
-                      <Badge variant="secondary" className="text-xs">
-                        검색: {searchTerm}
-                      </Badge>
-                    )}
-                    {selectedShip !== 'all' && (
-                      <Badge variant="secondary" className="text-xs">
-                        선박: {getShipName(selectedShip)}
-                      </Badge>
-                    )}
-                    {selectedStatus !== 'all' && (
-                      <Badge variant="secondary" className="text-xs">
-                        상태: {STATUS_OPTIONS.find(s => s.value === selectedStatus)?.label}
-                      </Badge>
-                    )}
-                    {selectedRank !== 'all' && (
-                      <Badge variant="secondary" className="text-xs">
-                        직급: {selectedRank}
-                      </Badge>
-                    )}
-                  </div>
-                )}
-
-                {/* Results Count */}
-                <p className="text-xs text-gray-500">
-                  총 {filteredAssignments.length}건의 발령
-                </p>
-              </div>
-
-              {/* Assignments Table */}
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">선박명</TableHead>
-                      <TableHead className="text-xs">선원명</TableHead>
-                      <TableHead className="text-xs">직급</TableHead>
-                      <TableHead className="text-xs">승선일</TableHead>
-                      <TableHead className="text-xs">하선일</TableHead>
-                      <TableHead className="text-xs">계약기간</TableHead>
-                      <TableHead className="text-xs">상태</TableHead>
-                      <TableHead className="text-right text-xs w-32">작업</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAssignments.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-sm text-gray-500">
-                          등록된 발령이 없습니다
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredAssignments.map((assignment) => (
-                        <TableRow key={assignment.id}>
-                          <TableCell className="text-sm">
-                            <div className="flex items-center gap-1.5">
-                              <ShipIcon className="w-3.5 h-3.5 text-gray-400" />
-                              {getShipName(assignment.ship_id)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            <div className="flex items-center gap-1.5">
-                              <UserIcon className="w-3.5 h-3.5 text-gray-400" />
-                              {getCrewName(assignment.crew_member_id)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm font-medium">{assignment.rank}</TableCell>
-                          <TableCell className="text-sm">{assignment.sign_on_date}</TableCell>
-                          <TableCell className="text-sm">{assignment.sign_off_date || '-'}</TableCell>
-                          <TableCell className="text-sm">{assignment.contract_duration_months}개월</TableCell>
-                          <TableCell className="text-sm">{getStatusBadge(assignment.status)}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleEdit(assignment)}
-                                className="h-7 px-2 gap-1"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                                <span className="text-xs">수정</span>
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDelete(assignment.id)}
-                                className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Assignment Dialog */}
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) resetForm();
-          }}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingAssignment ? '발령 수정' : '발령 등록'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="ship_id">선박 *</Label>
-                    <Select
-                      value={formData.ship_id}
-                      onValueChange={(value) => setFormData({ ...formData, ship_id: value })}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="선박 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ships.map(ship => (
-                          <SelectItem key={ship.id} value={String(ship.id)}>
-                            {ship.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="crew_member_id">선원 *</Label>
-                    <Select
-                      value={formData.crew_member_id}
-                      onValueChange={(value) => setFormData({ ...formData, crew_member_id: value })}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="선원 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {crewMembers.map(crew => (
-                          <SelectItem key={crew.id} value={String(crew.id)}>
-                            {crew.name} - {crew.rank}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="rank">직급 *</Label>
-                    <Select
-                      value={formData.rank}
-                      onValueChange={(value) => setFormData({ ...formData, rank: value })}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="직급 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {RANKS.map(rank => (
-                          <SelectItem key={rank} value={rank}>
-                            {rank}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="status">상태 *</Label>
-                    <Select
-                      value={formData.status}
-                      onValueChange={(value) => setFormData({ ...formData, status: value as 'active' | 'completed' | 'terminated' })}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="상태 선택" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUS_OPTIONS.map(status => (
-                          <SelectItem key={status.value} value={status.value}>
-                            {status.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="sign_on_date">승선일 *</Label>
-                    <Input
-                      id="sign_on_date"
-                      type="date"
-                      value={formData.sign_on_date}
-                      onChange={(e) => setFormData({ ...formData, sign_on_date: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="sign_off_date">하선일</Label>
-                    <Input
-                      id="sign_off_date"
-                      type="date"
-                      value={formData.sign_off_date}
-                      onChange={(e) => setFormData({ ...formData, sign_off_date: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="contract_duration_months">계약기간 (개월) *</Label>
-                    <Input
-                      id="contract_duration_months"
-                      type="number"
-                      min="1"
-                      value={formData.contract_duration_months}
-                      onChange={(e) => setFormData({ ...formData, contract_duration_months: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="salary">급여</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="salary"
-                        type="number"
-                        min="0"
-                        value={formData.salary}
-                        onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                        placeholder="금액"
-                        className="flex-1"
-                      />
+              {formView !== null ? (
+                /* ── Inline Form ── */
+                <form id="assignment-form" onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ship_id">선박 *</Label>
                       <Select
-                        value={formData.currency}
-                        onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                        value={formData.ship_id}
+                        onValueChange={(value) => setFormData({ ...formData, ship_id: value })}
+                        required
                       >
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
+                        <SelectTrigger>
+                          <SelectValue placeholder="선박 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="EUR">EUR</SelectItem>
-                          <SelectItem value="KRW">KRW</SelectItem>
+                          {ships.map(ship => (
+                            <SelectItem key={ship.id} value={String(ship.id)}>
+                              {ship.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="crew_member_id">선원 *</Label>
+                      <Select
+                        value={formData.crew_member_id}
+                        onValueChange={(value) => setFormData({ ...formData, crew_member_id: value })}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="선원 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {crewMembers.map(crew => (
+                            <SelectItem key={crew.id} value={String(crew.id)}>
+                              {crew.name} - {crew.rank}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="rank">직급 *</Label>
+                      <Select
+                        value={formData.rank}
+                        onValueChange={(value) => setFormData({ ...formData, rank: value })}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="직급 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RANKS.map(rank => (
+                            <SelectItem key={rank} value={rank}>
+                              {rank}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="status">상태 *</Label>
+                      <Select
+                        value={formData.status}
+                        onValueChange={(value) => setFormData({ ...formData, status: value as 'active' | 'completed' | 'terminated' })}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="상태 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STATUS_OPTIONS.map(status => (
+                            <SelectItem key={status.value} value={status.value}>
+                              {status.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="sign_on_date">승선일 *</Label>
+                      <Input
+                        id="sign_on_date"
+                        type="date"
+                        value={formData.sign_on_date}
+                        onChange={(e) => setFormData({ ...formData, sign_on_date: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="sign_off_date">하선일</Label>
+                      <Input
+                        id="sign_off_date"
+                        type="date"
+                        value={formData.sign_off_date}
+                        onChange={(e) => setFormData({ ...formData, sign_off_date: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="contract_duration_months">계약기간 (개월) *</Label>
+                      <Input
+                        id="contract_duration_months"
+                        type="number"
+                        min="1"
+                        value={formData.contract_duration_months}
+                        onChange={(e) => setFormData({ ...formData, contract_duration_months: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="salary">급여</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="salary"
+                          type="number"
+                          min="0"
+                          value={formData.salary}
+                          onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                          placeholder="금액"
+                          className="flex-1"
+                        />
+                        <Select
+                          value={formData.currency}
+                          onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                        >
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="USD">USD</SelectItem>
+                            <SelectItem value="EUR">EUR</SelectItem>
+                            <SelectItem value="KRW">KRW</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="notes">비고</Label>
-                  <Textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="추가 정보나 특이사항을 입력하세요"
-                    rows={3}
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">비고</Label>
+                    <Textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="추가 정보나 특이사항을 입력하세요"
+                      rows={3}
+                    />
+                  </div>
 
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    취소
-                  </Button>
-                  <Button type="submit">
-                    {editingAssignment ? '수정' : '등록'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button type="button" variant="outline" onClick={() => { setFormView(null); resetForm(); }}>
+                      취소
+                    </Button>
+                    <Button type="submit">
+                      {formView.id ? '수정' : '등록'}
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                /* ── List View ── */
+                <>
+                  {/* Search and Filters */}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Input
+                        placeholder="선박명, 선원명, 직급으로 검색..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="max-w-xs h-9 text-sm"
+                      />
+
+                      <Select value={selectedShip} onValueChange={setSelectedShip}>
+                        <SelectTrigger className="w-48 h-9 text-sm">
+                          <SelectValue placeholder="선박 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="text-sm">전체 선박</SelectItem>
+                          {ships.map(ship => (
+                            <SelectItem key={ship.id} value={String(ship.id)} className="text-sm">
+                              {ship.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                        <SelectTrigger className="w-40 h-9 text-sm">
+                          <SelectValue placeholder="상태 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="text-sm">전체 상태</SelectItem>
+                          {STATUS_OPTIONS.map(status => (
+                            <SelectItem key={status.value} value={status.value} className="text-sm">
+                              {status.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select value={selectedRank} onValueChange={setSelectedRank}>
+                        <SelectTrigger className="w-40 h-9 text-sm">
+                          <SelectValue placeholder="직급 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="text-sm">전체 직급</SelectItem>
+                          {RANKS.map(rank => (
+                            <SelectItem key={rank} value={rank} className="text-sm">
+                              {rank}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {hasActiveFilters && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearFilters}
+                          className="h-9 gap-1.5 text-sm"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          필터 초기화
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Active Filters Display */}
+                    {hasActiveFilters && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {searchTerm && (
+                          <Badge variant="secondary" className="text-xs">
+                            검색: {searchTerm}
+                          </Badge>
+                        )}
+                        {selectedShip !== 'all' && (
+                          <Badge variant="secondary" className="text-xs">
+                            선박: {getShipName(selectedShip)}
+                          </Badge>
+                        )}
+                        {selectedStatus !== 'all' && (
+                          <Badge variant="secondary" className="text-xs">
+                            상태: {STATUS_OPTIONS.find(s => s.value === selectedStatus)?.label}
+                          </Badge>
+                        )}
+                        {selectedRank !== 'all' && (
+                          <Badge variant="secondary" className="text-xs">
+                            직급: {selectedRank}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Results Count */}
+                    <p className="text-xs text-gray-500">
+                      총 {filteredAssignments.length}건의 발령
+                    </p>
+                  </div>
+
+                  {/* Assignments Table */}
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">선박명</TableHead>
+                          <TableHead className="text-xs">선원명</TableHead>
+                          <TableHead className="text-xs">직급</TableHead>
+                          <TableHead className="text-xs">승선일</TableHead>
+                          <TableHead className="text-xs">하선일</TableHead>
+                          <TableHead className="text-xs">계약기간</TableHead>
+                          <TableHead className="text-xs">상태</TableHead>
+                          <TableHead className="text-right text-xs w-32">작업</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredAssignments.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center py-8 text-sm text-gray-500">
+                              등록된 발령이 없습니다
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredAssignments.map((assignment) => (
+                            <TableRow key={assignment.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleEdit(assignment)}>
+                              <TableCell className="text-sm">
+                                <div className="flex items-center gap-1.5">
+                                  <ShipIcon className="w-3.5 h-3.5 text-gray-400" />
+                                  {getShipName(assignment.ship_id)}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                <div className="flex items-center gap-1.5">
+                                  <UserIcon className="w-3.5 h-3.5 text-gray-400" />
+                                  {getCrewName(assignment.crew_member_id)}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm font-medium">{assignment.rank}</TableCell>
+                              <TableCell className="text-sm">{assignment.sign_on_date}</TableCell>
+                              <TableCell className="text-sm">{assignment.sign_off_date || '-'}</TableCell>
+                              <TableCell className="text-sm">{assignment.contract_duration_months}개월</TableCell>
+                              <TableCell className="text-sm">{getStatusBadge(assignment.status)}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(assignment.id); }}
+                                    className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </>
     </ProtectedRoute>

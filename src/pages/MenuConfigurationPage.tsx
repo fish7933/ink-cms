@@ -26,16 +26,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, ChevronDown, ChevronRight, Edit2, Save, X } from 'lucide-react';
+import { GripVertical, ChevronDown, ChevronRight, Edit2, Save, X, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -115,7 +107,7 @@ export default function MenuConfigurationPage() {
   const [menuStructure, setMenuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -163,7 +155,7 @@ export default function MenuConfigurationPage() {
             const oldIndex = category.items.findIndex(item => item.id === active.id);
             const newIndex = category.items.findIndex(item => item.id === over.id);
             const newItems = arrayMove(category.items, oldIndex, newIndex);
-            
+
             // Update order based on new position
             return {
               ...category,
@@ -187,7 +179,7 @@ export default function MenuConfigurationPage() {
         const oldIndex = prev.findIndex(cat => cat.id === active.id);
         const newIndex = prev.findIndex(cat => cat.id === over.id);
         const newCategories = arrayMove(prev, oldIndex, newIndex);
-        
+
         return newCategories.map((cat, index) => ({
           ...cat,
           order: index + 1,
@@ -222,7 +214,7 @@ export default function MenuConfigurationPage() {
 
   const handleEditItem = (categoryId: string, item: MenuItem) => {
     setEditingItem({ ...item, parent_id: categoryId });
-    setEditDialogOpen(true);
+    setViewMode('edit');
   };
 
   const handleSaveEdit = () => {
@@ -242,7 +234,7 @@ export default function MenuConfigurationPage() {
       })
     );
 
-    setEditDialogOpen(false);
+    setViewMode('list');
     setEditingItem(null);
 
     toast({
@@ -254,7 +246,7 @@ export default function MenuConfigurationPage() {
   const handleSaveAll = () => {
     // In a real application, save to backend/database
     localStorage.setItem('menuStructure', JSON.stringify(menuStructure));
-    
+
     toast({
       title: '저장 완료',
       description: 'UI 구성이 저장되었습니다.',
@@ -264,7 +256,7 @@ export default function MenuConfigurationPage() {
   const handleReset = () => {
     setMenuStructure(defaultMenuStructure);
     localStorage.removeItem('menuStructure');
-    
+
     toast({
       title: '초기화 완료',
       description: 'UI 구성이 기본값으로 초기화되었습니다.',
@@ -279,6 +271,83 @@ export default function MenuConfigurationPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
             <p className="mt-4 text-gray-600">로딩중...</p>
           </div>
+        </div>
+      </>
+    );
+  }
+
+  if (viewMode === 'edit') {
+    return (
+      <>
+        <div className="container mx-auto p-6 max-w-6xl">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => { setViewMode('list'); setEditingItem(null); }}>
+                <ArrowLeft className="w-4 h-4 mr-1" />뒤로
+              </Button>
+              <h1 className="text-2xl font-bold">메뉴 항목 수정</h1>
+            </div>
+            <Button onClick={handleSaveEdit}>
+              <Save className="w-4 h-4 mr-2" />저장
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent className="pt-6">
+              {editingItem && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="label">메뉴명</Label>
+                    <Input
+                      id="label"
+                      value={editingItem.label}
+                      onChange={(e) => setEditingItem({ ...editingItem, label: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="path">경로</Label>
+                    <Input
+                      id="path"
+                      value={editingItem.path || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, path: e.target.value })}
+                      placeholder="/example-path"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="icon">아이콘</Label>
+                    <Input
+                      id="icon"
+                      value={editingItem.icon || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, icon: e.target.value })}
+                      placeholder="Users"
+                    />
+                  </div>
+                  <div>
+                    <Label>접근 권한</Label>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {['ship_owner', 'ship_manager', 'manning_agency', 'crew'].map(role => (
+                        <label key={role} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={editingItem.roles?.includes(role) || false}
+                            onChange={(e) => {
+                              const roles = editingItem.roles || [];
+                              if (e.target.checked) {
+                                setEditingItem({ ...editingItem, roles: [...roles, role] });
+                              } else {
+                                setEditingItem({ ...editingItem, roles: roles.filter(r => r !== role) });
+                              }
+                            }}
+                          />
+                          <span className="text-sm">{role}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </>
     );
@@ -382,80 +451,6 @@ export default function MenuConfigurationPage() {
             </DndContext>
           </CardContent>
         </Card>
-
-        {/* Edit Dialog */}
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>메뉴 항목 수정</DialogTitle>
-              <DialogDescription>
-                메뉴 항목의 정보를 수정합니다.
-              </DialogDescription>
-            </DialogHeader>
-            {editingItem && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="label">메뉴명</Label>
-                  <Input
-                    id="label"
-                    value={editingItem.label}
-                    onChange={(e) => setEditingItem({ ...editingItem, label: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="path">경로</Label>
-                  <Input
-                    id="path"
-                    value={editingItem.path || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, path: e.target.value })}
-                    placeholder="/example-path"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="icon">아이콘</Label>
-                  <Input
-                    id="icon"
-                    value={editingItem.icon || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, icon: e.target.value })}
-                    placeholder="Users"
-                  />
-                </div>
-                <div>
-                  <Label>접근 권한</Label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {['ship_owner', 'ship_manager', 'manning_agency', 'crew'].map(role => (
-                      <label key={role} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={editingItem.roles?.includes(role) || false}
-                          onChange={(e) => {
-                            const roles = editingItem.roles || [];
-                            if (e.target.checked) {
-                              setEditingItem({ ...editingItem, roles: [...roles, role] });
-                            } else {
-                              setEditingItem({ ...editingItem, roles: roles.filter(r => r !== role) });
-                            }
-                          }}
-                        />
-                        <span className="text-sm">{role}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                <X className="w-4 h-4 mr-2" />
-                취소
-              </Button>
-              <Button onClick={handleSaveEdit}>
-                <Save className="w-4 h-4 mr-2" />
-                저장
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </>
   );

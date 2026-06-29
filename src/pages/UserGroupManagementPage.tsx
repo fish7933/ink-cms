@@ -7,18 +7,10 @@ import { getShorePositions } from '@/services/shore-position.service';
 import type { User, Company, ShorePosition } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Edit, Trash2, UserCircle } from 'lucide-react';
+import { Plus, Trash2, UserCircle, ArrowLeft, Save } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
@@ -36,10 +28,10 @@ export default function UserGroupManagementPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formView, setFormView] = useState<{ id?: string } | null>(null);
+  const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  
+
   // Form state
   const [formData, setFormData] = useState({
     username: '',
@@ -61,7 +53,7 @@ export default function UserGroupManagementPage() {
       setCurrentUser(user);
       loadData();
     };
-    
+
     loadUser();
   }, [navigate]);
 
@@ -106,48 +98,50 @@ export default function UserGroupManagementPage() {
     return colorMap[role] || 'bg-gray-500';
   };
 
-  const openAddDialog = (role: 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew') => {
-    setEditingUser(null);
+  const openForm = (user?: User, role?: 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew') => {
     setFormError('');
-    setFormData({
-      username: '',
-      password: '',
-      name: '',
-      email: '',
-      role,
-      company_id: '',
-      position_id: '',
-    });
-    setIsDialogOpen(true);
+    if (user) {
+      setFormData({
+        username: user.username,
+        password: '',
+        name: user.name,
+        email: user.email,
+        role: user.role as 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew',
+        company_id: user.company_id || '',
+        position_id: user.position_id || '',
+      });
+      setFormView({ id: user.id });
+    } else {
+      setFormData({
+        username: '',
+        password: '',
+        name: '',
+        email: '',
+        role: role || 'crew',
+        company_id: '',
+        position_id: '',
+      });
+      setFormView({});
+    }
   };
 
-  const openEditDialog = (user: User) => {
-    setEditingUser(user);
+  const closeForm = () => {
+    setFormView(null);
     setFormError('');
-    setFormData({
-      username: user.username,
-      password: '',
-      name: user.name,
-      email: user.email,
-      role: user.role as 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew',
-      company_id: user.company_id || '',
-      position_id: user.position_id || '',
-    });
-    setIsDialogOpen(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     setFormError('');
-    
+
     // Validation for company_id
     if ((formData.role === 'ship_owner' || formData.role === 'manning_agency') && !formData.company_id) {
       setFormError('소속 회사를 선택해주세요.');
       return;
     }
-    
+
     try {
-      if (editingUser) {
+      setSaving(true);
+      if (formView?.id) {
         // Update user
         const updateData: Partial<User> = {
           name: formData.name,
@@ -156,12 +150,12 @@ export default function UserGroupManagementPage() {
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
         };
-        
+
         if (formData.password) {
           updateData.password = formData.password;
         }
-        
-        await updateUser(editingUser.id, updateData);
+
+        await updateUser(formView.id, updateData);
       } else {
         // Add new user
         await addUser({
@@ -174,18 +168,20 @@ export default function UserGroupManagementPage() {
           position_id: formData.position_id || null,
         });
       }
-      
-      setIsDialogOpen(false);
+
+      closeForm();
       await loadData();
     } catch (error) {
       console.error('Error saving user:', error);
       setFormError('사용자 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (userId: string) => {
     if (!confirm('이 사용자를 삭제하시겠습니까?')) return;
-    
+
     try {
       await deleteUser(userId);
       await loadData();
@@ -219,7 +215,7 @@ export default function UserGroupManagementPage() {
 
   const renderUserTable = (role: string) => {
     const roleUsers = getUsersByRole(role);
-    
+
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -233,7 +229,7 @@ export default function UserGroupManagementPage() {
             <Button
               size="sm"
               className="gap-1.5 h-8"
-              onClick={() => openAddDialog(role as 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew')}
+              onClick={() => openForm(undefined, role as 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew')}
             >
               <Plus className="w-3.5 h-3.5" />
               {getRoleName(role)} 추가
@@ -256,7 +252,7 @@ export default function UserGroupManagementPage() {
                     <TableHead className="text-xs">소속</TableHead>
                     <TableHead className="text-xs">직급</TableHead>
                     <TableHead className="text-xs">역할</TableHead>
-                    <TableHead className="text-right text-xs w-32">작업</TableHead>
+                    <TableHead className="text-right text-xs w-24">작업</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -264,7 +260,7 @@ export default function UserGroupManagementPage() {
                     const company = companies.find(c => c.id === user.company_id);
                     const position = positions.find(p => p.id === user.position_id);
                     return (
-                      <TableRow key={user.id}>
+                      <TableRow key={user.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openForm(user)}>
                         <TableCell className="font-medium text-sm">{user.username}</TableCell>
                         <TableCell className="text-sm">{user.name}</TableCell>
                         <TableCell className="text-sm">{user.email}</TableCell>
@@ -279,25 +275,15 @@ export default function UserGroupManagementPage() {
                             {getRoleName(user.role)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => openEditDialog(user)}
-                              className="h-7 px-2"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDelete(user.id)}
-                              className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </div>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDelete(user.id)}
+                            className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     );
@@ -314,131 +300,124 @@ export default function UserGroupManagementPage() {
   return (
     <>
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <UserCircle className="w-6 h-6" />
-            사용자 그룹 관리
-          </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            선주, 선박관리사, 선원매닝사, 선원을 그룹별로 관리합니다
-          </p>
-        </div>
-
-        <Tabs defaultValue="ship_manager" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-9">
-            <TabsTrigger value="ship_manager" className="text-sm">
-              선박관리사 ({getUsersByRole('ship_manager').length})
-            </TabsTrigger>
-            <TabsTrigger value="ship_owner" className="text-sm">
-              선주 ({getUsersByRole('ship_owner').length})
-            </TabsTrigger>
-            <TabsTrigger value="manning_agency" className="text-sm">
-              선원매닝사 ({getUsersByRole('manning_agency').length})
-            </TabsTrigger>
-            <TabsTrigger value="crew" className="text-sm">
-              선원 ({getUsersByRole('crew').length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="ship_manager" className="mt-3">
-            {renderUserTable('ship_manager')}
-          </TabsContent>
-
-          <TabsContent value="ship_owner" className="mt-3">
-            {renderUserTable('ship_owner')}
-          </TabsContent>
-
-          <TabsContent value="manning_agency" className="mt-3">
-            {renderUserTable('manning_agency')}
-          </TabsContent>
-
-          <TabsContent value="crew" className="mt-3">
-            {renderUserTable('crew')}
-          </TabsContent>
-        </Tabs>
-
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle className="text-base">
-                {editingUser ? '사용자 수정' : `${getRoleName(formData.role)} 추가`}
-              </DialogTitle>
-              <DialogDescription className="text-xs">
-                {editingUser ? '사용자 정보를 수정합니다' : '새로운 사용자를 등록합니다'}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-3 py-3">
+        {formView !== null ? (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}>
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <UserCircle className="w-5 h-5" />
+                      {formView.id ? '사용자 수정' : `${getRoleName(formData.role)} 추가`}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formView.id ? '사용자 정보를 수정합니다' : '새로운 사용자를 등록합니다'}
+                    </p>
+                  </div>
+                </div>
+                <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
+                  <Save className="w-4 h-4" />
+                  {saving ? '저장 중...' : '저장'}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-3 pt-2">
                 {formError && (
                   <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
                     {formError}
                   </div>
                 )}
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="username" className="text-xs">
-                    사용자명 * {editingUser && <span className="text-gray-500">(수정 불가)</span>}
-                  </Label>
-                  <Input
-                    id="username"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    placeholder="로그인 ID"
-                    required
-                    disabled={!!editingUser}
-                    className="h-9 text-sm"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="username" className="text-xs">
+                      사용자명 * {formView.id && <span className="text-gray-500">(수정 불가)</span>}
+                    </Label>
+                    <Input
+                      id="username"
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      placeholder="로그인 ID"
+                      required
+                      disabled={!!formView.id}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="password" className="text-xs">
+                      비밀번호 {formView.id ? '(변경시에만 입력)' : '*'}
+                    </Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="비밀번호"
+                      required={!formView.id}
+                      className="h-9 text-sm"
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="password" className="text-xs">
-                    비밀번호 {editingUser ? '(변경시에만 입력)' : '*'}
-                  </Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="비밀번호"
-                    required={!editingUser}
-                    className="h-9 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="name" className="text-xs">이름 *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="실명"
-                    required
-                    className="h-9 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="email" className="text-xs">이메일 *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="email@example.com"
-                    required
-                    className="h-9 text-sm"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name" className="text-xs">이름 *</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="실명"
+                      required
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email" className="text-xs">이메일 *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="email@example.com"
+                      required
+                      className="h-9 text-sm"
+                    />
+                  </div>
                 </div>
 
                 {formData.role === 'ship_manager' && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">소속 회사</Label>
-                    <Input
-                      value="INK"
-                      disabled
-                      className="h-9 text-sm bg-gray-50"
-                    />
-                    <p className="text-xs text-gray-500">선박관리사는 INK 소속입니다</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">소속 회사</Label>
+                      <Input
+                        value="INK"
+                        disabled
+                        className="h-9 text-sm bg-gray-50"
+                      />
+                      <p className="text-xs text-gray-500">선박관리사는 INK 소속입니다</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="position" className="text-xs">직급</Label>
+                      <Select
+                        value={formData.position_id}
+                        onValueChange={(value) => setFormData({ ...formData, position_id: value })}
+                      >
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="직급을 선택하세요" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {positions.map(position => (
+                            <SelectItem key={position.id} value={String(position.id)} className="text-sm">
+                              {position.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
 
@@ -476,27 +455,6 @@ export default function UserGroupManagementPage() {
                   </div>
                 )}
 
-                {formData.role === 'ship_manager' && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="position" className="text-xs">직급</Label>
-                    <Select
-                      value={formData.position_id}
-                      onValueChange={(value) => setFormData({ ...formData, position_id: value })}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="직급을 선택하세요" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {positions.map(position => (
-                          <SelectItem key={position.id} value={String(position.id)} className="text-sm">
-                            {position.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
                 <div className="space-y-1.5">
                   <Label className="text-xs">역할</Label>
                   <div className="flex items-center gap-2">
@@ -506,23 +464,54 @@ export default function UserGroupManagementPage() {
                   </div>
                 </div>
               </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  className="h-8"
-                >
-                  취소
-                </Button>
-                <Button type="submit" size="sm" className="h-8">
-                  {editingUser ? '수정' : '추가'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="mb-4">
+              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <UserCircle className="w-6 h-6" />
+                사용자 그룹 관리
+              </h1>
+              <p className="text-sm text-gray-600 mt-1">
+                선주, 선박관리사, 선원매닝사, 선원을 그룹별로 관리합니다
+              </p>
+            </div>
+
+            <Tabs defaultValue="ship_manager" className="w-full">
+              <TabsList className="grid w-full grid-cols-4 h-9">
+                <TabsTrigger value="ship_manager" className="text-sm">
+                  선박관리사 ({getUsersByRole('ship_manager').length})
+                </TabsTrigger>
+                <TabsTrigger value="ship_owner" className="text-sm">
+                  선주 ({getUsersByRole('ship_owner').length})
+                </TabsTrigger>
+                <TabsTrigger value="manning_agency" className="text-sm">
+                  선원매닝사 ({getUsersByRole('manning_agency').length})
+                </TabsTrigger>
+                <TabsTrigger value="crew" className="text-sm">
+                  선원 ({getUsersByRole('crew').length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="ship_manager" className="mt-3">
+                {renderUserTable('ship_manager')}
+              </TabsContent>
+
+              <TabsContent value="ship_owner" className="mt-3">
+                {renderUserTable('ship_owner')}
+              </TabsContent>
+
+              <TabsContent value="manning_agency" className="mt-3">
+                {renderUserTable('manning_agency')}
+              </TabsContent>
+
+              <TabsContent value="crew" className="mt-3">
+                {renderUserTable('crew')}
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
       </main>
     </>
   );
