@@ -98,6 +98,7 @@ export function RotationPlanDialog({
   useEffect(() => {
     if (formData.owner_id) {
       loadFleets(formData.owner_id);
+      loadShipsByOwner(formData.owner_id);
     }
   }, [formData.owner_id]);
 
@@ -129,7 +130,7 @@ export function RotationPlanDialog({
     const { data } = await supabase
       .from('companies')
       .select('*')
-      .eq('company_type', 'owner')
+      .eq('type', 'owner')
       .order('name');
     if (data) setOwners(data);
   };
@@ -148,6 +149,15 @@ export function RotationPlanDialog({
       .from('ships')
       .select('*')
       .eq('fleet_id', fleetId)
+      .order('name');
+    if (data) setShips(data);
+  };
+
+  const loadShipsByOwner = async (ownerId: string) => {
+    const { data } = await supabase
+      .from('ships')
+      .select('*')
+      .eq('owner_id', ownerId)
       .order('name');
     if (data) setShips(data);
   };
@@ -329,7 +339,7 @@ export function RotationPlanDialog({
               <Select
                 value={formData.ship_id}
                 onValueChange={(value) => setFormData({ ...formData, ship_id: value })}
-                disabled={!formData.fleet_id || !!plan}
+                disabled={!formData.owner_id || !!plan}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="선박 선택" />
