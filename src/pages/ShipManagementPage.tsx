@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import ShipTable from '@/components/ship/ShipTable';
 import ShipDialog from '@/components/ship/ShipDialog';
@@ -23,7 +23,7 @@ export default function ShipManagementPage() {
 
   const permissions = usePermissions('ships');
 
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formView, setFormView] = useState<{ ship?: Ship } | null>(null);
   const [editingShip, setEditingShip] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -258,7 +258,7 @@ export default function ShipManagementPage() {
       }
 
       await loadData();
-      setIsDialogOpen(false);
+      setFormView(null);
       resetForm();
     } catch (error) {
       console.error('Error saving ship:', error);
@@ -334,7 +334,7 @@ export default function ShipManagementPage() {
       is_bbchp: ship.is_bbchp || false,
     });
     setEditingShip(ship.id);
-    setIsDialogOpen(true);
+    setFormView({ ship });
   };
 
   const handleDelete = async (id: string) => {
@@ -406,34 +406,59 @@ export default function ShipManagementPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-center">
-                <CardTitle className="text-base">선박 목록</CardTitle>
-                <div className="flex gap-2">
-                  {permissions.canDelete && selectedShipIds.length > 0 && (
-                    <Button 
-                      size="sm"
-                      variant="destructive"
-                      className="gap-1.5 h-8"
-                      onClick={handleBulkDelete}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      선택 삭제 ({selectedShipIds.length})
+                {formView !== null ? (
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setFormView(null); resetForm(); }}>
+                      <ArrowLeft className="w-4 h-4" />
                     </Button>
-                  )}
-                  {permissions.canCreate && (
-                    <Button 
-                      size="sm"
-                      className="gap-1.5 h-8"
-                      onClick={() => setIsDialogOpen(true)}
-                    >
-                      <Plus className="w-4 h-4" />
-                      선박 등록
-                    </Button>
-                  )}
-                </div>
+                    <div>
+                      <CardTitle className="text-base">{editingShip ? '선박 정보 수정' : '선박 등록'}</CardTitle>
+                      <p className="text-xs text-gray-500 mt-0.5">선박의 상세 정보를 입력하세요</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <CardTitle className="text-base">선박 목록</CardTitle>
+                    <div className="flex gap-2">
+                      {permissions.canDelete && selectedShipIds.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="gap-1.5 h-8"
+                          onClick={handleBulkDelete}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          선택 삭제 ({selectedShipIds.length})
+                        </Button>
+                      )}
+                      {permissions.canCreate && (
+                        <Button
+                          size="sm"
+                          className="gap-1.5 h-8"
+                          onClick={() => { resetForm(); setFormView({}); }}
+                        >
+                          <Plus className="w-4 h-4" />
+                          선박 등록
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
-              {/* Search and Filters */}
+              {formView !== null ? (
+                <ShipDialog
+                  formData={formData}
+                  onFormDataChange={setFormData}
+                  onSubmit={handleSubmit}
+                  isEditing={!!editingShip}
+                  companies={companies}
+                  shipId={editingShip || undefined}
+                  onClose={() => { setFormView(null); resetForm(); }}
+                />
+              ) : (
+              <>{/* Search and Filters */}
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <Input
@@ -631,21 +656,10 @@ export default function ShipManagementPage() {
                   </Button>
                 </div>
               )}
+              </>
+              )}
             </CardContent>
           </Card>
-
-          <ShipDialog
-            open={isDialogOpen}
-            onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm();
-            }}
-            formData={formData}
-            onFormDataChange={setFormData}
-            onSubmit={handleSubmit}
-            isEditing={!!editingShip}
-            companies={companies}
-          />
         </div>
       </>
     </ProtectedRoute>

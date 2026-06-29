@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -94,7 +93,6 @@ interface CrewMember {
 }
 
 interface CrewFormDialogProps {
-  open: boolean;
   crew: CrewMember | null;
   onClose: (saved: boolean, crewId?: string) => void;
 }
@@ -173,7 +171,7 @@ const EMPTY_FORM = {
   sid: '',
 };
 
-export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
+export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
   const { toast } = useToast();
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
@@ -186,8 +184,6 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   const [formData, setFormData] = useState(EMPTY_FORM);
 
   useEffect(() => {
-    if (!open) return;
-
     supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
     getNationalities(true).then(setNationalities).catch(console.error);
     setSelectedFile(null);
@@ -254,7 +250,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
       setCertificates([]);
       setEmergencyContacts([]);
     }
-  }, [open, crew]);
+  }, [crew]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -405,12 +401,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={() => onClose(false)}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{crew ? '선원 정보 수정' : '선원 등록'}</DialogTitle>
-        </DialogHeader>
-
+    <div>
         {crew && (
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
             {previewUrl ? (
@@ -801,8 +792,7 @@ export function CrewFormDialog({ open, crew, onClose }: CrewFormDialogProps) {
             {saving ? '저장 중...' : crew ? '저장' : '등록'}
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }
 

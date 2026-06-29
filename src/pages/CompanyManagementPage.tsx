@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, X, ChevronLeft, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -27,6 +27,7 @@ export function CrewManagementPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [formView, setFormView] = useState<{ crew: CrewWithDetails | null } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,7 +42,6 @@ export function CrewManagementPage() {
   const [maxAge, setMaxAge] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [crewDialogOpen, setCrewDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
 
@@ -124,31 +124,11 @@ export function CrewManagementPage() {
 
   const handleView = (crew: CrewWithDetails) => {
     setSelectedCrew(crew);
-    setCrewDialogOpen(true);
+    setFormView({ crew });
   };
 
-  const handleAddCrew = () => { setSelectedCrew(null); setCrewDialogOpen(true); };
+  const handleAddCrew = () => { setSelectedCrew(null); setFormView({ crew: null }); };
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
-
-  const handleCrewDialogClose = async (saved: boolean, crewId?: string) => {
-    setCrewDialogOpen(false);
-    setSelectedCrew(null);
-    if (saved) {
-      await loadData();
-      if (crewId) {
-        setTimeout(() => {
-          setCrewMembers(prev => {
-            const updated = prev.find(c => c.id === crewId);
-            if (updated) {
-              setSelectedCrew(updated);
-              setCrewDialogOpen(true);
-            }
-            return prev;
-          });
-        }, 400);
-      }
-    }
-  };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
     if (checked) setSelectedCrewIds(prev => [...prev, crewId]);
@@ -211,6 +191,34 @@ export function CrewManagementPage() {
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
+        </div>
+      </>
+    );
+  }
+
+  if (formView !== null) {
+    return (
+      <>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setFormView(null); loadData(); }}>
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+                <div>
+                  <CardTitle className="text-base">{formView.crew ? '선원 수정' : '선원 등록'}</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">선원 정보를 입력합니다</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <CrewFormDialog
+                crew={formView.crew}
+                onClose={(saved) => { setFormView(null); if (saved) loadData(); }}
+              />
+            </CardContent>
+          </Card>
         </div>
       </>
     );
@@ -380,12 +388,6 @@ export function CrewManagementPage() {
           </CardContent>
         </Card>
       </div>
-
-      <CrewFormDialog
-        open={crewDialogOpen}
-        crew={selectedCrew}
-        onClose={handleCrewDialogClose}
-      />
 
       <CrewStatusDialog
         open={statusDialogOpen}

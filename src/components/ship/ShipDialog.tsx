@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -51,8 +50,7 @@ interface ShipFormData {
 }
 
 interface ShipDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   formData: ShipFormData;
   onFormDataChange: (data: ShipFormData) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -62,8 +60,7 @@ interface ShipDialogProps {
 }
 
 export default function ShipDialog({
-  open,
-  onOpenChange,
+  onClose,
   formData,
   onFormDataChange,
   onSubmit,
@@ -91,13 +88,11 @@ export default function ShipDialog({
   const isForeignFlag = formData.flag && !isKoreanFlag;
 
   useEffect(() => {
-    if (open) {
-      loadShipTypes();
-      loadShipFlags();
-      loadShipOwnerUsers();
-      loadAllFleets();
-    }
-  }, [open]);
+    loadShipTypes();
+    loadShipFlags();
+    loadShipOwnerUsers();
+    loadAllFleets();
+  }, []);
 
   useEffect(() => {
     if (formData.owner_id) {
@@ -278,13 +273,7 @@ export default function ShipDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-base">{isEditing ? '선박 정보 수정' : '선박 등록'}</DialogTitle>
-          <DialogDescription className="text-xs">선박의 상세 정보를 입력하세요</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit}>
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid w-full grid-cols-4 h-9">
               <TabsTrigger value="basic" className="text-xs">기본 정보</TabsTrigger>
@@ -780,19 +769,17 @@ export default function ShipDialog({
           </Tabs>
 
           <div className="flex gap-2 pt-4 mt-4 border-t">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="flex-1 h-9"
               disabled={!!ownerFleetMismatch}
             >
               {isEditing ? '수정' : '등록'}
             </Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-9">
+            <Button type="button" variant="outline" onClick={onClose} className="h-9">
               취소
             </Button>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+    </form>
   );
 }
