@@ -35,7 +35,6 @@ import { JobPostingDialog } from '@/components/job-postings/JobPostingDialog';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { getCompanies, getFleets, getShips, getCurrentUser } from '@/lib/store';
-import Layout from '@/components/Layout';
 import type { JobPostingGroupWithDetails, Company, Fleet, Ship, User, CrewRecommendationWithDetails } from '@/types/models';
 
 const ITEMS_PER_PAGE = 20;
@@ -438,14 +437,14 @@ export default function JobPostingsPage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="p-8">로딩 중...</div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <div className="flex justify-between items-center mb-4">
           <div>
@@ -858,6 +857,6 @@ export default function JobPostingsPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </Layout>
+    </>
   );
 }

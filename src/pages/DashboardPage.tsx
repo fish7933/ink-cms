@@ -3,7 +3,6 @@ import { getShips, getCrewMembers, getJobPostings, getJobApplications, getCurren
 import type { User, Ship, CrewMember, JobPosting, JobApplication } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Ship as ShipIcon, Users, Briefcase, FileText } from 'lucide-react';
-import Layout from '@/components/Layout';
 
 export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -107,21 +106,21 @@ export default function DashboardPage() {
 
   if (loading || !currentUser) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   const stats = getStats();
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         {/* Compact Welcome */}
         <div className="mb-4">
@@ -250,6 +249,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
+    </>
   );
 }

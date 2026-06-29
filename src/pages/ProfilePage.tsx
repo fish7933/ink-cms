@@ -8,7 +8,6 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser, updatePassword } from '@/services/auth.service';
 import { supabase } from '@/lib/supabase';
-import Layout from '@/components/Layout';
 import { User, Mail, Building2, Shield, Calendar, Lock } from 'lucide-react';
 
 interface UserData {
@@ -164,14 +163,14 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
@@ -184,7 +183,7 @@ export default function ProfilePage() {
   const companyName = user?.companies?.name || '미지정';
 
   return (
-    <Layout>
+    <>
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Page Header */}
         <div>
@@ -373,6 +372,6 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
+    </>
   );
 }

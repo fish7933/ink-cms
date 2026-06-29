@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '@/components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -392,7 +391,7 @@ export default function ApprovalManagementPage() {
   const rejectedApprovals = allApprovals.filter(a => a.status === 'rejected');
 
   return (
-    <Layout>
+    <>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">결재 관리</h1>
@@ -574,6 +573,6 @@ export default function ApprovalManagementPage() {
           </>
         )}
       </div>
-    </Layout>
+    </>
   );
 }

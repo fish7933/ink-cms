@@ -1,0 +1,91 @@
+import { lazy } from 'react';
+
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
+const CrewManagementPage = lazy(() => import('@/pages/CrewManagementPage'));
+const CrewDetailPage = lazy(() => import('@/pages/CrewDetailPage'));
+const CrewResumePage = lazy(() => import('@/pages/CrewResumePage'));
+const CrewInputPage = lazy(() => import('@/pages/CrewInputPage'));
+const CrewAssignmentPage = lazy(() => import('@/pages/CrewAssignmentPage'));
+const CrewRotationPage = lazy(() => import('@/pages/CrewRotationPage').then(m => ({ default: m.CrewRotationPage })));
+const ShipManagementPage = lazy(() => import('@/pages/ShipManagementPage'));
+const ShipTypeManagementPage = lazy(() => import('@/pages/ShipTypeManagementPage'));
+const ShipFlagManagementPage = lazy(() => import('@/pages/ShipFlagManagementPage'));
+const FleetManagementPage = lazy(() => import('@/pages/FleetManagementPage'));
+const JobPostingsPage = lazy(() => import('@/pages/JobPostingsPage'));
+const CrewRecommendationsPage = lazy(() => import('@/pages/CrewRecommendationsPage'));
+const MyRecommendationsPage = lazy(() => import('@/pages/MyRecommendationsPage'));
+const RecommendationReviewPage = lazy(() => import('@/pages/RecommendationReviewPage'));
+const ApprovalLineManagementPage = lazy(() => import('@/pages/ApprovalLineManagementPage'));
+const ApprovalInboxPage = lazy(() => import('@/pages/ApprovalInboxPage'));
+const ApprovalArchivePage = lazy(() => import('@/pages/ApprovalArchivePage'));
+const ApprovalManagementPage = lazy(() => import('@/pages/ApprovalManagementPage'));
+const SupervisorManagementPage = lazy(() => import('@/pages/SupervisorManagementPage'));
+const RanksPage = lazy(() => import('@/pages/RanksPage'));
+const PermissionsPage = lazy(() => import('@/pages/PermissionsPage'));
+const SalaryComponentsPage = lazy(() => import('@/pages/SalaryComponentsPage'));
+const SalaryTemplatesPage = lazy(() => import('@/pages/SalaryTemplatesPage'));
+const TemplateAssignmentsPage = lazy(() => import('@/pages/TemplateAssignmentsPage'));
+const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
+const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
+const CompanyManagementPage = lazy(() => import('@/pages/CompanyManagementPage'));
+const UserGroupManagementPage = lazy(() => import('@/pages/UserGroupManagementPage'));
+const ManagerAssignmentPage = lazy(() => import('@/pages/ManagerAssignmentPage'));
+const NationalityManagementPage = lazy(() => import('@/pages/NationalityManagementPage'));
+const CertificateTypeManagementPage = lazy(() => import('@/pages/CertificateTypeManagementPage'));
+const MenuConfigurationPage = lazy(() => import('@/pages/MenuConfigurationPage'));
+const CertificateExpiryDashboardPage = lazy(() => import('@/pages/CertificateExpiryDashboardPage'));
+const LeaveManagementPage = lazy(() => import('@/pages/LeaveManagementPage'));
+const ReportsPage = lazy(() => import('@/pages/ReportsPage'));
+const CrewEvaluationPage = lazy(() => import('@/pages/CrewEvaluationPage'));
+const AllotmentManagementPage = lazy(() => import('@/pages/AllotmentManagementPage'));
+const ContractManagementPage = lazy(() => import('@/pages/ContractManagementPage'));
+
+export interface RouteEntry {
+  path: string;
+  component: React.LazyExoticComponent<React.ComponentType<unknown>>;
+  exact?: boolean;
+}
+
+export const routeConfig: RouteEntry[] = [
+  { path: '/dashboard', component: DashboardPage },
+  { path: '/crew/management', component: CrewManagementPage },
+  { path: '/crew/input', component: CrewInputPage },
+  { path: '/crew/new', component: CrewDetailPage },
+  { path: '/crew/:id/resume', component: CrewResumePage },
+  { path: '/crew/:id', component: CrewDetailPage },
+  { path: '/crew', component: CrewManagementPage },
+  { path: '/assignments', component: CrewAssignmentPage },
+  { path: '/crew-rotation', component: CrewRotationPage },
+  { path: '/ships', component: ShipManagementPage },
+  { path: '/ship-types', component: ShipTypeManagementPage },
+  { path: '/ship-flags', component: ShipFlagManagementPage },
+  { path: '/fleet-management', component: FleetManagementPage },
+  { path: '/job-postings', component: JobPostingsPage },
+  { path: '/crew-recommendations', component: CrewRecommendationsPage },
+  { path: '/my-recommendations', component: MyRecommendationsPage },
+  { path: '/recommendation-review', component: RecommendationReviewPage },
+  { path: '/approval-lines', component: ApprovalLineManagementPage },
+  { path: '/approval-inbox', component: ApprovalInboxPage },
+  { path: '/approval-archive', component: ApprovalArchivePage },
+  { path: '/approval-management', component: ApprovalManagementPage },
+  { path: '/supervisor-management', component: SupervisorManagementPage },
+  { path: '/ranks', component: RanksPage },
+  { path: '/permissions', component: PermissionsPage },
+  { path: '/salary-components', component: SalaryComponentsPage },
+  { path: '/salary/templates', component: SalaryTemplatesPage },
+  { path: '/salary/assignments', component: TemplateAssignmentsPage },
+  { path: '/shore-positions', component: ShorePositionsPage },
+  { path: '/profile', component: ProfilePage },
+  { path: '/companies', component: CompanyManagementPage },
+  { path: '/user-groups', component: UserGroupManagementPage },
+  { path: '/manager-assignments', component: ManagerAssignmentPage },
+  { path: '/nationalities', component: NationalityManagementPage },
+  { path: '/certificate-types', component: CertificateTypeManagementPage },
+  { path: '/menu-configuration', component: MenuConfigurationPage },
+  { path: '/certificate-expiry', component: CertificateExpiryDashboardPage },
+  { path: '/leave-management', component: LeaveManagementPage },
+  { path: '/reports', component: ReportsPage },
+  { path: '/crew-evaluations', component: CrewEvaluationPage },
+  { path: '/allotment-management', component: AllotmentManagementPage },
+  { path: '/contract-management', component: ContractManagementPage },
+];

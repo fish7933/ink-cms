@@ -20,7 +20,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, X, Ship as ShipIcon, User as UserIcon } from 'lucide-react';
-import Layout from '@/components/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
 const RANKS = [
@@ -99,14 +98,14 @@ export default function CrewAssignmentPage() {
 
   if (!currentUser || loading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
@@ -225,7 +224,7 @@ export default function CrewAssignmentPage() {
 
   return (
     <ProtectedRoute resource="crew">
-      <Layout>
+      <>
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
           <Card>
             <CardHeader className="pb-3">
@@ -587,7 +586,7 @@ export default function CrewAssignmentPage() {
             </DialogContent>
           </Dialog>
         </div>
-      </Layout>
+      </>
     </ProtectedRoute>
   );
 }

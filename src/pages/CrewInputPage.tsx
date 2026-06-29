@@ -12,7 +12,6 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { crewService } from '@/services/crew.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
-import Layout from '@/components/Layout';
 import type { CrewRecommendationWithDetails, Rank } from '@/types/models';
 import type { CertificateType } from '@/types/certificate-type';
 
@@ -273,7 +272,7 @@ const addCert = (name?: string) => {
   if (!recommendation) return null;
 
   return (
-    <Layout>
+    <>
       <div className="max-w-4xl mx-auto px-4 py-6">
         <div className="mb-6 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
@@ -547,6 +546,6 @@ const addCert = (name?: string) => {
           </div>
         </form>
       </div>
-    </Layout>
+    </>
   );
 }

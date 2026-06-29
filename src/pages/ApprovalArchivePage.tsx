@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -67,7 +66,7 @@ export default function ApprovalArchivePage() {
   const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
-    <Layout>
+    <>
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="mb-5">
           <h1 className="text-2xl font-bold">결재 완료 문서함</h1>
@@ -245,6 +244,6 @@ export default function ApprovalArchivePage() {
           </DialogContent>
         </Dialog>
       </div>
-    </Layout>
+    </>
   );
 }

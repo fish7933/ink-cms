@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -185,7 +184,7 @@ export default function SupervisorManagementPage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="container mx-auto p-6">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
@@ -194,12 +193,12 @@ export default function SupervisorManagementPage() {
             </div>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="container mx-auto p-6 max-w-7xl">
         <div className="flex justify-between items-center mb-6">
           <div>
@@ -387,6 +386,6 @@ export default function SupervisorManagementPage() {
               }
             />
           )}
-    </Layout>
+    </>
   );
 }

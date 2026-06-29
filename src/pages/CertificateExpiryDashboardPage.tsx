@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import Layout from '@/components/Layout';
 import { getExpiringCertificates, calcExpiryStats, type CertExpiryItem, type CertExpiryStats } from '@/services/certificate-alert.service';
 import { useNavigate } from 'react-router-dom';
 
@@ -53,19 +52,19 @@ export default function CertificateExpiryDashboardPage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <Card>
           <CardHeader className="pb-3">
@@ -165,6 +164,6 @@ export default function CertificateExpiryDashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </Layout>
+    </>
   );
 }

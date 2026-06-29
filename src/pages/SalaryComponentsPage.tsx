@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Textarea } from '@/components/ui/textarea';
 import { getCurrentUser } from '@/lib/store';
-import Layout from '@/components/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -137,18 +136,18 @@ export default function SalaryComponentsPage() {
   if (loading) {
     return (
       <ProtectedRoute resource="salary_components">
-        <Layout>
+        <>
           <div className="flex items-center justify-center h-64">
             <p className="text-sm text-gray-500">로딩 중...</p>
           </div>
-        </Layout>
+        </>
       </ProtectedRoute>
     );
   }
 
   return (
     <ProtectedRoute resource="salary_components">
-      <Layout>
+      <>
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
           <Card>
             <CardHeader className="pb-3">
@@ -291,7 +290,7 @@ export default function SalaryComponentsPage() {
             </DialogContent>
           </Dialog>
         </div>
-      </Layout>
+      </>
     </ProtectedRoute>
   );
 }

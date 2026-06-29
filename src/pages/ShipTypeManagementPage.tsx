@@ -16,7 +16,6 @@ import type { ShipType, ShipSizeClassification } from '@/types/ship-classificati
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Ship, Ruler } from 'lucide-react';
-import Layout from '@/components/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
 import ShipTypeTable from '@/components/ship-classification/ShipTypeTable';
@@ -144,20 +143,20 @@ export default function ShipTypeManagementPage() {
 
   if (!currentUser || loading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
     <ProtectedRoute resource="ships">
-      <Layout>
+      <>
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
           {/* Ship Types Section */}
           <Card>
@@ -248,7 +247,7 @@ export default function ShipTypeManagementPage() {
             onSave={handleSaveSizeClassification}
           />
         </div>
-      </Layout>
+      </>
     </ProtectedRoute>
   );
 }

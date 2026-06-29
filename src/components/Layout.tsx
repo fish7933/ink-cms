@@ -1,5 +1,5 @@
-import { ReactNode, useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, Suspense } from 'react';
+import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
 import TabBar from '@/components/TabBar';
@@ -7,18 +7,17 @@ import { defaultMenuStructure } from '@/lib/default-menu';
 import { getCurrentUser } from '@/lib/store';
 import type { User } from '@/lib/store';
 import type { MenuCategory } from '@/types/menu';
+import { useTabContext } from '@/contexts/TabContext';
+import { routeConfig } from '@/lib/route-config';
 
-interface LayoutProps {
-  children: ReactNode;
-}
-
-export default function Layout({ children }: LayoutProps) {
+export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const { tabs, activeTabId } = useTabContext();
 
   useEffect(() => {
     let isMounted = true;
@@ -36,9 +35,8 @@ export default function Layout({ children }: LayoutProps) {
     };
     loadUser();
     return () => { isMounted = false; };
-  }, [navigate, location.pathname]);
+  }, [navigate]);
 
-  // URL 변경 시 카테고리 자동 동기화
   useEffect(() => {
     const found = menuStructure.find(category =>
       category.items.some(item => {
@@ -56,7 +54,7 @@ export default function Layout({ children }: LayoutProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
           <p className="text-gray-600">인증 확인 중...</p>
         </div>
       </div>
@@ -79,11 +77,41 @@ export default function Layout({ children }: LayoutProps) {
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           <TabBar />
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
+          <div className="flex-1 overflow-hidden relative">
+            {tabs.map(tab => (
+              <div
+                key={tab.id}
+                className="absolute inset-0 overflow-y-auto"
+                style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
+              >
+                <Suspense fallback={
+                  <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                  </div>
+                }>
+                  <TabPageRenderer path={tab.path} />
+                </Suspense>
+              </div>
+            ))}
+            {tabs.length === 0 && (
+              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                메뉴에서 페이지를 선택하세요
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function TabPageRenderer({ path }: { path: string }) {
+  return (
+    <Routes location={path}>
+      {routeConfig.map(route => {
+        const Comp = route.component;
+        return <Route key={route.path} path={route.path} element={<Comp />} />;
+      })}
+    </Routes>
   );
 }

@@ -13,7 +13,6 @@ import { CrewStatusDialog } from '@/components/crew/CrewStatusDialog';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supabase } from '@/lib/supabase';
 import type { Rank, Company, Fleet, Ship } from '@/types/models';
-import Layout from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
 
 export function CrewManagementPage() {
@@ -206,19 +205,19 @@ export function CrewManagementPage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <Card>
           <CardHeader className="pb-3">
@@ -413,7 +412,7 @@ export function CrewManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Layout>
+    </>
   );
 }
 

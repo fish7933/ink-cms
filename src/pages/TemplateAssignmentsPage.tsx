@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Label } from '@/components/ui/label';
 import { getCurrentUser, getShips, getFleets, getCompanies } from '@/lib/store';
 import type { Ship, Fleet, Company } from '@/types/models';
-import Layout from '@/components/Layout';
 import {
   getSalaryTemplates,
   getShipSalaryAssignments,
@@ -262,16 +261,16 @@ export default function TemplateAssignmentsPage() {
 
   if (loading) {
     return (
-      <Layout>
+      <>
         <div className="flex items-center justify-center h-64">
           <p className="text-sm text-gray-500">로딩 중...</p>
         </div>
-      </Layout>
+      </>
     );
   }
 
   return (
-    <Layout>
+    <>
       <div className="container mx-auto p-6">
         <Card>
           <CardHeader className="pb-3">
@@ -675,6 +674,6 @@ export default function TemplateAssignmentsPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </Layout>
+    </>
   );
 }

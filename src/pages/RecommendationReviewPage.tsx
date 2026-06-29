@@ -14,7 +14,6 @@ import { approvalService } from '@/services/approval.service';
 import { supervisorService } from '@/services/supervisor.service';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
-import Layout from '@/components/Layout';
 import type { CrewRecommendationWithDetails, User, Company, Fleet, Ship, Rank } from '@/types/models';
 import type { ApprovalLineWithSteps, CrewRecommendationApprovalWithDetails } from '@/types/approval';
 
@@ -342,10 +341,10 @@ export default function RecommendationReviewPage() {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const pageRecs = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  if (loading) return <Layout><div className="p-8 text-sm text-gray-500">로딩 중...</div></Layout>;
+  if (loading) return <><div className="p-8 text-sm text-gray-500">로딩 중...</div></>;
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <div className="mb-4">
           <h1 className="text-2xl font-bold">선원 추천 검토</h1>
@@ -681,6 +680,6 @@ export default function RecommendationReviewPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </Layout>
+    </>
   );
 }

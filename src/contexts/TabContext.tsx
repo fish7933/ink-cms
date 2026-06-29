@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 export interface Tab {
@@ -17,20 +17,23 @@ interface TabContextValue {
 
 const TabContext = createContext<TabContextValue | null>(null);
 
+const AUTH_PATHS = ['/login', '/auth/callback', '/'];
+
 export function TabProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const initialized = useRef(false);
 
-  // 브라우저 뒤로/앞으로 이동 시 활성 탭 동기화
   useEffect(() => {
+    if (initialized.current) return;
     const fullPath = location.pathname + location.search;
-    setTabs(current => {
-      const tab = current.find(t => t.id === fullPath);
-      if (tab) setActiveTabId(fullPath);
-      return current;
-    });
+    if (!AUTH_PATHS.includes(location.pathname)) {
+      initialized.current = true;
+      setTabs([{ id: fullPath, title: getTitleFromPath(fullPath), path: fullPath }]);
+      setActiveTabId(fullPath);
+    }
   }, [location.pathname, location.search]);
 
   const openTab = useCallback((path: string, title: string) => {
@@ -95,4 +98,26 @@ const noopTab: TabContextValue = {
 
 export function useTabContext() {
   return useContext(TabContext) ?? noopTab;
+}
+
+function getTitleFromPath(path: string): string {
+  const map: Record<string, string> = {
+    '/dashboard': '대시보드',
+    '/crew': '선원 목록', '/crew/management': '선원 목록', '/crew/new': '선원 등록', '/crew/input': '선원 고용',
+    '/assignments': '발령 관리', '/crew-rotation': '선원 교대 발령',
+    '/ships': '선박 목록', '/ship-types': '선종/분류 관리', '/ship-flags': '선적국 관리', '/fleet-management': '플릿 관리',
+    '/job-postings': '구인 공고', '/my-recommendations': '내 추천 선원', '/recommendation-review': '추천 검토',
+    '/approval-inbox': '내 결재함', '/approval-archive': '완료 문서함', '/approval-management': '결재 캐비넷', '/approval-lines': '결재선 관리',
+    '/salary/templates': '급여 템플릿', '/salary/assignments': '할당 현황', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',
+    '/companies': '회사 관리', '/user-groups': '사용자 그룹', '/manager-assignments': '담당자 배정', '/supervisor-management': '담당 감독 관리',
+    '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 유형 관리',
+    '/shore-positions': '육상 직원 직급', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
+    '/certificate-expiry': '증서 만료 현황', '/leave-management': '휴가 관리', '/reports': '통계 대시보드',
+    '/crew-evaluations': '선원 평가', '/contract-management': '계약 관리',
+  };
+  const basePath = path.split('?')[0];
+  if (map[basePath]) return map[basePath];
+  if (basePath.match(/^\/crew\/[^/]+\/resume$/)) return '이력서';
+  if (basePath.match(/^\/crew\/[^/]+$/)) return '선원 정보';
+  return basePath;
 }

@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import Layout from '@/components/Layout';
 import { getAllotments, addAllotment, updateAllotment, deleteAllotment, getRemittances, addRemittance } from '@/services/allotment.service';
 import type { AllotmentWithDetails, Remittance } from '@/types/allotment';
 import { supabase } from '@/lib/supabase';
@@ -131,10 +130,10 @@ export default function AllotmentManagementPage() {
     } catch { toast({ title: '저장 실패', variant: 'destructive' }); }
   };
 
-  if (loading) return <Layout><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div></Layout>;
+  if (loading) return <><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div></>;
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <Card>
           <CardHeader className="pb-3">
@@ -265,6 +264,6 @@ export default function AllotmentManagementPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </Layout>
+    </>
   );
 }

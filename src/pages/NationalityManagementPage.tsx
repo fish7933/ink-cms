@@ -7,7 +7,6 @@ import type { Nationality } from '@/types/nationality';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Edit, Trash2, Globe } from 'lucide-react';
-import Layout from '@/components/Layout';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -161,7 +160,7 @@ export default function NationalityManagementPage() {
   const otherCountries = nationalities.filter(n => !n.is_major_supplier);
 
   return (
-    <Layout>
+    <>
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <div className="mb-4">
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -458,6 +457,6 @@ export default function NationalityManagementPage() {
           </DialogContent>
         </Dialog>
       </main>
-    </Layout>
+    </>
   );
 }

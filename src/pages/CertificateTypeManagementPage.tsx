@@ -7,7 +7,6 @@ import type { CertificateType } from '@/types/certificate-type';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Edit, Trash2, FileText } from 'lucide-react';
-import Layout from '@/components/Layout';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -174,7 +173,7 @@ export default function CertificateTypeManagementPage() {
   const categories = ['stcw', 'national', 'medical', 'safety', 'technical', 'other'];
 
   return (
-    <Layout>
+    <>
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <div className="mb-4">
           <div className="flex justify-between items-start">
@@ -455,6 +454,6 @@ export default function CertificateTypeManagementPage() {
           </DialogContent>
         </Dialog>
       </main>
-    </Layout>
+    </>
   );
 }

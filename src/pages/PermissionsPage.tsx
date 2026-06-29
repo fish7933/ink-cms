@@ -9,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Shield, Save, CheckCircle2, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import Layout from '@/components/Layout';
 import PermissionTreeView from '@/components/permissions/PermissionTreeView';
 import { RESOURCES } from '@/types/permissions';
 import { useToast } from '@/hooks/use-toast';
@@ -146,7 +145,7 @@ export default function PermissionsPage() {
   }
 
   return (
-    <Layout>
+    <>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -264,6 +263,6 @@ export default function PermissionsPage() {
           </div>
         </div>
       </main>
-    </Layout>
+    </>
   );
 }

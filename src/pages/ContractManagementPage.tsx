@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import Layout from '@/components/Layout';
 import { getContracts, addContract, updateContract, deleteContract } from '@/services/contract.service';
 import type { CrewContractWithDetails } from '@/types/contract';
 import { supabase } from '@/lib/supabase';
@@ -121,10 +120,10 @@ export default function ContractManagementPage() {
     try { await deleteContract(id); toast({ title: '삭제 완료' }); loadData(); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
   };
 
-  if (loading) return <Layout><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div></Layout>;
+  if (loading) return <><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div></>;
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <Card>
           <CardHeader className="pb-3">
@@ -221,6 +220,6 @@ export default function ContractManagementPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </Layout>
+    </>
   );
 }

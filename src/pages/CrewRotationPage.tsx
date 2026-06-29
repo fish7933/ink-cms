@@ -11,7 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import Layout from '@/components/Layout';
 import { rotationService } from '@/services/rotation.service';
 import { RotationPlanDialog } from '@/components/rotation/RotationPlanDialog';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
@@ -80,7 +79,7 @@ export function CrewRotationPage() {
   };
 
   return (
-    <Layout>
+    <>
       <div className="container mx-auto py-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -246,6 +245,6 @@ export function CrewRotationPage() {
           onSuccess={loadPlans}
         />
       </div>
-    </Layout>
+    </>
   );
 }

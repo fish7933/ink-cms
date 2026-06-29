@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import Layout from '@/components/Layout';
 import LeaveRequestDialog from '@/components/crew/LeaveRequestDialog';
 import { getLeaveRequests, approveLeaveRequest, rejectLeaveRequest, deleteLeaveRequest } from '@/services/leave.service';
 import type { LeaveRequestWithDetails } from '@/types/leave';
@@ -81,11 +80,11 @@ export default function LeaveManagementPage() {
   };
 
   if (loading) {
-    return <Layout><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div></Layout>;
+    return <><div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div></>;
   }
 
   return (
-    <Layout>
+    <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <Card>
           <CardHeader className="pb-3">
@@ -164,6 +163,6 @@ export default function LeaveManagementPage() {
         </Card>
       </div>
       <LeaveRequestDialog open={dialogOpen} onOpenChange={setDialogOpen} record={editingRecord} onSuccess={loadData} />
-    </Layout>
+    </>
   );
 }
