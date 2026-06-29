@@ -52,11 +52,12 @@ export function usePermissions(resource: string): PermissionState {
           ...roleFlags,
         });
       } else {
+        const isManager = user.role === 'ship_manager';
         setPermissions({
-          canView: false,
-          canCreate: false,
-          canEdit: false,
-          canDelete: false,
+          canView: isManager,
+          canCreate: isManager,
+          canEdit: isManager,
+          canDelete: isManager,
           ...roleFlags,
         });
       }
