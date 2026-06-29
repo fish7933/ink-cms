@@ -33,6 +33,13 @@ import MenuConfigurationPage from '@/pages/MenuConfigurationPage';
 import { CrewRotationPage } from '@/pages/CrewRotationPage';
 import CrewInputPage from '@/pages/CrewInputPage';
 import CrewResumePage from '@/pages/CrewResumePage';
+import FleetManagementPage from '@/pages/FleetManagementPage';
+import CertificateExpiryDashboardPage from '@/pages/CertificateExpiryDashboardPage';
+import LeaveManagementPage from '@/pages/LeaveManagementPage';
+import ReportsPage from '@/pages/ReportsPage';
+import CrewEvaluationPage from '@/pages/CrewEvaluationPage';
+import AllotmentManagementPage from '@/pages/AllotmentManagementPage';
+import ContractManagementPage from '@/pages/ContractManagementPage';
 import AuthCallback from '@/pages/AuthCallback';
 import NotFound from '@/pages/NotFound';
 import { Toaster } from '@/components/ui/toaster';
@@ -79,6 +86,13 @@ function App() {
         <Route path="/certificate-types" element={<CertificateTypeManagementPage />} />
         <Route path="/menu-configuration" element={<MenuConfigurationPage />} />
         <Route path="/crew-rotation" element={<CrewRotationPage />} />
+        <Route path="/fleet-management" element={<FleetManagementPage />} />
+        <Route path="/certificate-expiry" element={<CertificateExpiryDashboardPage />} />
+        <Route path="/leave-management" element={<LeaveManagementPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/crew-evaluations" element={<CrewEvaluationPage />} />
+        <Route path="/allotment-management" element={<AllotmentManagementPage />} />
+        <Route path="/contract-management" element={<ContractManagementPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <Toaster />

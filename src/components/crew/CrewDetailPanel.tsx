@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText } from 'lucide-react';
+import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,17 @@ import { useToast } from '@/hooks/use-toast';
 import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
 import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
+import SeaServiceDialog from '@/components/crew/SeaServiceDialog';
+import TrainingRecordDialog from '@/components/crew/TrainingRecordDialog';
+import MedicalRecordDialog from '@/components/crew/MedicalRecordDialog';
+import SalaryRecordDialog from '@/components/crew/SalaryRecordDialog';
+import {
+  getSeaServiceRecords, deleteSeaServiceRecord,
+  getTrainingRecords, deleteTrainingRecord,
+  getMedicalRecords, deleteMedicalRecord,
+  getCrewSalaryRecords, deleteCrewSalaryRecord,
+} from '@/services/crew-extended.service';
+import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord } from '@/types/crew-extended';
 
 interface EmergencyContact {
   name: string;
@@ -131,6 +142,19 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [crewStatus, setCrewStatus] = useState('registered');
   const [formData, setFormData] = useState(EMPTY_FORM);
 
+  const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
+  const [trainingRecords, setTrainingRecords] = useState<TrainingRecord[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [salaryRecords, setSalaryRecords] = useState<CrewSalaryRecord[]>([]);
+  const [seaServiceDialogOpen, setSeaServiceDialogOpen] = useState(false);
+  const [trainingDialogOpen, setTrainingDialogOpen] = useState(false);
+  const [medicalDialogOpen, setMedicalDialogOpen] = useState(false);
+  const [salaryDialogOpen, setSalaryDialogOpen] = useState(false);
+  const [editingSeaService, setEditingSeaService] = useState<SeaServiceRecord | undefined>();
+  const [editingTraining, setEditingTraining] = useState<TrainingRecord | undefined>();
+  const [editingMedical, setEditingMedical] = useState<MedicalRecord | undefined>();
+  const [editingSalary, setEditingSalary] = useState<CrewSalaryRecord | undefined>();
+
   useEffect(() => {
     supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
     getNationalities(true).then(setNationalities).catch(console.error);
@@ -208,12 +232,47 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         setEmergencyContacts(Array.isArray(contacts) ? contacts : []);
       } catch { setEmergencyContacts([]); }
 
+      loadExtendedRecords(crewId);
     } catch (e) {
       console.error(e);
       toast({ title: '데이터 로드 실패', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadExtendedRecords = async (crewId: string) => {
+    try {
+      const [sea, train, med, sal] = await Promise.all([
+        getSeaServiceRecords(crewId),
+        getTrainingRecords(crewId),
+        getMedicalRecords(crewId),
+        getCrewSalaryRecords(crewId),
+      ]);
+      setSeaServiceRecords(sea);
+      setTrainingRecords(train);
+      setMedicalRecords(med);
+      setSalaryRecords(sal);
+    } catch (e) {
+      console.error('Extended records load error:', e);
+    }
+  };
+
+  const handleDeleteSeaService = async (recordId: string) => {
+    if (!confirm('이 승선 기록을 삭제하시겠습니까?')) return;
+    try { await deleteSeaServiceRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+  };
+  const handleDeleteTraining = async (recordId: string) => {
+    if (!confirm('이 교육 기록을 삭제하시겠습니까?')) return;
+    try { await deleteTrainingRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+  };
+  const handleDeleteMedical = async (recordId: string) => {
+    if (!confirm('이 진료 기록을 삭제하시겠습니까?')) return;
+    try { await deleteMedicalRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+  };
+  const handleDeleteSalary = async (recordId: string) => {
+    if (!confirm('이 급여 기록을 삭제하시겠습니까?')) return;
+    try { await deleteCrewSalaryRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -408,15 +467,33 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
       {/* 탭 */}
       <Tabs defaultValue="basic">
-        <TabsList className="grid w-full grid-cols-5 h-8">
-          <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
-          <TabsTrigger value="biodata" className="text-xs">Bio-Data</TabsTrigger>
-          <TabsTrigger value="lang_health" className="text-xs">언어/건강</TabsTrigger>
-          <TabsTrigger value="emergency" className="text-xs">연락처</TabsTrigger>
-          <TabsTrigger value="certificates" className="text-xs">
-            증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
-          </TabsTrigger>
-        </TabsList>
+        <div className="space-y-1">
+          <TabsList className="grid w-full grid-cols-5 h-8">
+            <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
+            <TabsTrigger value="biodata" className="text-xs">Bio-Data</TabsTrigger>
+            <TabsTrigger value="lang_health" className="text-xs">언어/건강</TabsTrigger>
+            <TabsTrigger value="emergency" className="text-xs">연락처</TabsTrigger>
+            <TabsTrigger value="certificates" className="text-xs">
+              증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
+            </TabsTrigger>
+          </TabsList>
+          {!isNew && (
+            <TabsList className="grid w-full grid-cols-4 h-8">
+              <TabsTrigger value="sea_service" className="text-xs">
+                승선경력{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="training" className="text-xs">
+                교육이력{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="medical" className="text-xs">
+                진료기록{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="salary_records" className="text-xs">
+                급여이력{salaryRecords.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{salaryRecords.length}</span>}
+              </TabsTrigger>
+            </TabsList>
+          )}
+        </div>
 
         {/* 기본 정보 */}
         <TabsContent value="basic" className="space-y-3 mt-3">
@@ -746,6 +823,184 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             ))}
           </div>
         </TabsContent>
+        {/* 승선경력 */}
+        {!isNew && (
+          <TabsContent value="sea_service" className="mt-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">승선 경력 ({seaServiceRecords.length}건)</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSeaService(undefined); setSeaServiceDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+              </div>
+              {seaServiceRecords.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">승선 경력을 추가하세요.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b bg-gray-50">
+                      <th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">유형</th><th className="text-center p-2">작업</th>
+                    </tr></thead>
+                    <tbody>
+                      {seaServiceRecords.map(r => (
+                        <tr key={r.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2 font-medium">{r.ship_name}</td>
+                          <td className="p-2">{r.rank}</td>
+                          <td className="p-2">{r.sign_on_date}</td>
+                          <td className="p-2">{r.sign_off_date || '-'}</td>
+                          <td className="p-2"><Badge variant="outline" className="text-xs">{r.record_type === 'pre_company' ? '입사 전' : '회사 배치'}</Badge></td>
+                          <td className="p-2 text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingSeaService(r); setSeaServiceDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteSeaService(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <SeaServiceDialog open={seaServiceDialogOpen} onOpenChange={setSeaServiceDialogOpen} crewId={id!} record={editingSeaService} onSuccess={() => loadExtendedRecords(id!)} />
+          </TabsContent>
+        )}
+
+        {/* 교육이력 */}
+        {!isNew && (
+          <TabsContent value="training" className="mt-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">교육 이력 ({trainingRecords.length}건)</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingTraining(undefined); setTrainingDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+              </div>
+              {trainingRecords.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">교육 이력을 추가하세요.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b bg-gray-50">
+                      <th className="text-left p-2">교육명</th><th className="text-left p-2">유형</th><th className="text-left p-2">시작일</th><th className="text-left p-2">종료일</th><th className="text-left p-2">결과</th><th className="text-center p-2">작업</th>
+                    </tr></thead>
+                    <tbody>
+                      {trainingRecords.map(r => (
+                        <tr key={r.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2 font-medium">{r.training_name}</td>
+                          <td className="p-2">{r.training_type === 'safety' ? '안전' : r.training_type === 'technical' ? '기술' : r.training_type === 'management' ? '관리' : r.training_type === 'certification' ? '자격증' : r.training_type || '-'}</td>
+                          <td className="p-2">{r.start_date}</td>
+                          <td className="p-2">{r.end_date || '-'}</td>
+                          <td className="p-2">
+                            {r.result === 'passed' ? <Badge className="bg-green-100 text-green-700 text-xs">합격</Badge>
+                              : r.result === 'failed' ? <Badge className="bg-red-100 text-red-700 text-xs">불합격</Badge>
+                              : r.result === 'in_progress' ? <Badge className="bg-blue-100 text-blue-700 text-xs">진행 중</Badge>
+                              : '-'}
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingTraining(r); setTrainingDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteTraining(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <TrainingRecordDialog open={trainingDialogOpen} onOpenChange={setTrainingDialogOpen} crewId={id!} record={editingTraining} onSuccess={() => loadExtendedRecords(id!)} />
+          </TabsContent>
+        )}
+
+        {/* 진료기록 */}
+        {!isNew && (
+          <TabsContent value="medical" className="mt-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">진료 기록 ({medicalRecords.length}건)</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingMedical(undefined); setMedicalDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+              </div>
+              {medicalRecords.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">진료 기록을 추가하세요.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b bg-gray-50">
+                      <th className="text-left p-2">일자</th><th className="text-left p-2">유형</th><th className="text-left p-2">진단</th><th className="text-left p-2">적합성</th><th className="text-left p-2">추적</th><th className="text-center p-2">작업</th>
+                    </tr></thead>
+                    <tbody>
+                      {medicalRecords.map(r => (
+                        <tr key={r.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2">{r.record_date}</td>
+                          <td className="p-2">{r.record_type === 'checkup' ? '검진' : r.record_type === 'illness' ? '질병' : r.record_type === 'injury' ? '부상' : r.record_type === 'vaccination' ? '접종' : '기타'}</td>
+                          <td className="p-2 font-medium max-w-[200px] truncate">{r.diagnosis}</td>
+                          <td className="p-2">
+                            {r.fitness_status === 'fit' ? <Badge className="bg-green-100 text-green-700 text-xs">적합</Badge>
+                              : r.fitness_status === 'fit_with_restrictions' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">조건부</Badge>
+                              : r.fitness_status === 'unfit' ? <Badge className="bg-red-100 text-red-700 text-xs">부적합</Badge>
+                              : r.fitness_status === 'pending' ? <Badge className="bg-gray-100 text-gray-700 text-xs">대기</Badge>
+                              : '-'}
+                          </td>
+                          <td className="p-2">{r.follow_up_required ? <Badge className="bg-orange-100 text-orange-700 text-xs">필요</Badge> : '-'}</td>
+                          <td className="p-2 text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingMedical(r); setMedicalDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteMedical(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <MedicalRecordDialog open={medicalDialogOpen} onOpenChange={setMedicalDialogOpen} crewId={id!} record={editingMedical} onSuccess={() => loadExtendedRecords(id!)} />
+          </TabsContent>
+        )}
+
+        {/* 급여이력 */}
+        {!isNew && (
+          <TabsContent value="salary_records" className="mt-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">급여 이력 ({salaryRecords.length}건)</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSalary(undefined); setSalaryDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+              </div>
+              {salaryRecords.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">급여 이력을 추가하세요.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b bg-gray-50">
+                      <th className="text-left p-2">기간</th><th className="text-right p-2">기본급</th><th className="text-right p-2">순수령</th><th className="text-left p-2">통화</th><th className="text-left p-2">상태</th><th className="text-center p-2">작업</th>
+                    </tr></thead>
+                    <tbody>
+                      {salaryRecords.map(r => (
+                        <tr key={r.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2">{r.payment_period_start} ~ {r.payment_period_end}</td>
+                          <td className="p-2 text-right font-mono">{r.basic_salary.toLocaleString()}</td>
+                          <td className="p-2 text-right font-mono font-semibold">{r.net_salary.toLocaleString()}</td>
+                          <td className="p-2">{r.currency}</td>
+                          <td className="p-2">
+                            {r.payment_status === 'paid' ? <Badge className="bg-green-100 text-green-700 text-xs">지급완료</Badge>
+                              : r.payment_status === 'pending' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">대기</Badge>
+                              : <Badge className="bg-red-100 text-red-700 text-xs">취소</Badge>}
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingSalary(r); setSalaryDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteSalary(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <SalaryRecordDialog open={salaryDialogOpen} onOpenChange={setSalaryDialogOpen} crewId={id!} record={editingSalary} onSuccess={() => loadExtendedRecords(id!)} />
+          </TabsContent>
+        )}
       </Tabs>
     </>
   );

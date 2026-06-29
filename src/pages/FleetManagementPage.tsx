@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser, getFleets, addFleet, updateFleet, deleteFleet, getFleetShips } from '@/lib/store';
+import { getCurrentUser, getFleets, addFleet, updateFleet, deleteFleet } from '@/lib/store';
+import { getFleetShips } from '@/services/fleet.service';
 import type { User, Fleet } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
