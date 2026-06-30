@@ -478,7 +478,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </div>
 
         {/* 기본 정보 */}
-        <TabsContent value="basic" className="space-y-3 mt-3">
+        <TabsContent forceMount value="basic" className="space-y-3 mt-3 data-[state=inactive]:hidden">
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">이름 (한국어) *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" /></div>
             <div><Label className="text-xs">이름 (영문)</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
@@ -517,7 +517,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </TabsContent>
 
         {/* Bio-Data */}
-        <TabsContent value="biodata" className="space-y-3 mt-3">
+        <TabsContent forceMount value="biodata" className="space-y-3 mt-3 data-[state=inactive]:hidden">
           <p className="text-xs font-semibold text-gray-600">신체 정보</p>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1 h-9" placeholder="예: Jakarta, Indonesia" /></div>
@@ -618,7 +618,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </TabsContent>
 
         {/* 언어/건강 */}
-        <TabsContent value="lang_health" className="space-y-3 mt-3">
+        <TabsContent forceMount value="lang_health" className="space-y-3 mt-3 data-[state=inactive]:hidden">
           <p className="text-xs font-semibold text-gray-600">언어 능력</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -705,7 +705,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </TabsContent>
 
         {/* 연락처 */}
-        <TabsContent value="emergency" className="mt-3">
+        <TabsContent forceMount value="emergency" className="mt-3 data-[state=inactive]:hidden">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">비상 연락처 및 가족 연락처</span>
@@ -739,7 +739,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </TabsContent>
 
         {/* 증서 */}
-        <TabsContent value="certificates" className="mt-3">
+        <TabsContent forceMount value="certificates" className="mt-3 data-[state=inactive]:hidden">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">
@@ -870,7 +870,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         </TabsContent>
         {/* 승선경력 */}
         {!isNew && (
-          <TabsContent value="sea_service" className="mt-3">
+          <TabsContent forceMount value="sea_service" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold">승선 경력 ({seaServiceRecords.length}건)</span>
@@ -911,7 +911,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
         {/* 교육이력 */}
         {!isNew && (
-          <TabsContent value="training" className="mt-3">
+          <TabsContent forceMount value="training" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold">교육 이력 ({trainingRecords.length}건)</span>
@@ -957,7 +957,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
         {/* 진료기록 */}
         {!isNew && (
-          <TabsContent value="medical" className="mt-3">
+          <TabsContent forceMount value="medical" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold">진료 기록 ({medicalRecords.length}건)</span>
@@ -1004,7 +1004,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
         {/* 급여이력 */}
         {!isNew && (
-          <TabsContent value="salary_records" className="mt-3">
+          <TabsContent forceMount value="salary_records" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold">급여 이력 ({salaryRecords.length}건)</span>
