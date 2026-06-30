@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Filter, X, ChevronLeft, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Search, Filter, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { CrewStatusTable } from '@/components/crew/CrewStatusTable';
-import { CrewFormDialog } from '@/components/crew/CrewFormDialog';
 import { CrewStatusDialog } from '@/components/crew/CrewStatusDialog';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supabase } from '@/lib/supabase';
@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export function CrewManagementPage() {
   const { toast } = useToast();
-  const formContainerRef = useRef<HTMLDivElement>(null);
+  const { openNewTab } = useTabContext();
   const [crewMembers, setCrewMembers] = useState<CrewWithDetails[]>([]);
   const [filteredCrew, setFilteredCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
@@ -28,7 +28,6 @@ export function CrewManagementPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [formView, setFormView] = useState<{ crew: CrewWithDetails | null } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,19 +46,6 @@ export function CrewManagementPage() {
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
 
   useEffect(() => { loadData(); }, []);
-  useEffect(() => {
-    if (formView !== null && formContainerRef.current) {
-      let el: Element | null = formContainerRef.current.parentElement;
-      while (el) {
-        const s = window.getComputedStyle(el);
-        if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
-          (el as HTMLElement).scrollTop = 0;
-          break;
-        }
-        el = el.parentElement;
-      }
-    }
-  }, [formView]);
   useEffect(() => { filterCrew(); }, [crewMembers, searchTerm, selectedOwner, selectedFleet, selectedShip, selectedRank, selectedRankCategory, selectedManningAgency, selectedShipType, minAge, maxAge, activeTab]);
   useEffect(() => { setCurrentPage(1); }, [filteredCrew.length]);
   useEffect(() => {
@@ -136,12 +122,8 @@ export function CrewManagementPage() {
     setFilteredCrew(filtered);
   };
 
-  const handleView = (crew: CrewWithDetails) => {
-    setSelectedCrew(crew);
-    setFormView({ crew });
-  };
-
-  const handleAddCrew = () => { setSelectedCrew(null); setFormView({ crew: null }); };
+  const handleView = (crew: CrewWithDetails) => openNewTab(`/crew/${crew.id}`, crew.name || '선원 정보');
+  const handleAddCrew = () => openNewTab('/crew/new', '선원 등록', true);
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
@@ -205,34 +187,6 @@ export function CrewManagementPage() {
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
             <p className="text-sm text-gray-600">로딩 중...</p>
           </div>
-        </div>
-      </>
-    );
-  }
-
-  if (formView !== null) {
-    return (
-      <>
-        <div ref={formContainerRef} className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setFormView(null); loadData(); }}>
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-                <div>
-                  <CardTitle className="text-base">{formView.crew ? '선원 수정' : '선원 등록'}</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">선원 정보를 입력합니다</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <CrewFormDialog
-                crew={formView.crew}
-                onClose={(saved) => { setFormView(null); if (saved) loadData(); }}
-              />
-            </CardContent>
-          </Card>
         </div>
       </>
     );

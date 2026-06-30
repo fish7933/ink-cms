@@ -11,7 +11,11 @@ interface TabContextValue {
   tabs: Tab[];
   activeTabId: string | null;
   openTab: (path: string, title: string) => void;
+  openNewTab: (path: string, title: string, alwaysNew?: boolean) => void;
   closeTab: (id: string) => void;
+  closeLastTab: () => void;
+  closeAllTabs: () => void;
+  updateTab: (id: string, updates: Partial<Pick<Tab, 'path' | 'title'>>) => void;
   activateTab: (id: string) => void;
 }
 
@@ -36,6 +40,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     }
   }, [location.pathname, location.search]);
 
+  // 메뉴 클릭 등 기존 탭 재사용 방식
   const openTab = useCallback((path: string, title: string) => {
     setTabs(prev => {
       const existing = prev.find(t => t.id === path);
@@ -47,6 +52,26 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       setActiveTabId(path);
       navigate(path);
       return [...prev, { id: path, title, path }];
+    });
+  }, [navigate]);
+
+  // 액션(등록/열람) 전용: 항상 새 탭 또는 같은 경로 재사용
+  const openNewTab = useCallback((path: string, title: string, alwaysNew = false) => {
+    setTabs(prev => {
+      if (!alwaysNew) {
+        const existing = prev.find(t => t.path === path);
+        if (existing) {
+          setActiveTabId(existing.id);
+          navigate(path);
+          return prev;
+        }
+      }
+      const samePathCount = prev.filter(t => t.path === path).length;
+      const tabTitle = samePathCount === 0 ? title : `${title} (${samePathCount + 1})`;
+      const id = `${path}:${Date.now()}`;
+      setActiveTabId(id);
+      navigate(path);
+      return [...prev, { id, title: tabTitle, path }];
     });
   }, [navigate]);
 
@@ -70,6 +95,35 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     });
   }, [navigate]);
 
+  // 마지막 탭 닫기 (탭바 끝 버튼)
+  const closeLastTab = useCallback(() => {
+    setTabs(prev => {
+      if (prev.length === 0) return prev;
+      const lastTab = prev[prev.length - 1];
+      const newTabs = prev.slice(0, -1);
+      setActiveTabId(currentActive => {
+        if (lastTab.id !== currentActive) return currentActive;
+        if (newTabs.length === 0) { navigate('/dashboard'); return null; }
+        const newLast = newTabs[newTabs.length - 1];
+        navigate(newLast.path);
+        return newLast.id;
+      });
+      return newTabs;
+    });
+  }, [navigate]);
+
+  // 전체 탭 닫기
+  const closeAllTabs = useCallback(() => {
+    setTabs([]);
+    setActiveTabId(null);
+    navigate('/dashboard');
+  }, [navigate]);
+
+  // 탭 경로/제목 업데이트 (저장 후 경로 변경 시)
+  const updateTab = useCallback((id: string, updates: Partial<Pick<Tab, 'path' | 'title'>>) => {
+    setTabs(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  }, []);
+
   const activateTab = useCallback((id: string) => {
     setTabs(current => {
       const tab = current.find(t => t.id === id);
@@ -82,7 +136,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   return (
-    <TabContext.Provider value={{ tabs, activeTabId, openTab, closeTab, activateTab }}>
+    <TabContext.Provider value={{ tabs, activeTabId, openTab, openNewTab, closeTab, closeLastTab, closeAllTabs, updateTab, activateTab }}>
       {children}
     </TabContext.Provider>
   );
@@ -92,7 +146,11 @@ const noopTab: TabContextValue = {
   tabs: [],
   activeTabId: null,
   openTab: () => {},
+  openNewTab: () => {},
   closeTab: () => {},
+  closeLastTab: () => {},
+  closeAllTabs: () => {},
+  updateTab: () => {},
   activateTab: () => {},
 };
 

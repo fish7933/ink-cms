@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
-import { CrewDetailPanel } from '@/components/crew/CrewDetailPanel';
+import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export function CrewManagementPage() {
   const { toast } = useToast();
+  const { openNewTab } = useTabContext();
 
   const [crewMembers, setCrewMembers] = useState<CrewWithDetails[]>([]);
   const [filteredCrew, setFilteredCrew] = useState<CrewWithDetails[]>([]);
@@ -45,9 +46,6 @@ export function CrewManagementPage() {
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
-
-  // null = 목록, {} = 신규등록, { id } = 수정
-  const [panelView, setPanelView] = useState<{ id?: string } | null>(null);
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { filterCrew(); }, [crewMembers, searchTerm, selectedOwner, selectedFleet, selectedShip, selectedRank, selectedRankCategory, selectedManningAgency, selectedNationality, activeTab]);
@@ -127,9 +125,8 @@ export function CrewManagementPage() {
     setSelectedNationality('all');
   };
 
-  const handleView = (crew: CrewWithDetails) => setPanelView({ id: crew.id });
-  const handleAddCrew = () => setPanelView({});
-  const handleClosePanel = () => { setPanelView(null); loadData(); };
+  const handleView = (crew: CrewWithDetails) => openNewTab(`/crew/${crew.id}`, crew.name || '선원 정보');
+  const handleAddCrew = () => openNewTab('/crew/new', '선원 등록', true);
   const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
 
   const handleSelectionChange = (crewId: string, checked: boolean) => {
@@ -196,32 +193,19 @@ export function CrewManagementPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                {panelView !== null && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleClosePanel}>
-                    <ArrowLeft className="w-4 h-4" />
-                  </Button>
-                )}
-                <div>
-                  <CardTitle className="text-base">선원 관리</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {panelView !== null
-                      ? (panelView.id ? '선원 정보 수정' : '새 선원 등록')
-                      : '선원 정보와 승하선 이력을 관리합니다'}
-                  </p>
-                </div>
+              <div>
+                <CardTitle className="text-base">선원 관리</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">선원 정보와 승하선 이력을 관리합니다</p>
               </div>
               <div className="flex gap-2">
-                {panelView === null && selectedCrewIds.length > 0 && (
+                {selectedCrewIds.length > 0 && (
                   <Button onClick={handleBulkDelete} size="sm" variant="destructive" className="gap-1.5 h-8">
                     <Trash2 className="w-4 h-4" />선택 삭제 ({selectedCrewIds.length})
                   </Button>
                 )}
-                {panelView === null && (
-                  <Button onClick={handleAddCrew} size="sm" className="gap-1.5 h-8">
-                    <Plus className="w-4 h-4" />선원 등록
-                  </Button>
-                )}
+                <Button onClick={handleAddCrew} size="sm" className="gap-1.5 h-8">
+                  <Plus className="w-4 h-4" />선원 등록
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -286,16 +270,7 @@ export function CrewManagementPage() {
               )}
             </div>
 
-            {/* 목록 또는 등록/수정 폼 */}
-            {panelView !== null ? (
-              <CrewDetailPanel
-                id={panelView.id}
-                onBack={handleClosePanel}
-                onSaved={(savedId) => { setPanelView({ id: savedId }); loadData(); }}
-                embedded={true}
-              />
-            ) : (
-              <>
+            <>
                 {/* 상태 탭 */}
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                   <TabsList className="h-8">
@@ -356,8 +331,7 @@ export function CrewManagementPage() {
                     </Button>
                   </div>
                 )}
-              </>
-            )}
+            </>
           </CardContent>
         </Card>
       </div>
