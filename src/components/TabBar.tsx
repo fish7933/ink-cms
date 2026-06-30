@@ -1,13 +1,35 @@
 import { X } from 'lucide-react';
+import { useRef, useEffect, useState } from 'react';
 import { useTabContext } from '@/contexts/TabContext';
+import { useUISettings } from '@/contexts/UISettingsContext';
+
+const CONTROLS_WIDTH = 120;
 
 export default function TabBar() {
   const { tabs, activeTabId, activateTab, closeTab, closeLastTab, closeAllTabs } = useTabContext();
+  const { uiSettings } = useUISettings();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(entries => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   if (tabs.length === 0) return null;
 
+  const availableWidth = containerWidth - CONTROLS_WIDTH;
+  const tabWidth = availableWidth > 0
+    ? Math.max(uiSettings.tabMinWidth, Math.min(uiSettings.tabMaxWidth, Math.floor(availableWidth / tabs.length)))
+    : uiSettings.tabMaxWidth;
+
   return (
-    <div className="bg-white border-b flex overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
+    <div ref={containerRef} className="bg-white border-b flex overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
       {tabs.map(tab => {
         const isActive = tab.id === activeTabId;
         return (
@@ -18,7 +40,7 @@ export default function TabBar() {
                 ? 'bg-blue-50 border-b-2 border-b-blue-600 text-blue-700'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
-            style={{ width: '160px', height: '36px' }}
+            style={{ width: `${tabWidth}px`, height: '36px' }}
             onClick={() => activateTab(tab.id)}
           >
             <span className="flex-1 text-xs truncate select-none">{tab.title}</span>
@@ -35,7 +57,6 @@ export default function TabBar() {
         );
       })}
 
-      {/* 탭바 끝 닫기 버튼 */}
       <div className="flex items-center gap-0.5 px-2 ml-auto shrink-0 border-l bg-white sticky right-0">
         <button
           className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"

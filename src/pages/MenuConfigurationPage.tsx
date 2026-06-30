@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useUISettings, DEFAULT_UI_SETTINGS } from '@/contexts/UISettingsContext';
 
 interface SortableItemProps {
   id: string;
@@ -103,11 +104,14 @@ function SortableItem({ id, item, onEdit, onToggle }: SortableItemProps) {
 export default function MenuConfigurationPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { uiSettings, updateUISettings, resetUISettings } = useUISettings();
   const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState<'menu' | 'ui'>('menu');
   const [menuStructure, setMenuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
+  const [localUI, setLocalUI] = useState(uiSettings);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -353,104 +357,220 @@ export default function MenuConfigurationPage() {
     );
   }
 
+  const handleSaveUISettings = () => {
+    updateUISettings(localUI);
+    toast({ title: '저장 완료', description: 'UI 설정이 저장되었습니다.' });
+  };
+
+  const handleResetUISettings = () => {
+    setLocalUI(DEFAULT_UI_SETTINGS);
+    resetUISettings();
+    toast({ title: '초기화 완료', description: 'UI 설정이 기본값으로 초기화되었습니다.' });
+  };
+
   return (
     <>
       <div className="container mx-auto p-6 max-w-6xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">UI 구성 관리</h1>
-            <p className="text-gray-600 mt-2">메뉴 구조를 드래그하여 순서를 변경하고, 항목을 활성화/비활성화할 수 있습니다.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleReset}>
-              초기화
-            </Button>
-            <Button onClick={handleSaveAll}>
-              <Save className="w-4 h-4 mr-2" />
-              저장
-            </Button>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">UI 구성 관리</h1>
+          <p className="text-gray-600 mt-1">메뉴 구조 및 UI 환경을 설정합니다.</p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>메뉴 구조</CardTitle>
-            <CardDescription>
-              대메뉴(카테고리)와 소메뉴(항목)를 관리합니다. 드래그하여 순서를 변경하세요.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleCategoryDragEnd}
-            >
-              <SortableContext
-                items={menuStructure.map(cat => cat.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-4">
-                  {menuStructure.map(category => {
-                    const isExpanded = expandedCategories.has(category.id);
+        {/* 섹션 탭 */}
+        <div className="flex border-b mb-6">
+          <button
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeSection === 'menu'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setActiveSection('menu')}
+          >
+            메뉴 구조
+          </button>
+          <button
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeSection === 'ui'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setActiveSection('ui')}
+          >
+            UI 설정
+          </button>
+        </div>
 
-                    return (
-                      <div key={category.id} className="border rounded-lg p-4 bg-gray-50">
-                        <div className="flex items-center gap-2 mb-3">
-                          <GripVertical className="w-5 h-5 text-gray-400 cursor-grab" />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleCategory(category.id)}
-                            className="flex-1 justify-start"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 mr-2" />
-                            ) : (
-                              <ChevronRight className="w-4 h-4 mr-2" />
-                            )}
-                            <span className="font-semibold text-base">{category.label}</span>
-                            <span className="ml-2 text-xs text-gray-500">
-                              ({category.items.length}개 항목)
-                            </span>
-                          </Button>
-                          <Switch
-                            checked={category.is_active}
-                            onCheckedChange={(checked) => handleToggleCategory(category.id, checked)}
-                          />
-                        </div>
-
-                        {isExpanded && (
-                          <div className="ml-8 space-y-2">
-                            <DndContext
-                              sensors={sensors}
-                              collisionDetection={closestCenter}
-                              onDragEnd={(event) => handleDragEnd(event, category.id)}
-                            >
-                              <SortableContext
-                                items={category.items.map(item => item.id)}
-                                strategy={verticalListSortingStrategy}
+        {/* 메뉴 구조 섹션 */}
+        {activeSection === 'menu' && (
+          <>
+            <div className="mb-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={handleReset}>초기화</Button>
+              <Button onClick={handleSaveAll}>
+                <Save className="w-4 h-4 mr-2" />저장
+              </Button>
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>메뉴 구조</CardTitle>
+                <CardDescription>
+                  대메뉴(카테고리)와 소메뉴(항목)를 관리합니다. 드래그하여 순서를 변경하세요.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleCategoryDragEnd}
+                >
+                  <SortableContext
+                    items={menuStructure.map(cat => cat.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-4">
+                      {menuStructure.map(category => {
+                        const isExpanded = expandedCategories.has(category.id);
+                        return (
+                          <div key={category.id} className="border rounded-lg p-4 bg-gray-50">
+                            <div className="flex items-center gap-2 mb-3">
+                              <GripVertical className="w-5 h-5 text-gray-400 cursor-grab" />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleCategory(category.id)}
+                                className="flex-1 justify-start"
                               >
-                                {category.items.map(item => (
-                                  <SortableItem
-                                    key={item.id}
-                                    id={item.id}
-                                    item={item}
-                                    onEdit={(item) => handleEditItem(category.id, item)}
-                                    onToggle={(id, isActive) => handleToggleItem(category.id, id, isActive)}
-                                  />
-                                ))}
-                              </SortableContext>
-                            </DndContext>
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4 mr-2" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 mr-2" />
+                                )}
+                                <span className="font-semibold text-base">{category.label}</span>
+                                <span className="ml-2 text-xs text-gray-500">
+                                  ({category.items.length}개 항목)
+                                </span>
+                              </Button>
+                              <Switch
+                                checked={category.is_active}
+                                onCheckedChange={(checked) => handleToggleCategory(category.id, checked)}
+                              />
+                            </div>
+                            {isExpanded && (
+                              <div className="ml-8 space-y-2">
+                                <DndContext
+                                  sensors={sensors}
+                                  collisionDetection={closestCenter}
+                                  onDragEnd={(event) => handleDragEnd(event, category.id)}
+                                >
+                                  <SortableContext
+                                    items={category.items.map(item => item.id)}
+                                    strategy={verticalListSortingStrategy}
+                                  >
+                                    {category.items.map(item => (
+                                      <SortableItem
+                                        key={item.id}
+                                        id={item.id}
+                                        item={item}
+                                        onEdit={(item) => handleEditItem(category.id, item)}
+                                        onToggle={(id, isActive) => handleToggleItem(category.id, id, isActive)}
+                                      />
+                                    ))}
+                                  </SortableContext>
+                                </DndContext>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </SortableContext>
-            </DndContext>
-          </CardContent>
-        </Card>
+                        );
+                      })}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* UI 설정 섹션 */}
+        {activeSection === 'ui' && (
+          <>
+            <div className="mb-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={handleResetUISettings}>초기화</Button>
+              <Button onClick={handleSaveUISettings}>
+                <Save className="w-4 h-4 mr-2" />저장
+              </Button>
+            </div>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>탭 설정</CardTitle>
+                  <CardDescription>탭의 크기와 동작 방식을 설정합니다.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>탭 최대 너비</Label>
+                      <span className="text-sm text-gray-500 font-mono">{localUI.tabMaxWidth}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={100}
+                      max={300}
+                      step={10}
+                      value={localUI.tabMaxWidth}
+                      onChange={e => setLocalUI(prev => ({ ...prev, tabMaxWidth: Number(e.target.value) }))}
+                      className="w-full accent-blue-600"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>100px</span><span>300px</span>
+                    </div>
+                    <p className="text-xs text-gray-500">탭이 적을 때 적용되는 최대 너비입니다.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>탭 최소 너비</Label>
+                      <span className="text-sm text-gray-500 font-mono">{localUI.tabMinWidth}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={60}
+                      max={160}
+                      step={10}
+                      value={localUI.tabMinWidth}
+                      onChange={e => setLocalUI(prev => ({ ...prev, tabMinWidth: Number(e.target.value) }))}
+                      className="w-full accent-blue-600"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>60px</span><span>160px</span>
+                    </div>
+                    <p className="text-xs text-gray-500">탭이 많을 때 적용되는 최소 너비입니다. 이 이하로는 줄어들지 않고 스크롤됩니다.</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>최대 열린 탭 수</Label>
+                      <span className="text-sm text-gray-500 font-mono">
+                        {localUI.maxOpenTabs === 0 ? '무제한' : `${localUI.maxOpenTabs}개`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={30}
+                      step={1}
+                      value={localUI.maxOpenTabs}
+                      onChange={e => setLocalUI(prev => ({ ...prev, maxOpenTabs: Number(e.target.value) }))}
+                      className="w-full accent-blue-600"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>무제한</span><span>30개</span>
+                    </div>
+                    <p className="text-xs text-gray-500">0으로 설정하면 탭 수 제한이 없습니다.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

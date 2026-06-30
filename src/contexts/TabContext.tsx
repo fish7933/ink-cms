@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useUISettings } from './UISettingsContext';
 
 export interface Tab {
   id: string;
@@ -26,6 +27,7 @@ const AUTH_PATHS = ['/login', '/auth/callback', '/'];
 export function TabProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { uiSettings } = useUISettings();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const initialized = useRef(false);
@@ -49,11 +51,13 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
         navigate(path);
         return prev;
       }
+      const limit = uiSettings.maxOpenTabs;
+      if (limit > 0 && prev.length >= limit) return prev;
       setActiveTabId(path);
       navigate(path);
       return [...prev, { id: path, title, path }];
     });
-  }, [navigate]);
+  }, [navigate, uiSettings.maxOpenTabs]);
 
   // 액션(등록/열람) 전용: 항상 새 탭 또는 같은 경로 재사용
   const openNewTab = useCallback((path: string, title: string, alwaysNew = false) => {
@@ -66,6 +70,8 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
           return prev;
         }
       }
+      const limit = uiSettings.maxOpenTabs;
+      if (limit > 0 && prev.length >= limit) return prev;
       const samePathCount = prev.filter(t => t.path === path).length;
       const tabTitle = samePathCount === 0 ? title : `${title} (${samePathCount + 1})`;
       const id = `${path}:${Date.now()}`;
@@ -73,7 +79,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       navigate(path);
       return [...prev, { id, title: tabTitle, path }];
     });
-  }, [navigate]);
+  }, [navigate, uiSettings.maxOpenTabs]);
 
   const closeTab = useCallback((id: string) => {
     setTabs(prev => {

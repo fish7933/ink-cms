@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { TabProvider } from '@/contexts/TabContext';
+import { UISettingsProvider } from '@/contexts/UISettingsContext';
 import LoginPage from '@/pages/LoginPage';
 import AuthCallback from '@/pages/AuthCallback';
 import Layout from '@/components/Layout';
@@ -8,6 +9,7 @@ import { Toaster } from '@/components/ui/toaster';
 function App() {
   return (
     <Router>
+      <UISettingsProvider>
       <TabProvider>
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
@@ -17,6 +19,7 @@ function App() {
         </Routes>
         <Toaster />
       </TabProvider>
+      </UISettingsProvider>
     </Router>
   );
 }
