@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import BadgeSelect from '@/components/ui/BadgeSelect';
+import type { BadgeSelectItem, BadgeSelectGroup } from '@/components/ui/BadgeSelect';
 import { getCurrentUser } from '@/lib/store';
 import {
   getSalaryTemplates,
@@ -63,18 +65,6 @@ export default function SalaryTemplatesPage() {
     setTemplates(tmpl);
     setComponents(comp);
     setLoading(false);
-  };
-
-  const toggleRank = (rank: string) => {
-    setSelectedRanks(prev =>
-      prev.includes(rank) ? prev.filter(r => r !== rank) : [...prev, rank]
-    );
-  };
-
-  const toggleComponent = (compId: string) => {
-    setSelectedComponents(prev =>
-      prev.includes(compId) ? prev.filter(c => c !== compId) : [...prev, compId]
-    );
   };
 
   const setAmount = (rank: string, compId: string, value: number) => {
@@ -240,77 +230,41 @@ export default function SalaryTemplatesPage() {
                       </Select>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">설명</Label>
-                    <Textarea
-                      value={formData.description}
-                      onChange={e => setFormData({ ...formData, description: e.target.value })}
-                      rows={2}
-                      className="text-sm"
-                    />
-                  </div>
-
                   {/* 직급 선택 */}
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">적용 직급</Label>
-                    <div className="grid grid-cols-4 gap-1 p-3 border rounded-md bg-gray-50">
-                      {RANKS.map(rank => (
-                        <label
-                          key={rank}
-                          className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded transition-colors
-                            ${selectedRanks.includes(rank) ? 'bg-blue-100 text-blue-700 font-medium' : 'hover:bg-gray-100'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedRanks.includes(rank)}
-                            onChange={() => toggleRank(rank)}
-                            className="accent-blue-600"
-                          />
-                          {rank}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  <BadgeSelect
+                    label="적용 직급"
+                    items={RANKS.map(r => ({ value: r, label: r }))}
+                    selected={selectedRanks}
+                    onChange={setSelectedRanks}
+                  />
 
                   {/* 급여 항목 선택 */}
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">급여 항목</Label>
-                    <div className="p-3 border rounded-md bg-gray-50 space-y-2">
-                      {/* 급여 구성 항목 */}
-                      {components.filter(c => (c.component_type ?? 'earning') === 'earning').length > 0 && (
-                        <div>
-                          <div className="text-xs font-medium text-blue-700 mb-1">급여 구성</div>
-                          <div className="flex flex-wrap gap-1">
-                            {components.filter(c => (c.component_type ?? 'earning') === 'earning').map(comp => (
-                              <label key={comp.id} className={`flex items-center gap-1 text-xs cursor-pointer px-2 py-1 rounded border transition-colors
-                                ${selectedComponents.includes(comp.id) ? 'bg-blue-100 text-blue-700 border-blue-300 font-medium' : 'bg-white border-gray-200 hover:bg-gray-100'}`}>
-                                <input type="checkbox" checked={selectedComponents.includes(comp.id)} onChange={() => toggleComponent(comp.id)} className="accent-blue-600" />
-                                {comp.name}
-                                <span className={`text-[10px] ${comp.payment_type === 'deferred' ? 'text-amber-500' : 'text-blue-400'}`}>
-                                  {comp.payment_type === 'deferred' ? '후불' : '매월'}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {/* 공제 항목 */}
-                      {components.filter(c => c.component_type === 'deduction').length > 0 && (
-                        <div>
-                          <div className="text-xs font-medium text-red-600 mb-1">공제 항목</div>
-                          <div className="flex flex-wrap gap-1">
-                            {components.filter(c => c.component_type === 'deduction').map(comp => (
-                              <label key={comp.id} className={`flex items-center gap-1 text-xs cursor-pointer px-2 py-1 rounded border transition-colors
-                                ${selectedComponents.includes(comp.id) ? 'bg-red-100 text-red-700 border-red-300 font-medium' : 'bg-white border-gray-200 hover:bg-gray-100'}`}>
-                                <input type="checkbox" checked={selectedComponents.includes(comp.id)} onChange={() => toggleComponent(comp.id)} className="accent-red-600" />
-                                {comp.name}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <BadgeSelect
+                    label="급여 항목"
+                    groups={[
+                      {
+                        label: '급여 구성',
+                        color: 'blue',
+                        items: components
+                          .filter(c => (c.component_type ?? 'earning') === 'earning')
+                          .map(c => ({
+                            value: c.id,
+                            label: c.name,
+                            sublabel: c.payment_type === 'deferred' ? '후불' : '매월',
+                            color: c.payment_type === 'deferred' ? 'amber' : 'blue',
+                          } as BadgeSelectItem)),
+                      },
+                      {
+                        label: '공제 항목',
+                        color: 'red',
+                        items: components
+                          .filter(c => c.component_type === 'deduction')
+                          .map(c => ({ value: c.id, label: c.name, color: 'red' } as BadgeSelectItem)),
+                      },
+                    ].filter(g => g.items.length > 0) as BadgeSelectGroup[]}
+                    selected={selectedComponents}
+                    onChange={setSelectedComponents}
+                  />
 
                   {/* 금액 입력 표 — 좌: 급여구성/공제 입력, 우: 계산결과 */}
                   {selectedRanks.length > 0 && selectedComponents.length > 0 && (
@@ -395,6 +349,18 @@ export default function SalaryTemplatesPage() {
                   )}
 
                 </div>
+                  {/* 설명 (맨 아래) */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">설명</Label>
+                    <Textarea
+                      value={formData.description}
+                      onChange={e => setFormData({ ...formData, description: e.target.value })}
+                      rows={2}
+                      className="text-sm"
+                      placeholder="템플릿에 대한 설명을 입력하세요"
+                    />
+                  </div>
+
                 <div className="flex justify-end gap-2 mt-4">
                   <Button type="button" variant="outline" size="sm" onClick={() => setFormView(null)} className="h-8">취소</Button>
                   <Button type="submit" size="sm" className="h-8">저장</Button>
