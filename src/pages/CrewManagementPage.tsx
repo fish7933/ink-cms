@@ -1,192 +1,181 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { msg } from '@/lib/messages';
-import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import {
+  Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
+  ArrowUpCircle, Ship, Users, UserCheck, UserMinus,
+} from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CrewStatusTable } from '@/components/crew/CrewStatusTable';
-import { CrewStatusDialog } from '@/components/crew/CrewStatusDialog';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supabase } from '@/lib/supabase';
-import type { Rank, Company, Fleet, Ship } from '@/types/models';
+import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
+import type { RegistrationSource } from '@/types/dispatch';
+import { REGISTRATION_SOURCE_LABELS, CREW_CATEGORY_LABELS } from '@/types/dispatch';
 import { useToast } from '@/hooks/use-toast';
+
+type CategoryTab = 'registered' | 'standby' | 'onboard' | 'disembarked';
+
+const CATEGORY_STATUS_MAP: Record<CategoryTab, string[]> = {
+  registered:   ['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected'],
+  standby:      ['deployment_decided', 'standby'],
+  onboard:      ['onboard'],
+  disembarked:  ['standby'],
+};
+
+const STATUS_BADGE: Record<string, { label: string; color: string }> = {
+  registered:        { label: '등록',      color: 'bg-gray-100 text-gray-700' },
+  under_review:      { label: '검토중',    color: 'bg-blue-100 text-blue-700' },
+  sent_to_owner:     { label: '선주송부',  color: 'bg-purple-100 text-purple-700' },
+  owner_approved:    { label: '선주승인',  color: 'bg-green-100 text-green-700' },
+  owner_rejected:    { label: '선주거절',  color: 'bg-red-100 text-red-700' },
+  deployment_decided:{ label: '승선결정',  color: 'bg-emerald-100 text-emerald-700' },
+  onboard:           { label: '승선중',    color: 'bg-cyan-100 text-cyan-700' },
+  standby:           { label: '대기',      color: 'bg-yellow-100 text-yellow-700' },
+};
 
 export function CrewManagementPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { openNewTab } = useTabContext();
 
-  const [crewMembers, setCrewMembers] = useState<CrewWithDetails[]>([]);
-  const [filteredCrew, setFilteredCrew] = useState<CrewWithDetails[]>([]);
+  const [crew, setCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [owners, setOwners] = useState<Company[]>([]);
   const [manningAgencies, setManningAgencies] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
-  const [ships, setShips] = useState<Ship[]>([]);
-  const [nationalityOptions, setNationalityOptions] = useState<string[]>([]);
+  const [ships, setShips] = useState<ShipType[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedCrewIds, setSelectedCrewIds] = useState<string[]>([]);
+  const [category, setCategory] = useState<CategoryTab>('registered');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterOwner, setFilterOwner] = useState('all');
+  const [filterFleet, setFilterFleet] = useState('all');
+  const [filterShip, setFilterShip] = useState('all');
+  const [filterRank, setFilterRank] = useState('all');
+  const [filterManning, setFilterManning] = useState('all');
+  const [filterSource, setFilterSource] = useState('all');
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedOwner, setSelectedOwner] = useState('all');
-  const [selectedFleet, setSelectedFleet] = useState('all');
-  const [selectedShip, setSelectedShip] = useState('all');
-  const [selectedRank, setSelectedRank] = useState('all');
-  const [selectedRankCategory, setSelectedRankCategory] = useState('all');
-  const [selectedManningAgency, setSelectedManningAgency] = useState('all');
-  const [selectedNationality, setSelectedNationality] = useState('all');
-  const [activeTab, setActiveTab] = useState('all');
-
-  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
-  const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
-
   useEffect(() => { loadData(); }, []);
-  useEffect(() => { filterCrew(); }, [crewMembers, searchTerm, selectedOwner, selectedFleet, selectedShip, selectedRank, selectedRankCategory, selectedManningAgency, selectedNationality, activeTab]);
-  useEffect(() => { setCurrentPage(1); }, [filteredCrew.length]);
+  useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource]);
   useEffect(() => {
-    if (selectedOwner !== 'all') loadFleets(selectedOwner);
-    else { setFleets([]); setSelectedFleet('all'); }
-  }, [selectedOwner]);
+    if (filterOwner !== 'all') supabase.from('fleets').select('*').eq('owner_id', filterOwner).then(({ data }) => setFleets(data || []));
+    else { setFleets([]); setFilterFleet('all'); }
+  }, [filterOwner]);
   useEffect(() => {
-    if (selectedFleet !== 'all') loadShips(selectedFleet);
-    else if (selectedOwner !== 'all') loadShipsByOwner(selectedOwner);
-    else { setShips([]); setSelectedShip('all'); }
-  }, [selectedFleet, selectedOwner]);
+    if (filterFleet !== 'all') supabase.from('ships').select('*').eq('fleet_id', filterFleet).then(({ data }) => setShips(data || []));
+    else if (filterOwner !== 'all') supabase.from('ships').select('*').eq('owner_id', filterOwner).then(({ data }) => setShips(data || []));
+    else { setShips([]); setFilterShip('all'); }
+  }, [filterFleet, filterOwner]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const [crewData, ranksData, companiesData] = await Promise.all([
+      const [crewData, ranksRes, companiesRes] = await Promise.all([
         crewService.getAllWithDetails(),
         supabase.from('ranks').select('*').order('display_order'),
         supabase.from('companies').select('*'),
       ]);
-      setCrewMembers(crewData);
-      if (ranksData.data) setRanks(ranksData.data);
-      if (companiesData.data) {
-        setOwners(companiesData.data.filter((c: Company) => c.type === 'owner'));
-        setManningAgencies(companiesData.data.filter((c: Company) => c.type === 'manning'));
+      setCrew(crewData);
+      if (ranksRes.data) setRanks(ranksRes.data);
+      if (companiesRes.data) {
+        setOwners(companiesRes.data.filter((c: Company) => c.type === 'owner'));
+        setManningAgencies(companiesRes.data.filter((c: Company) => c.type === 'manning'));
       }
-      const nats = [...new Set(crewData.map((c: CrewWithDetails) => c.nationality).filter(Boolean))] as string[];
-      setNationalityOptions(nats.sort());
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } finally { setLoading(false); }
   };
 
-  const loadFleets = async (ownerId: string) => {
-    const { data } = await supabase.from('fleets').select('*').eq('owner_id', ownerId);
-    if (data) setFleets(data);
-  };
-  const loadShips = async (fleetId: string) => {
-    const { data } = await supabase.from('ships').select('*').eq('fleet_id', fleetId);
-    if (data) setShips(data);
-  };
-  const loadShipsByOwner = async (ownerId: string) => {
-    const { data } = await supabase.from('ships').select('*').eq('owner_id', ownerId);
-    if (data) setShips(data);
-  };
-
-  const filterCrew = () => {
-    let filtered = [...crewMembers];
-    if (activeTab !== 'all') filtered = filtered.filter(c => c.current_status === activeTab);
+  const filtered = useMemo(() => {
+    const statuses = CATEGORY_STATUS_MAP[category];
+    let list = crew.filter(c => {
+      const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
+      if (category === 'disembarked') return st === 'standby';
+      if (category === 'standby') return statuses.includes(st);
+      return statuses.includes(st);
+    });
     if (searchTerm) {
       const t = searchTerm.toLowerCase();
-      filtered = filtered.filter(c =>
-        c.name.toLowerCase().includes(t) ||
-        c.rank_name.toLowerCase().includes(t) ||
-        c.rank_code.toLowerCase().includes(t) ||
+      list = list.filter(c =>
+        c.name?.toLowerCase().includes(t) ||
+        c.rank_name?.toLowerCase().includes(t) ||
         c.passport_number?.toLowerCase().includes(t) ||
         c.seaman_book_number?.toLowerCase().includes(t)
       );
     }
-    if (selectedOwner !== 'all') filtered = filtered.filter(c => c.owner_id === selectedOwner);
-    if (selectedFleet !== 'all') filtered = filtered.filter(c => c.fleet_id === selectedFleet);
-    if (selectedShip !== 'all') filtered = filtered.filter(c => c.current_ship_id === selectedShip);
-    if (selectedRank !== 'all') filtered = filtered.filter(c => c.rank_id === selectedRank);
-    if (selectedRankCategory !== 'all') filtered = filtered.filter(c => c.rank_category === selectedRankCategory);
-    if (selectedManningAgency !== 'all') filtered = filtered.filter(c => c.manning_agency_id === selectedManningAgency);
-    if (selectedNationality !== 'all') filtered = filtered.filter(c => c.nationality === selectedNationality);
-    setFilteredCrew(filtered);
+    if (filterOwner !== 'all') list = list.filter(c => c.owner_id === filterOwner);
+    if (filterFleet !== 'all') list = list.filter(c => c.fleet_id === filterFleet);
+    if (filterShip !== 'all') list = list.filter(c => c.current_ship_id === filterShip);
+    if (filterRank !== 'all') list = list.filter(c => c.rank_id === filterRank);
+    if (filterManning !== 'all') list = list.filter(c => c.manning_agency_id === filterManning);
+    if (filterSource !== 'all') list = list.filter(c => (c as CrewWithDetails & { registration_source?: string }).registration_source === filterSource);
+    return list;
+  }, [crew, category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource]);
+
+  const countOf = (cat: CategoryTab) => {
+    const statuses = CATEGORY_STATUS_MAP[cat];
+    return crew.filter(c => {
+      const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
+      if (cat === 'disembarked') return st === 'standby';
+      return statuses.includes(st);
+    }).length;
   };
 
-  const isFiltered = selectedOwner !== 'all' || selectedFleet !== 'all' || selectedShip !== 'all' ||
-    selectedRank !== 'all' || selectedRankCategory !== 'all' || selectedManningAgency !== 'all' || selectedNationality !== 'all';
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const goToPage = (p: number) => setCurrentPage(Math.max(1, Math.min(p, totalPages)));
 
-  const clearFilters = () => {
-    setSearchTerm(''); setSelectedOwner('all'); setSelectedFleet('all'); setSelectedShip('all');
-    setSelectedRank('all'); setSelectedRankCategory('all'); setSelectedManningAgency('all');
-    setSelectedNationality('all');
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleAll = (checked: boolean) =>
+    setSelectedIds(checked ? paginated.map(c => c.id) : []);
+
+  const openRotationPlan = (mode: 'boarding' | 'disembark') => {
+    if (selectedIds.length === 0) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
+    const param = selectedIds.join(',');
+    openNewTab(`/crew-rotation/new?${mode}=${param}`, '교대계획 작성', true);
   };
 
-  const handleView = (crew: CrewWithDetails) => openNewTab(`/crew/${crew.id}`, crew.name || '선원 정보');
-  const handleAddCrew = () => openNewTab('/crew/new', '선원 등록', true);
-  const handleChangeStatus = (crew: CrewWithDetails) => { setSelectedCrew(crew); setStatusDialogOpen(true); };
-
-  const handleSelectionChange = (crewId: string, checked: boolean) => {
-    if (checked) setSelectedCrewIds(prev => [...prev, crewId]);
-    else setSelectedCrewIds(prev => prev.filter(id => id !== crewId));
-  };
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) setSelectedCrewIds(paginatedCrew.map(c => c.id));
-    else setSelectedCrewIds([]);
-  };
-
-  const handleBulkDelete = () => {
-    if (selectedCrewIds.length === 0) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
-    setShowDeleteDialog(true);
+  const openDispatchOrder = () => {
+    if (selectedIds.length === 0) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
+    openNewTab(`/crew-dispatch/new?crew=${selectedIds.join(',')}`, '승진/강등 발령', true);
   };
 
   const confirmDelete = async () => {
-    try {
-      const { error } = await supabase.from('crew_members').delete().in('id', selectedCrewIds);
-      if (error) throw error;
-      toast({ title: '삭제 완료', description: `${selectedCrewIds.length}명의 선원이 삭제되었습니다.` });
-      setSelectedCrewIds([]);
-      setShowDeleteDialog(false);
-      await loadData();
-    } catch (e) {
-      console.error(e);
-      toast({ title: '삭제 실패', variant: 'destructive' });
-    }
+    const { error } = await supabase.from('crew_members').delete().in('id', selectedIds);
+    if (error) { toast({ title: '삭제 실패', variant: 'destructive' }); return; }
+    toast({ title: '삭제 완료', description: `${selectedIds.length}명 삭제됨` });
+    setSelectedIds([]); setShowDeleteDialog(false); await loadData();
   };
 
-  const getStatusCount = (status: string) =>
-    status === 'all' ? crewMembers.length : crewMembers.filter(c => c.current_status === status).length;
+  const isFiltered = filterOwner !== 'all' || filterFleet !== 'all' || filterShip !== 'all' ||
+    filterRank !== 'all' || filterManning !== 'all' || filterSource !== 'all';
 
-  const totalPages = Math.ceil(filteredCrew.length / itemsPerPage);
-  const paginatedCrew = filteredCrew.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const goToPage = (page: number) => setCurrentPage(Math.max(1, Math.min(page, totalPages)));
-
-  const tableProps = {
-    crew: paginatedCrew,
-    selectedCrewIds,
-    onSelectionChange: handleSelectionChange,
-    onSelectAll: handleSelectAll,
-    onView: handleView,
-    onEdit: handleView,
-    onChangeStatus: handleChangeStatus,
+  const clearFilters = () => {
+    setFilterOwner('all'); setFilterFleet('all'); setFilterShip('all');
+    setFilterRank('all'); setFilterManning('all'); setFilterSource('all'); setSearchTerm('');
   };
 
-  if (loading) {
-    return (
-      <>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-            <p className="text-sm text-gray-600">로딩 중...</p>
-          </div>
-        </div>
-      </>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
+        <p className="text-sm text-gray-600">로딩 중...</p>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -196,15 +185,32 @@ export function CrewManagementPage() {
             <div className="flex justify-between items-center">
               <div>
                 <CardTitle className="text-base">선원 관리</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">선원 정보와 승하선 이력을 관리합니다</p>
+                <p className="text-xs text-muted-foreground mt-1">등록부터 하선까지 선원 현황을 관리합니다</p>
               </div>
               <div className="flex gap-2">
-                {selectedCrewIds.length > 0 && (
-                  <Button onClick={handleBulkDelete} size="sm" variant="destructive" className="gap-1.5 h-8">
-                    <Trash2 className="w-4 h-4" />선택 삭제 ({selectedCrewIds.length})
-                  </Button>
+                {selectedIds.length > 0 && (
+                  <>
+                    {category === 'standby' && (
+                      <Button onClick={() => openRotationPlan('boarding')} size="sm" className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700">
+                        <Ship className="w-4 h-4" />교대계획(승선) ({selectedIds.length})
+                      </Button>
+                    )}
+                    {category === 'onboard' && (
+                      <>
+                        <Button onClick={() => openRotationPlan('disembark')} size="sm" className="gap-1.5 h-8 bg-orange-500 hover:bg-orange-600">
+                          <UserMinus className="w-4 h-4" />교대계획(하선) ({selectedIds.length})
+                        </Button>
+                        <Button onClick={openDispatchOrder} size="sm" variant="outline" className="gap-1.5 h-8">
+                          <ArrowUpCircle className="w-4 h-4" />승진/강등 발령
+                        </Button>
+                      </>
+                    )}
+                    <Button onClick={() => setShowDeleteDialog(true)} size="sm" variant="destructive" className="gap-1.5 h-8">
+                      <Trash2 className="w-4 h-4" />삭제 ({selectedIds.length})
+                    </Button>
+                  </>
                 )}
-                <Button onClick={handleAddCrew} size="sm" className="gap-1.5 h-8">
+                <Button onClick={() => openNewTab('/crew/new', '선원 등록', true)} size="sm" className="gap-1.5 h-8">
                   <Plus className="w-4 h-4" />선원 등록
                 </Button>
               </div>
@@ -223,47 +229,39 @@ export function CrewManagementPage() {
               />
             </div>
 
-            {/* 필터 드롭다운 */}
-            <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
-              <Select value={selectedOwner} onValueChange={setSelectedOwner}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선주사" /></SelectTrigger>
+            {/* 필터 */}
+            <div className="flex flex-wrap gap-2">
+              <Select value={filterOwner} onValueChange={setFilterOwner}>
+                <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="선주사" /></SelectTrigger>
                 <SelectContent><SelectItem value="all">전체 선주사</SelectItem>{owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
               </Select>
-
-              <Select value={selectedFleet} onValueChange={setSelectedFleet} disabled={selectedOwner === 'all'}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="플릿" /></SelectTrigger>
+              <Select value={filterFleet} onValueChange={setFilterFleet} disabled={filterOwner === 'all'}>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="플릿" /></SelectTrigger>
                 <SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent>
               </Select>
-
-              <Select value={selectedShip} onValueChange={setSelectedShip} disabled={selectedOwner === 'all'}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선박" /></SelectTrigger>
+              <Select value={filterShip} onValueChange={setFilterShip} disabled={filterOwner === 'all'}>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="선박" /></SelectTrigger>
                 <SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
               </Select>
-
-              <Select value={selectedRank} onValueChange={setSelectedRank}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="직급" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+              <Select value={filterRank} onValueChange={setFilterRank}>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="직급" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}</SelectContent>
               </Select>
-
-              <Select value={selectedRankCategory} onValueChange={setSelectedRankCategory}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="사관/부원" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">사관/부원 전체</SelectItem>
-                  <SelectItem value="officer">사관</SelectItem>
-                  <SelectItem value="rating">부원</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedManningAgency} onValueChange={setSelectedManningAgency}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="매닝사" /></SelectTrigger>
+              <Select value={filterManning} onValueChange={setFilterManning}>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="매닝사" /></SelectTrigger>
                 <SelectContent><SelectItem value="all">전체 매닝사</SelectItem>{manningAgencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
               </Select>
-
-              <Select value={selectedNationality} onValueChange={setSelectedNationality}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="국적" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 국적</SelectItem>{nationalityOptions.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
-              </Select>
-
+              {category === 'registered' && (
+                <Select value={filterSource} onValueChange={setFilterSource}>
+                  <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="등록출처" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체 출처</SelectItem>
+                    {(Object.keys(REGISTRATION_SOURCE_LABELS) as RegistrationSource[]).map(s => (
+                      <SelectItem key={s} value={s}>{REGISTRATION_SOURCE_LABELS[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {isFiltered && (
                 <Button variant="outline" size="sm" onClick={clearFilters} className="h-8 text-xs gap-1">
                   <X className="w-3 h-3" />초기화
@@ -271,88 +269,153 @@ export function CrewManagementPage() {
               )}
             </div>
 
-            <>
-                {/* 상태 탭 */}
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="h-8">
-                    <TabsTrigger value="all" className="text-xs h-7">전체 ({getStatusCount('all')})</TabsTrigger>
-                    <TabsTrigger value="registered" className="text-xs h-7">등록 ({getStatusCount('registered')})</TabsTrigger>
-                    <TabsTrigger value="available" className="text-xs h-7">대기 ({getStatusCount('available')})</TabsTrigger>
-                    <TabsTrigger value="on_board" className="text-xs h-7">승선 ({getStatusCount('on_board')})</TabsTrigger>
-                    <TabsTrigger value="on_leave" className="text-xs h-7">휴가 ({getStatusCount('on_leave')})</TabsTrigger>
-                    <TabsTrigger value="retired" className="text-xs h-7">퇴직 ({getStatusCount('retired')})</TabsTrigger>
-                  </TabsList>
+            {/* 4단계 탭 */}
+            <Tabs value={category} onValueChange={v => setCategory(v as CategoryTab)}>
+              <TabsList className="h-9 gap-1">
+                <TabsTrigger value="registered" className="text-xs h-8 gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  {CREW_CATEGORY_LABELS.registered}
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('registered')}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="standby" className="text-xs h-8 gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5" />
+                  {CREW_CATEGORY_LABELS.standby}
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('standby')}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="onboard" className="text-xs h-8 gap-1.5">
+                  <Ship className="w-3.5 h-3.5" />
+                  {CREW_CATEGORY_LABELS.onboard}
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('onboard')}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="disembarked" className="text-xs h-8 gap-1.5">
+                  <UserMinus className="w-3.5 h-3.5" />
+                  {CREW_CATEGORY_LABELS.disembarked}
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('disembarked')}</Badge>
+                </TabsTrigger>
+              </TabsList>
 
-                  <div className="flex justify-between items-center mt-2 mb-1">
+              {(['registered','standby','onboard','disembarked'] as CategoryTab[]).map(cat => (
+                <TabsContent key={cat} value={cat} className="mt-3">
+                  {/* 카운트 + 페이지당 설정 */}
+                  <div className="flex justify-between items-center mb-2">
                     <p className="text-xs text-gray-500">
-                      총 {filteredCrew.length}명
-                      {selectedCrewIds.length > 0 && msg.crew.selectedCount(selectedCrewIds.length)}
+                      총 {filtered.length}명
+                      {selectedIds.length > 0 && msg.crew.selectedCount(selectedIds.length)}
                     </p>
                     <div className="flex items-center gap-2">
                       <Label className="text-xs">페이지당:</Label>
-                      <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(parseInt(v)); setCurrentPage(1); }}>
+                      <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
                         <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="20">20</SelectItem>
-                          <SelectItem value="50">50</SelectItem>
-                          <SelectItem value="100">100</SelectItem>
+                          {[10,20,50,100].map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  {['all','registered','available','on_board','on_leave','retired'].map(tab => (
-                    <TabsContent key={tab} value={tab} className="mt-0">
-                      <CrewStatusTable {...tableProps} />
-                    </TabsContent>
-                  ))}
-                </Tabs>
+                  {/* 테이블 */}
+                  <div className="border rounded-md overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="w-8 px-3 py-2">
+                            <Checkbox
+                              checked={paginated.length > 0 && paginated.every(c => selectedIds.includes(c.id))}
+                              onCheckedChange={checked => toggleAll(!!checked)}
+                            />
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">이름</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">직급</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">국적</th>
+                          {cat === 'onboard' && <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">승선 선박</th>}
+                          {cat === 'registered' && <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">등록출처</th>}
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">상태</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Grade</th>
+                          <th className="px-3 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginated.length === 0 ? (
+                          <tr><td colSpan={8} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                        ) : paginated.map(c => {
+                          const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
+                          const statusKey = crewExt.status || '';
+                          const badge = STATUS_BADGE[statusKey];
+                          return (
+                            <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => toggleSelect(c.id)}>
+                              <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                                <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
+                              </td>
+                              <td className="px-3 py-2 font-medium">{c.name}</td>
+                              <td className="px-3 py-2 text-gray-600">{c.rank_name || '-'}</td>
+                              <td className="px-3 py-2 text-gray-600">{c.nationality || '-'}</td>
+                              {cat === 'onboard' && (
+                                <td className="px-3 py-2 text-gray-600 text-xs">{(c as CrewWithDetails & { current_ship_name?: string }).current_ship_name || '-'}</td>
+                              )}
+                              {cat === 'registered' && (
+                                <td className="px-3 py-2 text-xs text-gray-500">
+                                  {crewExt.registration_source ? REGISTRATION_SOURCE_LABELS[crewExt.registration_source as RegistrationSource] : '-'}
+                                </td>
+                              )}
+                              <td className="px-3 py-2">
+                                {badge && (
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${badge.color}`}>{badge.label}</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                {crewExt.current_grade ? (
+                                  <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{crewExt.current_grade}급</span>
+                                ) : '-'}
+                              </td>
+                              <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
+                                <Button
+                                  size="sm" variant="ghost" className="h-7 text-xs"
+                                  onClick={() => openNewTab(`/crew/${c.id}`, c.name || '선원 정보')}
+                                >
+                                  열람
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                {/* 페이지네이션 */}
-                {totalPages > 1 && (
-                  <div className="flex justify-center items-center gap-2 pt-3 border-t">
-                    <Button variant="outline" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="h-8">
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <div className="flex gap-1">
+                  {/* 페이지네이션 */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-2 pt-3">
+                      <Button variant="outline" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="h-8">
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let p: number;
-                        if (totalPages <= 5) p = i + 1;
-                        else if (currentPage <= 3) p = i + 1;
-                        else if (currentPage >= totalPages - 2) p = totalPages - 4 + i;
-                        else p = currentPage - 2 + i;
+                        const p = totalPages <= 5 ? i + 1
+                          : currentPage <= 3 ? i + 1
+                          : currentPage >= totalPages - 2 ? totalPages - 4 + i
+                          : currentPage - 2 + i;
                         return (
-                          <Button key={p} variant={currentPage === p ? 'default' : 'outline'} size="sm" onClick={() => goToPage(p)} className="h-8 w-8 p-0">{p}</Button>
+                          <Button key={p} variant={currentPage === p ? 'default' : 'outline'} size="sm"
+                            onClick={() => goToPage(p)} className="h-8 w-8 p-0">{p}</Button>
                         );
                       })}
+                      <Button variant="outline" size="sm" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="h-8">
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="h-8">
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
-            </>
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
           </CardContent>
         </Card>
       </div>
-
-      <CrewStatusDialog
-        open={statusDialogOpen}
-        crew={selectedCrew}
-        onClose={async (saved) => {
-          setStatusDialogOpen(false);
-          setSelectedCrew(null);
-          if (saved) await loadData();
-        }}
-      />
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>선원 삭제 확인</AlertDialogTitle>
             <AlertDialogDescription>
-              선택한 {selectedCrewIds.length}명의 선원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+              선택한 {selectedIds.length}명의 선원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
