@@ -172,7 +172,7 @@ function getTitleFromPath(path: string): string {
     '/ships': '선박 목록', '/ship-types': '선종/분류 관리', '/ship-flags': '선적국 관리', '/fleet-management': '플릿 관리',
     '/job-postings': '구인 공고', '/my-recommendations': '내 추천 선원', '/recommendation-review': '추천 검토',
     '/approval-inbox': '내 결재함', '/approval-archive': '완료 문서함', '/approval-management': '결재 캐비넷', '/approval-lines': '결재선 관리',
-    '/salary/templates': '급여 템플릿', '/salary/assignments': '할당 현황', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',
+    '/salary/templates': '급여 템플릿', '/salary/templates/new': '급여 템플릿 추가', '/salary/assignments': '할당 현황', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',
     '/companies': '회사 관리', '/user-groups': '사용자 그룹', '/manager-assignments': '담당자 배정', '/supervisor-management': '담당 감독 관리',
     '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 유형 관리',
     '/shore-positions': '육상 직원 직급', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
@@ -182,6 +182,7 @@ function getTitleFromPath(path: string): string {
   const basePath = path.split('?')[0];
   if (map[basePath]) return map[basePath];
   if (basePath.match(/^\/crew\/[^/]+\/resume$/)) return '이력서';
+  if (basePath.match(/^\/salary\/templates\/[^/]+\/edit$/)) return '급여 템플릿 수정';
   if (basePath.match(/^\/crew\/[^/]+$/)) return '선원 정보';
   return basePath;
 }
