@@ -4,12 +4,15 @@ import { useTabContext } from '@/contexts/TabContext';
 import { useUISettings } from '@/contexts/UISettingsContext';
 
 const CONTROLS_WIDTH = 120;
+const HOVER_PADDING = 40; // 양쪽 px + 닫기 버튼 여유
 
 export default function TabBar() {
   const { tabs, activeTabId, activateTab, closeTab, closeLastTab, closeAllTabs } = useTabContext();
   const { uiSettings } = useUISettings();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
+  const titleWidthCache = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const el = containerRef.current;
@@ -21,10 +24,22 @@ export default function TabBar() {
     return () => observer.disconnect();
   }, []);
 
+  // canvas로 텍스트 너비 측정
+  const measureTextWidth = (text: string): number => {
+    if (titleWidthCache.current[text]) return titleWidthCache.current[text];
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return uiSettings.tabMaxWidth;
+    ctx.font = '12px sans-serif';
+    const width = Math.ceil(ctx.measureText(text).width) + HOVER_PADDING;
+    titleWidthCache.current[text] = width;
+    return width;
+  };
+
   if (tabs.length === 0) return null;
 
   const availableWidth = containerWidth - CONTROLS_WIDTH;
-  const tabWidth = availableWidth > 0
+  const baseTabWidth = availableWidth > 0
     ? Math.max(uiSettings.tabMinWidth, Math.min(uiSettings.tabMaxWidth, Math.floor(availableWidth / tabs.length)))
     : uiSettings.tabMaxWidth;
 
@@ -32,18 +47,22 @@ export default function TabBar() {
     <div ref={containerRef} className="bg-white border-b flex overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
       {tabs.map(tab => {
         const isActive = tab.id === activeTabId;
+        const isHovered = hoveredTabId === tab.id;
+        const tabWidth = isHovered ? Math.max(baseTabWidth, measureTextWidth(tab.title)) : baseTabWidth;
         return (
           <div
             key={tab.id}
-            className={`flex items-center gap-1 px-3 border-r cursor-pointer shrink-0 group transition-colors ${
+            className={`flex items-center gap-1 px-3 border-r cursor-pointer shrink-0 group transition-[width,background-color] duration-150 ${
               isActive
                 ? 'bg-blue-50 border-b-2 border-b-blue-600 text-blue-700'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
             style={{ width: `${tabWidth}px`, height: '36px' }}
             onClick={() => activateTab(tab.id)}
+            onMouseEnter={() => setHoveredTabId(tab.id)}
+            onMouseLeave={() => setHoveredTabId(null)}
           >
-            <span className="flex-1 text-xs truncate select-none">{tab.title}</span>
+            <span className={`flex-1 text-xs select-none ${isHovered ? '' : 'truncate'}`}>{tab.title}</span>
             <button
               className={`shrink-0 rounded p-0.5 transition-colors opacity-0 group-hover:opacity-100 ${
                 isActive ? 'hover:bg-blue-100 text-blue-500' : 'hover:bg-gray-200 text-gray-400'
