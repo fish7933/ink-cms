@@ -86,8 +86,34 @@ export default function SalaryTemplatesPage() {
 
   const getAmount = (rank: string, compId: string) => amounts[rank]?.[compId] || 0;
 
+  // 급여 구성(earning) / 공제(deduction) 분리
+  const earningIds = selectedComponents.filter(cid => {
+    const comp = components.find(c => c.id === cid);
+    return (comp?.component_type ?? 'earning') === 'earning';
+  });
+  const deductionIds = selectedComponents.filter(cid => {
+    const comp = components.find(c => c.id === cid);
+    return comp?.component_type === 'deduction';
+  });
+
+  // 월 급여 총액 = earning 합계
   const rankTotal = (rank: string) =>
-    selectedComponents.reduce((s, cid) => s + getAmount(rank, cid), 0);
+    earningIds.reduce((s, cid) => s + getAmount(rank, cid), 0);
+
+  // 후불성 합계
+  const rankDeferred = (rank: string) =>
+    earningIds.filter(cid => {
+      const comp = components.find(c => c.id === cid);
+      return comp?.payment_type === 'deferred';
+    }).reduce((s, cid) => s + getAmount(rank, cid), 0);
+
+  // 공제 합계
+  const rankDeduction = (rank: string) =>
+    deductionIds.reduce((s, cid) => s + getAmount(rank, cid), 0);
+
+  // 월 실지급액
+  const rankMonthlyPay = (rank: string) =>
+    rankTotal(rank) - rankDeferred(rank) - rankDeduction(rank);
 
   const matrixToItems = () => {
     const result: { rank: string; component_id: string; amount: number }[] = [];
@@ -249,69 +275,122 @@ export default function SalaryTemplatesPage() {
                   {/* 급여 항목 선택 */}
                   <div className="space-y-1.5">
                     <Label className="text-sm">급여 항목</Label>
-                    <div className="flex flex-wrap gap-1 p-3 border rounded-md bg-gray-50">
-                      {components.map(comp => (
-                        <label
-                          key={comp.id}
-                          className={`flex items-center gap-1.5 text-xs cursor-pointer px-2 py-1.5 rounded border transition-colors
-                            ${selectedComponents.includes(comp.id)
-                              ? 'bg-blue-100 text-blue-700 border-blue-300 font-medium'
-                              : 'bg-white border-gray-200 hover:bg-gray-100'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedComponents.includes(comp.id)}
-                            onChange={() => toggleComponent(comp.id)}
-                            className="accent-blue-600"
-                          />
-                          {comp.name}
-                        </label>
-                      ))}
+                    <div className="p-3 border rounded-md bg-gray-50 space-y-2">
+                      {/* 급여 구성 항목 */}
+                      {components.filter(c => (c.component_type ?? 'earning') === 'earning').length > 0 && (
+                        <div>
+                          <div className="text-xs font-medium text-blue-700 mb-1">급여 구성</div>
+                          <div className="flex flex-wrap gap-1">
+                            {components.filter(c => (c.component_type ?? 'earning') === 'earning').map(comp => (
+                              <label key={comp.id} className={`flex items-center gap-1 text-xs cursor-pointer px-2 py-1 rounded border transition-colors
+                                ${selectedComponents.includes(comp.id) ? 'bg-blue-100 text-blue-700 border-blue-300 font-medium' : 'bg-white border-gray-200 hover:bg-gray-100'}`}>
+                                <input type="checkbox" checked={selectedComponents.includes(comp.id)} onChange={() => toggleComponent(comp.id)} className="accent-blue-600" />
+                                {comp.name}
+                                <span className={`text-[10px] ${comp.payment_type === 'deferred' ? 'text-amber-500' : 'text-blue-400'}`}>
+                                  {comp.payment_type === 'deferred' ? '후불' : '매월'}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* 공제 항목 */}
+                      {components.filter(c => c.component_type === 'deduction').length > 0 && (
+                        <div>
+                          <div className="text-xs font-medium text-red-600 mb-1">공제 항목</div>
+                          <div className="flex flex-wrap gap-1">
+                            {components.filter(c => c.component_type === 'deduction').map(comp => (
+                              <label key={comp.id} className={`flex items-center gap-1 text-xs cursor-pointer px-2 py-1 rounded border transition-colors
+                                ${selectedComponents.includes(comp.id) ? 'bg-red-100 text-red-700 border-red-300 font-medium' : 'bg-white border-gray-200 hover:bg-gray-100'}`}>
+                                <input type="checkbox" checked={selectedComponents.includes(comp.id)} onChange={() => toggleComponent(comp.id)} className="accent-red-600" />
+                                {comp.name}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* 금액 입력 표: 행=직급, 열=급여항목 */}
+                  {/* 금액 입력 표 — 좌: 급여구성/공제 입력, 우: 계산결과 */}
                   {selectedRanks.length > 0 && selectedComponents.length > 0 && (
                     <div className="space-y-1.5">
                       <Label className="text-sm">직급별 금액 입력</Label>
                       <div className="overflow-x-auto border rounded-md">
                         <table className="text-xs w-full">
                           <thead>
+                            {/* 그룹 헤더 */}
+                            <tr className="bg-gray-50 border-b">
+                              <th className="sticky left-0 bg-gray-50 border-r p-1" />
+                              {earningIds.length > 0 && (
+                                <th colSpan={earningIds.length} className="text-center py-1 px-2 text-blue-700 font-semibold border-r bg-blue-50/50">
+                                  ← 급여 구성 항목
+                                </th>
+                              )}
+                              {deductionIds.length > 0 && (
+                                <th colSpan={deductionIds.length} className="text-center py-1 px-2 text-red-600 font-semibold border-r bg-red-50/50">
+                                  공제 항목
+                                </th>
+                              )}
+                              <th colSpan={2} className="text-center py-1 px-2 text-gray-600 font-semibold bg-gray-100">
+                                계산 결과
+                              </th>
+                            </tr>
+                            {/* 컬럼 헤더 */}
                             <tr className="bg-gray-100">
                               <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100 min-w-32">직급</th>
-                              {selectedComponents.map(cid => {
+                              {earningIds.map(cid => {
                                 const comp = components.find(c => c.id === cid);
                                 return (
-                                  <th key={cid} className="text-center p-2 border-r font-semibold min-w-28">{comp?.name}</th>
+                                  <th key={cid} className="text-center p-1 border-r font-semibold min-w-24 bg-blue-50/30">
+                                    <div>{comp?.name}</div>
+                                    <div className={`text-[10px] font-normal ${comp?.payment_type === 'deferred' ? 'text-amber-500' : 'text-blue-400'}`}>
+                                      {comp?.payment_type === 'deferred' ? '후불성' : '매월'}
+                                    </div>
+                                  </th>
                                 );
                               })}
-                              <th className="text-center p-2 font-semibold min-w-24">합계</th>
+                              {deductionIds.map((cid, i) => {
+                                const comp = components.find(c => c.id === cid);
+                                return (
+                                  <th key={cid} className={`text-center p-1 border-r font-semibold min-w-24 bg-red-50/30 ${i === 0 ? 'border-l-2 border-l-red-200' : ''}`}>
+                                    <div>{comp?.name}</div>
+                                    <div className="text-[10px] font-normal text-red-400">공제</div>
+                                  </th>
+                                );
+                              })}
+                              <th className="text-center p-2 font-semibold min-w-24 bg-gray-100 border-l-2 border-l-gray-400">월 급여 총액</th>
+                              <th className="text-center p-2 font-semibold min-w-24 bg-blue-100 text-blue-800">월 실지급액</th>
                             </tr>
                           </thead>
                           <tbody>
                             {selectedRanks.map(rank => (
                               <tr key={rank} className="border-t">
                                 <td className="p-2 border-r font-medium text-gray-700 bg-gray-50 sticky left-0">{rank}</td>
-                                {selectedComponents.map(cid => (
+                                {earningIds.map(cid => (
                                   <td key={cid} className="p-1 border-r">
-                                    <Input
-                                      type="number"
-                                      value={getAmount(rank, cid) || ''}
-                                      onChange={e => setAmount(rank, cid, parseInt(e.target.value) || 0)}
-                                      className="h-7 text-xs text-right w-full"
-                                      placeholder="0"
-                                      min={0}
-                                    />
+                                    <Input type="number" value={getAmount(rank, cid) || ''} onChange={e => setAmount(rank, cid, parseInt(e.target.value) || 0)}
+                                      className="h-7 text-xs text-right w-full" placeholder="0" min={0} />
                                   </td>
                                 ))}
-                                <td className="p-2 text-right font-semibold text-blue-700">
+                                {deductionIds.map((cid, i) => (
+                                  <td key={cid} className={`p-1 border-r bg-red-50/20 ${i === 0 ? 'border-l-2 border-l-red-200' : ''}`}>
+                                    <Input type="number" value={getAmount(rank, cid) || ''} onChange={e => setAmount(rank, cid, parseInt(e.target.value) || 0)}
+                                      className="h-7 text-xs text-right w-full" placeholder="0" min={0} />
+                                  </td>
+                                ))}
+                                <td className="p-2 text-right font-semibold bg-gray-50 border-l-2 border-l-gray-400">
                                   {rankTotal(rank).toLocaleString()}
+                                </td>
+                                <td className="p-2 text-right font-bold text-blue-700 bg-blue-50">
+                                  {rankMonthlyPay(rank).toLocaleString()}
                                 </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+                      <p className="text-xs text-gray-400">월 실지급액 = 급여 구성 합계 − 후불성 − 공제</p>
                     </div>
                   )}
 
