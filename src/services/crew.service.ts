@@ -34,6 +34,7 @@ export interface CrewWithDetails extends CrewMember {
   rank_code: string;
   rank_category: 'officer' | 'rating';
   ship_name?: string;
+  current_ship_name?: string;
   owner_name?: string;
   fleet_name?: string;
   manning_agency_name?: string;
@@ -87,6 +88,8 @@ interface CrewMemberRow {
   place_of_birth?: string;
   emergency_contacts?: unknown;
   certificates?: unknown;
+  registration_source?: string;
+  current_grade?: string;
 }
 
 const calculateAge = (dateOfBirth: string): number => {
@@ -161,7 +164,10 @@ export const crewService = {
         contact_phone: item.phone,
         contact_email: item.email,
         emergency_contact: '',
+        status: item.status,
         current_status: (item.current_status || item.status) as CrewStatus,
+        registration_source: item.registration_source,
+        current_grade: item.current_grade,
         manning_agency_id: item.manning_agency_id,
         owner_id: item.owner_id,
         fleet_id: item.fleet_id,
@@ -173,6 +179,7 @@ export const crewService = {
         rank_code: rank?.rank_code || '',
         rank_category: rank?.rank_category || 'rating',
         ship_name: ship?.name,
+        current_ship_name: ship?.name,
         owner_name: owner?.name,
         fleet_name: fleet?.name,
         manning_agency_name: manningAgency?.name,
