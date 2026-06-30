@@ -526,10 +526,10 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
               <div><Label className="text-xs">몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1" placeholder="70" /></div>
               <div>
                 <Label className="text-xs">눈 색</Label>
-                <Select value={formData.eye_color} onValueChange={v => f('eye_color', v)}>
+                <Select value={formData.eye_color || '_none'} onValueChange={v => f('eye_color', v === '_none' ? '' : v)}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="눈 색 선택" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">선택 안함</SelectItem>
+                    <SelectItem value="_none">선택 안함</SelectItem>
                     {EYE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -562,10 +562,10 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">종교</Label>
-                  <Select value={formData.religion} onValueChange={v => f('religion', v)}>
+                  <Select value={formData.religion || '_none'} onValueChange={v => f('religion', v === '_none' ? '' : v)}>
                     <SelectTrigger className="mt-1"><SelectValue placeholder="종교 선택" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">선택 안함</SelectItem>
+                      <SelectItem value="_none">선택 안함</SelectItem>
                       {RELIGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                     </SelectContent>
                   </Select>

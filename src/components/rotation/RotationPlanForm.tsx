@@ -393,16 +393,16 @@ export function RotationPlanForm({
                     <div className="space-y-2">
                       <Label>하선자 (선택사항)</Label>
                       <Select
-                        value={assignment.off_crew_id || ''}
+                        value={assignment.off_crew_id || '_none'}
                         onValueChange={(value) =>
-                          handleAssignmentChange(index, 'off_crew_id', value || null)
+                          handleAssignmentChange(index, 'off_crew_id', value === '_none' ? null : value)
                         }
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="하선자 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">선택 안함</SelectItem>
+                          <SelectItem value="_none">선택 안함</SelectItem>
                           {onboardCrew.map((crew) => (
                             <SelectItem key={crew.id} value={String(crew.id)}>
                               {crew.name} ({crew.rank_name})
@@ -415,16 +415,16 @@ export function RotationPlanForm({
                     <div className="space-y-2">
                       <Label>승선자 (선택사항)</Label>
                       <Select
-                        value={assignment.on_crew_id || ''}
+                        value={assignment.on_crew_id || '_none'}
                         onValueChange={(value) =>
-                          handleAssignmentChange(index, 'on_crew_id', value || null)
+                          handleAssignmentChange(index, 'on_crew_id', value === '_none' ? null : value)
                         }
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="승선자 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">선택 안함</SelectItem>
+                          <SelectItem value="_none">선택 안함</SelectItem>
                           {standbyCrew.map((crew) => (
                             <SelectItem key={crew.id} value={String(crew.id)}>
                               {crew.name} ({crew.rank_name})
