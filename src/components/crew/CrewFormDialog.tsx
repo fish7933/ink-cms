@@ -299,13 +299,15 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
     let el: Element | null = formRef.current.parentElement;
     while (el) {
       const s = window.getComputedStyle(el);
-      if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+      if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
         (el as HTMLElement).scrollTop = 0;
         break;
       }
       el = el.parentElement;
     }
   }, []);
+
+  useEffect(() => { scrollToTop(); }, [scrollToTop]);
 
   const parseBool = (val: string): boolean | null => val === 'yes' ? true : val === 'no' ? false : null;
   const parseOptional = (val: string): string | null => (val && val !== 'none') ? val : null;

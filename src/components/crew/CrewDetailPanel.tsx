@@ -115,13 +115,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     let el: Element | null = panelRef.current.parentElement;
     while (el) {
       const s = window.getComputedStyle(el);
-      if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+      if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
         (el as HTMLElement).scrollTop = 0;
         break;
       }
       el = el.parentElement;
     }
   }, []);
+
+  useEffect(() => { scrollToTop(); }, [scrollToTop]);
 
   const isNew = !id;
   const [loading, setLoading] = useState(!isNew);

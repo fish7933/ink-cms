@@ -52,7 +52,7 @@ export function CrewManagementPage() {
       let el: Element | null = formContainerRef.current.parentElement;
       while (el) {
         const s = window.getComputedStyle(el);
-        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+        if (s.overflowY === 'auto' || s.overflowY === 'scroll') {
           (el as HTMLElement).scrollTop = 0;
           break;
         }
