@@ -252,27 +252,34 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
     }));
   };
 
+  const getCompType = (compId: string) => {
+    const comp = components.find(c => String(c.id) === compId);
+    return comp?.component_type ?? 'earning';
+  };
+
+  const getPayType = (compId: string) => {
+    const comp = components.find(c => String(c.id) === compId);
+    return comp?.payment_type ?? 'monthly';
+  };
+
   const getRankTotal = (rank: string) => {
     if (!rankSalaries[rank]) return 0;
     return selectedComponents.reduce((sum, compId) => {
-      const comp = components.find(c => String(c.id) === compId);
-      if (comp?.component_type === 'earning') return sum + (rankSalaries[rank]?.[compId] || 0);
+      if (getCompType(compId) === 'earning') return sum + (rankSalaries[rank]?.[compId] || 0);
       return sum;
     }, 0);
   };
 
   const getRankDeferred = (rank: string) =>
     selectedComponents.reduce((sum, compId) => {
-      const comp = components.find(c => String(c.id) === compId);
-      if (comp?.component_type === 'earning' && comp?.payment_type === 'deferred')
+      if (getCompType(compId) === 'earning' && getPayType(compId) === 'deferred')
         return sum + (rankSalaries[rank]?.[compId] || 0);
       return sum;
     }, 0);
 
   const getRankDeduction = (rank: string) =>
     selectedComponents.reduce((sum, compId) => {
-      const comp = components.find(c => String(c.id) === compId);
-      if (comp?.component_type === 'deduction') return sum + (rankSalaries[rank]?.[compId] || 0);
+      if (getCompType(compId) === 'deduction') return sum + (rankSalaries[rank]?.[compId] || 0);
       return sum;
     }, 0);
 
@@ -602,122 +609,122 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
         </div>
       </div>
 
-      {selectedRanks.length > 0 && selectedComponents.length > 0 && (
-        <div className="space-y-1.5">
-          <Label className="text-sm">직급별 급여 금액 입력 *</Label>
-          <div className="border rounded-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="h-9">
-                    <TableHead className="w-24 sticky left-0 bg-white z-10 text-xs py-2">직급</TableHead>
-                    {selectedComponents.map(compId => {
-                      const comp = components.find(c => String(c.id) === compId);
-                      return (
-                        <TableHead key={compId} className="text-right min-w-[120px] text-xs py-2">
-                          <div>{comp?.name}</div>
-                          {comp && (
-                            <div className={`text-[10px] font-normal ${
-                              comp.component_type === 'deduction' ? 'text-red-400' :
-                              comp.payment_type === 'deferred' ? 'text-amber-500' : 'text-blue-400'
-                            }`}>
-                              {comp.component_type === 'deduction' ? '공제' :
-                               comp.payment_type === 'deferred' ? '후불성' : '매월'}
-                            </div>
-                          )}
+      {selectedRanks.length > 0 && selectedComponents.length > 0 && (() => {
+        const earningIds = selectedComponents.filter(id => getCompType(id) === 'earning');
+        const deductionIds = selectedComponents.filter(id => getCompType(id) === 'deduction');
+        return (
+          <div className="space-y-1.5">
+            <Label className="text-sm">직급별 급여 금액 입력 *</Label>
+            <div className="border rounded-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    {/* 컬럼 그룹 헤더 */}
+                    <TableRow className="h-7 bg-gray-50 border-b-0">
+                      <TableHead className="sticky left-0 bg-gray-50 z-10 border-r" />
+                      {earningIds.length > 0 && (
+                        <TableHead
+                          colSpan={earningIds.length}
+                          className="text-center text-xs text-blue-700 font-semibold border-r border-blue-200 bg-blue-50/60 py-1"
+                        >
+                          ← 급여 구성 항목
                         </TableHead>
+                      )}
+                      {deductionIds.length > 0 && (
+                        <TableHead
+                          colSpan={deductionIds.length}
+                          className="text-center text-xs text-red-600 font-semibold border-r border-red-200 bg-red-50/60 py-1"
+                        >
+                          공제 항목 →
+                        </TableHead>
+                      )}
+                      <TableHead
+                        colSpan={2}
+                        className="text-center text-xs text-gray-600 font-semibold bg-gray-100 py-1"
+                      >
+                        계산 결과
+                      </TableHead>
+                    </TableRow>
+                    {/* 항목별 헤더 */}
+                    <TableRow className="h-10">
+                      <TableHead className="w-20 sticky left-0 bg-white z-10 text-xs py-2 border-r">직급</TableHead>
+                      {earningIds.map(compId => {
+                        const comp = components.find(c => String(c.id) === compId);
+                        return (
+                          <TableHead key={compId} className="text-right min-w-[110px] text-xs py-2 bg-blue-50/30">
+                            <div>{comp?.name}</div>
+                            <div className={`text-[10px] font-normal ${getPayType(compId) === 'deferred' ? 'text-amber-500' : 'text-blue-400'}`}>
+                              {getPayType(compId) === 'deferred' ? '후불성' : '매월'}
+                            </div>
+                          </TableHead>
+                        );
+                      })}
+                      {deductionIds.map((compId, i) => {
+                        const comp = components.find(c => String(c.id) === compId);
+                        return (
+                          <TableHead key={compId} className={`text-right min-w-[110px] text-xs py-2 bg-red-50/40 ${i === 0 ? 'border-l-2 border-l-red-200' : ''}`}>
+                            <div>{comp?.name}</div>
+                            <div className="text-[10px] font-normal text-red-400">공제</div>
+                          </TableHead>
+                        );
+                      })}
+                      <TableHead className="text-right min-w-[110px] text-xs py-2 bg-gray-100 border-l-2 border-l-gray-300">
+                        월 급여 총액
+                      </TableHead>
+                      <TableHead className="text-right min-w-[110px] text-xs py-2 bg-blue-100 text-blue-800 font-bold">
+                        월 실지급액
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedRanks.map(rankName => {
+                      const rank = ranks.find(r => r.name === rankName);
+                      const total = getRankTotal(rankName);
+                      const monthlyPay = getRankMonthlyPay(rankName);
+                      return (
+                        <TableRow key={rankName} className="h-10">
+                          <TableCell className="font-medium sticky left-0 bg-white text-xs py-1 border-r">
+                            {rank?.rank_code || rankName}
+                          </TableCell>
+                          {earningIds.map(compId => (
+                            <TableCell key={compId} className="py-1">
+                              <Input
+                                type="number"
+                                value={rankSalaries[rankName]?.[compId] || 0}
+                                onChange={e => handleAmountChange(rankName, compId, e.target.value)}
+                                min="0" step="1"
+                                className="text-right h-8 text-xs"
+                              />
+                            </TableCell>
+                          ))}
+                          {deductionIds.map((compId, i) => (
+                            <TableCell key={compId} className={`py-1 bg-red-50/20 ${i === 0 ? 'border-l-2 border-l-red-200' : ''}`}>
+                              <Input
+                                type="number"
+                                value={rankSalaries[rankName]?.[compId] || 0}
+                                onChange={e => handleAmountChange(rankName, compId, e.target.value)}
+                                min="0" step="1"
+                                className="text-right h-8 text-xs"
+                              />
+                            </TableCell>
+                          ))}
+                          <TableCell className="text-right font-semibold text-xs py-1 bg-gray-50 border-l-2 border-l-gray-300">
+                            {formatCurrency(total)}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-xs py-1 bg-blue-50 text-blue-700">
+                            {formatCurrency(monthlyPay)}
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                    <TableHead className="text-right font-bold min-w-[120px] text-xs py-2">월 급여 총액</TableHead>
-                    <TableHead className="text-right font-bold min-w-[120px] text-xs py-2 text-blue-700">월 실지급액</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedRanks.map(rankName => {
-                    const rank = ranks.find(r => r.name === rankName);
-                    return (
-                      <TableRow key={rankName} className="h-10">
-                        <TableCell className="font-medium sticky left-0 bg-white text-xs py-1">
-                          {rank?.rank_code || rankName}
-                        </TableCell>
-                        {selectedComponents.map(compId => (
-                          <TableCell key={compId} className="py-1">
-                            <Input
-                              type="number"
-                              value={rankSalaries[rankName]?.[compId] || 0}
-                              onChange={(e) => handleAmountChange(rankName, compId, e.target.value)}
-                              min="0"
-                              step="0.01"
-                              className="text-right h-8 text-xs"
-                            />
-                          </TableCell>
-                        ))}
-                        <TableCell className="text-right font-bold text-xs py-1">
-                          {formatCurrency(getRankTotal(rankName))}
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-xs py-1 text-blue-700">
-                          {formatCurrency(getRankMonthlyPay(rankName))}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
             </div>
+            <p className="text-xs text-gray-400">월 실지급액 = 급여 구성 합계 − 후불성 − 공제</p>
           </div>
-        </div>
-      )}
-
-      {/* 급여 자동 계산 요약 */}
-      {selectedRanks.length > 0 && selectedComponents.length > 0 && (
-        <div className="space-y-1.5">
-          <Label className="text-sm">급여 계산 요약</Label>
-          <div className="border rounded-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="h-9 bg-gray-50">
-                    <TableHead className="w-24 sticky left-0 bg-gray-50 text-xs py-2">직급</TableHead>
-                    <TableHead className="text-right text-xs py-2">월 급여 총액</TableHead>
-                    <TableHead className="text-right text-xs text-amber-600 py-2">후불성</TableHead>
-                    <TableHead className="text-right text-xs text-red-500 py-2">공제</TableHead>
-                    <TableHead className="text-right text-xs font-bold text-blue-700 py-2">월 실지급액</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedRanks.map(rankName => {
-                    const rank = ranks.find(r => r.name === rankName);
-                    const total = getRankTotal(rankName);
-                    const deferred = getRankDeferred(rankName);
-                    const deduction = getRankDeduction(rankName);
-                    const monthlyPay = getRankMonthlyPay(rankName);
-                    return (
-                      <TableRow key={rankName} className="h-9">
-                        <TableCell className="font-medium sticky left-0 bg-white text-xs py-1">
-                          {rank?.rank_code || rankName}
-                        </TableCell>
-                        <TableCell className="text-right text-xs py-1">{formatCurrency(total)}</TableCell>
-                        <TableCell className="text-right text-xs text-amber-600 py-1">
-                          {deferred > 0 ? `-${formatCurrency(deferred)}` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-red-500 py-1">
-                          {deduction > 0 ? `-${formatCurrency(deduction)}` : '-'}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-bold text-blue-700 py-1">
-                          {formatCurrency(monthlyPay)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-          <p className="text-xs text-gray-400">
-            월 실지급액 = 월 급여 총액 − 후불성(하선 후 지급) − 공제
-          </p>
-        </div>
-      )}
+        );
+      })()}
 
       {error && (
         <Alert variant="destructive">
