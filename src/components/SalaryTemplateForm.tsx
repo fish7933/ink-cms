@@ -629,6 +629,7 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
                       );
                     })}
                     <TableHead className="text-right font-bold min-w-[120px] text-xs py-2">월 급여 총액</TableHead>
+                    <TableHead className="text-right font-bold min-w-[120px] text-xs py-2 text-blue-700">월 실지급액</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -653,6 +654,9 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
                         ))}
                         <TableCell className="text-right font-bold text-xs py-1">
                           {formatCurrency(getRankTotal(rankName))}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-xs py-1 text-blue-700">
+                          {formatCurrency(getRankMonthlyPay(rankName))}
                         </TableCell>
                       </TableRow>
                     );
