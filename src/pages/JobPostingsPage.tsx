@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { msg } from '@/lib/messages';
 import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -228,7 +229,7 @@ export default function JobPostingsPage() {
               const currentRanks = current.ranks.map(r => r.rank_code).join(', ');
               const nextRanks = next.ranks.map(r => r.rank_code).join(', ');
               warnings.push(
-                `${current.ship_name} - [${currentRanks}]: ${currentDate.toLocaleDateString('ko-KR')}과 [${nextRanks}]: ${nextDate.toLocaleDateString('ko-KR')} 공고에서 [${overlappingRanks.join(', ')}] 직급이 중복됩니다 (${Math.floor(daysDiff)}일 차이).`
+                msg.jobPosting.overlapDetail(current.ship_name, currentRanks, currentDate.toLocaleDateString('ko-KR'), nextRanks, nextDate.toLocaleDateString('ko-KR'), overlappingRanks.join(', '), Math.floor(daysDiff))
               );
             }
           }
@@ -393,7 +394,7 @@ export default function JobPostingsPage() {
     if (manningCompanies.length === 0) return '-';
     if (manningCompanies.length === 1) return manningCompanies[0].name;
     if (manningCompanies.length === 2) return `${manningCompanies[0].name}, ${manningCompanies[1].name}`;
-    return `${manningCompanies[0].name} 외 ${manningCompanies.length - 1}개사`;
+    return msg.jobPosting.multipleAgencies(manningCompanies[0].name, manningCompanies.length - 1);
   };
 
   const getRecommendationStatusBadge = (status: string) => {
@@ -457,8 +458,8 @@ export default function JobPostingsPage() {
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   {isManningOrCrew
-                    ? `총 ${filteredPostings.length}개의 채용 공고 (선원 추천 가능)`
-                    : `총 ${filteredPostings.length}개의 구인 공고`
+                    ? msg.jobPosting.totalRecommendable(filteredPostings.length)
+                    : msg.jobPosting.total(filteredPostings.length)
                   }
                 </p>
               </div>

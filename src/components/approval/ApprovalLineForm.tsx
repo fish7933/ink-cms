@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -307,7 +308,7 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
 
       toast({
         title: '성공',
-        description: `결재 라인이 ${approvalLine?.id ? '수정' : '생성'}되었습니다.`,
+        description: msg.approval.lineChanged(!!approvalLine?.id),
       });
 
       onSuccess();

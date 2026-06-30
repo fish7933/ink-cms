@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { msg } from '@/lib/messages';
 import {
   getCurrentUser,
   getShips,
@@ -453,7 +454,7 @@ export default function JobPostingPage() {
                         <CardTitle>구인 공고 관리</CardTitle>
                         <CardDescription>
                           {currentUser.role === 'ship_manager' && supervisedShips.length > 0
-                            ? `담당 선박 ${supervisedShips.length}척의 구인 공고를 관리하세요`
+                            ? msg.ship.supervisedPostings(supervisedShips.length)
                             : currentUser.role === 'ship_manager'
                             ? '담당 감독으로 지정된 선박의 구인 공고를 관리하세요'
                             : '등록한 구인 공고를 관리하세요'}

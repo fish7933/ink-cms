@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { msg } from '@/lib/messages';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -132,7 +133,7 @@ export function CrewRecommendationDialog({
       const ext = file.name.split('.').pop();
       const path = `crew-recommendations/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
       const { error } = await supabase.storage.from('documents').upload(path, file);
-      if (error) throw new Error(`파일 업로드 실패: ${file.name}`);
+      if (error) throw new Error(msg.file.uploadFailed(file.name));
       paths.push(path);
     }
     return paths;

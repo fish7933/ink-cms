@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { msg } from '@/lib/messages';
 import { getCurrentUser, getShips, getCompanies, getFleets, addShip, updateShip, deleteShip } from '@/lib/store';
 import type { User, Ship, Company, Fleet } from '@/types/models';
 import { Button } from '@/components/ui/button';
@@ -353,7 +354,7 @@ export default function ShipManagementPage() {
       .map(ship => ship.name)
       .join(', ');
     
-    if (confirm(`선택한 ${selectedShipIds.length}척의 선박을 삭제하시겠습니까?\n\n${shipNames}`)) {
+    if (confirm(msg.ship.deleteConfirm(selectedShipIds.length, shipNames))) {
       try {
         await Promise.all(selectedShipIds.map(id => deleteShip(id)));
         await loadData();
@@ -568,8 +569,8 @@ export default function ShipManagementPage() {
                 {/* Results Count and Items Per Page */}
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-500">
-                    총 {totalItems}척의 선박 {totalPages > 0 && `(페이지 ${currentPage}/${totalPages})`}
-                    {selectedShipIds.length > 0 && ` · ${selectedShipIds.length}척 선택됨`}
+                    총 {totalItems}척의 선박 {totalPages > 0 && msg.ship.pageInfo(currentPage, totalPages)}
+                    {selectedShipIds.length > 0 && msg.ship.selectedCount(selectedShipIds.length)}
                   </p>
                   <Select 
                     value={itemsPerPage.toString()} 

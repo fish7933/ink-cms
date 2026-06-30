@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -152,7 +153,7 @@ export default function ApprovalLineManagementPage() {
           inProgressCount: 0,
           completedCount: 0,
           totalCount: 0,
-          message: `데이터베이스 조회 중 오류가 발생했습니다: ${checkError.message}`,
+          message: msg.approval.dbError(checkError.message),
         };
       }
 
@@ -178,16 +179,7 @@ export default function ApprovalLineManagementPage() {
 
       console.log('Usage stats:', { inProgressCount, completedCount, totalCount });
 
-      let message = `이 결재 라인은 총 ${totalCount}건의 결재에서 사용되고 있습니다.\n`;
-
-      if (inProgressCount > 0) {
-        message += `• 진행 중인 결재: ${inProgressCount}건\n`;
-      }
-      if (completedCount > 0) {
-        message += `• 완료된 결재: ${completedCount}건\n`;
-      }
-
-      message += '\n결재 라인을 삭제하려면 먼저 관련된 모든 결재 건을 삭제해주세요.';
+      const message = msg.approval.usageDetail(totalCount, inProgressCount, completedCount);
 
       return {
         canModify: false,
@@ -223,7 +215,7 @@ export default function ApprovalLineManagementPage() {
       console.log('Edit blocked - in-progress approvals exist');
       toast({
         title: '수정할 수 없습니다',
-        description: `이 결재 라인은 현재 ${usage.inProgressCount}건의 진행 중인 결재에서 사용 중입니다. 진행 중인 결재가 완료될 때까지 수정할 수 없습니다.`,
+        description: msg.approval.inProgressBlock(usage.inProgressCount),
         variant: 'destructive',
       });
       return;
@@ -234,7 +226,7 @@ export default function ApprovalLineManagementPage() {
       console.log('Edit allowed with warning - only completed approvals exist');
       toast({
         title: '주의',
-        description: `이 결재 라인은 ${usage.completedCount}건의 완료된 결재에서 사용되었습니다. 수정 시 기존 결재 이력에는 영향을 주지 않습니다.`,
+        description: msg.approval.completedWarning(usage.completedCount),
         variant: 'default',
       });
     }
@@ -350,7 +342,7 @@ export default function ApprovalLineManagementPage() {
 
       toast({
         title: '성공',
-        description: `결재 라인이 ${!line.is_active ? '활성화' : '비활성화'}되었습니다.`,
+        description: msg.approval.lineToggled(!line.is_active),
       });
 
       loadApprovalLines();

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { msg as messages } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -244,7 +245,7 @@ export default function TemplateApplicationDialog({
           const tmplName = allShipAssignmentMap.get(String(s.id)) || '';
           return `${s.name} (${tmplName})`;
         });
-        details.push(`선박 할당 ${assignedShips.length}건 자동 해제: ${shipNames.join(', ')}`);
+        details.push(messages.salaryTemplate.shipAutoRelease(assignedShips.length, shipNames.join(', ')));
       }
     } else {
       // Owner assignment: check fleets and ships under this owner
@@ -255,7 +256,7 @@ export default function TemplateApplicationDialog({
           const tmplName = allFleetAssignmentMap.get(String(f.id)) || '';
           return `${f.name} (${tmplName})`;
         });
-        details.push(`플릿 할당 ${assignedFleets.length}건 자동 해제: ${fleetNames.join(', ')}`);
+        details.push(messages.salaryTemplate.fleetAutoRelease(assignedFleets.length, fleetNames.join(', ')));
       }
 
       const ownerShips = getOwnerShips();
@@ -265,7 +266,7 @@ export default function TemplateApplicationDialog({
           const tmplName = allShipAssignmentMap.get(String(s.id)) || '';
           return `${s.name} (${tmplName})`;
         });
-        details.push(`선박 할당 ${assignedShips.length}건 자동 해제: ${shipNames.join(', ')}`);
+        details.push(messages.salaryTemplate.shipAutoRelease(assignedShips.length, shipNames.join(', ')));
       }
     }
 
@@ -298,7 +299,7 @@ export default function TemplateApplicationDialog({
         level: 'fleet' as const,
         icon: <Layers className="h-4 w-4" />,
         title: '플릿 할당',
-        description: `"${ownerName}" 선주의 "${fleet?.name}" 플릿에 할당됩니다. (소속 선박 ${fleetShips.length}척 모두 해당)`,
+        description: messages.salaryTemplate.assignedToOwnerFleet(ownerName, fleet?.name || '', fleetShips.length),
       };
     }
 
@@ -310,7 +311,7 @@ export default function TemplateApplicationDialog({
       level: 'owner' as const,
       icon: <Building2 className="h-4 w-4" />,
       title: '선주 할당',
-      description: `"${ownerName}" 선주에 할당됩니다. (${ownerFleetCount}개 플릿, ${ownerShips.length}척 모든 선박 해당)`,
+      description: messages.salaryTemplate.assignedToOwner(ownerName, ownerFleetCount, ownerShips.length),
     };
   };
 
@@ -327,7 +328,7 @@ export default function TemplateApplicationDialog({
 
     // Block duplicate assignment
     if (duplicateCheck.isDuplicate) {
-      alert(`이미 "${duplicateCheck.existingTemplateName}" 템플릿이 할당되어 있습니다. 기존 할당을 해제한 후 다시 시도해주세요.`);
+      alert(messages.salaryTemplate.duplicateTemplate(duplicateCheck.existingTemplateName || ''));
       return;
     }
 
@@ -356,11 +357,11 @@ export default function TemplateApplicationDialog({
 
       if (result) {
         const levelText = selectedShipId ? '선박' : selectedFleetId ? '플릿' : '선주';
-        let msg = `템플릿이 ${levelText}에 성공적으로 할당되었습니다.`;
+        let successMsg = messages.salaryTemplate.assignSuccess(levelText);
         if (cleanupInfo.hasLowerAssignments) {
-          msg += ` (하위 레벨 할당이 자동 해제되었습니다)`;
+          successMsg += ` (하위 레벨 할당이 자동 해제되었습니다)`;
         }
-        setSuccessMessage(msg);
+        setSuccessMessage(successMsg);
 
         // Reload existing assignments
         await loadData();

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { msg } from '@/lib/messages';
 import { Plus, Search, Filter, X, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
@@ -307,7 +308,7 @@ export function CrewManagementPage() {
                 <div className="flex justify-between items-center">
                   <p className="text-xs text-gray-500">
                     총 {filteredCrew.length}명 (페이지 {currentPage}/{Math.max(1, totalPages)})
-                    {selectedCrewIds.length > 0 && ` · ${selectedCrewIds.length}명 선택됨`}
+                    {selectedCrewIds.length > 0 && msg.crew.selectedCount(selectedCrewIds.length)}
                   </p>
                   <div className="flex items-center gap-2">
                     <Label className="text-xs">페이지당:</Label>

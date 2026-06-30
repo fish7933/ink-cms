@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -227,8 +228,7 @@ export default function ShipDialog({
       const fleetOwner = companies.find(c => c.id === selectedFleet.owner_id);
       
       setOwnerFleetMismatch(
-        `경고: 선박 소유주 "${shipOwner?.name || '알 수 없음'}"와 플릿 소유주 "${fleetOwner?.name || '알 수 없음'}"가 일치하지 않습니다. ` +
-        `데이터 불일치를 방지하기 위해 플릿을 제거하거나 같은 소유주의 플릿을 선택해주세요.`
+        msg.ship.ownerMismatch(shipOwner?.name || '알 수 없음', fleetOwner?.name || '알 수 없음')
       );
     } else {
       setOwnerFleetMismatch(null);

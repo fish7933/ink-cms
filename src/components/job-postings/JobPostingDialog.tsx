@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { msg } from '@/lib/messages';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
@@ -162,7 +163,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
         `${w.rank_code}: ${w.existing_postings.length}개의 유사한 공고 존재`
       ).join('\n');
       const confirmed = confirm(
-        `중복 가능성이 있는 공고가 발견되었습니다:\n\n${warningMessage}\n\n그래도 등록하시겠습니까?`
+        msg.jobPosting.duplicateWarning(warningMessage)
       );
       if (!confirmed) return;
     }
@@ -221,7 +222,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
       onClose(true);
     } catch (error) {
       console.error('Failed to save job posting:', error);
-      alert(`저장에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      alert(msg.jobPosting.saveFailed(error instanceof Error ? error.message : '알 수 없는 오류'));
     }
   };
 
