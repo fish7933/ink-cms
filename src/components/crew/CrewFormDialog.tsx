@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -173,6 +173,7 @@ const EMPTY_FORM = {
 
 export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
   const { toast } = useToast();
+  const formRef = useRef<HTMLDivElement>(null);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -293,6 +294,19 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
   const removeContact = (idx: number) => setEmergencyContacts(prev => prev.filter((_, i) => i !== idx));
   const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
 
+  const scrollToTop = useCallback(() => {
+    if (!formRef.current) return;
+    let el: Element | null = formRef.current.parentElement;
+    while (el) {
+      const s = window.getComputedStyle(el);
+      if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+        (el as HTMLElement).scrollTop = 0;
+        break;
+      }
+      el = el.parentElement;
+    }
+  }, []);
+
   const parseBool = (val: string): boolean | null => val === 'yes' ? true : val === 'no' ? false : null;
   const parseOptional = (val: string): string | null => (val && val !== 'none') ? val : null;
 
@@ -401,7 +415,7 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
   };
 
   return (
-    <div>
+    <div ref={formRef}>
         {crew && (
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
             {previewUrl ? (
@@ -418,7 +432,7 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
           </div>
         )}
 
-        <Tabs defaultValue="basic" className="w-full">
+        <Tabs defaultValue="basic" className="w-full" onValueChange={scrollToTop}>
           <TabsList className="grid w-full grid-cols-5 h-9">
             <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
             <TabsTrigger value="biodata" className="text-xs">Bio-Data</TabsTrigger>

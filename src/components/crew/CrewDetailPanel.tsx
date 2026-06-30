@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,6 +108,20 @@ const EMPTY_FORM = {
 
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
   const { toast } = useToast();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const scrollToTop = useCallback(() => {
+    if (!panelRef.current) return;
+    let el: Element | null = panelRef.current.parentElement;
+    while (el) {
+      const s = window.getComputedStyle(el);
+      if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+        (el as HTMLElement).scrollTop = 0;
+        break;
+      }
+      el = el.parentElement;
+    }
+  }, []);
 
   const isNew = !id;
   const [loading, setLoading] = useState(!isNew);
@@ -448,7 +462,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       </div>
 
       {/* 탭 */}
-      <Tabs defaultValue="basic">
+      <Tabs defaultValue="basic" onValueChange={scrollToTop}>
         <div className="space-y-1">
           <TabsList className="grid w-full grid-cols-5 h-8">
             <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
@@ -1052,7 +1066,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   if (embedded) {
     return (
-      <div className="space-y-4 pt-3 border-t">
+      <div ref={panelRef} className="space-y-4 pt-3 border-t">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}
@@ -1072,7 +1086,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+    <div ref={panelRef} className="max-w-4xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <Card>
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center">

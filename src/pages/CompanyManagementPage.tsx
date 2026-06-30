@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Filter, X, ChevronLeft, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export function CrewManagementPage() {
   const { toast } = useToast();
+  const formContainerRef = useRef<HTMLDivElement>(null);
   const [crewMembers, setCrewMembers] = useState<CrewWithDetails[]>([]);
   const [filteredCrew, setFilteredCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
@@ -46,6 +47,19 @@ export function CrewManagementPage() {
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
 
   useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    if (formView !== null && formContainerRef.current) {
+      let el: Element | null = formContainerRef.current.parentElement;
+      while (el) {
+        const s = window.getComputedStyle(el);
+        if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+          (el as HTMLElement).scrollTop = 0;
+          break;
+        }
+        el = el.parentElement;
+      }
+    }
+  }, [formView]);
   useEffect(() => { filterCrew(); }, [crewMembers, searchTerm, selectedOwner, selectedFleet, selectedShip, selectedRank, selectedRankCategory, selectedManningAgency, selectedShipType, minAge, maxAge, activeTab]);
   useEffect(() => { setCurrentPage(1); }, [filteredCrew.length]);
   useEffect(() => {
@@ -199,7 +213,7 @@ export function CrewManagementPage() {
   if (formView !== null) {
     return (
       <>
-        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+        <div ref={formContainerRef} className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
