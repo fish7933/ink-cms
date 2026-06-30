@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Ship, Users, Calendar, FileText, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Plus, Ship, Users, Calendar, FileText, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,15 +7,15 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { rotationService } from '@/services/rotation.service';
-import { RotationPlanForm } from '@/components/rotation/RotationPlanForm';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { useTabContext } from '@/contexts/TabContext';
 
 export function CrewRotationPage() {
   const [plans, setPlans] = useState<CrewRotationPlanWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
-  const [formView, setFormView] = useState<{ plan: CrewRotationPlanWithDetails | null } | null>(null);
+  const { openNewTab } = useTabContext();
 
   useEffect(() => { loadPlans(); }, []);
 
@@ -41,26 +41,11 @@ export function CrewRotationPage() {
     return <Badge variant={c.variant}>{c.label}</Badge>;
   };
 
-  if (formView !== null) {
-    return (
-      <div className="container mx-auto py-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setFormView(null); loadPlans(); }}><ArrowLeft className="w-4 h-4" /></Button>
-          <div>
-            <h1 className="text-xl font-bold">{formView.plan ? '교대 계획 수정' : '새 교대 계획 작성'}</h1>
-            <p className="text-xs text-muted-foreground">선원 승선/하선 교대 계획을 작성합니다</p>
-          </div>
-        </div>
-        <RotationPlanForm plan={formView.plan} onSuccess={() => { setFormView(null); loadPlans(); }} onCancel={() => { setFormView(null); loadPlans(); }} />
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div><h1 className="text-xl font-bold">선원 교대 발령</h1><p className="text-xs text-muted-foreground mt-1">선원 승선/하선 교대 계획을 작성하고 결재를 진행합니다</p></div>
-        <Button onClick={() => setFormView({ plan: null })} size="sm"><Plus className="mr-2 h-4 w-4" />새 교대 계획 작성</Button>
+        <Button onClick={() => openNewTab('/crew-rotation/new', '교대계획 작성', true)} size="sm"><Plus className="mr-2 h-4 w-4" />새 교대 계획 작성</Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -78,7 +63,7 @@ export function CrewRotationPage() {
               <TableHeader><TableRow><TableHead className="text-xs">계획명</TableHead><TableHead className="text-xs">선박</TableHead><TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">교대일</TableHead><TableHead className="text-xs">교대인원</TableHead><TableHead className="text-xs">상태</TableHead><TableHead className="text-xs">작성일</TableHead><TableHead className="text-right text-xs">작업</TableHead></TableRow></TableHeader>
               <TableBody>
                 {plans.map(plan => (
-                  <TableRow key={plan.id} className="cursor-pointer" onClick={() => setFormView({ plan })}>
+                  <TableRow key={plan.id} className="cursor-pointer" onClick={() => openNewTab(`/crew-rotation/${plan.id}`, plan.plan_name || '교대계획')}>
                     <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
                     <TableCell className="text-xs"><div className="flex items-center gap-2"><Ship className="h-3.5 w-3.5 text-muted-foreground" />{plan.ship_name}</div></TableCell>
                     <TableCell className="text-xs">{plan.owner_name}</TableCell>
