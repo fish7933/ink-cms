@@ -369,6 +369,10 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
     catering: ranks.filter(r => r.department === 'catering'),
   };
 
+  // 급여 구성 / 공제 항목 분리
+  const earningIds = selectedComponents.filter(id => getCompType(id) === 'earning');
+  const deductionIds = selectedComponents.filter(id => getCompType(id) === 'deduction');
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -609,10 +613,7 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
         </div>
       </div>
 
-      {selectedRanks.length > 0 && selectedComponents.length > 0 && (() => {
-        const earningIds = selectedComponents.filter(id => getCompType(id) === 'earning');
-        const deductionIds = selectedComponents.filter(id => getCompType(id) === 'deduction');
-        return (
+      {selectedRanks.length > 0 && selectedComponents.length > 0 && (
           <div className="space-y-1.5">
             <Label className="text-sm">직급별 급여 금액 입력 *</Label>
             <div className="border rounded-md overflow-hidden">
@@ -723,8 +724,7 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
             </div>
             <p className="text-xs text-gray-400">월 실지급액 = 급여 구성 합계 − 후불성 − 공제</p>
           </div>
-        );
-      })()}
+      )}
 
       {error && (
         <Alert variant="destructive">

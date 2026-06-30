@@ -220,7 +220,7 @@ export async function getSalaryTemplateWithItems(templateId: string): Promise<Sa
       id: String(item.id),
       template_id: String(item.template_id),
       component_id: String(item.component_id),
-      component: component || { id: String(item.component_id), name: 'Unknown', description: '', display_order: 0, is_active: true, created_at: '', updated_at: '' },
+      component: component || { id: String(item.component_id), name: 'Unknown', description: '', display_order: 0, is_active: true, component_type: 'earning' as const, payment_type: 'monthly' as const, created_at: '', updated_at: '' },
     };
   });
 
