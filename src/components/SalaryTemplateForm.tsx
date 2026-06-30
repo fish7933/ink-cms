@@ -29,6 +29,8 @@ interface SalaryTemplateFormProps {
 
 export default function SalaryTemplateForm({ template, onSuccess, onCancel }: SalaryTemplateFormProps) {
   const [components, setComponents] = useState<SalaryComponent[]>([]);
+  const [compTypeMap, setCompTypeMap] = useState<Record<string, 'earning' | 'deduction'>>({});
+  const [payTypeMap, setPayTypeMap] = useState<Record<string, 'monthly' | 'deferred'>>({});
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [templates, setTemplates] = useState<SalaryTemplate[]>([]);
   const [formData, setFormData] = useState({
@@ -89,6 +91,16 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
     setComponents(componentsData);
     setRanks(ranksData);
     setTemplates(templatesData);
+
+    // 타입 맵 즉시 구성 — getCompType/getPayType 이 상태 배열 검색 없이 O(1) 조회
+    const ctMap: Record<string, 'earning' | 'deduction'> = {};
+    const ptMap: Record<string, 'monthly' | 'deferred'> = {};
+    componentsData.forEach(c => {
+      ctMap[String(c.id)] = c.component_type;
+      ptMap[String(c.id)] = c.payment_type;
+    });
+    setCompTypeMap(ctMap);
+    setPayTypeMap(ptMap);
 
     // If creating new template, select all by default
     if (!template) {
@@ -252,15 +264,11 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
     }));
   };
 
-  const getCompType = (compId: string) => {
-    const comp = components.find(c => String(c.id) === compId);
-    return comp?.component_type ?? 'earning';
-  };
+  const getCompType = (compId: string): 'earning' | 'deduction' =>
+    compTypeMap[compId] ?? 'earning';
 
-  const getPayType = (compId: string) => {
-    const comp = components.find(c => String(c.id) === compId);
-    return comp?.payment_type ?? 'monthly';
-  };
+  const getPayType = (compId: string): 'monthly' | 'deferred' =>
+    payTypeMap[compId] ?? 'monthly';
 
   const getRankTotal = (rank: string) => {
     if (!rankSalaries[rank]) return 0;

@@ -82,7 +82,7 @@ export interface OwnerSalaryAssignment {
 export async function getSalaryComponents(): Promise<SalaryComponent[]> {
   const { data, error } = await supabase
     .from('salary_components')
-    .select('*')
+    .select('id, name, description, display_order, is_active, component_type, payment_type, created_at, updated_at')
     .eq('is_active', true)
     .order('display_order', { ascending: true });
 
@@ -91,7 +91,12 @@ export async function getSalaryComponents(): Promise<SalaryComponent[]> {
     return [];
   }
 
-  return (data || []).map(item => ({ ...item, id: String(item.id) })) as SalaryComponent[];
+  return (data || []).map(item => ({
+    ...item,
+    id: String(item.id),
+    component_type: (item.component_type ?? 'earning') as 'earning' | 'deduction',
+    payment_type: (item.payment_type ?? 'monthly') as 'monthly' | 'deferred',
+  })) as SalaryComponent[];
 }
 
 export async function addSalaryComponent(component: Omit<SalaryComponent, 'id' | 'created_at' | 'updated_at'>): Promise<SalaryComponent | null> {
