@@ -8,6 +8,8 @@ export interface SalaryComponent {
   description?: string;
   display_order: number;
   is_active: boolean;
+  component_type: 'earning' | 'deduction'; // 급여 구성 항목 vs 공제 항목
+  payment_type: 'monthly' | 'deferred';    // 매월 지급 vs 후불성(하선 후)
   created_at: string;
   updated_at: string;
 }

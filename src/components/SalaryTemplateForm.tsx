@@ -254,8 +254,30 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
 
   const getRankTotal = (rank: string) => {
     if (!rankSalaries[rank]) return 0;
-    return Object.values(rankSalaries[rank]).reduce((sum, amount) => sum + amount, 0);
+    return selectedComponents.reduce((sum, compId) => {
+      const comp = components.find(c => String(c.id) === compId);
+      if (comp?.component_type === 'earning') return sum + (rankSalaries[rank]?.[compId] || 0);
+      return sum;
+    }, 0);
   };
+
+  const getRankDeferred = (rank: string) =>
+    selectedComponents.reduce((sum, compId) => {
+      const comp = components.find(c => String(c.id) === compId);
+      if (comp?.component_type === 'earning' && comp?.payment_type === 'deferred')
+        return sum + (rankSalaries[rank]?.[compId] || 0);
+      return sum;
+    }, 0);
+
+  const getRankDeduction = (rank: string) =>
+    selectedComponents.reduce((sum, compId) => {
+      const comp = components.find(c => String(c.id) === compId);
+      if (comp?.component_type === 'deduction') return sum + (rankSalaries[rank]?.[compId] || 0);
+      return sum;
+    }, 0);
+
+  const getRankMonthlyPay = (rank: string) =>
+    getRankTotal(rank) - getRankDeferred(rank) - getRankDeduction(rank);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ko-KR', {
@@ -531,18 +553,46 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
             </Button>
           </div>
         </div>
-        <div className="border rounded-md p-3">
-          <div className="flex flex-wrap gap-1.5">
-            {components.map((component) => (
-              <Badge
-                key={component.id}
-                variant={selectedComponents.includes(String(component.id)) ? "default" : "outline"}
-                className="cursor-pointer text-xs px-2 py-0.5 h-6"
-                onClick={() => handleComponentToggle(String(component.id))}
-              >
-                {component.name}
-              </Badge>
-            ))}
+        <div className="border rounded-md p-3 space-y-2">
+          {/* 급여 구성 항목 */}
+          {components.filter(c => c.component_type === 'earning').length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-gray-500 mb-1.5">급여 구성</div>
+              <div className="flex flex-wrap gap-1.5">
+                {components.filter(c => c.component_type === 'earning').map((component) => (
+                  <Badge
+                    key={component.id}
+                    variant={selectedComponents.includes(String(component.id)) ? "default" : "outline"}
+                    className="cursor-pointer text-xs px-2 py-0.5 h-6 gap-1"
+                    onClick={() => handleComponentToggle(String(component.id))}
+                  >
+                    {component.name}
+                    <span className={`text-[10px] opacity-70 ${component.payment_type === 'deferred' ? 'text-amber-300' : ''}`}>
+                      {component.payment_type === 'deferred' ? '후불' : '매월'}
+                    </span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* 공제 항목 */}
+          {components.filter(c => c.component_type === 'deduction').length > 0 && (
+            <div>
+              <div className="text-xs font-medium text-red-500 mb-1.5">공제</div>
+              <div className="flex flex-wrap gap-1.5">
+                {components.filter(c => c.component_type === 'deduction').map((component) => (
+                  <Badge
+                    key={component.id}
+                    variant={selectedComponents.includes(String(component.id)) ? "destructive" : "outline"}
+                    className="cursor-pointer text-xs px-2 py-0.5 h-6"
+                    onClick={() => handleComponentToggle(String(component.id))}
+                  >
+                    {component.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
           </div>
           {components.length === 0 && (
             <div className="text-center py-4 text-sm text-gray-500">
@@ -565,11 +615,20 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
                       const comp = components.find(c => String(c.id) === compId);
                       return (
                         <TableHead key={compId} className="text-right min-w-[120px] text-xs py-2">
-                          {comp?.name}
+                          <div>{comp?.name}</div>
+                          {comp && (
+                            <div className={`text-[10px] font-normal ${
+                              comp.component_type === 'deduction' ? 'text-red-400' :
+                              comp.payment_type === 'deferred' ? 'text-amber-500' : 'text-blue-400'
+                            }`}>
+                              {comp.component_type === 'deduction' ? '공제' :
+                               comp.payment_type === 'deferred' ? '후불성' : '매월'}
+                            </div>
+                          )}
                         </TableHead>
                       );
                     })}
-                    <TableHead className="text-right font-bold min-w-[120px] text-xs py-2">총액</TableHead>
+                    <TableHead className="text-right font-bold min-w-[120px] text-xs py-2">월 급여 총액</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -602,6 +661,57 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
               </Table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 급여 자동 계산 요약 */}
+      {selectedRanks.length > 0 && selectedComponents.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="text-sm">급여 계산 요약</Label>
+          <div className="border rounded-md overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="h-9 bg-gray-50">
+                    <TableHead className="w-24 sticky left-0 bg-gray-50 text-xs py-2">직급</TableHead>
+                    <TableHead className="text-right text-xs py-2">월 급여 총액</TableHead>
+                    <TableHead className="text-right text-xs text-amber-600 py-2">후불성</TableHead>
+                    <TableHead className="text-right text-xs text-red-500 py-2">공제</TableHead>
+                    <TableHead className="text-right text-xs font-bold text-blue-700 py-2">월 실지급액</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedRanks.map(rankName => {
+                    const rank = ranks.find(r => r.name === rankName);
+                    const total = getRankTotal(rankName);
+                    const deferred = getRankDeferred(rankName);
+                    const deduction = getRankDeduction(rankName);
+                    const monthlyPay = getRankMonthlyPay(rankName);
+                    return (
+                      <TableRow key={rankName} className="h-9">
+                        <TableCell className="font-medium sticky left-0 bg-white text-xs py-1">
+                          {rank?.rank_code || rankName}
+                        </TableCell>
+                        <TableCell className="text-right text-xs py-1">{formatCurrency(total)}</TableCell>
+                        <TableCell className="text-right text-xs text-amber-600 py-1">
+                          {deferred > 0 ? `-${formatCurrency(deferred)}` : '-'}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-red-500 py-1">
+                          {deduction > 0 ? `-${formatCurrency(deduction)}` : '-'}
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-bold text-blue-700 py-1">
+                          {formatCurrency(monthlyPay)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">
+            월 실지급액 = 월 급여 총액 − 후불성(하선 후 지급) − 공제
+          </p>
         </div>
       )}
 
