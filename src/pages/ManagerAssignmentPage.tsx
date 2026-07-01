@@ -13,15 +13,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 
-const USER_ROLE_LABEL: Record<string, string> = { ship_owner: '선주', ship_manager: '내부담당', manning_agency: '매닝사' };
-const USER_ROLE_COLOR: Record<string, string> = { ship_owner: 'bg-purple-100 text-purple-700', ship_manager: 'bg-blue-100 text-blue-700', manning_agency: 'bg-green-100 text-green-700' };
-
 interface Company { id: string; name: string; type: string; }
 interface Fleet { id: string; name: string; owner_id: string; }
 interface Ship { id: string; name: string; owner_id: string; fleet_id: string | null; }
 interface Assignment { id: string; assignment_type: string; entity_id: string; user_id: string; role: string; }
-
 interface Modal { type: 'owner' | 'fleet' | 'ship'; entityId: string; entityLabel: string; }
+
+interface EffectiveResult {
+  assignments: Assignment[];
+  inherited: boolean;
+  sourceName: string;
+}
 
 export default function ManagerAssignmentPage() {
   const navigate = useNavigate();
@@ -64,6 +66,89 @@ export default function ManagerAssignmentPage() {
     finally { setLoading(false); }
   };
 
+  const getDirectAssignments = (type: string, entityId: string) =>
+    assignments.filter(a => a.assignment_type === type && a.entity_id === entityId);
+
+  // 상속 포함 유효 담당자 조회: 직접 배정 없으면 상위 탐색
+  const getEffective = (type: 'owner' | 'fleet' | 'ship', entityId: string): EffectiveResult => {
+    const direct = getDirectAssignments(type, entityId);
+    if (direct.length > 0) return { assignments: direct, inherited: false, sourceName: '' };
+
+    if (type === 'fleet') {
+      const fleet = fleets.find(f => f.id === entityId);
+      if (fleet?.owner_id) {
+        const ownerAsgns = getDirectAssignments('owner', fleet.owner_id);
+        if (ownerAsgns.length > 0) {
+          const owner = owners.find(o => o.id === fleet.owner_id);
+          return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || '상위 선주사' };
+        }
+      }
+    }
+
+    if (type === 'ship') {
+      const ship = ships.find(s => s.id === entityId);
+      // 플릿 레벨 확인
+      if (ship?.fleet_id) {
+        const fleetAsgns = getDirectAssignments('fleet', ship.fleet_id);
+        if (fleetAsgns.length > 0) {
+          const fleet = fleets.find(f => f.id === ship.fleet_id);
+          return { assignments: fleetAsgns, inherited: true, sourceName: fleet?.name || '상위 플릿' };
+        }
+        // 플릿도 없으면 선주사 레벨
+        const fleet = fleets.find(f => f.id === ship.fleet_id);
+        if (fleet?.owner_id) {
+          const ownerAsgns = getDirectAssignments('owner', fleet.owner_id);
+          if (ownerAsgns.length > 0) {
+            const owner = owners.find(o => o.id === fleet.owner_id);
+            return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || '상위 선주사' };
+          }
+        }
+      }
+      // 플릿 없는 선박 → 선주사 레벨
+      if (ship?.owner_id) {
+        const ownerAsgns = getDirectAssignments('owner', ship.owner_id);
+        if (ownerAsgns.length > 0) {
+          const owner = owners.find(o => o.id === ship.owner_id);
+          return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || '상위 선주사' };
+        }
+      }
+    }
+
+    return { assignments: [], inherited: false, sourceName: '' };
+  };
+
+  const getUserById = (id: string) => users.find(u => u.id === id);
+
+  const renderBadges = (type: 'owner' | 'fleet' | 'ship', entityId: string) => {
+    const { assignments: asgns, inherited, sourceName } = getEffective(type, entityId);
+
+    if (!asgns.length) return <span className="text-xs text-gray-300">미배정</span>;
+
+    return (
+      <div className="flex flex-wrap items-center gap-1">
+        {inherited && (
+          <span className="text-xs text-gray-400 italic">↑ {sourceName}:</span>
+        )}
+        {asgns.map(a => {
+          const u = getUserById(a.user_id);
+          if (!u) return null;
+          return inherited ? (
+            // 상속된 배정: 점선 테두리 회색
+            <span key={a.id} className="text-xs px-2 py-0.5 rounded-full border border-dashed border-gray-300 text-gray-400 flex items-center gap-1">
+              {u.name}
+            </span>
+          ) : (
+            // 직접 배정: 보라색 + 삭제 버튼
+            <span key={a.id} className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 flex items-center gap-1">
+              {u.name}
+              <button onClick={e => { e.stopPropagation(); handleDelete(a.id); }} className="ml-0.5 hover:opacity-70">×</button>
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
   const openModal = (type: Modal['type'], entityId: string, entityLabel: string) => {
     setSelectedUser('');
     setModal({ type, entityId, entityLabel });
@@ -72,11 +157,9 @@ export default function ManagerAssignmentPage() {
   const handleSave = async () => {
     if (!selectedUser) { toast({ title: '사용자를 선택하세요', variant: 'destructive' }); return; }
     if (!modal) return;
-    const user = users.find(u => u.id === selectedUser);
-    const roleMap: Record<string, string> = { ship_owner: 'owner_manager', ship_manager: 'ship_manager', manning_agency: 'manning_manager' };
     try {
       setSaving(true);
-      await addAssignment({ assignment_type: modal.type, entity_id: modal.entityId, user_id: selectedUser, role: roleMap[user?.role || ''] || 'owner_manager', assigned_by: null });
+      await addAssignment({ assignment_type: modal.type, entity_id: modal.entityId, user_id: selectedUser, role: 'owner_manager', assigned_by: null });
       toast({ title: '배정 완료' });
       setModal(null);
       await loadData();
@@ -91,29 +174,6 @@ export default function ManagerAssignmentPage() {
     catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
   };
 
-  const getUserById = (id: string) => users.find(u => u.id === id);
-  const getAssignmentsFor = (type: string, entityId: string) =>
-    assignments.filter(a => a.assignment_type === type && a.entity_id === entityId);
-
-  const renderBadges = (type: string, entityId: string) => {
-    const asgns = getAssignmentsFor(type, entityId);
-    if (!asgns.length) return <span className="text-xs text-gray-400">미배정</span>;
-    return (
-      <div className="flex flex-wrap gap-1">
-        {asgns.map(a => {
-          const u = getUserById(a.user_id);
-          if (!u) return null;
-          return (
-            <span key={a.id} className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${USER_ROLE_COLOR[u.role] || 'bg-gray-100 text-gray-600'}`}>
-              {u.name}<span className="opacity-60">({USER_ROLE_LABEL[u.role] || u.role})</span>
-              <button onClick={e => { e.stopPropagation(); handleDelete(a.id); }} className="ml-0.5 hover:opacity-70">×</button>
-            </span>
-          );
-        })}
-      </div>
-    );
-  };
-
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
 
   return (
@@ -123,8 +183,21 @@ export default function ManagerAssignmentPage() {
           <Users className="w-6 h-6" />
           <div>
             <h1 className="text-xl font-bold text-gray-900">선주 사용자 관리</h1>
-            <p className="text-sm text-gray-500">선주사·플릿·선박별 선주 사용자를 배정합니다. 이메일 발송 시 수신처/참조처로 자동 적용됩니다.</p>
+            <p className="text-sm text-gray-500">
+              선주사·플릿·선박별 선주 사용자를 배정합니다.
+              직접 배정이 없으면 상위 레벨 배정을 자동 상속합니다.
+            </p>
           </div>
+        </div>
+
+        {/* 범례 */}
+        <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
+          <span className="flex items-center gap-1">
+            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">이름</span> 직접 배정
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="px-2 py-0.5 rounded-full border border-dashed border-gray-300 text-gray-400">이름</span> 상위에서 상속
+          </span>
         </div>
 
         {owners.length === 0 ? (
@@ -153,24 +226,24 @@ export default function ManagerAssignmentPage() {
                       return (
                         <div key={fleet.id} className="border-l-2 border-gray-200 pl-3">
                           <div className="flex items-center justify-between py-1">
-                            <div className="flex items-center gap-2">
-                              <ChevronRight className="w-3 h-3 text-gray-400" />
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
                               <span className="text-xs font-medium text-gray-600">{fleet.name}</span>
-                              <div className="ml-1">{renderBadges('fleet', fleet.id)}</div>
+                              <div>{renderBadges('fleet', fleet.id)}</div>
                             </div>
-                            <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2" onClick={() => openModal('fleet', fleet.id, `${owner.name} › ${fleet.name}`)}>
+                            <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('fleet', fleet.id, `${owner.name} › ${fleet.name}`)}>
                               <Plus className="w-3 h-3" />배정
                             </Button>
                           </div>
                           {fleetShips.map(ship => (
                             <div key={ship.id} className="border-l-2 border-gray-100 pl-3 ml-3">
                               <div className="flex items-center justify-between py-0.5">
-                                <div className="flex items-center gap-2">
-                                  <ChevronRight className="w-3 h-3 text-gray-300" />
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />
                                   <span className="text-xs text-gray-500">{ship.name}</span>
-                                  <div className="ml-1">{renderBadges('ship', ship.id)}</div>
+                                  <div>{renderBadges('ship', ship.id)}</div>
                                 </div>
-                                <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2" onClick={() => openModal('ship', ship.id, `${owner.name} › ${fleet.name} › ${ship.name}`)}>
+                                <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${fleet.name} › ${ship.name}`)}>
                                   <Plus className="w-3 h-3" />배정
                                 </Button>
                               </div>
@@ -182,12 +255,12 @@ export default function ManagerAssignmentPage() {
                     {ownerShips.map(ship => (
                       <div key={ship.id} className="border-l-2 border-gray-100 pl-3">
                         <div className="flex items-center justify-between py-0.5">
-                          <div className="flex items-center gap-2">
-                            <ChevronRight className="w-3 h-3 text-gray-300" />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />
                             <span className="text-xs text-gray-500">{ship.name}</span>
-                            <div className="ml-1">{renderBadges('ship', ship.id)}</div>
+                            <div>{renderBadges('ship', ship.id)}</div>
                           </div>
-                          <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2" onClick={() => openModal('ship', ship.id, `${owner.name} › ${ship.name}`)}>
+                          <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${ship.name}`)}>
                             <Plus className="w-3 h-3" />배정
                           </Button>
                         </div>
@@ -208,7 +281,7 @@ export default function ManagerAssignmentPage() {
                 <div key={fleet.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-50">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-gray-600">{fleet.name}</span>
-                    <div className="ml-1">{renderBadges('fleet', fleet.id)}</div>
+                    <div>{renderBadges('fleet', fleet.id)}</div>
                   </div>
                   <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2" onClick={() => openModal('fleet', fleet.id, fleet.name)}>
                     <Plus className="w-3 h-3" />배정
@@ -231,24 +304,39 @@ export default function ManagerAssignmentPage() {
               <Label className="text-xs text-gray-500">대상</Label>
               <p className="text-sm font-medium">{modal?.entityLabel}</p>
             </div>
+            {modal && (() => {
+              const { assignments: inherited, inherited: isInherited, sourceName } = getEffective(modal.type, modal.entityId);
+              if (isInherited && inherited.length > 0) {
+                return (
+                  <div className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-700">
+                    현재 <strong>{sourceName}</strong>에서 상속됨:&nbsp;
+                    {inherited.map(a => getUserById(a.user_id)?.name).filter(Boolean).join(', ')}
+                    <br />직접 배정하면 상속 대신 이 배정이 적용됩니다.
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div className="space-y-1.5">
               <Label className="text-xs">선주 사용자 *</Label>
               <Select value={selectedUser} onValueChange={setSelectedUser}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주 사용자 선택" /></SelectTrigger>
                 <SelectContent>
-                  {users.map(u => (
+                  {users.length === 0 ? (
+                    <div className="px-2 py-2 text-xs text-gray-400">등록된 선주 사용자가 없습니다</div>
+                  ) : users.map(u => (
                     <SelectItem key={u.id} value={u.id} className="text-sm">
                       {u.name} <span className="text-gray-400 text-xs">({u.email})</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-400">사용자 그룹 관리 &gt; 선주에 등록된 사용자만 표시됩니다</p>
+              <p className="text-xs text-gray-400">사용자 그룹 관리 › 선주에 등록된 사용자만 표시됩니다</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setModal(null)}>취소</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? '저장 중...' : '배정'}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving || !selectedUser}>{saving ? '저장 중...' : '배정'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
