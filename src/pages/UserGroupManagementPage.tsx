@@ -168,8 +168,8 @@ export default function UserGroupManagementPage() {
               <CardTitle className="text-base">{ROLE_LABELS[role] || role} 관리</CardTitle>
               <p className="text-xs text-muted-foreground mt-1">총 {roleUsers.length}명</p>
             </div>
-            <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/user-groups?mode=new&role=${role}`, `${ROLE_LABELS[role] || role} 추가`, true)}>
-              <Plus className="w-3.5 h-3.5" />{ROLE_LABELS[role] || role} 추가
+            <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/user-groups?mode=new&role=${role}`, '담당자 추가', true)}>
+              <Plus className="w-3.5 h-3.5" />담당자 추가
             </Button>
           </div>
         </CardHeader>
