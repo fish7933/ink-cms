@@ -23,6 +23,7 @@ interface Company {
   phone: string | null;
   officer_contract_months: number | null;
   rating_contract_months: number | null;
+  month_days_basis: '30' | 'actual';
 }
 
 interface SystemUser { id: string; name: string; email: string; role: string; }
@@ -31,9 +32,12 @@ interface FormState {
   name: string; country: string; manager_id: string;
   email: string; phone: string;
   officer_contract_months: number | null; rating_contract_months: number | null;
+  month_days_basis: '30' | 'actual';
 }
 
-const EMPTY_FORM: FormState = { name: '', country: '', manager_id: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null };
+const EMPTY_FORM: FormState = { name: '', country: '', manager_id: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null, month_days_basis: '30' };
+
+const MONTH_BASIS_LABELS: Record<string, string> = { '30': '30일 고정', 'actual': '실제 일수' };
 
 export default function CompanyManagementPage() {
   const [searchParams] = useSearchParams();
@@ -65,7 +69,7 @@ export default function CompanyManagementPage() {
   useEffect(() => {
     if (editId && companies.length > 0) {
       const c = companies.find(c => c.id === editId);
-      if (c) setForm({ name: c.name, country: c.country || '', manager_id: c.manager_id || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months });
+      if (c) setForm({ name: c.name, country: c.country || '', manager_id: c.manager_id || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months, month_days_basis: c.month_days_basis || '30' });
     }
     if (isNew) setForm(EMPTY_FORM);
   }, [editId, isNew, companies]);
@@ -73,7 +77,7 @@ export default function CompanyManagementPage() {
   async function load() {
     setLoading(true);
     const [{ data: cd, error }, { data: ud }, natData] = await Promise.all([
-      supabase.from('companies').select('id,name,type,country,manager_id,email,phone,officer_contract_months,rating_contract_months').eq('type', companyType).order('name'),
+      supabase.from('companies').select('id,name,type,country,manager_id,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
       supabase.from('users').select('id,name,email,role').eq('role', companyType === 'owner' ? 'ship_owner' : 'manning_agency').order('name'),
       getNationalities(),
     ]);
@@ -87,7 +91,7 @@ export default function CompanyManagementPage() {
   async function handleSave() {
     if (!form.name.trim()) { toast({ title: '회사명을 입력하세요', variant: 'destructive' }); return; }
     setSaving(true);
-    const payload = { name: form.name.trim(), type: companyType, country: form.country || null, manager_id: form.manager_id || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, updated_at: new Date().toISOString() };
+    const payload = { name: form.name.trim(), type: companyType, country: form.country || null, manager_id: form.manager_id || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, updated_at: new Date().toISOString() };
     let error;
     if (editId) {
       ({ error } = await supabase.from('companies').update(payload).eq('id', editId));
@@ -172,6 +176,19 @@ export default function CompanyManagementPage() {
                   <div className="space-y-1"><Label className="text-xs">사관 기본 계약(월)</Label><Input className="h-8 text-sm" type="number" min={1} value={form.officer_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, officer_contract_months: e.target.value ? +e.target.value : null }))} placeholder="예: 6" /></div>
                   <div className="space-y-1"><Label className="text-xs">부원 기본 계약(월)</Label><Input className="h-8 text-sm" type="number" min={1} value={form.rating_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, rating_contract_months: e.target.value ? +e.target.value : null }))} placeholder="예: 9" /></div>
                 </div>
+                {companyType === 'owner' && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">급여 월 계산 기준</Label>
+                    <Select value={form.month_days_basis} onValueChange={v => setForm(f => ({ ...f, month_days_basis: v as '30' | 'actual' }))}>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30일 고정 (한 달 = 30일)</SelectItem>
+                        <SelectItem value="actual">실제 일수 (해당 월 실제 날수 적용)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-400">선원 일할 급여 계산 시 적용되는 월 일수 기준입니다</p>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -197,6 +214,7 @@ export default function CompanyManagementPage() {
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">연락처</th>
                           <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">사관(월)</th>
                           <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">부원(월)</th>
+                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">월 계산</th>}
                           <th className="px-3 py-2"></th>
                         </tr>
                       </thead>
@@ -215,6 +233,13 @@ export default function CompanyManagementPage() {
                               <td className="px-3 py-2 text-gray-600 text-xs">{c.phone || '-'}</td>
                               <td className="px-3 py-2 text-center text-gray-600">{c.officer_contract_months ?? '-'}</td>
                               <td className="px-3 py-2 text-center text-gray-600">{c.rating_contract_months ?? '-'}</td>
+                              {companyType === 'owner' && (
+                                <td className="px-3 py-2 text-center">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${c.month_days_basis === 'actual' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                    {MONTH_BASIS_LABELS[c.month_days_basis] || '30일 고정'}
+                                  </span>
+                                </td>
+                              )}
                               <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-end gap-1">
                                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
