@@ -324,10 +324,13 @@ export function CrewManagementPage() {
                               onCheckedChange={checked => toggleAll(!!checked)}
                             />
                           </th>
+                          <th className="w-8 px-2 py-2 text-center text-xs font-medium text-gray-400">#</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">이름</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">직급</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">국적</th>
-                          {cat === 'onboard' && <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">승선 선박</th>}
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">
+                            {cat === 'onboard' ? '승선 선박' : cat === 'disembarked' ? '하선 선박' : cat === 'standby' ? '배정 선박' : '추천 선박'}
+                          </th>
                           {cat === 'registered' && <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">등록출처</th>}
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">상태</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Grade</th>
@@ -336,24 +339,27 @@ export function CrewManagementPage() {
                       </thead>
                       <tbody>
                         {paginated.length === 0 ? (
-                          <tr><td colSpan={8} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
-                        ) : paginated.map(c => {
+                          <tr><td colSpan={cat === 'registered' ? 10 : 9} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                        ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           const statusKey = crewExt.status || '';
                           const badge = (cat === 'disembarked' && statusKey === 'standby')
                             ? { label: '휴가중', color: 'bg-sky-100 text-sky-700' }
                             : STATUS_BADGE[statusKey];
+                          const shipParts = [crewExt.owner_name, crewExt.fleet_name, crewExt.current_ship_name].filter(Boolean);
+                          const shipDisplay = (cat === 'registered' && crewExt.registration_source !== 'job_posting')
+                            ? '-'
+                            : shipParts.length > 0 ? shipParts.join(' › ') : '-';
                           return (
                             <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => toggleSelect(c.id)}>
                               <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                                 <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
                               </td>
+                              <td className="px-2 py-2 text-center text-xs text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                               <td className="px-3 py-2 font-medium">{c.name}</td>
                               <td className="px-3 py-2 text-gray-600">{c.rank_name || '-'}</td>
                               <td className="px-3 py-2 text-gray-600">{c.nationality || '-'}</td>
-                              {cat === 'onboard' && (
-                                <td className="px-3 py-2 text-gray-600 text-xs">{(c as CrewWithDetails & { current_ship_name?: string }).current_ship_name || '-'}</td>
-                              )}
+                              <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] truncate" title={shipDisplay !== '-' ? shipDisplay : undefined}>{shipDisplay}</td>
                               {cat === 'registered' && (
                                 <td className="px-3 py-2 text-xs text-gray-500">
                                   {crewExt.registration_source ? REGISTRATION_SOURCE_LABELS[crewExt.registration_source as RegistrationSource] : '-'}
