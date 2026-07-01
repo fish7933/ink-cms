@@ -170,9 +170,9 @@ export default function CompanyManagementPage() {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">담당자 <span className="text-gray-400 font-normal">(나중에 설정 가능)</span></Label>
+                    <Label className="text-xs">사용자 <span className="text-gray-400 font-normal">(나중에 설정 가능)</span></Label>
                     <Select value={form.manager_id || '_none'} onValueChange={v => setForm(f => ({ ...f, manager_id: v === '_none' ? '' : v }))}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="담당자 선택 (선택사항)" /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="사용자 선택" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">— 미지정 —</SelectItem>
                         {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>)}
@@ -207,7 +207,7 @@ export default function CompanyManagementPage() {
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1 max-w-xs">
                     <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
-                    <Input className="pl-8 h-8 text-sm" placeholder="회사명, 담당자, 국가 검색..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <Input className="pl-8 h-8 text-sm" placeholder="회사명, 사용자명, 국가 검색..." value={search} onChange={e => setSearch(e.target.value)} />
                   </div>
                   <span className="text-xs text-gray-500 self-center">총 {filtered.length}개</span>
                 </div>
@@ -221,7 +221,7 @@ export default function CompanyManagementPage() {
                           <th className="w-8 px-3 py-2 text-center text-xs font-medium text-gray-400">#</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">회사명</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">국가</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">담당자</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">사용자</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">이메일</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">연락처</th>
                           <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">사관(월)</th>
