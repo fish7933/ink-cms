@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/services/auth.service';
 import { getUsers, addUser, updateUser, deleteUser } from '@/services/user.service';
 import { getCompanies } from '@/services/company.service';
 import { getShorePositions } from '@/services/shore-position.service';
+import { supabase } from '@/lib/supabase';
 import type { User, Company, ShorePosition } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,7 @@ const ROLE_LABELS: Record<string, string> = { ship_owner: '선주', ship_manager
 const ROLE_COLORS: Record<string, string> = { ship_owner: 'bg-purple-500', ship_manager: 'bg-blue-500', manning_agency: 'bg-green-500', crew: 'bg-gray-500', admin: 'bg-red-500' };
 
 type CompanyExt = Company & { company_type?: string };
+interface CrewOption { id: string; name: string; rank_name?: string; nationality?: string; }
 
 export default function UserGroupManagementPage() {
   const navigate = useNavigate();
@@ -36,6 +38,7 @@ export default function UserGroupManagementPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<CompanyExt[]>([]);
   const [positions, setPositions] = useState<ShorePosition[]>([]);
+  const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -43,7 +46,7 @@ export default function UserGroupManagementPage() {
 
   const [formData, setFormData] = useState({
     username: '', password: '', name: '', email: '',
-    role: defaultRole, company_id: '', position_id: '',
+    role: defaultRole, company_id: '', position_id: '', crew_member_id: '',
   });
 
   useEffect(() => {
@@ -74,22 +77,26 @@ export default function UserGroupManagementPage() {
         username: '', password: '', name: '', email: '',
         role: defaultRole,
         company_id: (defaultRole === 'ship_manager' || defaultRole === 'admin') ? (mgmtCompany?.id || '') : '',
-        position_id: '',
+        position_id: '', crew_member_id: '',
       });
     }
     if (editId) {
       const u = users.find(u => u.id === editId);
       if (u) {
-        const eu = u as User & { username?: string; position_id?: string };
-        setFormData({ username: eu.username || '', password: '', name: u.name, email: u.email, role: u.role, company_id: u.company_id || '', position_id: eu.position_id || '' });
+        const eu = u as User & { username?: string; position_id?: string; crew_member_id?: string };
+        setFormData({ username: eu.username || '', password: '', name: u.name, email: u.email, role: u.role, company_id: u.company_id || '', position_id: eu.position_id || '', crew_member_id: eu.crew_member_id || '' });
       }
     }
   }, [loading, isNew, editId, users, companies, defaultRole]);
 
   const loadData = async () => {
     try {
-      const [u, c, p] = await Promise.all([getUsers(), getCompanies(), getShorePositions()]);
+      const [u, c, p, crewRes] = await Promise.all([
+        getUsers(), getCompanies(), getShorePositions(),
+        supabase.from('crew_members').select('id,name,rank_id,nationality').order('name'),
+      ]);
       setUsers(u); setCompanies(c as CompanyExt[]); setPositions(p);
+      setCrewOptions((crewRes.data || []) as CrewOption[]);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -118,6 +125,7 @@ export default function UserGroupManagementPage() {
           role: formData.role as User['role'],
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
+          crew_member_id: formData.crew_member_id || null,
           ...(formData.password ? { password: formData.password } : {}),
         });
       } else {
@@ -127,6 +135,7 @@ export default function UserGroupManagementPage() {
           role: formData.role as User['role'],
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
+          crew_member_id: formData.crew_member_id || null,
         });
       }
       toast({ title: editId ? '수정 완료' : '등록 완료' });
@@ -284,6 +293,21 @@ export default function UserGroupManagementPage() {
                       </Select>
                     </div>
                   )}
+                </div>
+              )}
+              {formData.role === 'crew' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">연결할 선원 레코드</Label>
+                  <Select value={formData.crew_member_id || '_none'} onValueChange={v => setFormData({ ...formData, crew_member_id: v === '_none' ? '' : v })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 레코드 선택 (선택사항)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— 미연결 —</SelectItem>
+                      {crewOptions.map(c => (
+                        <SelectItem key={c.id} value={c.id} className="text-sm">{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-400">선원이 로그인 시 자신의 이력서·채용단계·교육·고과를 조회할 수 있도록 연결합니다</p>
                 </div>
               )}
               <div className="space-y-1.5">

@@ -24,7 +24,7 @@ export async function getUsersByRole(role: string): Promise<User[]> {
 }
 
 export async function addUser(
-  user: Omit<User, 'id' | 'created_at' | 'updated_at'> & { password: string; position_id?: string | null }
+  user: Omit<User, 'id' | 'created_at' | 'updated_at'> & { password: string; position_id?: string | null; crew_member_id?: string | null }
 ): Promise<User | null> {
   const passwordHash = await bcrypt.hash(user.password, SALT_ROUNDS);
   const now = new Date().toISOString();
@@ -38,6 +38,7 @@ export async function addUser(
       name: user.name,
       company_id: user.company_id || null,
       position_id: user.position_id || null,
+      crew_member_id: user.crew_member_id || null,
       is_active: true,
       created_at: now,
       updated_at: now,
@@ -50,7 +51,7 @@ export async function addUser(
 
 export async function updateUser(
   id: string,
-  updates: Partial<User> & { password?: string }
+  updates: Partial<User> & { password?: string; position_id?: string | null; crew_member_id?: string | null }
 ): Promise<User | null> {
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (updates.name !== undefined) payload.name = updates.name;
@@ -58,6 +59,7 @@ export async function updateUser(
   if (updates.role !== undefined) payload.role = updates.role;
   if (updates.company_id !== undefined) payload.company_id = updates.company_id;
   if (updates.position_id !== undefined) payload.position_id = updates.position_id;
+  if (updates.crew_member_id !== undefined) payload.crew_member_id = updates.crew_member_id;
   if (updates.password) payload.password = await bcrypt.hash(updates.password, SALT_ROUNDS);
 
   const { data, error } = await supabase
