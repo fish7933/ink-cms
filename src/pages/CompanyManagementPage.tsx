@@ -170,9 +170,9 @@ export default function CompanyManagementPage() {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">담당자</Label>
+                    <Label className="text-xs">담당자 <span className="text-gray-400 font-normal">(나중에 설정 가능)</span></Label>
                     <Select value={form.manager_id || '_none'} onValueChange={v => setForm(f => ({ ...f, manager_id: v === '_none' ? '' : v }))}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="담당자 선택" /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="담당자 선택 (선택사항)" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">— 미지정 —</SelectItem>
                         {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>)}

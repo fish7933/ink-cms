@@ -114,9 +114,7 @@ export default function UserGroupManagementPage() {
     if (!formData.email.trim()) { setFormError('이메일을 입력하세요.'); return; }
     if (!editId && !formData.username.trim()) { setFormError('사용자명을 입력하세요.'); return; }
     if (!editId && !formData.password.trim()) { setFormError('비밀번호를 입력하세요.'); return; }
-    if (['ship_owner', 'manning_agency'].includes(formData.role) && !formData.company_id) {
-      setFormError('소속 회사를 선택해주세요.'); return;
-    }
+    // company_id는 선택사항 — 나중에 선주사/매닝사 등록 후 연결 가능
     try {
       setSaving(true);
       if (editId) {
@@ -269,14 +267,14 @@ export default function UserGroupManagementPage() {
                   <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" className="h-9 text-sm" />
                 </div>
               </div>
-              {companyOptions.length > 0 && (
+              {['ship_owner', 'manning_agency', 'ship_manager', 'admin'].includes(formData.role) && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">소속 회사 {['ship_owner','manning_agency'].includes(formData.role) ? '*' : ''}</Label>
+                    <Label className="text-xs">소속 회사 <span className="text-gray-400 font-normal">(나중에 설정 가능)</span></Label>
                     <Select value={formData.company_id || '_none'} onValueChange={v => setFormData({ ...formData, company_id: v === '_none' ? '' : v })}>
-                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="회사 선택" /></SelectTrigger>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="회사 선택 (선택사항)" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="_none">— 선택 —</SelectItem>
+                        <SelectItem value="_none">— 미지정 —</SelectItem>
                         {companyOptions.map(c => <SelectItem key={c.id} value={String(c.id)} className="text-sm">{c.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
