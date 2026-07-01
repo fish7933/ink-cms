@@ -72,6 +72,6 @@ export async function updateUser(
 
 export async function deleteUser(id: string): Promise<boolean> {
   const { error } = await supabase.from('users').delete().eq('id', id);
-  if (error) { console.error('Error deleting user:', error); return false; }
+  if (error) { console.error('Error deleting user:', error); throw error; }
   return true;
 }
