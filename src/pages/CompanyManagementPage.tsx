@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { getNationalities } from '@/services/nationality.service';
+import type { Nationality } from '@/types/nationality';
 
 interface Company {
   id: string;
@@ -57,6 +59,7 @@ export default function CompanyManagementPage() {
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [users, setUsers] = useState<SystemUser[]>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -74,7 +77,7 @@ export default function CompanyManagementPage() {
 
   async function load() {
     setLoading(true);
-    const [{ data: companyData, error }, { data: userData }] = await Promise.all([
+    const [{ data: companyData, error }, { data: userData }, natData] = await Promise.all([
       supabase
         .from('companies')
         .select('id,name,type,country,manager_id,email,phone,officer_contract_months,rating_contract_months')
@@ -85,14 +88,17 @@ export default function CompanyManagementPage() {
         .select('id,name,email,role')
         .in('role', ['admin', 'ship_manager'])
         .order('name'),
+      getNationalities(),
     ]);
     if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
     else { setCompanies((companyData || []) as Company[]); }
     setUsers((userData || []) as SystemUser[]);
+    setNationalities(natData);
     setLoading(false);
   }
 
   const userById = new Map(users.map(u => [u.id, u]));
+  const natByCode = new Map(nationalities.map(n => [n.country_code, n]));
 
   function openAdd() {
     setEditing(null);
@@ -207,7 +213,7 @@ export default function CompanyManagementPage() {
                         <tr key={c.id} className="border-b hover:bg-gray-50">
                           <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
                           <td className="px-3 py-2 font-medium">{c.name}</td>
-                          <td className="px-3 py-2 text-gray-600">{c.country || '-'}</td>
+                          <td className="px-3 py-2 text-gray-600">{c.country ? (natByCode.get(c.country)?.country_name_ko ?? c.country) : '-'}</td>
                           <td className="px-3 py-2 text-gray-600">
                             {manager ? (
                               <span>{manager.name} <span className="text-xs text-gray-400">({manager.email})</span></span>
@@ -252,7 +258,10 @@ export default function CompanyManagementPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">국가</Label>
-                <Input className="h-8 text-sm" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="예: 대한민국" />
+                <Select value={form.country || '_none'} onValueChange={v => setForm(f => ({ ...f, country: v === '_none' ? '' : v }))}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="국가 선택" /></SelectTrigger>
+                  <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">담당자</Label>

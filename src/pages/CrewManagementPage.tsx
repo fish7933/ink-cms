@@ -20,6 +20,8 @@ import { supabase } from '@/lib/supabase';
 import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
 import type { RegistrationSource } from '@/types/dispatch';
 import { REGISTRATION_SOURCE_LABELS, CREW_CATEGORY_LABELS } from '@/types/dispatch';
+import { getNationalities } from '@/services/nationality.service';
+import type { Nationality } from '@/types/nationality';
 import { useToast } from '@/hooks/use-toast';
 
 type CategoryTab = 'registered' | 'standby' | 'onboard' | 'disembarked';
@@ -49,6 +51,7 @@ export function CrewManagementPage() {
 
   const [crew, setCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [owners, setOwners] = useState<Company[]>([]);
   const [manningAgencies, setManningAgencies] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
@@ -63,6 +66,7 @@ export function CrewManagementPage() {
   const [filterRank, setFilterRank] = useState('all');
   const [filterManning, setFilterManning] = useState('all');
   const [filterSource, setFilterSource] = useState('all');
+  const [filterNationality, setFilterNationality] = useState('all');
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -70,7 +74,7 @@ export function CrewManagementPage() {
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => { loadData(); }, []);
-  useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource]);
+  useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality]);
   useEffect(() => {
     if (filterOwner !== 'all') supabase.from('fleets').select('*').eq('owner_id', filterOwner).then(({ data }) => setFleets(data || []));
     else { setFleets([]); setFilterFleet('all'); }
@@ -84,10 +88,11 @@ export function CrewManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [crewData, ranksRes, companiesRes] = await Promise.all([
+      const [crewData, ranksRes, companiesRes, natData] = await Promise.all([
         crewService.getAllWithDetails(),
         supabase.from('ranks').select('*').order('display_order'),
         supabase.from('companies').select('*'),
+        getNationalities(),
       ]);
       setCrew(crewData);
       if (ranksRes.data) setRanks(ranksRes.data);
@@ -95,6 +100,7 @@ export function CrewManagementPage() {
         setOwners(companiesRes.data.filter((c: Company) => c.type === 'owner'));
         setManningAgencies(companiesRes.data.filter((c: Company) => c.type === 'manning'));
       }
+      setNationalities(natData);
     } finally { setLoading(false); }
   };
 
@@ -121,8 +127,9 @@ export function CrewManagementPage() {
     if (filterRank !== 'all') list = list.filter(c => c.rank_id === filterRank);
     if (filterManning !== 'all') list = list.filter(c => c.manning_agency_id === filterManning);
     if (filterSource !== 'all') list = list.filter(c => (c as CrewWithDetails & { registration_source?: string }).registration_source === filterSource);
+    if (filterNationality !== 'all') list = list.filter(c => c.nationality === filterNationality);
     return list;
-  }, [crew, category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource]);
+  }, [crew, category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality]);
 
   const countOf = (cat: CategoryTab) => {
     const statuses = CATEGORY_STATUS_MAP[cat];
@@ -161,11 +168,12 @@ export function CrewManagementPage() {
   };
 
   const isFiltered = filterOwner !== 'all' || filterFleet !== 'all' || filterShip !== 'all' ||
-    filterRank !== 'all' || filterManning !== 'all' || filterSource !== 'all';
+    filterRank !== 'all' || filterManning !== 'all' || filterSource !== 'all' || filterNationality !== 'all';
 
   const clearFilters = () => {
     setFilterOwner('all'); setFilterFleet('all'); setFilterShip('all');
-    setFilterRank('all'); setFilterManning('all'); setFilterSource('all'); setSearchTerm('');
+    setFilterRank('all'); setFilterManning('all'); setFilterSource('all');
+    setFilterNationality('all'); setSearchTerm('');
   };
 
   if (loading) return (
@@ -250,6 +258,13 @@ export function CrewManagementPage() {
               <Select value={filterManning} onValueChange={setFilterManning}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="매닝사" /></SelectTrigger>
                 <SelectContent><SelectItem value="all">전체 매닝사</SelectItem>{manningAgencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={filterNationality} onValueChange={setFilterNationality}>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="국적" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 국적</SelectItem>
+                  {nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}
+                </SelectContent>
               </Select>
               {category === 'registered' && (
                 <Select value={filterSource} onValueChange={setFilterSource}>
@@ -342,6 +357,8 @@ export function CrewManagementPage() {
                           <tr><td colSpan={cat === 'registered' ? 10 : 9} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
+                          const natEntry = nationalities.find(n => n.country_code === c.nationality);
+                          const nationalityDisplay = natEntry ? natEntry.country_name_ko : (c.nationality || '-');
                           const statusKey = crewExt.status || '';
                           const badge = (cat === 'disembarked' && statusKey === 'standby')
                             ? { label: '휴가중', color: 'bg-sky-100 text-sky-700' }
@@ -358,7 +375,7 @@ export function CrewManagementPage() {
                               <td className="px-2 py-2 text-center text-xs text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                               <td className="px-3 py-2 font-medium">{c.name}</td>
                               <td className="px-3 py-2 text-gray-600">{c.rank_name || '-'}</td>
-                              <td className="px-3 py-2 text-gray-600">{c.nationality || '-'}</td>
+                              <td className="px-3 py-2 text-gray-600">{nationalityDisplay}</td>
                               <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] truncate" title={shipDisplay !== '-' ? shipDisplay : undefined}>{shipDisplay}</td>
                               {cat === 'registered' && (
                                 <td className="px-3 py-2 text-xs text-gray-500">

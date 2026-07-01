@@ -485,7 +485,7 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
                 <Label className="text-xs">국적</Label>
                 <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
-                  <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
+                  <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><Label className="text-xs">생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1" /></div>

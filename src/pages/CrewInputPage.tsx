@@ -12,8 +12,10 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { crewService } from '@/services/crew.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
+import { getNationalities } from '@/services/nationality.service';
 import type { CrewRecommendationWithDetails, Rank } from '@/types/models';
 import type { CertificateType } from '@/types/certificate-type';
+import type { Nationality } from '@/types/nationality';
 
 interface Certificate {
   name: string;
@@ -37,6 +39,7 @@ export default function CrewInputPage() {
   const recommendation = location.state?.recommendation as CrewRecommendationWithDetails;
 
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
@@ -78,6 +81,7 @@ export default function CrewInputPage() {
     }
     loadRanks();
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
+    getNationalities().then(setNationalities).catch(console.error);
     setFormData(prev => ({
       ...prev,
       name: recommendation.crew_name,
@@ -345,7 +349,13 @@ const addCert = (name?: string) => {
                         <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2"><Label>국적</Label><Input value={formData.nationality} onChange={e => setFormData(p => ({ ...p, nationality: e.target.value }))} /></div>
+                    <div className="space-y-2">
+                      <Label>국적</Label>
+                      <Select value={formData.nationality} onValueChange={v => setFormData(p => ({ ...p, nationality: v }))}>
+                        <SelectTrigger><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                        <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
                     <div className="space-y-2"><Label>생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
                     <div className="space-y-2"><Label>여권번호</Label><Input value={formData.passport_number} onChange={e => setFormData(p => ({ ...p, passport_number: e.target.value }))} /></div>
                     <div className="space-y-2"><Label>선원수첩번호</Label><Input value={formData.seaman_book_number} onChange={e => setFormData(p => ({ ...p, seaman_book_number: e.target.value }))} /></div>
