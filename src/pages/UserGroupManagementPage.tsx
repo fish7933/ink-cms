@@ -168,8 +168,8 @@ export default function UserGroupManagementPage() {
               <CardTitle className="text-base">{ROLE_LABELS[role] || role} 관리</CardTitle>
               <p className="text-xs text-muted-foreground mt-1">총 {roleUsers.length}명</p>
             </div>
-            <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/user-groups?mode=new&role=${role}`, '담당자 추가', true)}>
-              <Plus className="w-3.5 h-3.5" />담당자 추가
+            <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/user-groups?mode=new&role=${role}`, '사용자 추가', true)}>
+              <Plus className="w-3.5 h-3.5" />사용자 추가
             </Button>
           </div>
         </CardHeader>
@@ -232,7 +232,7 @@ export default function UserGroupManagementPage() {
               <div className="flex items-center gap-2">
                 <UserCircle className="w-5 h-5" />
                 <div>
-                  <CardTitle className="text-base">{editId ? '사용자 수정' : `${ROLE_LABELS[formData.role] || formData.role} 추가`}</CardTitle>
+                  <CardTitle className="text-base">{editId ? '사용자 수정' : '사용자 추가'}</CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">{editId ? '사용자 정보를 수정합니다' : '새로운 사용자를 등록합니다'}</p>
                 </div>
               </div>
