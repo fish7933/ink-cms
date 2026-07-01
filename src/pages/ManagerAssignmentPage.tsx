@@ -1,415 +1,349 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getCurrentUser } from '@/services/auth.service';
 import { getUsers } from '@/services/user.service';
-import { getCompanies } from '@/services/company.service';
-import { getFleets } from '@/services/fleet.service';
-import { getShips } from '@/services/ship.service';
-import { getAssignments, getAssignmentsByEntity, addAssignment, deleteAssignment } from '@/services/assignment.service';
-import type { User, Company, Fleet, Ship } from '@/types/models';
-import type { Assignment } from '@/types/assignment-approval';
+import { addAssignment, deleteAssignment } from '@/services/assignment.service';
+import { supabase } from '@/lib/supabase';
+import type { User } from '@/types/models';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Trash2, Users, Building2, Ship as ShipIcon, Layers, ArrowLeft, Save } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Plus, Trash2, Users, ChevronRight, Save } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTabContext } from '@/contexts/TabContext';
+import { useToast } from '@/hooks/use-toast';
+
+// 사용자 역할 → 배정 레이블/색상
+const USER_ROLE_LABEL: Record<string, string> = {
+  ship_owner: '선주',
+  ship_manager: '내부담당',
+  manning_agency: '매닝사',
+};
+const USER_ROLE_COLOR: Record<string, string> = {
+  ship_owner: 'bg-purple-100 text-purple-700',
+  ship_manager: 'bg-blue-100 text-blue-700',
+  manning_agency: 'bg-green-100 text-green-700',
+};
+
+interface Company { id: string; name: string; type: string; }
+interface Fleet { id: string; name: string; owner_id: string; }
+interface Ship { id: string; name: string; owner_id: string; fleet_id: string | null; }
+interface Assignment { id: string; assignment_type: string; entity_id: string; user_id: string; role: string; created_at: string; }
 
 export default function ManagerAssignmentPage() {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [searchParams] = useSearchParams();
+  const { openNewTab, closeTab, activeTabId } = useTabContext();
+  const { toast } = useToast();
+
+  const editType = searchParams.get('type') as 'owner' | 'fleet' | 'ship' | null;
+  const isFormMode = !!editType;
+
   const [users, setUsers] = useState<User[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [owners, setOwners] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [ships, setShips] = useState<Ship[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [formView, setFormView] = useState<{ id?: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Form state
-  const [formData, setFormData] = useState({
-    assignment_type: 'owner' as 'owner' | 'fleet' | 'ship',
+  const [form, setForm] = useState({
+    assignment_type: editType || 'owner',
     entity_id: '',
     user_id: '',
-    role: 'owner_manager' as 'owner_manager' | 'fleet_manager' | 'ship_manager' | 'manning_manager',
   });
 
   useEffect(() => {
-    const loadUser = async () => {
+    const init = async () => {
       const user = await getCurrentUser();
-      if (!user || user.role !== 'ship_manager') {
-      navigate('/dashboard');
-      return;
-    }
-    setCurrentUser(user);
-    loadData();
+      if (!user || !['ship_manager', 'admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
+      await loadData();
     };
-
-    loadUser();
+    init();
   }, [navigate]);
+
+  useEffect(() => {
+    if (isFormMode) setForm(f => ({ ...f, assignment_type: editType || 'owner', entity_id: '', user_id: '' }));
+  }, [editType, isFormMode]);
+
+  // 목록 갱신 신호 수신
+  useEffect(() => {
+    if (isFormMode) return;
+    const handler = () => loadData();
+    window.addEventListener('assignment-data-changed', handler);
+    return () => window.removeEventListener('assignment-data-changed', handler);
+  }, [isFormMode]);
 
   const loadData = async () => {
     try {
-      const [usersData, companiesData, fleetsData, shipsData, assignmentsData] = await Promise.all([
+      const [usersData, ownersRes, fleetsRes, shipsRes, assignRes] = await Promise.all([
         getUsers(),
-        getCompanies(),
-        getFleets(),
-        getShips(),
-        getAssignments(),
+        supabase.from('companies').select('id,name,type').eq('type', 'owner').order('name'),
+        supabase.from('fleets').select('id,name,owner_id').order('name'),
+        supabase.from('ships').select('id,name,owner_id,fleet_id').order('name'),
+        supabase.from('assignments').select('*').order('created_at', { ascending: false }),
       ]);
-      setUsers(usersData);
-      setCompanies(companiesData.filter(c => c.type === 'owner'));
-      setFleets(fleetsData);
-      setShips(shipsData);
-      setAssignments(assignmentsData);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getAssignmentsByType = (type: 'owner' | 'fleet' | 'ship') => {
-    return assignments.filter(a => a.assignment_type === type);
-  };
-
-  const getRoleName = (role: string) => {
-    const roleMap: Record<string, string> = {
-      owner_manager: '선주 담당자',
-      fleet_manager: '플릿 담당자',
-      ship_manager: '선박 담당자',
-      manning_manager: '매닝 담당자',
-    };
-    return roleMap[role] || role;
-  };
-
-  const getRoleBadgeColor = (role: string) => {
-    const colorMap: Record<string, string> = {
-      owner_manager: 'bg-purple-500',
-      fleet_manager: 'bg-blue-500',
-      ship_manager: 'bg-green-500',
-      manning_manager: 'bg-orange-500',
-    };
-    return colorMap[role] || 'bg-gray-500';
-  };
-
-  const getEntityName = (assignment: Assignment) => {
-    if (assignment.assignment_type === 'owner') {
-      const company = companies.find(c => c.id === assignment.entity_id);
-      return company?.name || '알 수 없음';
-    } else if (assignment.assignment_type === 'fleet') {
-      const fleet = fleets.find(f => f.id === assignment.entity_id);
-      return fleet?.name || '알 수 없음';
-    } else if (assignment.assignment_type === 'ship') {
-      const ship = ships.find(s => s.id === assignment.entity_id);
-      return ship?.name || '알 수 없음';
-    }
-    return '알 수 없음';
-  };
-
-  const getUserName = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    return user ? `${user.name} (${user.email})` : '알 수 없음';
-  };
-
-  const openForm = (type: 'owner' | 'fleet' | 'ship') => {
-    const roleMap = {
-      owner: 'owner_manager',
-      fleet: 'fleet_manager',
-      ship: 'ship_manager',
-    };
-
-    setFormData({
-      assignment_type: type,
-      entity_id: '',
-      user_id: '',
-      role: roleMap[type] as 'owner_manager' | 'fleet_manager' | 'ship_manager' | 'manning_manager',
-    });
-    setFormView({});
-  };
-
-  const closeForm = () => {
-    setFormView(null);
+      setUsers(usersData.filter(u => ['ship_owner', 'ship_manager', 'manning_agency'].includes(u.role)));
+      setOwners((ownersRes.data || []) as Company[]);
+      setFleets((fleetsRes.data || []) as Fleet[]);
+      setShips((shipsRes.data || []) as Ship[]);
+      setAssignments((assignRes.data || []) as Assignment[]);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   const handleSave = async () => {
+    if (!form.entity_id) { toast({ title: '대상을 선택하세요', variant: 'destructive' }); return; }
+    if (!form.user_id) { toast({ title: '사용자를 선택하세요', variant: 'destructive' }); return; }
+    const user = users.find(u => u.id === form.user_id);
+    const roleMap: Record<string, string> = { ship_owner: 'owner_manager', ship_manager: 'ship_manager', manning_agency: 'manning_manager' };
     try {
       setSaving(true);
-      await addAssignment({
-        assignment_type: formData.assignment_type,
-        entity_id: formData.entity_id,
-        user_id: formData.user_id,
-        role: formData.role,
-        assigned_by: currentUser?.id || null,
-      });
-
-      closeForm();
-      await loadData();
-    } catch (error) {
-      console.error('Error adding assignment:', error);
-      alert('담당자 배정 중 오류가 발생했습니다.');
-    } finally {
-      setSaving(false);
-    }
+      await addAssignment({ assignment_type: form.assignment_type as 'owner'|'fleet'|'ship', entity_id: form.entity_id, user_id: form.user_id, role: roleMap[user?.role || ''] || 'owner_manager', assigned_by: null });
+      toast({ title: '배정 완료' });
+      window.dispatchEvent(new CustomEvent('assignment-data-changed'));
+      closeTab(activeTabId!);
+    } catch (e: unknown) {
+      toast({ title: '배정 실패', description: (e as {message?:string})?.message, variant: 'destructive' });
+    } finally { setSaving(false); }
   };
 
-  const handleDelete = async (assignmentId: string) => {
-    if (!confirm('이 담당자 배정을 삭제하시겠습니까?')) return;
-
+  const handleDelete = async (id: string) => {
+    if (!confirm('이 배정을 삭제하시겠습니까?')) return;
     try {
-      await deleteAssignment(assignmentId);
+      await deleteAssignment(id);
       await loadData();
-    } catch (error) {
-      console.error('Error deleting assignment:', error);
-      alert('담당자 배정 삭제 중 오류가 발생했습니다.');
-    }
+      toast({ title: '삭제 완료' });
+    } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
   };
 
-  const getEntityOptions = () => {
-    if (formData.assignment_type === 'owner') {
-      return companies.map(c => ({ id: c.id, name: c.name }));
-    } else if (formData.assignment_type === 'fleet') {
-      return fleets.map(f => ({ id: f.id, name: f.name }));
-    } else if (formData.assignment_type === 'ship') {
-      return ships.map(s => ({ id: s.id, name: s.name }));
-    }
-    return [];
+  const getUserById = (id: string) => users.find(u => u.id === id);
+  const getAssignmentsFor = (type: string, entityId: string) =>
+    assignments.filter(a => a.assignment_type === type && a.entity_id === entityId);
+
+  const entityOptions = () => {
+    if (form.assignment_type === 'owner') return owners.map(o => ({ id: o.id, label: o.name }));
+    if (form.assignment_type === 'fleet') return fleets.map(f => {
+      const owner = owners.find(o => o.id === f.owner_id);
+      return { id: f.id, label: `${owner ? owner.name + ' › ' : ''}${f.name}` };
+    });
+    return ships.map(s => {
+      const owner = owners.find(o => o.id === s.owner_id);
+      const fleet = fleets.find(f => f.id === s.fleet_id);
+      return { id: s.id, label: `${owner ? owner.name + ' › ' : ''}${fleet ? fleet.name + ' › ' : ''}${s.name}` };
+    });
   };
 
-  const getAvailableUsers = () => {
-    // Filter users based on role - only ship_owner users can be assigned
-    return users.filter(u => u.role === 'ship_owner');
-  };
+  // 사용자 역할 필터: 선주사엔 ship_owner 우선, 모두 선택 가능
+  const userOptions = users;
 
-  if (!currentUser || loading) {
+  const renderAssignmentBadges = (type: string, entityId: string) => {
+    const asgns = getAssignmentsFor(type, entityId);
+    if (!asgns.length) return <span className="text-xs text-gray-400">미배정</span>;
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">데이터를 불러오는 중...</p>
-        </div>
+      <div className="flex flex-wrap gap-1">
+        {asgns.map(a => {
+          const u = getUserById(a.user_id);
+          if (!u) return null;
+          return (
+            <span key={a.id} className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${USER_ROLE_COLOR[u.role] || 'bg-gray-100 text-gray-600'}`}>
+              {u.name}
+              <span className="opacity-60">({USER_ROLE_LABEL[u.role] || u.role})</span>
+              <button onClick={e => { e.stopPropagation(); handleDelete(a.id); }} className="ml-0.5 hover:opacity-70">×</button>
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
+  if (loading && !isFormMode) {
+    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
+  }
+
+  // ─── 폼 모드 ───
+  if (isFormMode) {
+    const typeLabel = editType === 'owner' ? '선주사' : editType === 'fleet' ? '플릿' : '선박';
+    return (
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                <CardTitle className="text-base">{typeLabel} 사용자 배정</CardTitle>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>취소</Button>
+                <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
+                  <Save className="w-4 h-4" />{saving ? '저장 중...' : '배정'}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-2 max-w-md">
+            <div className="space-y-1.5">
+              <Label className="text-xs">대상 {typeLabel} *</Label>
+              <Select value={form.entity_id} onValueChange={v => setForm(f => ({ ...f, entity_id: v }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={`${typeLabel} 선택`} /></SelectTrigger>
+                <SelectContent>
+                  {entityOptions().map(e => <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">배정 사용자 *</Label>
+              <Select value={form.user_id} onValueChange={v => setForm(f => ({ ...f, user_id: v }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="사용자 선택" /></SelectTrigger>
+                <SelectContent>
+                  {(['ship_owner', 'ship_manager', 'manning_agency'] as const).map(role => {
+                    const roleUsers = userOptions.filter(u => u.role === role);
+                    if (!roleUsers.length) return null;
+                    return [
+                      <SelectItem key={`hd-${role}`} value={`__hd__${role}`} disabled className="text-xs font-semibold text-gray-400 py-1">
+                        ── {USER_ROLE_LABEL[role]} ──
+                      </SelectItem>,
+                      ...roleUsers.map(u => (
+                        <SelectItem key={u.id} value={u.id} className="pl-4">
+                          {u.name} <span className="text-gray-400 text-xs">({u.email})</span>
+                        </SelectItem>
+                      ))
+                    ];
+                  })}
+                </SelectContent>
+              </Select>
+              {form.user_id && (() => {
+                const u = getUserById(form.user_id);
+                if (!u) return null;
+                return <p className="text-xs text-gray-500">역할: <span className={`px-1.5 py-0.5 rounded ${USER_ROLE_COLOR[u.role]}`}>{USER_ROLE_LABEL[u.role] || u.role}</span> → 이메일 수신처/참조처로 사용됩니다</p>;
+              })()}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  const renderAssignmentTable = (type: 'owner' | 'fleet' | 'ship') => {
-    const typeAssignments = getAssignmentsByType(type);
-    const typeName = type === 'owner' ? '선주' : type === 'fleet' ? '플릿' : '선박';
-
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle className="text-base">{typeName} 담당자 관리</CardTitle>
-              <CardDescription className="text-xs mt-1">
-                총 {typeAssignments.length}건의 담당자 배정
-              </CardDescription>
-            </div>
-            <Button
-              size="sm"
-              className="gap-1.5 h-8"
-              onClick={() => openForm(type)}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              담당자 배정
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {typeAssignments.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">
-              배정된 {typeName} 담당자가 없습니다
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">{typeName}</TableHead>
-                    <TableHead className="text-xs">담당자</TableHead>
-                    <TableHead className="text-xs">역할</TableHead>
-                    <TableHead className="text-xs">배정일</TableHead>
-                    <TableHead className="text-right text-xs w-24">작업</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {typeAssignments.map(assignment => (
-                    <TableRow key={assignment.id}>
-                      <TableCell className="font-medium text-sm">
-                        {getEntityName(assignment)}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {getUserName(assignment.user_id)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={`text-xs ${getRoleBadgeColor(assignment.role)}`}>
-                          {getRoleName(assignment.role)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {new Date(assignment.created_at).toLocaleDateString('ko-KR')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(assignment.id)}
-                          className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
-
+  // ─── 목록 모드: 선주사 > 플릿 > 선박 계층 ───
   return (
-    <>
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        {formView !== null ? (
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}>
-                    <ArrowLeft className="w-4 h-4" />
-                  </Button>
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Users className="w-5 h-5" />
-                      {formData.assignment_type === 'owner' ? '선주' :
-                       formData.assignment_type === 'fleet' ? '플릿' : '선박'} 담당자 배정
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      담당자를 배정하여 선원 추천 승인 권한을 부여합니다
-                    </p>
-                  </div>
-                </div>
-                <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
-                  <Save className="w-4 h-4" />
-                  {saving ? '저장 중...' : '배정'}
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Users className="w-6 h-6" />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">담당자 배정 관리</h1>
+            <p className="text-sm text-gray-500">선주사·플릿·선박별 담당 사용자를 지정합니다. 이메일 발송 시 수신처/참조처로 자동 적용됩니다.</p>
+          </div>
+        </div>
+      </div>
+
+      {owners.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-sm text-gray-400">등록된 선주사가 없습니다</CardContent></Card>
+      ) : owners.map(owner => {
+        const ownerFleets = fleets.filter(f => f.owner_id === owner.id);
+        const ownerShips = ships.filter(s => s.owner_id === owner.id && !s.fleet_id);
+
+        return (
+          <Card key={owner.id}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
+                  {owner.name}
+                </CardTitle>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                  onClick={() => openNewTab(`/manager-assignments?type=owner&entityId=${owner.id}`, `${owner.name} 배정`, true)}>
+                  <Plus className="w-3 h-3" />배정 추가
                 </Button>
               </div>
+              <div className="mt-1">{renderAssignmentBadges('owner', owner.id)}</div>
             </CardHeader>
-            <CardContent className="pt-0">
-              <div className="space-y-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="entity" className="text-xs">
-                    {formData.assignment_type === 'owner' ? '선주사' :
-                     formData.assignment_type === 'fleet' ? '플릿' : '선박'} *
-                  </Label>
-                  <Select
-                    value={formData.entity_id}
-                    onValueChange={(value) => setFormData({ ...formData, entity_id: value })}
-                    required
-                  >
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getEntityOptions().map(entity => (
-                        <SelectItem key={entity.id} value={String(entity.id)} className="text-sm">
-                          {entity.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="user" className="text-xs">담당자 *</Label>
-                  <Select
-                    value={formData.user_id}
-                    onValueChange={(value) => setFormData({ ...formData, user_id: value })}
-                    required
-                  >
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="담당자를 선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getAvailableUsers().map(user => (
-                        <SelectItem key={user.id} value={String(user.id)} className="text-sm">
-                          {user.name} ({user.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {(ownerFleets.length > 0 || ownerShips.length > 0) && (
+              <CardContent className="pt-0 pb-3">
+                <div className="space-y-2 ml-4">
+                  {/* 플릿별 */}
+                  {ownerFleets.map(fleet => {
+                    const fleetShips = ships.filter(s => s.fleet_id === fleet.id);
+                    return (
+                      <div key={fleet.id} className="border-l-2 border-gray-200 pl-3">
+                        <div className="flex items-center justify-between py-1">
+                          <div className="flex items-center gap-2">
+                            <ChevronRight className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs font-medium text-gray-600">{fleet.name}</span>
+                            <div className="ml-1">{renderAssignmentBadges('fleet', fleet.id)}</div>
+                          </div>
+                          <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2"
+                            onClick={() => openNewTab(`/manager-assignments?type=fleet&entityId=${fleet.id}`, `${fleet.name} 배정`, true)}>
+                            <Plus className="w-3 h-3" />배정
+                          </Button>
+                        </div>
+                        {/* 플릿 소속 선박 */}
+                        {fleetShips.map(ship => (
+                          <div key={ship.id} className="border-l-2 border-gray-100 pl-3 ml-3">
+                            <div className="flex items-center justify-between py-0.5">
+                              <div className="flex items-center gap-2">
+                                <ChevronRight className="w-3 h-3 text-gray-300" />
+                                <span className="text-xs text-gray-500">{ship.name}</span>
+                                <div className="ml-1">{renderAssignmentBadges('ship', ship.id)}</div>
+                              </div>
+                              <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2"
+                                onClick={() => openNewTab(`/manager-assignments?type=ship&entityId=${ship.id}`, `${ship.name} 배정`, true)}>
+                                <Plus className="w-3 h-3" />배정
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {/* 플릿 미소속 선박 */}
+                  {ownerShips.map(ship => (
+                    <div key={ship.id} className="border-l-2 border-gray-100 pl-3">
+                      <div className="flex items-center justify-between py-0.5">
+                        <div className="flex items-center gap-2">
+                          <ChevronRight className="w-3 h-3 text-gray-300" />
+                          <span className="text-xs text-gray-500">{ship.name}</span>
+                          <div className="ml-1">{renderAssignmentBadges('ship', ship.id)}</div>
+                        </div>
+                        <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2"
+                          onClick={() => openNewTab(`/manager-assignments?type=ship&entityId=${ship.id}`, `${ship.name} 배정`, true)}>
+                          <Plus className="w-3 h-3" />배정
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs">역할</Label>
-                  <div className="flex items-center gap-2">
-                    <Badge className={`text-xs ${getRoleBadgeColor(formData.role)}`}>
-                      {getRoleName(formData.role)}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    이 담당자는 선원 추천을 승인하거나 거절할 수 있습니다
-                  </p>
-                </div>
-              </div>
-            </CardContent>
+              </CardContent>
+            )}
           </Card>
-        ) : (
-          <>
-            <div className="mb-4">
-              <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Users className="w-6 h-6" />
-                담당자 배정 관리
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">
-                선주, 플릿, 선박별로 담당자를 배정하고 관리합니다
-              </p>
-            </div>
+        );
+      })}
 
-            <Tabs defaultValue="owner" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 h-9">
-                <TabsTrigger value="owner" className="text-sm flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5" />
-                  선주 담당자 ({getAssignmentsByType('owner').length})
-                </TabsTrigger>
-                <TabsTrigger value="fleet" className="text-sm flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5" />
-                  플릿 담당자 ({getAssignmentsByType('fleet').length})
-                </TabsTrigger>
-                <TabsTrigger value="ship" className="text-sm flex items-center gap-1.5">
-                  <ShipIcon className="w-3.5 h-3.5" />
-                  선박 담당자 ({getAssignmentsByType('ship').length})
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="owner" className="mt-3">
-                {renderAssignmentTable('owner')}
-              </TabsContent>
-
-              <TabsContent value="fleet" className="mt-3">
-                {renderAssignmentTable('fleet')}
-              </TabsContent>
-
-              <TabsContent value="ship" className="mt-3">
-                {renderAssignmentTable('ship')}
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
-      </main>
-    </>
+      {/* 선주사 미소속 플릿 */}
+      {fleets.filter(f => !owners.find(o => o.id === f.owner_id)).length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-500">선주사 미지정 플릿</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 pb-3 space-y-1">
+            {fleets.filter(f => !owners.find(o => o.id === f.owner_id)).map(fleet => (
+              <div key={fleet.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-50">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-600">{fleet.name}</span>
+                  <div className="ml-1">{renderAssignmentBadges('fleet', fleet.id)}</div>
+                </div>
+                <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2"
+                  onClick={() => openNewTab(`/manager-assignments?type=fleet&entityId=${fleet.id}`, `${fleet.name} 배정`, true)}>
+                  <Plus className="w-3 h-3" />배정
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
