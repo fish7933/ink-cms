@@ -49,7 +49,7 @@ export default function RotationPlanFormPage() {
   const { activeTabId, closeTab } = useTabContext();
   const [searchParams] = useSearchParams();
 
-  const [standbyCrew, setStandbyCrew] = useState<CrewMember[]>([]);
+  const [availableCrew, setAvailableCrew] = useState<CrewMember[]>([]);
   const [onboardCrew, setOnboardCrew] = useState<CrewMember[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [ships, setShips] = useState<ShipType[]>([]);
@@ -73,13 +73,16 @@ export default function RotationPlanFormPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [standbyRes, onboardRes, ranksRes, shipsRes] = await Promise.all([
-      supabase.from('crew_members').select('*').in('status', ['standby', 'deployment_decided']).order('name'),
+    const [availableRes, onboardRes, ranksRes, shipsRes] = await Promise.all([
+      // 등록/대기/하선(standby) 선원 모두 승선 후보 가능
+      supabase.from('crew_members').select('*')
+        .in('status', ['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected', 'standby', 'deployment_decided'])
+        .order('name'),
       supabase.from('crew_members').select('*').eq('status', 'onboard').order('name'),
       supabase.from('ranks').select('*').order('display_order'),
       supabase.from('ships').select('*').order('name'),
     ]);
-    setStandbyCrew(standbyRes.data || []);
+    setAvailableCrew(availableRes.data || []);
     setOnboardCrew(onboardRes.data || []);
     setRanks(ranksRes.data || []);
     setShips(shipsRes.data || []);
@@ -105,10 +108,20 @@ export default function RotationPlanFormPage() {
   const usedBoardingIds = rows.map(r => r.boardingCrewId).filter(Boolean) as string[];
   const usedDisembarkIds = rows.map(r => r.disembarkCrewId).filter(Boolean) as string[];
 
-  const filteredStandby = standbyCrew.filter(c =>
+  const filteredStandby = availableCrew.filter(c =>
     !usedBoardingIds.includes(c.id) &&
     (boardingSearch === '' || (c.name || '').toLowerCase().includes(boardingSearch.toLowerCase()))
   );
+
+  const STATUS_MINI: Record<string, { label: string; cls: string }> = {
+    registered:        { label: '등록',    cls: 'bg-gray-100 text-gray-600' },
+    under_review:      { label: '검토중',  cls: 'bg-blue-100 text-blue-600' },
+    sent_to_owner:     { label: '선주송부', cls: 'bg-purple-100 text-purple-600' },
+    owner_approved:    { label: '선주승인', cls: 'bg-green-100 text-green-600' },
+    owner_rejected:    { label: '선주거절', cls: 'bg-red-100 text-red-600' },
+    deployment_decided:{ label: '승선결정', cls: 'bg-emerald-100 text-emerald-600' },
+    standby:           { label: '대기',    cls: 'bg-yellow-100 text-yellow-600' },
+  };
   const filteredOnboard = onboardCrew.filter(c =>
     !usedDisembarkIds.includes(c.id) &&
     (disembarkSearch === '' || (c.name || '').toLowerCase().includes(disembarkSearch.toLowerCase()))
@@ -128,7 +141,7 @@ export default function RotationPlanFormPage() {
 
   const getCrewName = (id: string | null) => {
     if (!id) return '-';
-    return (standbyCrew.find(c => c.id === id) || onboardCrew.find(c => c.id === id))?.name || id;
+    return (availableCrew.find(c => c.id === id) || onboardCrew.find(c => c.id === id))?.name || id;
   };
 
   const handleSubmit = async (asDraft: boolean) => {
@@ -226,7 +239,7 @@ export default function RotationPlanFormPage() {
           <CardHeader className="pb-2 bg-emerald-50 rounded-t-lg cursor-pointer" onClick={() => setBoardingPanelOpen(v => !v)}>
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm text-emerald-800">
-                승선 후보 (대기선원)
+                승선 후보
                 <Badge variant="secondary" className="ml-2 text-xs">{filteredStandby.length}명</Badge>
               </CardTitle>
               {boardingPanelOpen ? <ChevronUp className="w-4 h-4 text-emerald-600" /> : <ChevronDown className="w-4 h-4 text-emerald-600" />}
@@ -236,21 +249,29 @@ export default function RotationPlanFormPage() {
             <CardContent className="pt-2 p-3">
               <Input placeholder="이름 검색..." value={boardingSearch} onChange={e => setBoardingSearch(e.target.value)} className="h-7 text-xs mb-2" />
               <div className="space-y-1 max-h-72 overflow-y-auto">
-                {filteredStandby.map(c => (
-                  <div key={c.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-emerald-50 text-xs">
-                    <div>
-                      <span className="font-medium">{c.name}</span>
-                      <span className="text-gray-500 ml-2">{c.rank || '-'}</span>
-                      {(c as CrewMember & { current_grade?: string }).current_grade && (
-                        <span className="ml-1 text-blue-600 font-mono">{(c as CrewMember & { current_grade?: string }).current_grade}급</span>
-                      )}
+                {filteredStandby.map(c => {
+                  const crewExt = c as CrewMember & { current_grade?: string; status?: string };
+                  const st = crewExt.status || '';
+                  const mini = STATUS_MINI[st];
+                  return (
+                    <div key={c.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-emerald-50 text-xs">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-gray-500">{c.rank || '-'}</span>
+                        {crewExt.current_grade && (
+                          <span className="text-blue-600 font-mono">{crewExt.current_grade}급</span>
+                        )}
+                        {mini && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${mini.cls}`}>{mini.label}</span>
+                        )}
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-emerald-600 shrink-0" onClick={() => addBoardingCrewToRow(c.id)}>
+                        <Plus className="w-3 h-3" />
+                      </Button>
                     </div>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-emerald-600" onClick={() => addBoardingCrewToRow(c.id)}>
-                      <Plus className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ))}
-                {filteredStandby.length === 0 && <p className="text-center text-gray-400 text-xs py-4">대기선원이 없습니다</p>}
+                  );
+                })}
+                {filteredStandby.length === 0 && <p className="text-center text-gray-400 text-xs py-4">승선 가능한 선원이 없습니다</p>}
               </div>
             </CardContent>
           )}
@@ -287,7 +308,7 @@ export default function RotationPlanFormPage() {
                     <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="선원 선택" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">-- 없음 (하선만) --</SelectItem>
-                      {standbyCrew.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.rank || '-'})</SelectItem>)}
+                      {availableCrew.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.rank || '-'})</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <div className="grid grid-cols-2 gap-1">

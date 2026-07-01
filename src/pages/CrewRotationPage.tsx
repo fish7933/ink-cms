@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { supabase } from '@/lib/supabase';
 import { rotationService } from '@/services/rotation.service';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import { format } from 'date-fns';
@@ -26,10 +27,30 @@ export function CrewRotationPage() {
     if (await rotationService.deleteRotationPlan(planId)) loadPlans();
   };
 
+  const handleSubmitApproval = async (planId: string) => {
+    if (!confirm('결재 상신하시겠습니까?')) return;
+    const { error } = await supabase
+      .from('crew_rotation_plans')
+      .update({ status: 'pending_approval', updated_at: new Date().toISOString() })
+      .eq('id', planId);
+    if (error) { alert('오류가 발생했습니다.'); return; }
+    loadPlans();
+  };
+
+  const handleApprove = async (planId: string) => {
+    if (!confirm('이 교대 계획을 승인하시겠습니까?')) return;
+    const { error } = await supabase
+      .from('crew_rotation_plans')
+      .update({ status: 'approved', updated_at: new Date().toISOString() })
+      .eq('id', planId);
+    if (error) { alert('오류가 발생했습니다.'); return; }
+    loadPlans();
+  };
+
   const handleExecute = async (planId: string) => {
-    if (!confirm('이 교대 계획을 실행하시겠습니까? 실행 후에는 취소할 수 없습니다.')) return;
-    if (await rotationService.executeRotationPlan(planId)) { alert('교대 계획이 성공적으로 실행되었습니다.'); loadPlans(); }
-    else alert('교대 계획 실행 중 오류가 발생했습니다.');
+    if (!confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
+    if (await rotationService.executeRotationPlan(planId)) { alert('발령이 실행되었습니다. 선원 상태가 업데이트되었습니다.'); loadPlans(); }
+    else alert('실행 중 오류가 발생했습니다.');
   };
 
   const getStatusBadge = (status: string) => {
@@ -73,8 +94,18 @@ export function CrewRotationPage() {
                     <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd', { locale: ko })}</TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
-                        {plan.status === 'draft' && <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleDelete(plan.id)}>삭제</Button>}
-                        {plan.status === 'approved' && <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleExecute(plan.id)}>발령 실행</Button>}
+                        {plan.status === 'draft' && (
+                          <>
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleDelete(plan.id)}>삭제</Button>
+                            <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => handleSubmitApproval(plan.id)}>결재 상신</Button>
+                          </>
+                        )}
+                        {plan.status === 'pending_approval' && (
+                          <Button variant="default" size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => handleApprove(plan.id)}>승인</Button>
+                        )}
+                        {plan.status === 'approved' && (
+                          <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleExecute(plan.id)}>발령 실행</Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

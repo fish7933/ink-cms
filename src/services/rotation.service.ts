@@ -203,6 +203,18 @@ export const rotationService = {
         await supabase.from('crew_rotation_plans').delete().eq('id', plan.id);
         return null;
       }
+
+      // 승선 후보에 추가된 "등록" 상태 선원 → "대기(standby)" 로 변경
+      const boardingIds = formData.assignments
+        .map(a => a.on_crew_id)
+        .filter((id): id is string => Boolean(id));
+      if (boardingIds.length > 0) {
+        await supabase
+          .from('crew_members')
+          .update({ status: 'standby', updated_at: new Date().toISOString() })
+          .in('id', boardingIds)
+          .in('status', ['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected']);
+      }
     }
 
     return plan;
@@ -275,14 +287,53 @@ export const rotationService = {
 
   /**
    * Execute approved rotation plan
+   * 승선자 → onboard, 하선자 → standby, 계획 → executed
    */
   async executeRotationPlan(planId: string): Promise<boolean> {
-    const { error } = await supabase.rpc('execute_rotation_plan', {
-      plan_id: planId,
-    });
+    // 배정 목록 조회
+    const { data: assignments, error: fetchErr } = await supabase
+      .from('crew_rotation_assignments')
+      .select('on_crew_id, off_crew_id')
+      .eq('rotation_plan_id', planId);
 
-    if (error) {
-      console.error('Error executing rotation plan:', error);
+    if (fetchErr) {
+      console.error('Error fetching assignments for execution:', fetchErr);
+      return false;
+    }
+
+    const boardingIds = (assignments || [])
+      .map(a => a.on_crew_id)
+      .filter((id): id is string => Boolean(id));
+    const disembarkIds = (assignments || [])
+      .map(a => a.off_crew_id)
+      .filter((id): id is string => Boolean(id));
+
+    // 승선자 → onboard
+    if (boardingIds.length > 0) {
+      const { error } = await supabase
+        .from('crew_members')
+        .update({ status: 'onboard', updated_at: new Date().toISOString() })
+        .in('id', boardingIds);
+      if (error) { console.error('Error updating boarding crew status:', error); return false; }
+    }
+
+    // 하선자 → standby (대기)
+    if (disembarkIds.length > 0) {
+      const { error } = await supabase
+        .from('crew_members')
+        .update({ status: 'standby', updated_at: new Date().toISOString() })
+        .in('id', disembarkIds);
+      if (error) { console.error('Error updating disembarking crew status:', error); return false; }
+    }
+
+    // 계획 상태 → executed
+    const { error: planErr } = await supabase
+      .from('crew_rotation_plans')
+      .update({ status: 'executed', updated_at: new Date().toISOString() })
+      .eq('id', planId);
+
+    if (planErr) {
+      console.error('Error updating plan status to executed:', planErr);
       return false;
     }
 
