@@ -340,7 +340,9 @@ export function CrewManagementPage() {
                         ) : paginated.map(c => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           const statusKey = crewExt.status || '';
-                          const badge = STATUS_BADGE[statusKey];
+                          const badge = (cat === 'disembarked' && statusKey === 'standby')
+                            ? { label: '휴가중', color: 'bg-sky-100 text-sky-700' }
+                            : STATUS_BADGE[statusKey];
                           return (
                             <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => toggleSelect(c.id)}>
                               <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
