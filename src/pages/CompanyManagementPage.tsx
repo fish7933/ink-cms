@@ -18,7 +18,6 @@ interface Company {
   name: string;
   type: string;
   country: string | null;
-  manager_id: string | null;
   email: string | null;
   phone: string | null;
   officer_contract_months: number | null;
@@ -26,16 +25,14 @@ interface Company {
   month_days_basis: '30' | 'actual';
 }
 
-interface SystemUser { id: string; name: string; email: string; role: string; }
-
 interface FormState {
-  name: string; country: string; manager_id: string;
+  name: string; country: string;
   email: string; phone: string;
   officer_contract_months: number | null; rating_contract_months: number | null;
   month_days_basis: '30' | 'actual';
 }
 
-const EMPTY_FORM: FormState = { name: '', country: '', manager_id: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null, month_days_basis: '30' };
+const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null, month_days_basis: '30' };
 
 const MONTH_BASIS_LABELS: Record<string, string> = { '30': '30일 고정', 'actual': '실제 일수' };
 
@@ -53,7 +50,6 @@ export default function CompanyManagementPage() {
   const formTitle = isFormMode ? (editId ? (companyType === 'owner' ? '선주사 수정' : '매닝사 수정') : (companyType === 'owner' ? '선주사 등록' : '매닝사 등록')) : pageTitle;
 
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [users, setUsers] = useState<SystemUser[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -66,7 +62,6 @@ export default function CompanyManagementPage() {
     load();
   }, [companyType]);
 
-  // 폼 탭에서 저장/삭제 완료 시 목록 탭 자동 갱신
   useEffect(() => {
     if (isFormMode) return;
     const handler = (e: Event) => {
@@ -79,21 +74,19 @@ export default function CompanyManagementPage() {
   useEffect(() => {
     if (editId && companies.length > 0) {
       const c = companies.find(c => c.id === editId);
-      if (c) setForm({ name: c.name, country: c.country || '', manager_id: c.manager_id || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months, month_days_basis: c.month_days_basis || '30' });
+      if (c) setForm({ name: c.name, country: c.country || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months, month_days_basis: c.month_days_basis || '30' });
     }
     if (isNew) setForm(EMPTY_FORM);
   }, [editId, isNew, companies]);
 
   async function load() {
     setLoading(true);
-    const [{ data: cd, error }, { data: ud }, natData] = await Promise.all([
-      supabase.from('companies').select('id,name,type,country,manager_id,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
-      supabase.from('users').select('id,name,email,role').eq('role', companyType === 'owner' ? 'ship_owner' : 'manning_agency').order('name'),
+    const [{ data: cd, error }, natData] = await Promise.all([
+      supabase.from('companies').select('id,name,type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
       getNationalities(),
     ]);
     if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
     else { setCompanies((cd || []) as Company[]); }
-    setUsers((ud || []) as SystemUser[]);
     setNationalities(natData);
     setLoading(false);
   }
@@ -101,7 +94,7 @@ export default function CompanyManagementPage() {
   async function handleSave() {
     if (!form.name.trim()) { toast({ title: '회사명을 입력하세요', variant: 'destructive' }); return; }
     setSaving(true);
-    const payload = { name: form.name.trim(), type: companyType, country: form.country || null, manager_id: form.manager_id || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, updated_at: new Date().toISOString() };
+    const payload = { name: form.name.trim(), type: companyType, country: form.country || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, updated_at: new Date().toISOString() };
     let error;
     if (editId) {
       ({ error } = await supabase.from('companies').update(payload).eq('id', editId));
@@ -125,13 +118,12 @@ export default function CompanyManagementPage() {
     load();
   }
 
-  const userById = new Map(users.map(u => [u.id, u]));
   const natByCode = new Map(nationalities.map(n => [n.country_code, n]));
 
-  const filtered = companies.filter(c => {
-    const mgr = c.manager_id ? (userById.get(c.manager_id)?.name || '') : '';
-    return c.name.toLowerCase().includes(search.toLowerCase()) || mgr.toLowerCase().includes(search.toLowerCase()) || (c.country || '').toLowerCase().includes(search.toLowerCase());
-  });
+  const filtered = companies.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.country || '').toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <>
@@ -170,44 +162,39 @@ export default function CompanyManagementPage() {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">사용자 <span className="text-gray-400 font-normal">(나중에 설정 가능)</span></Label>
-                    <Select value={form.manager_id || '_none'} onValueChange={v => setForm(f => ({ ...f, manager_id: v === '_none' ? '' : v }))}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="사용자 선택" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">— 미지정 —</SelectItem>
-                        {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-xs">이메일</Label>
+                    <Input className="h-8 text-sm" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="이메일" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label className="text-xs">이메일</Label><Input className="h-8 text-sm" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="이메일" /></div>
                   <div className="space-y-1"><Label className="text-xs">연락처</Label><Input className="h-8 text-sm" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="전화번호" /></div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">사관 기본 계약(월)</Label>
+                    <Input className="h-8 text-sm" type="number" min={1} value={form.officer_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, officer_contract_months: e.target.value ? +e.target.value : null }))} placeholder="예: 6" />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label className="text-xs">사관 기본 계약(월)</Label><Input className="h-8 text-sm" type="number" min={1} value={form.officer_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, officer_contract_months: e.target.value ? +e.target.value : null }))} placeholder="예: 6" /></div>
                   <div className="space-y-1"><Label className="text-xs">부원 기본 계약(월)</Label><Input className="h-8 text-sm" type="number" min={1} value={form.rating_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, rating_contract_months: e.target.value ? +e.target.value : null }))} placeholder="예: 9" /></div>
+                  {companyType === 'owner' && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">급여 월 계산 기준</Label>
+                      <Select value={form.month_days_basis} onValueChange={v => setForm(f => ({ ...f, month_days_basis: v as '30' | 'actual' }))}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="30">30일 고정</SelectItem>
+                          <SelectItem value="actual">실제 일수</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
-                {companyType === 'owner' && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">급여 월 계산 기준</Label>
-                    <Select value={form.month_days_basis} onValueChange={v => setForm(f => ({ ...f, month_days_basis: v as '30' | 'actual' }))}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="30">30일 고정 (한 달 = 30일)</SelectItem>
-                        <SelectItem value="actual">실제 일수 (해당 월 실제 날수 적용)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-gray-400">선원 일할 급여 계산 시 적용되는 월 일수 기준입니다</p>
-                  </div>
-                )}
               </div>
             ) : (
               <>
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1 max-w-xs">
                     <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
-                    <Input className="pl-8 h-8 text-sm" placeholder="회사명, 사용자명, 국가 검색..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <Input className="pl-8 h-8 text-sm" placeholder="회사명, 국가 검색..." value={search} onChange={e => setSearch(e.target.value)} />
                   </div>
                   <span className="text-xs text-gray-500 self-center">총 {filtered.length}개</span>
                 </div>
@@ -221,7 +208,6 @@ export default function CompanyManagementPage() {
                           <th className="w-8 px-3 py-2 text-center text-xs font-medium text-gray-400">#</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">회사명</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">국가</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">사용자</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">이메일</th>
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">연락처</th>
                           <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">사관(월)</th>
@@ -232,39 +218,35 @@ export default function CompanyManagementPage() {
                       </thead>
                       <tbody>
                         {filtered.length === 0 ? (
-                          <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-400">등록된 회사가 없습니다</td></tr>
-                        ) : filtered.map((c, i) => {
-                          const manager = c.manager_id ? userById.get(c.manager_id) : null;
-                          return (
-                            <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
-                              <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
-                              <td className="px-3 py-2 font-medium">{c.name}</td>
-                              <td className="px-3 py-2 text-gray-600">{c.country ? (natByCode.get(c.country)?.country_name_ko ?? c.country) : '-'}</td>
-                              <td className="px-3 py-2 text-gray-600">{manager ? <span>{manager.name} <span className="text-xs text-gray-400">({manager.email})</span></span> : '-'}</td>
-                              <td className="px-3 py-2 text-gray-600 text-xs">{c.email || '-'}</td>
-                              <td className="px-3 py-2 text-gray-600 text-xs">{c.phone || '-'}</td>
-                              <td className="px-3 py-2 text-center text-gray-600">{c.officer_contract_months ?? '-'}</td>
-                              <td className="px-3 py-2 text-center text-gray-600">{c.rating_contract_months ?? '-'}</td>
-                              {companyType === 'owner' && (
-                                <td className="px-3 py-2 text-center">
-                                  <span className={`text-xs px-2 py-0.5 rounded-full ${c.month_days_basis === 'actual' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                                    {MONTH_BASIS_LABELS[c.month_days_basis] || '30일 고정'}
-                                  </span>
-                                </td>
-                              )}
-                              <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
-                                <div className="flex justify-end gap-1">
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </Button>
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => setDeleteId(c.id)}>
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
+                          <tr><td colSpan={companyType === 'owner' ? 9 : 8} className="text-center py-10 text-sm text-gray-400">등록된 회사가 없습니다</td></tr>
+                        ) : filtered.map((c, i) => (
+                          <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
+                            <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
+                            <td className="px-3 py-2 font-medium">{c.name}</td>
+                            <td className="px-3 py-2 text-gray-600">{c.country ? (natByCode.get(c.country)?.country_name_ko ?? c.country) : '-'}</td>
+                            <td className="px-3 py-2 text-gray-600 text-xs">{c.email || '-'}</td>
+                            <td className="px-3 py-2 text-gray-600 text-xs">{c.phone || '-'}</td>
+                            <td className="px-3 py-2 text-center text-gray-600">{c.officer_contract_months ?? '-'}</td>
+                            <td className="px-3 py-2 text-center text-gray-600">{c.rating_contract_months ?? '-'}</td>
+                            {companyType === 'owner' && (
+                              <td className="px-3 py-2 text-center">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${c.month_days_basis === 'actual' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  {MONTH_BASIS_LABELS[c.month_days_basis] || '30일 고정'}
+                                </span>
                               </td>
-                            </tr>
-                          );
-                        })}
+                            )}
+                            <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
+                              <div className="flex justify-end gap-1">
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => setDeleteId(c.id)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
