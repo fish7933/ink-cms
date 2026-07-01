@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -15,18 +16,34 @@ interface Company {
   name: string;
   type: string;
   country: string | null;
-  contact_person: string | null;
+  manager_id: string | null;
   email: string | null;
   phone: string | null;
   officer_contract_months: number | null;
   rating_contract_months: number | null;
 }
 
-const EMPTY_FORM: Omit<Company, 'id'> = {
+interface SystemUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+interface FormState {
+  name: string;
+  country: string;
+  manager_id: string;
+  email: string;
+  phone: string;
+  officer_contract_months: number | null;
+  rating_contract_months: number | null;
+}
+
+const EMPTY_FORM: FormState = {
   name: '',
-  type: '',
   country: '',
-  contact_person: '',
+  manager_id: '',
   email: '',
   phone: '',
   officer_contract_months: null,
@@ -39,12 +56,13 @@ export default function CompanyManagementPage() {
   const { toast } = useToast();
 
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [users, setUsers] = useState<SystemUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Company | null>(null);
-  const [form, setForm] = useState<Omit<Company, 'id'>>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
   const pageTitle = companyType === 'owner' ? '선주사 관리' : '선원 매닝사 관리';
@@ -56,32 +74,60 @@ export default function CompanyManagementPage() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('companies')
-      .select('id,name,type,country,contact_person,email,phone,officer_contract_months,rating_contract_months')
-      .eq('type', companyType)
-      .order('name');
+    const [{ data: companyData, error }, { data: userData }] = await Promise.all([
+      supabase
+        .from('companies')
+        .select('id,name,type,country,manager_id,email,phone,officer_contract_months,rating_contract_months')
+        .eq('type', companyType)
+        .order('name'),
+      supabase
+        .from('users')
+        .select('id,name,email,role')
+        .in('role', ['admin', 'ship_manager'])
+        .order('name'),
+    ]);
     if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
-    else { setCompanies((data || []) as Company[]); }
+    else { setCompanies((companyData || []) as Company[]); }
+    setUsers((userData || []) as SystemUser[]);
     setLoading(false);
   }
 
+  const userById = new Map(users.map(u => [u.id, u]));
+
   function openAdd() {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, type: companyType });
+    setForm(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEdit(c: Company) {
     setEditing(c);
-    setForm({ name: c.name, type: c.type, country: c.country || '', contact_person: c.contact_person || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months });
+    setForm({
+      name: c.name,
+      country: c.country || '',
+      manager_id: c.manager_id || '',
+      email: c.email || '',
+      phone: c.phone || '',
+      officer_contract_months: c.officer_contract_months,
+      rating_contract_months: c.rating_contract_months,
+    });
     setDialogOpen(true);
   }
 
   async function handleSave() {
     if (!form.name.trim()) { toast({ title: '회사명을 입력하세요', variant: 'destructive' }); return; }
     setSaving(true);
-    const payload = { name: form.name.trim(), type: companyType, country: form.country || null, contact_person: form.contact_person || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, updated_at: new Date().toISOString() };
+    const payload = {
+      name: form.name.trim(),
+      type: companyType,
+      country: form.country || null,
+      manager_id: form.manager_id || null,
+      email: form.email || null,
+      phone: form.phone || null,
+      officer_contract_months: form.officer_contract_months || null,
+      rating_contract_months: form.rating_contract_months || null,
+      updated_at: new Date().toISOString(),
+    };
     let error;
     if (editing) {
       ({ error } = await supabase.from('companies').update(payload).eq('id', editing.id));
@@ -104,11 +150,14 @@ export default function CompanyManagementPage() {
     load();
   }
 
-  const filtered = companies.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.contact_person || '').toLowerCase().includes(search.toLowerCase()) ||
-    (c.country || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = companies.filter(c => {
+    const managerName = c.manager_id ? (userById.get(c.manager_id)?.name || '') : '';
+    return (
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      managerName.toLowerCase().includes(search.toLowerCase()) ||
+      (c.country || '').toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   return (
     <>
@@ -152,28 +201,35 @@ export default function CompanyManagementPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr><td colSpan={9} className="text-center py-10 text-sm text-gray-400">등록된 회사가 없습니다</td></tr>
-                    ) : filtered.map((c, i) => (
-                      <tr key={c.id} className="border-b hover:bg-gray-50">
-                        <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
-                        <td className="px-3 py-2 font-medium">{c.name}</td>
-                        <td className="px-3 py-2 text-gray-600">{c.country || '-'}</td>
-                        <td className="px-3 py-2 text-gray-600">{c.contact_person || '-'}</td>
-                        <td className="px-3 py-2 text-gray-600 text-xs">{c.email || '-'}</td>
-                        <td className="px-3 py-2 text-gray-600 text-xs">{c.phone || '-'}</td>
-                        <td className="px-3 py-2 text-center text-gray-600">{c.officer_contract_months ?? '-'}</td>
-                        <td className="px-3 py-2 text-center text-gray-600">{c.rating_contract_months ?? '-'}</td>
-                        <td className="px-3 py-2 text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(c)}>
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => setDeleteId(c.id)}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    ) : filtered.map((c, i) => {
+                      const manager = c.manager_id ? userById.get(c.manager_id) : null;
+                      return (
+                        <tr key={c.id} className="border-b hover:bg-gray-50">
+                          <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
+                          <td className="px-3 py-2 font-medium">{c.name}</td>
+                          <td className="px-3 py-2 text-gray-600">{c.country || '-'}</td>
+                          <td className="px-3 py-2 text-gray-600">
+                            {manager ? (
+                              <span>{manager.name} <span className="text-xs text-gray-400">({manager.email})</span></span>
+                            ) : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600 text-xs">{c.email || '-'}</td>
+                          <td className="px-3 py-2 text-gray-600 text-xs">{c.phone || '-'}</td>
+                          <td className="px-3 py-2 text-center text-gray-600">{c.officer_contract_months ?? '-'}</td>
+                          <td className="px-3 py-2 text-center text-gray-600">{c.rating_contract_months ?? '-'}</td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(c)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => setDeleteId(c.id)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -196,21 +252,33 @@ export default function CompanyManagementPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">국가</Label>
-                <Input className="h-8 text-sm" value={form.country || ''} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="예: 대한민국" />
+                <Input className="h-8 text-sm" value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="예: 대한민국" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">담당자</Label>
-                <Input className="h-8 text-sm" value={form.contact_person || ''} onChange={e => setForm(f => ({ ...f, contact_person: e.target.value }))} placeholder="담당자명" />
+                <Select value={form.manager_id || '_none'} onValueChange={v => setForm(f => ({ ...f, manager_id: v === '_none' ? '' : v }))}>
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="담당자 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— 미지정 —</SelectItem>
+                    {users.map(u => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">이메일</Label>
-                <Input className="h-8 text-sm" type="email" value={form.email || ''} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="이메일" />
+                <Input className="h-8 text-sm" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="이메일" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">연락처</Label>
-                <Input className="h-8 text-sm" value={form.phone || ''} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="전화번호" />
+                <Input className="h-8 text-sm" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="전화번호" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
