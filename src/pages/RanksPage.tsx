@@ -44,6 +44,13 @@ export default function RanksPage() {
   }, [navigate]);
 
   useEffect(() => {
+    if (isFormMode) return;
+    const handler = () => loadData();
+    window.addEventListener('ranks-data-changed', handler);
+    return () => window.removeEventListener('ranks-data-changed', handler);
+  }, [isFormMode]);
+
+  useEffect(() => {
     if (editId && ranks.length > 0) {
       const r = ranks.find(r => r.id === editId);
       if (r) setFormData({ name: r.name, rank_code: r.rank_code, department: r.department, rank_category: r.rank_category, stcw_requirement: (r as Record<string, string>).stcw_requirement || '', display_order: r.display_order });
@@ -75,6 +82,7 @@ export default function RanksPage() {
         const { error } = await supabase.from('ranks').insert({ ...payload, display_order: max + 1 });
         if (error) throw error;
       }
+      window.dispatchEvent(new CustomEvent('ranks-data-changed'));
       closeTab(activeTabId!);
     } catch { alert('저장 중 오류가 발생했습니다.'); }
     finally { setSaving(false); }

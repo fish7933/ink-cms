@@ -46,6 +46,13 @@ export default function CertificateTypeManagementPage() {
   }, [navigate]);
 
   useEffect(() => {
+    if (isFormMode) return;
+    const handler = () => loadData();
+    window.addEventListener('certtype-data-changed', handler);
+    return () => window.removeEventListener('certtype-data-changed', handler);
+  }, [isFormMode]);
+
+  useEffect(() => {
     if (editId && types.length > 0) {
       const t = types.find(t => t.id === editId);
       if (t) setFormData({ category: t.category, type_code: t.type_code, type_name_en: t.type_name_en, type_name_ko: t.type_name_ko, description: t.description || '', validity_period_months: t.validity_period_months || undefined, is_mandatory: t.is_mandatory || false, is_active: t.is_active !== false, display_order: t.display_order || 999 });
@@ -65,6 +72,7 @@ export default function CertificateTypeManagementPage() {
       const payload = { ...formData, validity_period_months: formData.validity_period_months || null };
       if (editId) await updateCertificateType(editId, payload);
       else await addCertificateType(payload);
+      window.dispatchEvent(new CustomEvent('certtype-data-changed'));
       closeTab(activeTabId!);
     } catch { alert('저장 중 오류가 발생했습니다.'); }
     finally { setSaving(false); }

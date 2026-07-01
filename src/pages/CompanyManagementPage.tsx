@@ -66,6 +66,16 @@ export default function CompanyManagementPage() {
     load();
   }, [companyType]);
 
+  // 폼 탭에서 저장/삭제 완료 시 목록 탭 자동 갱신
+  useEffect(() => {
+    if (isFormMode) return;
+    const handler = (e: Event) => {
+      if ((e as CustomEvent).detail?.companyType === companyType) load();
+    };
+    window.addEventListener('company-data-changed', handler);
+    return () => window.removeEventListener('company-data-changed', handler);
+  }, [isFormMode, companyType]);
+
   useEffect(() => {
     if (editId && companies.length > 0) {
       const c = companies.find(c => c.id === editId);
@@ -101,6 +111,7 @@ export default function CompanyManagementPage() {
     setSaving(false);
     if (error) { toast({ title: '저장 실패', description: error.message, variant: 'destructive' }); return; }
     toast({ title: editId ? '수정 완료' : '등록 완료' });
+    window.dispatchEvent(new CustomEvent('company-data-changed', { detail: { companyType } }));
     closeTab(activeTabId!);
   }
 
@@ -110,6 +121,7 @@ export default function CompanyManagementPage() {
     setDeleteId(null);
     if (error) { toast({ title: '삭제 실패', description: error.message, variant: 'destructive' }); return; }
     toast({ title: '삭제 완료' });
+    window.dispatchEvent(new CustomEvent('company-data-changed', { detail: { companyType } }));
     load();
   }
 

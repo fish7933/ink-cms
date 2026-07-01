@@ -46,6 +46,13 @@ export default function NationalityManagementPage() {
   }, [navigate]);
 
   useEffect(() => {
+    if (isFormMode) return;
+    const handler = () => loadData();
+    window.addEventListener('nationality-data-changed', handler);
+    return () => window.removeEventListener('nationality-data-changed', handler);
+  }, [isFormMode]);
+
+  useEffect(() => {
     if (editId && nationalities.length > 0) {
       const nat = nationalities.find(n => n.id === editId);
       if (nat) setFormData({
@@ -69,6 +76,7 @@ export default function NationalityManagementPage() {
       setSaving(true);
       if (editId) await updateNationality(editId, formData);
       else await addNationality(formData);
+      window.dispatchEvent(new CustomEvent('nationality-data-changed'));
       closeTab(activeTabId!);
     } catch { alert('저장 중 오류가 발생했습니다.'); }
     finally { setSaving(false); }

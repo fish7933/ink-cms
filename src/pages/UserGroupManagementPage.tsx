@@ -55,6 +55,13 @@ export default function UserGroupManagementPage() {
     init();
   }, [navigate]);
 
+  useEffect(() => {
+    if (isFormMode) return;
+    const handler = () => loadData();
+    window.addEventListener('usergroup-data-changed', handler);
+    return () => window.removeEventListener('usergroup-data-changed', handler);
+  }, [isFormMode]);
+
   // 폼 초기화 - 데이터 로드 후 1회만
   useEffect(() => {
     if (loading) return;
@@ -123,6 +130,7 @@ export default function UserGroupManagementPage() {
         });
       }
       toast({ title: editId ? '수정 완료' : '등록 완료' });
+      window.dispatchEvent(new CustomEvent('usergroup-data-changed'));
       closeTab(activeTabId!);
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message || '알 수 없는 오류';

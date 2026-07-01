@@ -36,6 +36,13 @@ export default function ShorePositionsPage() {
   }, [navigate]);
 
   useEffect(() => {
+    if (isFormMode) return;
+    const handler = () => loadData();
+    window.addEventListener('shorepos-data-changed', handler);
+    return () => window.removeEventListener('shorepos-data-changed', handler);
+  }, [isFormMode]);
+
+  useEffect(() => {
     if (editId && positions.length > 0) {
       const pos = positions.find(p => p.id === editId);
       if (pos) setFormData({ name: pos.name, display_order: pos.display_order });
@@ -58,6 +65,7 @@ export default function ShorePositionsPage() {
       setSaving(true);
       if (editId) await updateShorePosition(editId, formData);
       else await addShorePosition(formData);
+      window.dispatchEvent(new CustomEvent('shorepos-data-changed'));
       closeTab(activeTabId!);
     } catch { alert('저장 중 오류가 발생했습니다.'); }
     finally { setSaving(false); }
