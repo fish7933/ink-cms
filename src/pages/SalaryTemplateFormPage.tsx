@@ -79,15 +79,13 @@ export default function SalaryTemplateFormPage() {
   const setAmount = (rank: string, cid: string, val: number) =>
     setAmounts(prev => ({ ...prev, [rank]: { ...prev[rank], [cid]: val } }));
 
-  // 분리 계산
-  const earningIds = selectedComponents.filter(cid => {
-    const c = components.find(x => x.id === cid);
-    return (c?.component_type ?? 'earning') === 'earning';
-  });
-  const deductionIds = selectedComponents.filter(cid => {
-    const c = components.find(x => x.id === cid);
-    return c?.component_type === 'deduction';
-  });
+  // display_order 기준 정렬을 유지하기 위해 components 배열 순서로 필터링
+  const earningIds = components
+    .filter(c => (c.component_type ?? 'earning') === 'earning' && selectedComponents.includes(c.id))
+    .map(c => c.id);
+  const deductionIds = components
+    .filter(c => c.component_type === 'deduction' && selectedComponents.includes(c.id))
+    .map(c => c.id);
   const rankTotal = (rank: string) => earningIds.reduce((s, cid) => s + getAmount(rank, cid), 0);
   const rankDeferred = (rank: string) =>
     earningIds.filter(cid => components.find(x => x.id === cid)?.payment_type === 'deferred')
@@ -134,7 +132,7 @@ export default function SalaryTemplateFormPage() {
   const compGroups: BadgeSelectGroup[] = [
     {
       label: '급여 구성',
-      color: 'blue',
+      color: 'blue' as const,
       items: components
         .filter(c => (c.component_type ?? 'earning') === 'earning')
         .map(c => ({
@@ -146,7 +144,7 @@ export default function SalaryTemplateFormPage() {
     },
     {
       label: '공제 항목',
-      color: 'red',
+      color: 'red' as const,
       items: components
         .filter(c => c.component_type === 'deduction')
         .map(c => ({ value: c.id, label: c.name, color: 'red' } as BadgeSelectItem)),
@@ -252,8 +250,14 @@ export default function SalaryTemplateFormPage() {
                             </th>
                           );
                         })}
-                        <th className="text-center p-2 font-semibold min-w-24 bg-gray-100 border-l-2 border-l-gray-400">월 급여 총액</th>
-                        <th className="text-center p-2 font-semibold min-w-24 bg-blue-100 text-blue-800">월 실지급액</th>
+                        <th className="text-center p-2 font-semibold min-w-24 bg-gray-100 border-l-2 border-l-gray-400">
+                          <div className="text-[10px] font-bold text-gray-500">TW</div>
+                          <div>월 급여 총액</div>
+                        </th>
+                        <th className="text-center p-2 font-semibold min-w-24 bg-blue-100 text-blue-800">
+                          <div className="text-[10px] font-bold text-blue-500">AW</div>
+                          <div>월 실지급액</div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>

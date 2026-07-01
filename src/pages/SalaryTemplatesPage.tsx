@@ -144,47 +144,53 @@ export default function SalaryTemplatesPage() {
                                   <thead>
                                     <tr className="bg-gray-100">
                                       <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100">직급</th>
-                                      {[...new Set(expandedData.items.map(i => i.component_id))].map(cid => {
-                                        const comp = components.find(c => c.id === cid);
-                                        const isDeduction = comp?.component_type === 'deduction';
-                                        return (
-                                          <th key={cid} className={`text-right p-2 border-r font-semibold min-w-24 ${isDeduction ? 'text-red-600' : ''}`}>
-                                            {comp?.name || '-'}
-                                            {isDeduction && <span className="block text-[10px] font-normal text-red-400">공제</span>}
-                                          </th>
-                                        );
-                                      })}
-                                      <th className="text-right p-2 font-semibold min-w-20 border-l-2 border-l-gray-300">월 총액</th>
-                                      <th className="text-right p-2 font-semibold min-w-20 text-blue-700 bg-blue-50">월 실지급액</th>
+                                      {components
+                                        .filter(c => expandedData.items.some(i => i.component_id === c.id))
+                                        .map(comp => {
+                                          const isDeduction = comp.component_type === 'deduction';
+                                          return (
+                                            <th key={comp.id} className={`text-right p-2 border-r font-semibold min-w-24 ${isDeduction ? 'text-red-600' : ''}`}>
+                                              {comp.name}
+                                              {isDeduction && <span className="block text-[10px] font-normal text-red-400">공제</span>}
+                                            </th>
+                                          );
+                                        })}
+                                      <th className="text-right p-2 font-semibold min-w-20 border-l-2 border-l-gray-300">
+                                        <div className="text-[10px] font-bold text-gray-500">TW</div>
+                                        <div>월 총액</div>
+                                      </th>
+                                      <th className="text-right p-2 font-semibold min-w-20 text-blue-700 bg-blue-50">
+                                        <div className="text-[10px] font-bold text-blue-500">AW</div>
+                                        <div>월 실지급액</div>
+                                      </th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {expandedData.ranks.map(r => {
-                                      const compIds = [...new Set(expandedData.items.map(i => i.component_id))];
-                                      const earningTotal = compIds.reduce((s, cid) => {
-                                        const comp = components.find(c => c.id === cid);
-                                        if ((comp?.component_type ?? 'earning') !== 'earning') return s;
-                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === cid)?.amount || 0);
+                                      // display_order 유지: components 배열 순서로 필터링
+                                      const orderedComps = components.filter(c =>
+                                        expandedData.items.some(i => i.component_id === c.id)
+                                      );
+                                      const earningTotal = orderedComps.reduce((s, comp) => {
+                                        if ((comp.component_type ?? 'earning') !== 'earning') return s;
+                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === comp.id)?.amount || 0);
                                       }, 0);
-                                      const deferred = compIds.reduce((s, cid) => {
-                                        const comp = components.find(c => c.id === cid);
-                                        if ((comp?.component_type ?? 'earning') !== 'earning' || comp?.payment_type !== 'deferred') return s;
-                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === cid)?.amount || 0);
+                                      const deferred = orderedComps.reduce((s, comp) => {
+                                        if ((comp.component_type ?? 'earning') !== 'earning' || comp.payment_type !== 'deferred') return s;
+                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === comp.id)?.amount || 0);
                                       }, 0);
-                                      const deduction = compIds.reduce((s, cid) => {
-                                        const comp = components.find(c => c.id === cid);
-                                        if (comp?.component_type !== 'deduction') return s;
-                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === cid)?.amount || 0);
+                                      const deduction = orderedComps.reduce((s, comp) => {
+                                        if (comp.component_type !== 'deduction') return s;
+                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === comp.id)?.amount || 0);
                                       }, 0);
                                       return (
                                         <tr key={r} className="border-t">
                                           <td className="p-2 border-r font-medium text-gray-700 bg-gray-50 sticky left-0">{r}</td>
-                                          {compIds.map(cid => {
-                                            const item = expandedData.items.find(i => i.rank === r && i.component_id === cid);
-                                            const comp = components.find(c => c.id === cid);
-                                            const isDeduction = comp?.component_type === 'deduction';
+                                          {orderedComps.map(comp => {
+                                            const item = expandedData.items.find(i => i.rank === r && i.component_id === comp.id);
+                                            const isDeduction = comp.component_type === 'deduction';
                                             return (
-                                              <td key={cid} className={`p-2 border-r text-right ${isDeduction ? 'text-red-600 bg-red-50/20' : ''}`}>
+                                              <td key={comp.id} className={`p-2 border-r text-right ${isDeduction ? 'text-red-600 bg-red-50/20' : ''}`}>
                                                 {item ? item.amount.toLocaleString() : '-'}
                                               </td>
                                             );
