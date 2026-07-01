@@ -74,7 +74,7 @@ export default function CompanyManagementPage() {
     setLoading(true);
     const [{ data: cd, error }, { data: ud }, natData] = await Promise.all([
       supabase.from('companies').select('id,name,type,country,manager_id,email,phone,officer_contract_months,rating_contract_months').eq('type', companyType).order('name'),
-      supabase.from('users').select('id,name,email,role').in('role', ['admin', 'ship_manager']).order('name'),
+      supabase.from('users').select('id,name,email,role').eq('role', companyType === 'owner' ? 'ship_owner' : 'manning_agency').order('name'),
       getNationalities(),
     ]);
     if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
