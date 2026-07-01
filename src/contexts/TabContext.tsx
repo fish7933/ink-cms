@@ -173,7 +173,7 @@ function getTitleFromPath(path: string): string {
     '/job-postings': '구인 공고', '/my-recommendations': '내 추천 선원', '/recommendation-review': '추천 검토',
     '/approval-inbox': '내 결재함', '/approval-archive': '완료 문서함', '/approval-management': '결재 캐비넷', '/approval-lines': '결재선 관리',
     '/salary/templates': '급여 템플릿', '/salary/templates/new': '급여 템플릿 추가', '/salary/assignments': '할당 현황', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',
-    '/companies': '회사 관리', '/companies?type=owner': '선주사 관리', '/companies?type=manning': '선원 매닝사 관리', '/user-groups': '사용자 그룹', '/manager-assignments': '담당자 배정', '/supervisor-management': '담당 감독 관리',
+    '/companies': '회사 관리', '/companies?type=owner': '선주사 관리', '/companies?type=manning': '선원 매닝사 관리', '/user-groups': '사용자 그룹', '/manager-assignments': '선주 사용자 관리', '/supervisor-management': '우리회사 담당자 관리',
     '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 유형 관리',
     '/shore-positions': '육상 직원 직급', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
     '/certificate-expiry': '증서 만료 현황', '/leave-management': '휴가 관리', '/reports': '통계 대시보드',

@@ -325,7 +325,7 @@ export const defaultMenuStructure: MenuCategory[] = [
       },
       {
         id: 'manager-assignments',
-        label: '담당자 배정 관리',
+        label: '선주 사용자 관리',
         path: '/manager-assignments',
         icon: 'UserCheck',
         roles: ['ship_manager'],
@@ -334,7 +334,7 @@ export const defaultMenuStructure: MenuCategory[] = [
       },
       {
         id: 'supervisor-management',
-        label: '담당 감독 관리',
+        label: '우리회사 담당자 관리',
         path: '/supervisor-management',
         icon: 'UserCheck',
         roles: ['ship_manager'],

@@ -122,8 +122,8 @@ export default function SupervisorManagementPage() {
         <div className="flex items-center gap-2">
           <UserCheck className="w-6 h-6" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">담당 감독 관리</h1>
-            <p className="text-sm text-gray-500">선주사·플릿·선박별 내부 담당 감독(선박관리사)을 배정합니다</p>
+            <h1 className="text-xl font-bold text-gray-900">우리회사 담당자 관리</h1>
+            <p className="text-sm text-gray-500">선주사·플릿·선박별 내부 담당자(선박관리사)를 배정합니다</p>
           </div>
         </div>
 
@@ -205,7 +205,7 @@ export default function SupervisorManagementPage() {
       <Dialog open={!!modal} onOpenChange={open => !open && setModal(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base">감독 배정</DialogTitle>
+            <DialogTitle className="text-base">우리회사 담당자 배정</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">

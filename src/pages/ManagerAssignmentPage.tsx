@@ -55,7 +55,7 @@ export default function ManagerAssignmentPage() {
         supabase.from('ships').select('id,name,owner_id,fleet_id').order('name'),
         supabase.from('assignments').select('*').order('created_at', { ascending: false }),
       ]);
-      setUsers(usersData.filter(u => ['ship_owner', 'ship_manager', 'manning_agency'].includes(u.role)));
+      setUsers(usersData.filter(u => u.role === 'ship_owner'));
       setOwners((ownersRes.data || []) as Company[]);
       setFleets((fleetsRes.data || []) as Fleet[]);
       setShips((shipsRes.data || []) as Ship[]);
@@ -122,8 +122,8 @@ export default function ManagerAssignmentPage() {
         <div className="flex items-center gap-2">
           <Users className="w-6 h-6" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">담당자 배정 관리</h1>
-            <p className="text-sm text-gray-500">선주사·플릿·선박별 담당 사용자를 지정합니다. 이메일 발송 시 수신처/참조처로 자동 적용됩니다.</p>
+            <h1 className="text-xl font-bold text-gray-900">선주 사용자 관리</h1>
+            <p className="text-sm text-gray-500">선주사·플릿·선박별 선주 사용자를 배정합니다. 이메일 발송 시 수신처/참조처로 자동 적용됩니다.</p>
           </div>
         </div>
 
@@ -224,7 +224,7 @@ export default function ManagerAssignmentPage() {
       <Dialog open={!!modal} onOpenChange={open => !open && setModal(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base">사용자 배정</DialogTitle>
+            <DialogTitle className="text-base">선주 사용자 배정</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
@@ -232,31 +232,18 @@ export default function ManagerAssignmentPage() {
               <p className="text-sm font-medium">{modal?.entityLabel}</p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">배정 사용자 *</Label>
+              <Label className="text-xs">선주 사용자 *</Label>
               <Select value={selectedUser} onValueChange={setSelectedUser}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="사용자 선택" /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주 사용자 선택" /></SelectTrigger>
                 <SelectContent>
-                  {(['ship_owner', 'ship_manager', 'manning_agency'] as const).map(role => {
-                    const roleUsers = users.filter(u => u.role === role);
-                    if (!roleUsers.length) return null;
-                    return (
-                      <div key={role}>
-                        <div className="px-2 py-1 text-xs font-semibold text-gray-400">── {USER_ROLE_LABEL[role]} ──</div>
-                        {roleUsers.map(u => (
-                          <SelectItem key={u.id} value={u.id} className="pl-4 text-sm">
-                            {u.name} <span className="text-gray-400 text-xs">({u.email})</span>
-                          </SelectItem>
-                        ))}
-                      </div>
-                    );
-                  })}
+                  {users.map(u => (
+                    <SelectItem key={u.id} value={u.id} className="text-sm">
+                      {u.name} <span className="text-gray-400 text-xs">({u.email})</span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              {selectedUser && (() => {
-                const u = getUserById(selectedUser);
-                if (!u) return null;
-                return <p className="text-xs text-gray-400">역할: <span className={`px-1.5 py-0.5 rounded ${USER_ROLE_COLOR[u.role]}`}>{USER_ROLE_LABEL[u.role] || u.role}</span></p>;
-              })()}
+              <p className="text-xs text-gray-400">사용자 그룹 관리 &gt; 선주에 등록된 사용자만 표시됩니다</p>
             </div>
           </div>
           <DialogFooter>
