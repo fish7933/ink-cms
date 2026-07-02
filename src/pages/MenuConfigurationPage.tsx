@@ -123,7 +123,7 @@ export default function MenuConfigurationPage() {
   useEffect(() => {
     const checkAccess = async () => {
       const user = await getCurrentUser();
-      if (!user || user.role !== 'ship_manager') {
+      if (!user || !['ship_manager', 'admin'].includes(user.role ?? '')) {
         toast({
           title: '접근 권한 없음',
           description: '슈퍼 관리자만 접근할 수 있습니다.',
