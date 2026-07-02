@@ -8,12 +8,19 @@ import type { Permission, PermissionUpdate } from '@/types/permissions';
 import { MENU_STRUCTURE } from '@/types/permissions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square, Lock, Crown, UserMinus } from 'lucide-react';
+import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square, Lock, Crown, UserMinus, UserCog } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 
 type PermField = 'can_create' | 'can_edit' | 'can_delete';
+type ManagedRole = 'admin' | 'system_admin' | 'ship_manager';
+
+const ROLE_LABEL: Record<ManagedRole, string> = {
+  admin: '슈퍼관리자',
+  system_admin: '시스템 관리자',
+  ship_manager: '일반 관리자',
+};
 
 export default function PermissionsPage() {
   const navigate = useNavigate();
@@ -32,6 +39,7 @@ export default function PermissionsPage() {
     const all = await getUsers();
     const targets = [
       ...all.filter(u => u.role === 'admin'),
+      ...all.filter(u => u.role === 'system_admin'),
       ...all.filter(u => u.role === 'ship_manager'),
     ];
     setUsers(targets);
@@ -41,7 +49,7 @@ export default function PermissionsPage() {
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
-      if (!user || user.role !== 'admin') { navigate('/dashboard'); return; }
+      if (!user || !['admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       setCurrentUser(user);
       const targets = await loadUsers();
       if (targets.length > 0) {
@@ -58,53 +66,61 @@ export default function PermissionsPage() {
     setPermissions(await getPermissionsByUserId(user.id));
   };
 
-  const isAdmin = (user: User | null) => user?.role === 'admin';
+  const isAdmin = (u: User | null) => u?.role === 'admin';
+  const isSystemAdmin = (u: User | null) => u?.role === 'system_admin';
+  const isSuperOnly = (u: User | null) => isAdmin(u); // 슈퍼관리자만 변경 가능한 액션
   const adminCount = users.filter(u => u.role === 'admin').length;
 
-  // 슈퍼관리자 위임: ship_manager → admin
-  const handleDelegate = async (user: User) => {
-    if (!confirm(`${user.name}님을 슈퍼관리자로 위임하시겠습니까?\n슈퍼관리자는 UI 구성 관리와 권한 설정에 접근할 수 있습니다.`)) return;
+  const changeRole = async (user: User, newRole: ManagedRole, confirmMsg: string, successMsg: string) => {
+    if (!confirm(confirmMsg)) return;
     setDelegating(user.id);
     try {
-      const { error } = await supabase.from('users').update({ role: 'admin' }).eq('id', user.id);
+      const { error } = await supabase.from('users').update({ role: newRole }).eq('id', user.id);
       if (error) throw error;
-      toast({ title: '위임 완료', description: `${user.name}님이 슈퍼관리자가 되었습니다.` });
+      toast({ title: '완료', description: successMsg });
       const targets = await loadUsers();
       const updated = targets.find(u => u.id === user.id);
       if (updated) { setSelectedUser(updated); setPermissions(await getPermissionsByUserId(updated.id)); }
     } catch {
-      toast({ title: '위임 실패', variant: 'destructive' });
+      toast({ title: '실패', variant: 'destructive' });
     } finally { setDelegating(null); }
   };
 
-  // 위임 해제: admin → ship_manager (자기 자신 또는 마지막 admin 제외)
-  const handleRevoke = async (user: User) => {
-    if (user.id === currentUser?.id) {
-      toast({ title: '불가', description: '자신의 슈퍼관리자 권한은 해제할 수 없습니다.', variant: 'destructive' });
-      return;
-    }
-    if (adminCount <= 1) {
-      toast({ title: '불가', description: '최소 1명의 슈퍼관리자가 필요합니다.', variant: 'destructive' });
-      return;
-    }
-    if (!confirm(`${user.name}님의 슈퍼관리자 권한을 해제하시겠습니까?`)) return;
-    setDelegating(user.id);
-    try {
-      const { error } = await supabase.from('users').update({ role: 'ship_manager' }).eq('id', user.id);
-      if (error) throw error;
-      toast({ title: '권한 해제 완료', description: `${user.name}님이 일반 관리자로 변경되었습니다.` });
-      const targets = await loadUsers();
-      const updated = targets.find(u => u.id === user.id);
-      if (updated) { setSelectedUser(updated); setPermissions(await getPermissionsByUserId(updated.id)); }
-    } catch {
-      toast({ title: '해제 실패', variant: 'destructive' });
-    } finally { setDelegating(null); }
+  // 슈퍼관리자 위임 (ship_manager/system_admin → admin)
+  const handleDelegate = (user: User) =>
+    changeRole(user, 'admin',
+      `${user.name}님을 슈퍼관리자로 위임하시겠습니까?\n슈퍼관리자는 시스템 전체 권한을 가집니다.`,
+      `${user.name}님이 슈퍼관리자가 되었습니다.`
+    );
+
+  // 슈퍼관리자 해제 (admin → ship_manager)
+  const handleRevokeAdmin = (user: User) => {
+    if (user.id === currentUser?.id) return toast({ title: '불가', description: '자신의 슈퍼관리자 권한은 해제할 수 없습니다.', variant: 'destructive' });
+    if (adminCount <= 1) return toast({ title: '불가', description: '최소 1명의 슈퍼관리자가 필요합니다.', variant: 'destructive' });
+    changeRole(user, 'ship_manager',
+      `${user.name}님의 슈퍼관리자 권한을 해제하시겠습니까?`,
+      `${user.name}님이 일반 관리자로 변경되었습니다.`
+    );
   };
+
+  // 시스템 관리자 지정 (ship_manager → system_admin)
+  const handleSetSystemAdmin = (user: User) =>
+    changeRole(user, 'system_admin',
+      `${user.name}님을 시스템 관리자로 지정하시겠습니까?\nUI 구성 관리와 권한 설정에 접근할 수 있게 됩니다.`,
+      `${user.name}님이 시스템 관리자로 지정되었습니다.`
+    );
+
+  // 시스템 관리자 해제 (system_admin → ship_manager)
+  const handleRevokeSystemAdmin = (user: User) =>
+    changeRole(user, 'ship_manager',
+      `${user.name}님의 시스템 관리자 지정을 해제하시겠습니까?`,
+      `${user.name}님이 일반 관리자로 변경되었습니다.`
+    );
 
   const getPermission = (resource: string) => permissions.find(p => p.resource === resource);
 
   const setResourceField = (resource: string, field: PermField, value: boolean) => {
-    if (isAdmin(selectedUser)) return;
+    if (isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return;
     setPermissions(prev => {
       const existing = prev.find(p => p.resource === resource);
       if (existing) return prev.map(p => p.resource === resource ? { ...p, [field]: value } : p);
@@ -123,7 +139,7 @@ export default function PermissionsPage() {
   };
 
   const handleGrantAll = (value: boolean) => {
-    if (isAdmin(selectedUser)) return;
+    if (isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return;
     MENU_STRUCTURE.forEach(menu =>
       menu.children?.forEach(page =>
         (['can_create', 'can_edit', 'can_delete'] as PermField[]).forEach(field =>
@@ -134,13 +150,13 @@ export default function PermissionsPage() {
   };
 
   const handleMenuChange = (menuId: string, field: PermField, value: boolean) => {
-    if (isAdmin(selectedUser)) return;
+    if (isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return;
     const menu = MENU_STRUCTURE.find(m => m.id === menuId);
     menu?.children?.forEach(page => setResourceField(page.resource, field, value));
   };
 
   const getMenuFieldState = (menuId: string, field: PermField): boolean | 'indeterminate' => {
-    if (isAdmin(selectedUser)) return true;
+    if (isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return true;
     const menu = MENU_STRUCTURE.find(m => m.id === menuId);
     if (!menu?.children?.length) return false;
     const values = menu.children.map(page => getPermission(page.resource)?.[field] ?? false);
@@ -153,7 +169,7 @@ export default function PermissionsPage() {
     permissions.reduce((s, p) => s + (p.can_create ? 1 : 0) + (p.can_edit ? 1 : 0) + (p.can_delete ? 1 : 0), 0);
 
   const handleSave = async () => {
-    if (!selectedUser || isAdmin(selectedUser)) return;
+    if (!selectedUser || isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return;
     setSaving(true);
     try {
       const updates: PermissionUpdate[] = MENU_STRUCTURE.flatMap(m => m.children ?? []).map(page => {
@@ -170,6 +186,12 @@ export default function PermissionsPage() {
   const toggleMenu = (id: string) =>
     setExpandedMenus(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const roleBadge = (user: User) => {
+    if (user.role === 'admin') return <Badge className="text-[10px] px-1.5 bg-purple-600 hover:bg-purple-600 text-white shrink-0">슈퍼</Badge>;
+    if (user.role === 'system_admin') return <Badge className="text-[10px] px-1.5 bg-indigo-500 hover:bg-indigo-500 text-white shrink-0">시스템</Badge>;
+    return null;
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -182,7 +204,7 @@ export default function PermissionsPage() {
         <Shield className="w-5 h-5 text-blue-600" />
         <div>
           <h1 className="text-base font-bold text-gray-900">권한 설정</h1>
-          <p className="text-xs text-gray-500">슈퍼관리자만 접근 가능합니다. 관리자 권한 위임 및 개별 페이지 권한을 설정합니다.</p>
+          <p className="text-xs text-gray-500">슈퍼관리자 · 시스템 관리자만 접근 가능합니다. 관리자 역할 지정 및 메뉴별 권한을 설정합니다.</p>
         </div>
       </div>
 
@@ -199,57 +221,76 @@ export default function PermissionsPage() {
                 <p className="text-xs text-gray-400 py-4 text-center">등록된 관리자가 없습니다</p>
               ) : users.map(user => {
                 const isSelected = selectedUser?.id === user.id;
-                const superAdmin = user.role === 'admin';
                 const isSelf = user.id === currentUser?.id;
                 const isProcessing = delegating === user.id;
+                const canManage = isAdmin(currentUser); // 슈퍼관리자만 역할 변경 가능
+
+                const selectedBg = user.role === 'admin'
+                  ? 'bg-purple-50 border-purple-200'
+                  : user.role === 'system_admin'
+                    ? 'bg-indigo-50 border-indigo-200'
+                    : 'bg-blue-50 border-blue-200';
+                const selectedText = user.role === 'admin' ? 'text-purple-700'
+                  : user.role === 'system_admin' ? 'text-indigo-700' : 'text-blue-700';
+
                 return (
                   <div
                     key={user.id}
                     onClick={() => selectUser(user)}
-                    className={`w-full text-left px-3 py-2.5 rounded-md transition-colors cursor-pointer ${
-                      isSelected
-                        ? superAdmin ? 'bg-purple-50 border border-purple-200' : 'bg-blue-50 border border-blue-200'
-                        : 'hover:bg-gray-50 border border-transparent'
+                    className={`w-full text-left px-3 py-2.5 rounded-md transition-colors cursor-pointer border ${
+                      isSelected ? selectedBg : 'border-transparent hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <span className={`text-sm font-medium truncate ${isSelected ? (superAdmin ? 'text-purple-700' : 'text-blue-700') : 'text-gray-800'}`}>
+                      <span className={`text-sm font-medium truncate ${isSelected ? selectedText : 'text-gray-800'}`}>
                         {user.name}
                         {isSelf && <span className="text-xs text-gray-400 ml-1">(나)</span>}
                       </span>
-                      {superAdmin
-                        ? <Badge className="text-[10px] px-1.5 bg-purple-600 hover:bg-purple-600 text-white shrink-0">슈퍼</Badge>
-                        : isSelected
-                          ? <Badge variant="secondary" className="text-[10px] px-1.5 shrink-0">{grantedCount()}</Badge>
-                          : null
-                      }
+                      <div className="flex items-center gap-1">
+                        {roleBadge(user)}
+                        {!user.role || user.role === 'ship_manager' ? (
+                          isSelected && <Badge variant="secondary" className="text-[10px] px-1.5 shrink-0">{grantedCount()}</Badge>
+                        ) : null}
+                      </div>
                     </div>
                     <p className="text-xs text-gray-400 truncate">{user.email}</p>
 
-                    {/* 위임 버튼 — 선택된 항목에만 표시 */}
-                    {isSelected && (
-                      <div className="mt-2 flex gap-1.5" onClick={e => e.stopPropagation()}>
-                        {superAdmin ? (
-                          !isSelf && adminCount > 1 && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 px-2 text-[10px] text-orange-600 border-orange-200 hover:bg-orange-50 gap-1"
-                              disabled={isProcessing}
-                              onClick={() => handleRevoke(user)}
-                            >
-                              <UserMinus className="w-3 h-3" />위임 해제
+                    {/* 역할 변경 버튼 — 슈퍼관리자만, 선택된 항목만 */}
+                    {isSelected && canManage && (
+                      <div className="mt-2 flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
+                        {user.role === 'ship_manager' && (
+                          <>
+                            <Button size="sm" variant="outline" disabled={isProcessing}
+                              className="h-6 px-2 text-[10px] text-indigo-600 border-indigo-200 hover:bg-indigo-50 gap-1"
+                              onClick={() => handleSetSystemAdmin(user)}>
+                              <UserCog className="w-3 h-3" />시스템 관리자 지정
                             </Button>
-                          )
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 gap-1"
-                            disabled={isProcessing}
-                            onClick={() => handleDelegate(user)}
-                          >
-                            <Crown className="w-3 h-3" />슈퍼관리자 위임
+                            <Button size="sm" variant="outline" disabled={isProcessing}
+                              className="h-6 px-2 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 gap-1"
+                              onClick={() => handleDelegate(user)}>
+                              <Crown className="w-3 h-3" />슈퍼관리자 위임
+                            </Button>
+                          </>
+                        )}
+                        {user.role === 'system_admin' && (
+                          <>
+                            <Button size="sm" variant="outline" disabled={isProcessing}
+                              className="h-6 px-2 text-[10px] text-orange-600 border-orange-200 hover:bg-orange-50 gap-1"
+                              onClick={() => handleRevokeSystemAdmin(user)}>
+                              <UserMinus className="w-3 h-3" />시스템 관리자 해제
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={isProcessing}
+                              className="h-6 px-2 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 gap-1"
+                              onClick={() => handleDelegate(user)}>
+                              <Crown className="w-3 h-3" />슈퍼관리자 위임
+                            </Button>
+                          </>
+                        )}
+                        {user.role === 'admin' && !isSelf && adminCount > 1 && (
+                          <Button size="sm" variant="outline" disabled={isProcessing}
+                            className="h-6 px-2 text-[10px] text-orange-600 border-orange-200 hover:bg-orange-50 gap-1"
+                            onClick={() => handleRevokeAdmin(user)}>
+                            <UserMinus className="w-3 h-3" />슈퍼관리자 해제
                           </Button>
                         )}
                       </div>
@@ -271,17 +312,18 @@ export default function PermissionsPage() {
                     <CardTitle className="text-sm">
                       {selectedUser ? `${selectedUser.name} — 권한 설정` : '관리자를 선택하세요'}
                     </CardTitle>
-                    {selectedUser && isAdmin(selectedUser) && (
-                      <Badge className="text-xs bg-purple-600 hover:bg-purple-600 text-white gap-1">
-                        <Shield className="w-3 h-3" />슈퍼관리자
+                    {selectedUser && (
+                      <Badge className={`text-xs gap-1 ${
+                        isAdmin(selectedUser) ? 'bg-purple-600 hover:bg-purple-600' : isSystemAdmin(selectedUser) ? 'bg-indigo-500 hover:bg-indigo-500' : 'bg-gray-400 hover:bg-gray-400'
+                      } text-white`}>
+                        <Shield className="w-3 h-3" />
+                        {ROLE_LABEL[(selectedUser.role as ManagedRole) ?? 'ship_manager']}
                       </Badge>
                     )}
                   </div>
-                  {selectedUser && (
-                    <p className="text-xs text-gray-400 mt-0.5">{selectedUser.email}</p>
-                  )}
+                  {selectedUser && <p className="text-xs text-gray-400 mt-0.5">{selectedUser.email}</p>}
                 </div>
-                {selectedUser && !isAdmin(selectedUser) && (
+                {selectedUser && !isAdmin(selectedUser) && !isSystemAdmin(selectedUser) && (
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => handleGrantAll(true)}>
                       <CheckSquare className="w-3.5 h-3.5" />전체 허용
@@ -308,6 +350,12 @@ export default function PermissionsPage() {
                   <p className="text-sm font-medium text-purple-700">슈퍼관리자는 모든 메뉴에 대한 전체 권한을 가집니다.</p>
                   <p className="text-xs text-purple-500">UI 구성 관리 · 권한 설정 · 시스템 전체 접근 가능</p>
                 </div>
+              ) : isSystemAdmin(selectedUser) ? (
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-6 text-center space-y-2">
+                  <UserCog className="w-8 h-8 mx-auto text-indigo-400" />
+                  <p className="text-sm font-medium text-indigo-700">시스템 관리자는 모든 메뉴에 대한 전체 권한을 가집니다.</p>
+                  <p className="text-xs text-indigo-500">UI 구성 관리 · 권한 설정 접근 가능 (슈퍼관리자 지정)</p>
+                </div>
               ) : (
                 <div className="space-y-1">
                   <div className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-1.5 text-xs font-medium text-gray-400 text-center border-b mb-1">
@@ -316,19 +364,13 @@ export default function PermissionsPage() {
                     <div>수정</div>
                     <div>삭제</div>
                   </div>
-
                   {MENU_STRUCTURE.map(menu => {
                     const isExpanded = expandedMenus.has(menu.id);
                     return (
                       <div key={menu.id} className="border rounded-md overflow-hidden">
                         <div className="grid grid-cols-[1fr_56px_56px_56px] items-center bg-gray-50 hover:bg-gray-100 transition-colors">
-                          <button
-                            onClick={() => toggleMenu(menu.id)}
-                            className="flex items-center gap-2 px-3 py-2.5 text-left"
-                          >
-                            {isExpanded
-                              ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                              : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                          <button onClick={() => toggleMenu(menu.id)} className="flex items-center gap-2 px-3 py-2.5 text-left">
+                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
                             <Folder className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                             <span className="text-xs font-semibold text-gray-700">{menu.name}</span>
                           </button>
@@ -342,16 +384,12 @@ export default function PermissionsPage() {
                             </div>
                           ))}
                         </div>
-
                         {isExpanded && menu.children && (
                           <div className="border-t">
                             {menu.children.map(page => {
                               const perm = getPermission(page.resource);
                               return (
-                                <div
-                                  key={page.id}
-                                  className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-2 border-b last:border-b-0 hover:bg-blue-50/30 transition-colors items-center"
-                                >
+                                <div key={page.id} className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-2 border-b last:border-b-0 hover:bg-blue-50/30 transition-colors items-center">
                                   <div className="flex items-center gap-1.5 pl-7">
                                     <FileText className="w-3 h-3 text-gray-300 shrink-0" />
                                     <span className="text-xs text-gray-600">{page.name}</span>
