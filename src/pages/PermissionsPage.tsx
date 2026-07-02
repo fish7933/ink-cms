@@ -68,10 +68,13 @@ export default function PermissionsPage() {
 
   const isAdmin = (u: User | null) => u?.role === 'admin';
   const isSystemAdmin = (u: User | null) => u?.role === 'system_admin';
-  const isSuperOnly = (u: User | null) => isAdmin(u); // 슈퍼관리자만 변경 가능한 액션
   const adminCount = users.filter(u => u.role === 'admin').length;
 
   const changeRole = async (user: User, newRole: ManagedRole, confirmMsg: string, successMsg: string) => {
+    if (!isAdmin(currentUser)) {
+      toast({ title: '권한 없음', description: '슈퍼관리자만 역할을 변경할 수 있습니다.', variant: 'destructive' });
+      return;
+    }
     if (!confirm(confirmMsg)) return;
     setDelegating(user.id);
     try {
