@@ -7,7 +7,7 @@ import type { Permission, PermissionUpdate } from '@/types/permissions';
 import { MENU_STRUCTURE } from '@/types/permissions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square } from 'lucide-react';
+import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -30,7 +30,11 @@ export default function PermissionsPage() {
       const user = await getCurrentUser();
       if (!user || !['ship_manager', 'admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       const all = await getUsers();
-      const targets = all.filter(u => u.role === 'ship_manager');
+      // admin + ship_manager 모두 표시, admin 먼저
+      const targets = [
+        ...all.filter(u => u.role === 'admin'),
+        ...all.filter(u => u.role === 'ship_manager'),
+      ];
       setUsers(targets);
       if (targets.length > 0) {
         setSelectedUser(targets[0]);
@@ -46,9 +50,12 @@ export default function PermissionsPage() {
     setPermissions(await getPermissionsByUserId(user.id));
   };
 
+  const isAdmin = (user: User | null) => user?.role === 'admin';
+
   const getPermission = (resource: string) => permissions.find(p => p.resource === resource);
 
   const setResourceField = (resource: string, field: PermField, value: boolean) => {
+    if (isAdmin(selectedUser)) return; // 슈퍼관리자는 잠금
     setPermissions(prev => {
       const existing = prev.find(p => p.resource === resource);
       if (existing) return prev.map(p => p.resource === resource ? { ...p, [field]: value } : p);
@@ -66,8 +73,8 @@ export default function PermissionsPage() {
     });
   };
 
-  // 전체 메뉴 일괄 on/off
   const handleGrantAll = (value: boolean) => {
+    if (isAdmin(selectedUser)) return;
     MENU_STRUCTURE.forEach(menu =>
       menu.children?.forEach(page =>
         (['can_create', 'can_edit', 'can_delete'] as PermField[]).forEach(field =>
@@ -77,15 +84,15 @@ export default function PermissionsPage() {
     );
   };
 
-  // 대메뉴 체크박스 클릭 → 하위 전체에 일괄 적용
   const handleMenuChange = (menuId: string, field: PermField, value: boolean) => {
+    if (isAdmin(selectedUser)) return;
     const menu = MENU_STRUCTURE.find(m => m.id === menuId);
     if (!menu?.children) return;
     menu.children.forEach(page => setResourceField(page.resource, field, value));
   };
 
-  // 대메뉴의 특정 필드 상태 계산: true=전체on / false=전체off / 'indeterminate'=혼합
   const getMenuFieldState = (menuId: string, field: PermField): boolean | 'indeterminate' => {
+    if (isAdmin(selectedUser)) return true;
     const menu = MENU_STRUCTURE.find(m => m.id === menuId);
     if (!menu?.children?.length) return false;
     const values = menu.children.map(page => getPermission(page.resource)?.[field] ?? false);
@@ -98,7 +105,7 @@ export default function PermissionsPage() {
     permissions.reduce((s, p) => s + (p.can_create ? 1 : 0) + (p.can_edit ? 1 : 0) + (p.can_delete ? 1 : 0), 0);
 
   const handleSave = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || isAdmin(selectedUser)) return;
     setSaving(true);
     try {
       const updates: PermissionUpdate[] = MENU_STRUCTURE.flatMap(m => m.children ?? []).map(page => {
@@ -144,21 +151,28 @@ export default function PermissionsPage() {
                 <p className="text-xs text-gray-400 py-4 text-center">등록된 관리자가 없습니다</p>
               ) : users.map(user => {
                 const isSelected = selectedUser?.id === user.id;
+                const superAdmin = user.role === 'admin';
                 return (
                   <button
                     key={user.id}
                     onClick={() => selectUser(user)}
                     className={`w-full text-left px-3 py-2.5 rounded-md transition-colors ${
-                      isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'
+                      isSelected
+                        ? superAdmin ? 'bg-purple-50 border border-purple-200' : 'bg-blue-50 border border-blue-200'
+                        : 'hover:bg-gray-50 border border-transparent'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm font-medium truncate ${isSelected ? 'text-blue-700' : 'text-gray-800'}`}>
+                      <span className={`text-sm font-medium truncate ${isSelected ? (superAdmin ? 'text-purple-700' : 'text-blue-700') : 'text-gray-800'}`}>
                         {user.name}
                       </span>
-                      {isSelected && (
-                        <Badge variant="secondary" className="text-xs shrink-0">{grantedCount()}</Badge>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {superAdmin ? (
+                          <Badge className="text-xs bg-purple-600 hover:bg-purple-600 text-white">슈퍼관리자</Badge>
+                        ) : isSelected ? (
+                          <Badge variant="secondary" className="text-xs">{grantedCount()}</Badge>
+                        ) : null}
+                      </div>
                     </div>
                     <p className="text-xs text-gray-400 truncate mt-0.5">{user.email}</p>
                   </button>
@@ -174,14 +188,21 @@ export default function PermissionsPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-sm">
-                    {selectedUser ? `${selectedUser.name} — 권한 설정` : '관리자를 선택하세요'}
-                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-sm">
+                      {selectedUser ? `${selectedUser.name} — 권한 설정` : '관리자를 선택하세요'}
+                    </CardTitle>
+                    {selectedUser && isAdmin(selectedUser) && (
+                      <Badge className="text-xs bg-purple-600 hover:bg-purple-600 text-white gap-1">
+                        <Shield className="w-3 h-3" />슈퍼관리자
+                      </Badge>
+                    )}
+                  </div>
                   {selectedUser && (
                     <p className="text-xs text-gray-400 mt-0.5">{selectedUser.email}</p>
                   )}
                 </div>
-                {selectedUser && (
+                {selectedUser && !isAdmin(selectedUser) && (
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => handleGrantAll(true)}>
                       <CheckSquare className="w-3.5 h-3.5" />전체 허용
@@ -202,9 +223,15 @@ export default function PermissionsPage() {
                   <Shield className="w-10 h-10 mx-auto mb-2 text-gray-200" />
                   <p className="text-sm">왼쪽에서 관리자를 선택하세요</p>
                 </div>
+              ) : isAdmin(selectedUser) ? (
+                /* 슈퍼관리자 — 모든 권한 잠금 표시 */
+                <div className="rounded-lg border border-purple-100 bg-purple-50 px-4 py-6 text-center space-y-2">
+                  <Lock className="w-8 h-8 mx-auto text-purple-400" />
+                  <p className="text-sm font-medium text-purple-700">슈퍼관리자는 모든 메뉴에 대한 전체 권한을 가집니다.</p>
+                  <p className="text-xs text-purple-500">개별 권한 설정 없이 시스템 전체를 관리할 수 있습니다.</p>
+                </div>
               ) : (
                 <div className="space-y-1">
-                  {/* 헤더 */}
                   <div className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-1.5 text-xs font-medium text-gray-400 text-center border-b mb-1">
                     <div className="text-left">메뉴 / 페이지</div>
                     <div>추가</div>
@@ -216,8 +243,6 @@ export default function PermissionsPage() {
                     const isExpanded = expandedMenus.has(menu.id);
                     return (
                       <div key={menu.id} className="border rounded-md overflow-hidden">
-
-                        {/* 대메뉴 행 — 체크박스로 하위 일괄 제어 */}
                         <div className="grid grid-cols-[1fr_56px_56px_56px] items-center bg-gray-50 hover:bg-gray-100 transition-colors">
                           <button
                             onClick={() => toggleMenu(menu.id)}
@@ -229,21 +254,17 @@ export default function PermissionsPage() {
                             <Folder className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                             <span className="text-xs font-semibold text-gray-700">{menu.name}</span>
                           </button>
-                          {(['can_create', 'can_edit', 'can_delete'] as PermField[]).map(field => {
-                            const state = getMenuFieldState(menu.id, field);
-                            return (
-                              <div key={field} className="flex justify-center">
-                                <Checkbox
-                                  checked={state}
-                                  onCheckedChange={v => handleMenuChange(menu.id, field, !!v)}
-                                  className="data-[state=indeterminate]:bg-blue-100 data-[state=indeterminate]:border-blue-400"
-                                />
-                              </div>
-                            );
-                          })}
+                          {(['can_create', 'can_edit', 'can_delete'] as PermField[]).map(field => (
+                            <div key={field} className="flex justify-center">
+                              <Checkbox
+                                checked={getMenuFieldState(menu.id, field)}
+                                onCheckedChange={v => handleMenuChange(menu.id, field, !!v)}
+                                className="data-[state=indeterminate]:bg-blue-100 data-[state=indeterminate]:border-blue-400"
+                              />
+                            </div>
+                          ))}
                         </div>
 
-                        {/* 하위 페이지 목록 */}
                         {isExpanded && menu.children && (
                           <div className="border-t">
                             {menu.children.map(page => {
