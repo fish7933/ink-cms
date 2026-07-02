@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, getUsers } from '@/lib/store';
 import { getPermissionsByUserId, updateUserPermissions } from '@/services/permission.service';
+import { supabase } from '@/lib/supabase';
 import type { User } from '@/types/models';
 import type { Permission, PermissionUpdate } from '@/types/permissions';
 import { MENU_STRUCTURE } from '@/types/permissions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square, Lock } from 'lucide-react';
+import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square, Lock, Crown, UserMinus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -18,24 +19,31 @@ export default function PermissionsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(MENU_STRUCTURE.map(m => m.id)));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [delegating, setDelegating] = useState<string | null>(null);
+
+  const loadUsers = useCallback(async () => {
+    const all = await getUsers();
+    const targets = [
+      ...all.filter(u => u.role === 'admin'),
+      ...all.filter(u => u.role === 'ship_manager'),
+    ];
+    setUsers(targets);
+    return targets;
+  }, []);
 
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
-      if (!user || !['ship_manager', 'admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
-      const all = await getUsers();
-      // admin + ship_manager 모두 표시, admin 먼저
-      const targets = [
-        ...all.filter(u => u.role === 'admin'),
-        ...all.filter(u => u.role === 'ship_manager'),
-      ];
-      setUsers(targets);
+      if (!user || user.role !== 'admin') { navigate('/dashboard'); return; }
+      setCurrentUser(user);
+      const targets = await loadUsers();
       if (targets.length > 0) {
         setSelectedUser(targets[0]);
         setPermissions(await getPermissionsByUserId(targets[0].id));
@@ -43,7 +51,7 @@ export default function PermissionsPage() {
       setLoading(false);
     };
     init();
-  }, [navigate]);
+  }, [navigate, loadUsers]);
 
   const selectUser = async (user: User) => {
     setSelectedUser(user);
@@ -51,11 +59,52 @@ export default function PermissionsPage() {
   };
 
   const isAdmin = (user: User | null) => user?.role === 'admin';
+  const adminCount = users.filter(u => u.role === 'admin').length;
+
+  // 슈퍼관리자 위임: ship_manager → admin
+  const handleDelegate = async (user: User) => {
+    if (!confirm(`${user.name}님을 슈퍼관리자로 위임하시겠습니까?\n슈퍼관리자는 UI 구성 관리와 권한 설정에 접근할 수 있습니다.`)) return;
+    setDelegating(user.id);
+    try {
+      const { error } = await supabase.from('users').update({ role: 'admin' }).eq('id', user.id);
+      if (error) throw error;
+      toast({ title: '위임 완료', description: `${user.name}님이 슈퍼관리자가 되었습니다.` });
+      const targets = await loadUsers();
+      const updated = targets.find(u => u.id === user.id);
+      if (updated) { setSelectedUser(updated); setPermissions(await getPermissionsByUserId(updated.id)); }
+    } catch {
+      toast({ title: '위임 실패', variant: 'destructive' });
+    } finally { setDelegating(null); }
+  };
+
+  // 위임 해제: admin → ship_manager (자기 자신 또는 마지막 admin 제외)
+  const handleRevoke = async (user: User) => {
+    if (user.id === currentUser?.id) {
+      toast({ title: '불가', description: '자신의 슈퍼관리자 권한은 해제할 수 없습니다.', variant: 'destructive' });
+      return;
+    }
+    if (adminCount <= 1) {
+      toast({ title: '불가', description: '최소 1명의 슈퍼관리자가 필요합니다.', variant: 'destructive' });
+      return;
+    }
+    if (!confirm(`${user.name}님의 슈퍼관리자 권한을 해제하시겠습니까?`)) return;
+    setDelegating(user.id);
+    try {
+      const { error } = await supabase.from('users').update({ role: 'ship_manager' }).eq('id', user.id);
+      if (error) throw error;
+      toast({ title: '권한 해제 완료', description: `${user.name}님이 일반 관리자로 변경되었습니다.` });
+      const targets = await loadUsers();
+      const updated = targets.find(u => u.id === user.id);
+      if (updated) { setSelectedUser(updated); setPermissions(await getPermissionsByUserId(updated.id)); }
+    } catch {
+      toast({ title: '해제 실패', variant: 'destructive' });
+    } finally { setDelegating(null); }
+  };
 
   const getPermission = (resource: string) => permissions.find(p => p.resource === resource);
 
   const setResourceField = (resource: string, field: PermField, value: boolean) => {
-    if (isAdmin(selectedUser)) return; // 슈퍼관리자는 잠금
+    if (isAdmin(selectedUser)) return;
     setPermissions(prev => {
       const existing = prev.find(p => p.resource === resource);
       if (existing) return prev.map(p => p.resource === resource ? { ...p, [field]: value } : p);
@@ -87,8 +136,7 @@ export default function PermissionsPage() {
   const handleMenuChange = (menuId: string, field: PermField, value: boolean) => {
     if (isAdmin(selectedUser)) return;
     const menu = MENU_STRUCTURE.find(m => m.id === menuId);
-    if (!menu?.children) return;
-    menu.children.forEach(page => setResourceField(page.resource, field, value));
+    menu?.children?.forEach(page => setResourceField(page.resource, field, value));
   };
 
   const getMenuFieldState = (menuId: string, field: PermField): boolean | 'indeterminate' => {
@@ -134,7 +182,7 @@ export default function PermissionsPage() {
         <Shield className="w-5 h-5 text-blue-600" />
         <div>
           <h1 className="text-base font-bold text-gray-900">권한 설정</h1>
-          <p className="text-xs text-gray-500">대메뉴 체크박스로 하위 전체 일괄 설정. 개별 페이지도 따로 조정 가능합니다. 조회는 모든 관리자에게 기본 부여됩니다.</p>
+          <p className="text-xs text-gray-500">슈퍼관리자만 접근 가능합니다. 관리자 권한 위임 및 개별 페이지 권한을 설정합니다.</p>
         </div>
       </div>
 
@@ -152,37 +200,68 @@ export default function PermissionsPage() {
               ) : users.map(user => {
                 const isSelected = selectedUser?.id === user.id;
                 const superAdmin = user.role === 'admin';
+                const isSelf = user.id === currentUser?.id;
+                const isProcessing = delegating === user.id;
                 return (
-                  <button
+                  <div
                     key={user.id}
                     onClick={() => selectUser(user)}
-                    className={`w-full text-left px-3 py-2.5 rounded-md transition-colors ${
+                    className={`w-full text-left px-3 py-2.5 rounded-md transition-colors cursor-pointer ${
                       isSelected
                         ? superAdmin ? 'bg-purple-50 border border-purple-200' : 'bg-blue-50 border border-blue-200'
                         : 'hover:bg-gray-50 border border-transparent'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
                       <span className={`text-sm font-medium truncate ${isSelected ? (superAdmin ? 'text-purple-700' : 'text-blue-700') : 'text-gray-800'}`}>
                         {user.name}
+                        {isSelf && <span className="text-xs text-gray-400 ml-1">(나)</span>}
                       </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {superAdmin ? (
-                          <Badge className="text-xs bg-purple-600 hover:bg-purple-600 text-white">슈퍼관리자</Badge>
-                        ) : isSelected ? (
-                          <Badge variant="secondary" className="text-xs">{grantedCount()}</Badge>
-                        ) : null}
-                      </div>
+                      {superAdmin
+                        ? <Badge className="text-[10px] px-1.5 bg-purple-600 hover:bg-purple-600 text-white shrink-0">슈퍼</Badge>
+                        : isSelected
+                          ? <Badge variant="secondary" className="text-[10px] px-1.5 shrink-0">{grantedCount()}</Badge>
+                          : null
+                      }
                     </div>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">{user.email}</p>
-                  </button>
+                    <p className="text-xs text-gray-400 truncate">{user.email}</p>
+
+                    {/* 위임 버튼 — 선택된 항목에만 표시 */}
+                    {isSelected && (
+                      <div className="mt-2 flex gap-1.5" onClick={e => e.stopPropagation()}>
+                        {superAdmin ? (
+                          !isSelf && adminCount > 1 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-[10px] text-orange-600 border-orange-200 hover:bg-orange-50 gap-1"
+                              disabled={isProcessing}
+                              onClick={() => handleRevoke(user)}
+                            >
+                              <UserMinus className="w-3 h-3" />위임 해제
+                            </Button>
+                          )
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-[10px] text-purple-600 border-purple-200 hover:bg-purple-50 gap-1"
+                            disabled={isProcessing}
+                            onClick={() => handleDelegate(user)}
+                          >
+                            <Crown className="w-3 h-3" />슈퍼관리자 위임
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </CardContent>
           </Card>
         </div>
 
-        {/* 권한 설정 */}
+        {/* 권한 설정 패널 */}
         <div className="lg:col-span-3">
           <Card>
             <CardHeader className="pb-2">
@@ -224,11 +303,10 @@ export default function PermissionsPage() {
                   <p className="text-sm">왼쪽에서 관리자를 선택하세요</p>
                 </div>
               ) : isAdmin(selectedUser) ? (
-                /* 슈퍼관리자 — 모든 권한 잠금 표시 */
                 <div className="rounded-lg border border-purple-100 bg-purple-50 px-4 py-6 text-center space-y-2">
                   <Lock className="w-8 h-8 mx-auto text-purple-400" />
                   <p className="text-sm font-medium text-purple-700">슈퍼관리자는 모든 메뉴에 대한 전체 권한을 가집니다.</p>
-                  <p className="text-xs text-purple-500">개별 권한 설정 없이 시스템 전체를 관리할 수 있습니다.</p>
+                  <p className="text-xs text-purple-500">UI 구성 관리 · 권한 설정 · 시스템 전체 접근 가능</p>
                 </div>
               ) : (
                 <div className="space-y-1">
