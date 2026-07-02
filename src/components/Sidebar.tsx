@@ -30,7 +30,7 @@ export default function Sidebar({ menuStructure, currentRole, selectedCategoryId
   const filterItemsByRole = (items: MenuItem[]) =>
     items.filter(item =>
       item.is_active &&
-      (currentRole === 'admin' || !item.roles || item.roles.length === 0 || item.roles.includes(currentRole))
+      (['admin', 'system_admin'].includes(currentRole) || !item.roles || item.roles.length === 0 || item.roles.includes(currentRole))
     );
 
   // selectedCategoryId로 카테고리 찾기, 없으면 URL 기반으로 fallback
