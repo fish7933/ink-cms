@@ -7,7 +7,7 @@ import type { Permission, PermissionUpdate } from '@/types/permissions';
 import { MENU_STRUCTURE } from '@/types/permissions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText } from 'lucide-react';
+import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -64,6 +64,17 @@ export default function PermissionsPage() {
         updated_at: new Date().toISOString(),
       }];
     });
+  };
+
+  // 전체 메뉴 일괄 on/off
+  const handleGrantAll = (value: boolean) => {
+    MENU_STRUCTURE.forEach(menu =>
+      menu.children?.forEach(page =>
+        (['can_create', 'can_edit', 'can_delete'] as PermField[]).forEach(field =>
+          setResourceField(page.resource, field, value)
+        )
+      )
+    );
   };
 
   // 대메뉴 체크박스 클릭 → 하위 전체에 일괄 적용
@@ -171,9 +182,17 @@ export default function PermissionsPage() {
                   )}
                 </div>
                 {selectedUser && (
-                  <Button size="sm" className="h-8 gap-1.5" onClick={handleSave} disabled={saving}>
-                    <Save className="w-3.5 h-3.5" />{saving ? '저장 중...' : '저장'}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => handleGrantAll(true)}>
+                      <CheckSquare className="w-3.5 h-3.5" />전체 허용
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => handleGrantAll(false)}>
+                      <Square className="w-3.5 h-3.5" />전체 해제
+                    </Button>
+                    <Button size="sm" className="h-8 gap-1.5" onClick={handleSave} disabled={saving}>
+                      <Save className="w-3.5 h-3.5" />{saving ? '저장 중...' : '저장'}
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardHeader>
