@@ -4,13 +4,15 @@ import { getCurrentUser, getUsers } from '@/lib/store';
 import { getPermissionsByUserId, updateUserPermissions } from '@/services/permission.service';
 import type { User } from '@/types/models';
 import type { Permission, PermissionUpdate } from '@/types/permissions';
-import { MENU_STRUCTURE, RESOURCES } from '@/types/permissions';
+import { MENU_STRUCTURE } from '@/types/permissions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+
+type PermField = 'can_create' | 'can_edit' | 'can_delete';
 
 export default function PermissionsPage() {
   const navigate = useNavigate();
@@ -44,7 +46,9 @@ export default function PermissionsPage() {
     setPermissions(await getPermissionsByUserId(user.id));
   };
 
-  const handlePermissionChange = (resource: string, field: keyof Permission, value: boolean) => {
+  const getPermission = (resource: string) => permissions.find(p => p.resource === resource);
+
+  const setResourceField = (resource: string, field: PermField, value: boolean) => {
     setPermissions(prev => {
       const existing = prev.find(p => p.resource === resource);
       if (existing) return prev.map(p => p.resource === resource ? { ...p, [field]: value } : p);
@@ -62,13 +66,33 @@ export default function PermissionsPage() {
     });
   };
 
+  // 대메뉴 체크박스 클릭 → 하위 전체에 일괄 적용
+  const handleMenuChange = (menuId: string, field: PermField, value: boolean) => {
+    const menu = MENU_STRUCTURE.find(m => m.id === menuId);
+    if (!menu?.children) return;
+    menu.children.forEach(page => setResourceField(page.resource, field, value));
+  };
+
+  // 대메뉴의 특정 필드 상태 계산: true=전체on / false=전체off / 'indeterminate'=혼합
+  const getMenuFieldState = (menuId: string, field: PermField): boolean | 'indeterminate' => {
+    const menu = MENU_STRUCTURE.find(m => m.id === menuId);
+    if (!menu?.children?.length) return false;
+    const values = menu.children.map(page => getPermission(page.resource)?.[field] ?? false);
+    if (values.every(v => v)) return true;
+    if (values.every(v => !v)) return false;
+    return 'indeterminate';
+  };
+
+  const grantedCount = () =>
+    permissions.reduce((s, p) => s + (p.can_create ? 1 : 0) + (p.can_edit ? 1 : 0) + (p.can_delete ? 1 : 0), 0);
+
   const handleSave = async () => {
     if (!selectedUser) return;
     setSaving(true);
     try {
-      const updates: PermissionUpdate[] = RESOURCES.map(r => {
-        const p = permissions.find(x => x.resource === r.id);
-        return { resource: r.id, can_view: true, can_create: p?.can_create ?? false, can_edit: p?.can_edit ?? false, can_delete: p?.can_delete ?? false };
+      const updates: PermissionUpdate[] = MENU_STRUCTURE.flatMap(m => m.children ?? []).map(page => {
+        const p = getPermission(page.resource);
+        return { resource: page.resource, can_view: true, can_create: p?.can_create ?? false, can_edit: p?.can_edit ?? false, can_delete: p?.can_delete ?? false };
       });
       await updateUserPermissions(selectedUser.id, updates);
       toast({ title: '저장 완료', description: `${selectedUser.name}님 권한이 업데이트되었습니다.` });
@@ -79,13 +103,6 @@ export default function PermissionsPage() {
 
   const toggleMenu = (id: string) =>
     setExpandedMenus(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const getPermission = (resource: string) => permissions.find(p => p.resource === resource);
-
-  const grantedCount = (userId: string) => {
-    if (selectedUser?.id !== userId) return null;
-    return permissions.reduce((s, p) => s + (p.can_create ? 1 : 0) + (p.can_edit ? 1 : 0) + (p.can_delete ? 1 : 0), 0);
-  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -99,7 +116,7 @@ export default function PermissionsPage() {
         <Shield className="w-5 h-5 text-blue-600" />
         <div>
           <h1 className="text-base font-bold text-gray-900">권한 설정</h1>
-          <p className="text-xs text-gray-500">관리자별 메뉴 접근 권한(추가·수정·삭제)을 설정합니다. 조회는 모든 관리자에게 기본 부여됩니다.</p>
+          <p className="text-xs text-gray-500">대메뉴 체크박스로 하위 전체 일괄 설정. 개별 페이지도 따로 조정 가능합니다. 조회는 모든 관리자에게 기본 부여됩니다.</p>
         </div>
       </div>
 
@@ -116,7 +133,6 @@ export default function PermissionsPage() {
                 <p className="text-xs text-gray-400 py-4 text-center">등록된 관리자가 없습니다</p>
               ) : users.map(user => {
                 const isSelected = selectedUser?.id === user.id;
-                const count = grantedCount(user.id);
                 return (
                   <button
                     key={user.id}
@@ -129,8 +145,8 @@ export default function PermissionsPage() {
                       <span className={`text-sm font-medium truncate ${isSelected ? 'text-blue-700' : 'text-gray-800'}`}>
                         {user.name}
                       </span>
-                      {count !== null && (
-                        <Badge variant="secondary" className="text-xs shrink-0">{count}</Badge>
+                      {isSelected && (
+                        <Badge variant="secondary" className="text-xs shrink-0">{grantedCount()}</Badge>
                       )}
                     </div>
                     <p className="text-xs text-gray-400 truncate mt-0.5">{user.email}</p>
@@ -141,7 +157,7 @@ export default function PermissionsPage() {
           </Card>
         </div>
 
-        {/* 권한 트리 */}
+        {/* 권한 설정 */}
         <div className="lg:col-span-3">
           <Card>
             <CardHeader className="pb-2">
@@ -169,58 +185,67 @@ export default function PermissionsPage() {
                 </div>
               ) : (
                 <div className="space-y-1">
+                  {/* 헤더 */}
+                  <div className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-1.5 text-xs font-medium text-gray-400 text-center border-b mb-1">
+                    <div className="text-left">메뉴 / 페이지</div>
+                    <div>추가</div>
+                    <div>수정</div>
+                    <div>삭제</div>
+                  </div>
+
                   {MENU_STRUCTURE.map(menu => {
                     const isExpanded = expandedMenus.has(menu.id);
                     return (
                       <div key={menu.id} className="border rounded-md overflow-hidden">
-                        <button
-                          onClick={() => toggleMenu(menu.id)}
-                          className="w-full flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                        >
-                          {isExpanded
-                            ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                            : <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" />}
-                          <Folder className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                          <span className="text-xs font-semibold text-gray-700">{menu.name}</span>
-                        </button>
 
+                        {/* 대메뉴 행 — 체크박스로 하위 일괄 제어 */}
+                        <div className="grid grid-cols-[1fr_56px_56px_56px] items-center bg-gray-50 hover:bg-gray-100 transition-colors">
+                          <button
+                            onClick={() => toggleMenu(menu.id)}
+                            className="flex items-center gap-2 px-3 py-2.5 text-left"
+                          >
+                            {isExpanded
+                              ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                            <Folder className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                            <span className="text-xs font-semibold text-gray-700">{menu.name}</span>
+                          </button>
+                          {(['can_create', 'can_edit', 'can_delete'] as PermField[]).map(field => {
+                            const state = getMenuFieldState(menu.id, field);
+                            return (
+                              <div key={field} className="flex justify-center">
+                                <Checkbox
+                                  checked={state}
+                                  onCheckedChange={v => handleMenuChange(menu.id, field, !!v)}
+                                  className="data-[state=indeterminate]:bg-blue-100 data-[state=indeterminate]:border-blue-400"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* 하위 페이지 목록 */}
                         {isExpanded && menu.children && (
-                          <div>
-                            <div className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-1.5 bg-gray-50 border-t border-b text-xs font-medium text-gray-500 text-center">
-                              <div className="text-left pl-5">페이지</div>
-                              <div>추가</div>
-                              <div>수정</div>
-                              <div>삭제</div>
-                            </div>
+                          <div className="border-t">
                             {menu.children.map(page => {
                               const perm = getPermission(page.resource);
                               return (
                                 <div
                                   key={page.id}
-                                  className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-2 border-b last:border-b-0 hover:bg-blue-50/40 transition-colors items-center"
+                                  className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-2 border-b last:border-b-0 hover:bg-blue-50/30 transition-colors items-center"
                                 >
-                                  <div className="flex items-center gap-1.5 pl-5">
+                                  <div className="flex items-center gap-1.5 pl-7">
                                     <FileText className="w-3 h-3 text-gray-300 shrink-0" />
-                                    <span className="text-xs text-gray-700">{page.name}</span>
+                                    <span className="text-xs text-gray-600">{page.name}</span>
                                   </div>
-                                  <div className="flex justify-center">
-                                    <Checkbox
-                                      checked={perm?.can_create ?? false}
-                                      onCheckedChange={v => handlePermissionChange(page.resource, 'can_create', !!v)}
-                                    />
-                                  </div>
-                                  <div className="flex justify-center">
-                                    <Checkbox
-                                      checked={perm?.can_edit ?? false}
-                                      onCheckedChange={v => handlePermissionChange(page.resource, 'can_edit', !!v)}
-                                    />
-                                  </div>
-                                  <div className="flex justify-center">
-                                    <Checkbox
-                                      checked={perm?.can_delete ?? false}
-                                      onCheckedChange={v => handlePermissionChange(page.resource, 'can_delete', !!v)}
-                                    />
-                                  </div>
+                                  {(['can_create', 'can_edit', 'can_delete'] as PermField[]).map(field => (
+                                    <div key={field} className="flex justify-center">
+                                      <Checkbox
+                                        checked={perm?.[field] ?? false}
+                                        onCheckedChange={v => setResourceField(page.resource, field, !!v)}
+                                      />
+                                    </div>
+                                  ))}
                                 </div>
                               );
                             })}
