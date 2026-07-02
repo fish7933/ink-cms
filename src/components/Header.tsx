@@ -50,7 +50,7 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
 
   const filterCategoriesByRole = (categories: MenuCategory[]) => {
     if (!currentUser) return [];
-    const isAdmin = currentUser.role === 'admin';
+    const isAdmin = ['admin', 'system_admin'].includes(currentUser.role ?? '');
     return categories
       .filter(c => c.is_active)
       .map(c => ({
@@ -66,6 +66,7 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
 
   const roleLabels: Record<string, string> = {
     admin: '슈퍼관리자',
+    system_admin: '시스템 관리자',
     ship_owner: '선주',
     ship_manager: '선박관리사',
     manning_agency: '선원 매닝사',
