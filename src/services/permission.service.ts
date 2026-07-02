@@ -55,21 +55,32 @@ export const updatePermission = async (
   return data;
 };
 
-// Update multiple permissions for a user
+// Update multiple permissions for a user (upsert: insert if not exists, update if exists)
 export const updateUserPermissions = async (
   userId: string,
   permissionUpdates: PermissionUpdate[]
 ): Promise<Permission[]> => {
-  const updatedPermissions: Permission[] = [];
+  const rows = permissionUpdates.map(u => ({
+    user_id: userId,
+    resource: u.resource,
+    can_view: u.can_view,
+    can_create: u.can_create,
+    can_edit: u.can_edit,
+    can_delete: u.can_delete,
+    updated_at: new Date().toISOString(),
+  }));
 
-  for (const update of permissionUpdates) {
-    const permission = await updatePermission(userId, update.resource, update);
-    if (permission) {
-      updatedPermissions.push(permission);
-    }
+  const { data, error } = await supabase
+    .from('permissions')
+    .upsert(rows, { onConflict: 'user_id,resource' })
+    .select();
+
+  if (error) {
+    console.error('Error upserting permissions:', error);
+    throw error;
   }
 
-  return updatedPermissions;
+  return data || [];
 };
 
 // Check if user has specific permission
