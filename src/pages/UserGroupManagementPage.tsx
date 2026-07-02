@@ -46,7 +46,7 @@ export default function UserGroupManagementPage() {
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
-      if (!user || !['ship_manager', 'admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
+      if (!user || !['ship_manager', 'admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       await loadData();
     };
     init();

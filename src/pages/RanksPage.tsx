@@ -36,7 +36,7 @@ export default function RanksPage() {
     const init = async () => {
       const user = await getCurrentUser();
       if (!user) { navigate('/login'); return; }
-      if (!['ship_manager', 'ship_owner', 'admin'].includes(user.role)) { navigate('/dashboard'); return; }
+      if (!['ship_manager', 'ship_owner', 'admin', 'system_admin'].includes(user.role)) { navigate('/dashboard'); return; }
       setCurrentUser(user);
       await loadData();
     };
