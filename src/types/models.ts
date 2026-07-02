@@ -303,3 +303,11 @@ export interface CrewRecommendationWithDetails extends CrewRecommendation {
   fleet_name?: string;
   ship_name?: string;
 }
+
+export interface ShorePosition {
+  id: string;
+  name: string;
+  display_order: number;
+  created_at?: string;
+  updated_at?: string;
+}

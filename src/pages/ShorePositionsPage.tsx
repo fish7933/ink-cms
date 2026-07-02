@@ -29,7 +29,7 @@ export default function ShorePositionsPage() {
     const init = async () => {
       const user = await getCurrentUser();
       if (!user) { navigate('/login'); return; }
-      if (user.role !== 'ship_manager') { navigate('/dashboard'); return; }
+      if (!['ship_manager', 'admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       await loadData();
     };
     init();
