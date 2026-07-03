@@ -25,6 +25,9 @@ export interface SalaryTemplate {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  effective_from: string; // 이 버전의 적용 시작일
+  effective_until?: string | null; // null = 현재 활성 버전, 값이 있으면 갱신되어 종료된 과거 버전
+  root_template_id?: string | null; // 최초 원본 템플릿 id (null이면 이 행 자체가 원본)
 }
 
 export interface SalaryTemplateRank {
@@ -40,6 +43,7 @@ export interface SalaryTemplateItem {
   template_id: string;
   component_id: string;
   rank?: string;
+  rank_grade?: string | null; // null = 해당 직급 전체 공통 금액, 값이 있으면 그 등급 전용
   amount: number;
   created_at: string;
   updated_at: string;
@@ -151,6 +155,7 @@ export async function getSalaryTemplates(): Promise<SalaryTemplate[]> {
     .from('salary_templates')
     .select('*')
     .eq('is_active', true)
+    .is('effective_until', null) // 현재 활성 버전만 (갱신되어 종료된 과거 버전은 이력에서만 조회)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -189,7 +194,11 @@ export async function getSalaryTemplateWithItems(templateId: string): Promise<Sa
     return null;
   }
 
-  const ranks = templateRanks?.map(tr => tr.rank) || [];
+  // 직급은 항상 display_order 기준으로 정렬해서 반환 (저장/선택 순서와 무관하게)
+  const { data: allRanks } = await supabase.from('ranks').select('name, display_order').order('display_order');
+  const rankOrder = new Map((allRanks || []).map((r, i) => [r.name, i]));
+  const ranks = (templateRanks?.map(tr => tr.rank) || [])
+    .sort((a, b) => (rankOrder.get(a) ?? 999) - (rankOrder.get(b) ?? 999));
 
   // Fetch template items (flat query, no nested select)
   const { data: items, error: itemsError } = await supabase
@@ -242,9 +251,9 @@ export async function getSalaryTemplateWithItems(templateId: string): Promise<Sa
 }
 
 export async function addSalaryTemplate(
-  template: { name: string; description?: string; currency: string; is_active: boolean },
+  template: { name: string; description?: string; currency: string; is_active: boolean; effective_from?: string },
   ranks: string[],
-  items: { rank: string; component_id: string; amount: number }[]
+  items: { rank: string; rank_grade?: string | null; component_id: string; amount: number }[]
 ): Promise<SalaryTemplate | null> {
   const currentUser = await getCurrentUser();
   
@@ -287,6 +296,7 @@ export async function addSalaryTemplate(
       template_id: newTemplateId,
       component_id: item.component_id,
       rank: item.rank,
+      rank_grade: item.rank_grade || null,
       amount: item.amount,
     }));
 
@@ -310,8 +320,61 @@ export async function updateSalaryTemplate(
   id: string,
   template: Partial<SalaryTemplate>,
   ranks?: string[],
-  items?: { rank: string; component_id: string; amount: number }[]
+  items?: { rank: string; rank_grade?: string | null; component_id: string; amount: number }[]
 ): Promise<SalaryTemplate | null> {
+  // 적용 시작일(effective_from)이 변경되면, 직전 이력 버전의 종료일(effective_until)도 그에 맞춰 자동 조정
+  // (두 버전 사이에 공백/중복 기간이 생기지 않도록 항상 하루 단위로 이어지게 유지)
+  if (template.effective_from) {
+    const { data: existing, error: existingError } = await supabase
+      .from('salary_templates')
+      .select('effective_from, root_template_id')
+      .eq('id', id)
+      .single();
+
+    if (existingError || !existing) {
+      console.error('Error fetching template before update:', existingError);
+      return null;
+    }
+
+    if (template.effective_from !== existing.effective_from) {
+      const root = existing.root_template_id ? String(existing.root_template_id) : id;
+      const { data: lineage, error: lineageError } = await supabase
+        .from('salary_templates')
+        .select('id, effective_from')
+        .or(`id.eq.${root},root_template_id.eq.${root}`)
+        .neq('id', id)
+        .lt('effective_from', existing.effective_from)
+        .order('effective_from', { ascending: false })
+        .limit(1);
+
+      if (lineageError) {
+        console.error('Error fetching predecessor template version:', lineageError);
+        return null;
+      }
+
+      const predecessor = lineage?.[0];
+      if (predecessor) {
+        if (template.effective_from <= predecessor.effective_from) {
+          console.error('Error updating salary template: effective_from must be after the previous version\'s effective_from', predecessor.effective_from);
+          return null;
+        }
+        const dayBefore = new Date(template.effective_from);
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        const newPredecessorUntil = dayBefore.toISOString().slice(0, 10);
+
+        const { error: predUpdateError } = await supabase
+          .from('salary_templates')
+          .update({ effective_until: newPredecessorUntil })
+          .eq('id', predecessor.id);
+
+        if (predUpdateError) {
+          console.error('Error adjusting previous version\'s effective_until:', predUpdateError);
+          return null;
+        }
+      }
+    }
+  }
+
   // Update template
   const { data: updatedTemplate, error: templateError } = await supabase
     .from('salary_templates')
@@ -365,6 +428,7 @@ export async function updateSalaryTemplate(
         template_id: id,
         component_id: item.component_id,
         rank: item.rank,
+        rank_grade: item.rank_grade || null,
         amount: item.amount,
       }));
 
@@ -395,6 +459,101 @@ export async function deleteSalaryTemplate(id: string): Promise<boolean> {
   }
 
   return true;
+}
+
+// 특정 템플릿(어느 버전이든)의 전체 이력(원본 + 갱신된 모든 버전)을 최신순으로 조회
+export async function getSalaryTemplateHistory(templateId: string): Promise<SalaryTemplate[]> {
+  const { data: current, error: currentError } = await supabase
+    .from('salary_templates')
+    .select('id, root_template_id')
+    .eq('id', templateId)
+    .single();
+
+  if (currentError || !current) {
+    console.error('Error fetching template for history:', currentError);
+    return [];
+  }
+
+  const root = current.root_template_id ? String(current.root_template_id) : String(current.id);
+
+  const { data, error } = await supabase
+    .from('salary_templates')
+    .select('*')
+    .or(`id.eq.${root},root_template_id.eq.${root}`)
+    .order('effective_from', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching salary template history:', error);
+    return [];
+  }
+
+  return (data || []).map(item => ({
+    ...item,
+    id: String(item.id),
+    company_id: item.company_id ? String(item.company_id) : undefined,
+  })) as SalaryTemplate[];
+}
+
+// 급여 인상 등에 대응하기 위한 템플릿 갱신: 새 유효기간 버전을 생성하고, 기존 배정(선박/플릿/선주)을 자동으로 새 버전으로 이전
+export async function renewSalaryTemplate(templateId: string, newEffectiveFrom: string): Promise<SalaryTemplate | null> {
+  const current = await getSalaryTemplateWithItems(templateId);
+  if (!current) {
+    console.error('Error renewing salary template: template not found', templateId);
+    return null;
+  }
+  if (current.effective_until) {
+    console.error('Error renewing salary template: cannot renew an already-closed historical version', templateId);
+    return null;
+  }
+  if (newEffectiveFrom <= current.effective_from) {
+    console.error('Error renewing salary template: new effective_from must be after current effective_from');
+    return null;
+  }
+
+  const root = current.root_template_id || current.id;
+
+  const newTemplate = await addSalaryTemplate(
+    {
+      name: current.name,
+      description: current.description,
+      currency: current.currency,
+      is_active: true,
+      effective_from: newEffectiveFrom,
+    },
+    current.ranks,
+    current.items.map(i => ({ rank: i.rank || '', rank_grade: i.rank_grade, component_id: i.component_id, amount: i.amount })),
+  );
+
+  if (!newTemplate) {
+    console.error('Error renewing salary template: failed to create new version');
+    return null;
+  }
+
+  const { error: rootError } = await supabase
+    .from('salary_templates')
+    .update({ root_template_id: root, company_id: current.company_id ?? null })
+    .eq('id', newTemplate.id);
+  if (rootError) console.error('Error linking renewed template to root:', rootError);
+
+  const dayBefore = new Date(newEffectiveFrom);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  const effectiveUntil = dayBefore.toISOString().slice(0, 10);
+
+  const { error: closeError } = await supabase
+    .from('salary_templates')
+    .update({ effective_until: effectiveUntil })
+    .eq('id', templateId);
+  if (closeError) console.error('Error closing previous template version:', closeError);
+
+  // 기존 배정을 새 버전으로 자동 이전
+  const { error: shipError } = await supabase.from('ship_salary_assignments').update({ template_id: newTemplate.id }).eq('template_id', templateId);
+  if (shipError) console.error('Error migrating ship salary assignments to renewed template:', shipError);
+  const { error: fleetError } = await supabase.from('fleet_salary_assignments').update({ template_id: newTemplate.id }).eq('template_id', templateId);
+  if (fleetError) console.error('Error migrating fleet salary assignments to renewed template:', fleetError);
+  const { error: ownerError } = await supabase.from('owner_salary_assignments').update({ template_id: newTemplate.id }).eq('template_id', templateId);
+  if (ownerError) console.error('Error migrating owner salary assignments to renewed template:', ownerError);
+
+  return { ...newTemplate, root_template_id: root };
 }
 
 // Ship Salary Assignment functions
@@ -764,4 +923,36 @@ export async function getEffectiveTemplateForShip(shipId: string): Promise<Salar
   }
 
   return null;
+}
+
+// 여러 선박의 배정된(유효) 급여 템플릿을 한 번에 계산 (선박 목록에서 선박마다 개별 조회하지 않도록 벌크 처리)
+export async function getEffectiveTemplateMapForShips(
+  ships: { id: string; fleet_id?: string | null; owner_id?: string | null }[]
+): Promise<Record<string, SalaryTemplate | null>> {
+  const [shipAssignments, fleetAssignments, ownerAssignments, templates] = await Promise.all([
+    getShipSalaryAssignments(),
+    getFleetSalaryAssignments(),
+    getOwnerSalaryAssignments(),
+    getSalaryTemplates(),
+  ]);
+
+  const templateMap = new Map(templates.map(t => [t.id, t]));
+  const byShip = new Map<string, ShipSalaryAssignment[]>();
+  shipAssignments.forEach(a => { const arr = byShip.get(a.ship_id) || []; arr.push(a); byShip.set(a.ship_id, arr); });
+  const byFleet = new Map<string, FleetSalaryAssignment[]>();
+  fleetAssignments.forEach(a => { const arr = byFleet.get(a.fleet_id) || []; arr.push(a); byFleet.set(a.fleet_id, arr); });
+  const byOwner = new Map<string, OwnerSalaryAssignment[]>();
+  ownerAssignments.forEach(a => { const arr = byOwner.get(a.owner_id) || []; arr.push(a); byOwner.set(a.owner_id, arr); });
+
+  const result: Record<string, SalaryTemplate | null> = {};
+  for (const ship of ships) {
+    const shipAssigns = byShip.get(ship.id);
+    if (shipAssigns?.length) { result[ship.id] = templateMap.get(shipAssigns[0].template_id) || null; continue; }
+    const fleetAssigns = ship.fleet_id ? byFleet.get(ship.fleet_id) : undefined;
+    if (fleetAssigns?.length) { result[ship.id] = templateMap.get(fleetAssigns[0].template_id) || null; continue; }
+    const ownerAssigns = ship.owner_id ? byOwner.get(ship.owner_id) : undefined;
+    if (ownerAssigns?.length) { result[ship.id] = templateMap.get(ownerAssigns[0].template_id) || null; continue; }
+    result[ship.id] = null;
+  }
+  return result;
 }

@@ -31,7 +31,7 @@ export default function ShipFlagManagementPage() {
   useEffect(() => {
     const loadUser = async () => {
       const user = await getCurrentUser();
-      if (!user || user.role !== 'ship_manager') {
+      if (!user || !['ship_manager', 'admin', 'system_admin'].includes(user.role)) {
         navigate('/dashboard');
         return;
       }
@@ -76,12 +76,13 @@ export default function ShipFlagManagementPage() {
     }
   };
 
-  const handleSave = async (data: Omit<ShipFlag, 'id' | 'created_at' | 'updated_at'>) => {
+  const handleSave = async (data: Omit<ShipFlag, 'id' | 'created_at' | 'updated_at' | 'display_order'>) => {
     try {
       if (editingFlag) {
         await updateShipFlag(editingFlag.id, data);
       } else {
-        await addShipFlag(data);
+        const nextOrder = shipFlags.length > 0 ? Math.max(...shipFlags.map(f => f.display_order)) + 1 : 1;
+        await addShipFlag({ ...data, display_order: nextOrder });
       }
       await loadData();
       setIsDialogOpen(false);
@@ -135,6 +136,8 @@ export default function ShipFlagManagementPage() {
             <CardContent className="pt-0">
               <ShipFlagTable
                 flags={shipFlags}
+                onFlagsChange={setShipFlags}
+                onReorderError={loadData}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 canEdit={permissions.canEdit}

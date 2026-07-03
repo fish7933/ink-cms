@@ -2,179 +2,104 @@ import { useEffect, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { User, Users, Shield } from 'lucide-react';
+import { Users, Shield } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { User as UserType } from '@/types/models';
+import { getAssignmentsByEntity } from '@/services/assignment.service';
 
 interface ShipPersonnelTabProps {
   shipId?: string;
   ownerId?: string;
   fleetId?: string;
-  managerId?: string;
 }
 
-interface SupervisorInfo {
+interface PersonInfo {
   id: string;
   name: string;
   email: string;
+}
+
+interface SupervisorInfo extends PersonInfo {
   assignment_level: 'ship' | 'fleet' | 'owner';
 }
 
-export function ShipPersonnelTab({ shipId, ownerId, fleetId, managerId }: ShipPersonnelTabProps) {
-  const [ownerContact, setOwnerContact] = useState<UserType | null>(null);
-  const [fleetContact, setFleetContact] = useState<UserType | null>(null);
-  const [shipManager, setShipManager] = useState<UserType | null>(null);
+const LEVEL_LABELS = { ship: '선박 직접 할당', fleet: '선대 할당', owner: '선주사 할당' };
+const LEVEL_COLORS = { ship: 'bg-blue-100 text-blue-700', fleet: 'bg-green-100 text-green-700', owner: 'bg-purple-100 text-purple-700' };
+
+export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabProps) {
+  const [ownerManagers, setOwnerManagers] = useState<PersonInfo[]>([]);
+  const [ownerManagerLevel, setOwnerManagerLevel] = useState<'ship' | 'fleet' | 'owner' | null>(null);
+  const [ownerManagerSourceName, setOwnerManagerSourceName] = useState('');
   const [supervisors, setSupervisors] = useState<SupervisorInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadPersonnel();
-  }, [shipId, ownerId, fleetId, managerId]);
+  }, [shipId, ownerId, fleetId]);
+
+  const resolveUsers = async (userIds: string[]): Promise<PersonInfo[]> => {
+    if (userIds.length === 0) return [];
+    const { data } = await supabase.from('users').select('id, name, email').in('id', userIds);
+    return (data || []).map(u => ({ id: u.id, name: u.name || u.email, email: u.email }));
+  };
 
   const loadPersonnel = async () => {
     setLoading(true);
     try {
-      // Load ship manager (담당자)
-      if (managerId) {
-        const { data: manager } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', managerId)
-          .single();
-        setShipManager(manager);
+      // 선주 담당자: assignments 테이블 (role=owner_manager), 우선순위 선박 > 플릿 > 선주사 (ManagerAssignmentPage와 동일 로직)
+      let level: 'ship' | 'fleet' | 'owner' | null = null;
+      let sourceName = '';
+      let asgns: { user_id: string }[] = [];
+
+      if (shipId) {
+        const shipAsgns = await getAssignmentsByEntity('ship', shipId);
+        if (shipAsgns.length > 0) { asgns = shipAsgns; level = 'ship'; }
       }
-
-      // Load owner contact
-      if (ownerId) {
-        const { data: owner } = await supabase
-          .from('companies')
-          .select('manager_id')
-          .eq('id', ownerId)
-          .single();
-
-        if (owner?.manager_id) {
-          const { data: ownerUser } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', owner.manager_id)
-            .single();
-          setOwnerContact(ownerUser);
+      if (asgns.length === 0 && fleetId) {
+        const fleetAsgns = await getAssignmentsByEntity('fleet', fleetId);
+        if (fleetAsgns.length > 0) {
+          asgns = fleetAsgns;
+          level = 'fleet';
+          const { data: fleet } = await supabase.from('fleets').select('name').eq('id', fleetId).single();
+          sourceName = fleet?.name || '상위 플릿';
         }
       }
-
-      // Load fleet contact
-      if (fleetId) {
-        const { data: fleet } = await supabase
-          .from('fleets')
-          .select('manager_id')
-          .eq('id', fleetId)
-          .single();
-
-        if (fleet?.manager_id) {
-          const { data: fleetUser } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', fleet.manager_id)
-            .single();
-          setFleetContact(fleetUser);
+      if (asgns.length === 0 && ownerId) {
+        const ownerAsgns = await getAssignmentsByEntity('owner', ownerId);
+        if (ownerAsgns.length > 0) {
+          asgns = ownerAsgns;
+          level = 'owner';
+          const { data: owner } = await supabase.from('companies').select('name').eq('id', ownerId).single();
+          sourceName = owner?.name || '상위 선주사';
         }
       }
+      setOwnerManagerLevel(level);
+      setOwnerManagerSourceName(sourceName);
+      setOwnerManagers(await resolveUsers(asgns.map(a => a.user_id)));
 
-      // Load supervisors (감독) - ship managers assigned to this ship
+      // 선박관리사 감독 (supervisor_assignments 테이블)
       const supervisorList: SupervisorInfo[] = [];
 
-      // Ship-level supervisors
       if (shipId) {
-        const { data: shipAssignments, error: shipError } = await supabase
-          .from('supervisor_assignments')
-          .select('supervisor_id')
-          .eq('ship_id', shipId);
-
-        console.log('Ship-level assignments:', shipAssignments, shipError);
-
-        if (shipAssignments && shipAssignments.length > 0) {
-          const supervisorIds = shipAssignments.map(a => a.supervisor_id);
-          const { data: supervisorUsers } = await supabase
-            .from('users')
-            .select('id, name, email')
-            .in('id', supervisorIds);
-
-          if (supervisorUsers) {
-            supervisorUsers.forEach(user => {
-              supervisorList.push({
-                id: user.id,
-                name: user.name || user.email,
-                email: user.email,
-                assignment_level: 'ship',
-              });
-            });
-          }
+        const { data: shipAssignments } = await supabase.from('supervisor_assignments').select('supervisor_id').eq('ship_id', shipId);
+        if (shipAssignments?.length) {
+          const users = await resolveUsers(shipAssignments.map(a => a.supervisor_id));
+          users.forEach(u => supervisorList.push({ ...u, assignment_level: 'ship' }));
         }
       }
-
-      // Fleet-level supervisors
       if (fleetId) {
-        const { data: fleetAssignments, error: fleetError } = await supabase
-          .from('supervisor_assignments')
-          .select('supervisor_id')
-          .eq('fleet_id', fleetId);
-
-        console.log('Fleet-level assignments:', fleetAssignments, fleetError);
-
-        if (fleetAssignments && fleetAssignments.length > 0) {
-          const supervisorIds = fleetAssignments.map(a => a.supervisor_id);
-          const { data: supervisorUsers } = await supabase
-            .from('users')
-            .select('id, name, email')
-            .in('id', supervisorIds);
-
-          if (supervisorUsers) {
-            supervisorUsers.forEach(user => {
-              if (!supervisorList.find(s => s.id === user.id)) {
-                supervisorList.push({
-                  id: user.id,
-                  name: user.name || user.email,
-                  email: user.email,
-                  assignment_level: 'fleet',
-                });
-              }
-            });
-          }
+        const { data: fleetAssignments } = await supabase.from('supervisor_assignments').select('supervisor_id').eq('fleet_id', fleetId);
+        if (fleetAssignments?.length) {
+          const users = await resolveUsers(fleetAssignments.map(a => a.supervisor_id));
+          users.forEach(u => { if (!supervisorList.find(s => s.id === u.id)) supervisorList.push({ ...u, assignment_level: 'fleet' }); });
         }
       }
-
-      // Owner-level supervisors
       if (ownerId) {
-        const { data: ownerAssignments, error: ownerError } = await supabase
-          .from('supervisor_assignments')
-          .select('supervisor_id')
-          .eq('owner_id', ownerId);
-
-        console.log('Owner-level assignments:', ownerAssignments, ownerError);
-
-        if (ownerAssignments && ownerAssignments.length > 0) {
-          const supervisorIds = ownerAssignments.map(a => a.supervisor_id);
-          const { data: supervisorUsers } = await supabase
-            .from('users')
-            .select('id, name, email')
-            .in('id', supervisorIds);
-
-          if (supervisorUsers) {
-            supervisorUsers.forEach(user => {
-              if (!supervisorList.find(s => s.id === user.id)) {
-                supervisorList.push({
-                  id: user.id,
-                  name: user.name || user.email,
-                  email: user.email,
-                  assignment_level: 'owner',
-                });
-              }
-            });
-          }
+        const { data: ownerAssignments } = await supabase.from('supervisor_assignments').select('supervisor_id').eq('owner_id', ownerId);
+        if (ownerAssignments?.length) {
+          const users = await resolveUsers(ownerAssignments.map(a => a.supervisor_id));
+          users.forEach(u => { if (!supervisorList.find(s => s.id === u.id)) supervisorList.push({ ...u, assignment_level: 'owner' }); });
         }
       }
-
-      console.log('Final supervisor list:', supervisorList);
       setSupervisors(supervisorList);
     } catch (error) {
       console.error('Error loading personnel:', error);
@@ -183,23 +108,9 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId, managerId }: ShipPe
     }
   };
 
-  const getAssignmentLevelBadge = (level: 'ship' | 'fleet' | 'owner') => {
-    const labels = {
-      ship: '선박 직접 할당',
-      fleet: '선대 할당',
-      owner: '선주사 할당',
-    };
-    const colors = {
-      ship: 'bg-blue-100 text-blue-700',
-      fleet: 'bg-green-100 text-green-700',
-      owner: 'bg-purple-100 text-purple-700',
-    };
-    return (
-      <Badge variant="secondary" className={`text-xs ${colors[level]}`}>
-        {labels[level]}
-      </Badge>
-    );
-  };
+  const getAssignmentLevelBadge = (level: 'ship' | 'fleet' | 'owner') => (
+    <Badge variant="secondary" className={`text-xs ${LEVEL_COLORS[level]}`}>{LEVEL_LABELS[level]}</Badge>
+  );
 
   if (loading) {
     return (
@@ -211,56 +122,37 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId, managerId }: ShipPe
 
   return (
     <div className="space-y-4">
-      {/* Ship Manager (담당자) */}
+      {/* 선주 담당자 */}
       <Card>
         <CardContent className="pt-4">
           <div className="flex items-center gap-2 mb-3">
-            <User className="w-4 h-4 text-blue-600" />
-            <Label className="text-sm font-semibold">선주사 담당자 (Ship Owner Contact)</Label>
+            <Users className="w-4 h-4 text-purple-600" />
+            <Label className="text-sm font-semibold">선주 담당자 (Ship Owner Contact)</Label>
           </div>
-          {shipManager ? (
+          {ownerManagers.length > 0 ? (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">{shipManager.name || shipManager.email}</p>
-                  <p className="text-xs text-gray-500">{shipManager.email}</p>
+              {ownerManagerLevel && ownerManagerLevel !== 'ship' && (
+                <p className="text-xs text-gray-400">
+                  {ownerManagerLevel === 'fleet' ? '선대' : '선주사'} 담당자가 자동 적용됩니다 ({ownerManagerSourceName})
+                </p>
+              )}
+              {ownerManagers.map(m => (
+                <div key={m.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                  <div>
+                    <p className="text-sm font-medium">{m.name}</p>
+                    <p className="text-xs text-gray-500">{m.email}</p>
+                  </div>
+                  {ownerManagerLevel && getAssignmentLevelBadge(ownerManagerLevel)}
                 </div>
-                <Badge className="bg-blue-600 text-white text-xs">선박 담당자</Badge>
-              </div>
+              ))}
             </div>
           ) : (
-            <div className="text-sm text-gray-500">
-              {fleetContact ? (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">선대 담당자가 자동 적용됩니다</p>
-                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <div>
-                      <p className="text-sm font-medium">{fleetContact.name || fleetContact.email}</p>
-                      <p className="text-xs text-gray-500">{fleetContact.email}</p>
-                    </div>
-                    <Badge variant="outline" className="text-xs">선대 담당자</Badge>
-                  </div>
-                </div>
-              ) : ownerContact ? (
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">선주사 담당자가 자동 적용됩니다</p>
-                  <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                    <div>
-                      <p className="text-sm font-medium">{ownerContact.name || ownerContact.email}</p>
-                      <p className="text-xs text-gray-500">{ownerContact.email}</p>
-                    </div>
-                    <Badge variant="outline" className="text-xs">선주사 담당자</Badge>
-                  </div>
-                </div>
-              ) : (
-                '담당자가 지정되지 않았습니다'
-              )}
-            </div>
+            <div className="text-sm text-gray-500">담당자가 지정되지 않았습니다</div>
           )}
         </CardContent>
       </Card>
 
-      {/* Supervisors (감독) */}
+      {/* 선박관리사 담당자 (감독) */}
       <Card>
         <CardContent className="pt-4">
           <div className="flex items-center gap-2 mb-3">
@@ -290,34 +182,15 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId, managerId }: ShipPe
         </CardContent>
       </Card>
 
-      {/* Owner Contact */}
-      {ownerContact && (
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-purple-600" />
-              <Label className="text-sm font-semibold">선주사 대표 연락처</Label>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <div>
-                <p className="text-sm font-medium">{ownerContact.name || ownerContact.email}</p>
-                <p className="text-xs text-gray-500">{ownerContact.email}</p>
-              </div>
-              <Badge variant="outline" className="text-xs">선주사</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Information Note */}
       <div className="text-xs text-gray-500 p-3 bg-blue-50 rounded-md border border-blue-200">
         <p className="font-medium text-blue-900 mb-1">담당자 구분</p>
         <ul className="list-disc list-inside space-y-1 text-blue-800">
-          <li><strong>선주사 담당자:</strong> 선박 소유자 측의 담당자 (ship_owner 역할)</li>
-          <li><strong>선박관리사 담당자:</strong> 선박 관리 감독자 (ship_manager 역할, supervisor_assignments 테이블에서 관리)</li>
+          <li><strong>선주 담당자:</strong> 선박 소유자 측의 담당자 (선주 사용자 관리 화면에서 배정, ship_owner 역할)</li>
+          <li><strong>선박관리사 담당자:</strong> 선박 관리 감독자 (ship_manager 역할, 선박관리사 담당자 화면에서 배정)</li>
         </ul>
         <p className="mt-2 text-blue-800">
-          <strong>우선순위:</strong> 선박 담당자 → 선대 담당자 → 선주사 담당자
+          <strong>우선순위:</strong> 선박 직접 배정 → 선대 배정 → 선주사 배정
         </p>
       </div>
     </div>

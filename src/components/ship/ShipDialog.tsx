@@ -9,12 +9,14 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info, AlertTriangle } from 'lucide-react';
-import type { Company, Fleet, User } from '@/types/models';
-import { getFleets, getShipOwnerUsers } from '@/lib/store';
+import type { Company, Fleet } from '@/types/models';
+import { getFleets } from '@/lib/store';
 import { getShipTypes, calculateDWTFromGT, getShipClassification } from '@/services/ship-classification.service';
 import { getActiveShipFlags } from '@/services/ship-flag.service';
 import type { ShipType, ShipSizeClassification } from '@/types/ship-classification';
 import type { ShipFlag } from '@/types/ship-flag';
+import type { SalaryTemplate } from '@/lib/salary-store';
+import SalaryTemplateViewDialog from '@/components/salary/SalaryTemplateViewDialog';
 import { ShipPersonnelTab } from './ShipPersonnelTab';
 
 interface ShipFormData {
@@ -47,7 +49,6 @@ interface ShipFormData {
   depth: string;
   draft: string;
   is_bbchp?: boolean;
-  manager_id?: string;
 }
 
 interface ShipDialogProps {
@@ -58,6 +59,7 @@ interface ShipDialogProps {
   isEditing: boolean;
   companies: Company[];
   shipId?: string;
+  salaryTemplate?: SalaryTemplate | null;
 }
 
 export default function ShipDialog({
@@ -68,6 +70,7 @@ export default function ShipDialog({
   isEditing,
   companies,
   shipId,
+  salaryTemplate,
 }: ShipDialogProps) {
   const [availableFleets, setAvailableFleets] = useState<Fleet[]>([]);
   const [allFleets, setAllFleets] = useState<Fleet[]>([]);
@@ -77,9 +80,8 @@ export default function ShipDialog({
   const [shipFlags, setShipFlags] = useState<ShipFlag[]>([]);
   const [loadingShipFlags, setLoadingShipFlags] = useState(false);
   const [shipClassification, setShipClassification] = useState<ShipSizeClassification | null>(null);
-  const [shipOwnerUsers, setShipOwnerUsers] = useState<User[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
   const [ownerFleetMismatch, setOwnerFleetMismatch] = useState<string | null>(null);
+  const [salaryTemplateDialogOpen, setSalaryTemplateDialogOpen] = useState(false);
 
   const ownerCompanies = companies.filter(c => c.type === 'owner');
 
@@ -91,7 +93,6 @@ export default function ShipDialog({
   useEffect(() => {
     loadShipTypes();
     loadShipFlags();
-    loadShipOwnerUsers();
     loadAllFleets();
   }, []);
 
@@ -172,19 +173,6 @@ export default function ShipDialog({
       setShipFlags([]);
     } finally {
       setLoadingShipFlags(false);
-    }
-  };
-
-  const loadShipOwnerUsers = async () => {
-    setLoadingUsers(true);
-    try {
-      const users = await getShipOwnerUsers();
-      setShipOwnerUsers(users);
-    } catch (error) {
-      console.error('Error loading ship owner users:', error);
-      setShipOwnerUsers([]);
-    } finally {
-      setLoadingUsers(false);
     }
   };
 
@@ -341,35 +329,6 @@ export default function ShipDialog({
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="manager_id" className="text-xs">담당자</Label>
-                <Select
-                  value={formData.manager_id || '__none__'}
-                  onValueChange={(value) => onFormDataChange({...formData, manager_id: value === '__none__' ? undefined : value})}
-                  disabled={loadingUsers}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="담당자를 선택하세요 (선택사항)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__" className="text-sm">
-                      담당자 없음
-                    </SelectItem>
-                    {shipOwnerUsers.map((user) => (
-                      <SelectItem 
-                        key={user.id} 
-                        value={String(user.id)}
-                        className="text-sm"
-                      >
-                        {user.username || user.name || user.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-500">
-                  선박 담당자를 지정하지 않으면 플릿 또는 선주사 담당자가 자동으로 적용됩니다
-                </p>
-              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -550,6 +509,22 @@ export default function ShipDialog({
                   {shipClassification.description && (
                     <p className="text-xs text-blue-700 mt-1">{shipClassification.description}</p>
                   )}
+                </div>
+              )}
+
+              {shipId && (
+                <div className="p-3 bg-gray-50 rounded-md border">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-700">배정된 급여 템플릿:</span>
+                    {salaryTemplate ? (
+                      <button type="button" onClick={() => setSalaryTemplateDialogOpen(true)}>
+                        <Badge variant="outline" className="text-xs cursor-pointer hover:bg-gray-100">{salaryTemplate.name}</Badge>
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-400">미배정</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">선박 &gt; 플릿 &gt; 선주 순으로 배정된 템플릿이 적용됩니다. 배정은 급여 템플릿 관리 화면에서 변경할 수 있습니다.</p>
                 </div>
               )}
 
@@ -763,7 +738,6 @@ export default function ShipDialog({
                 shipId={shipId}
                 ownerId={formData.owner_id}
                 fleetId={formData.fleet_id}
-                managerId={formData.manager_id}
               />
             </TabsContent>
           </Tabs>
@@ -780,6 +754,13 @@ export default function ShipDialog({
               취소
             </Button>
           </div>
+
+      <SalaryTemplateViewDialog
+        open={salaryTemplateDialogOpen}
+        onOpenChange={setSalaryTemplateDialogOpen}
+        templateId={salaryTemplate?.id ?? null}
+        templateName={salaryTemplate?.name}
+      />
     </form>
   );
 }

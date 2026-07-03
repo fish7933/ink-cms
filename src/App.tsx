@@ -3,6 +3,7 @@ import { TabProvider } from '@/contexts/TabContext';
 import { UISettingsProvider } from '@/contexts/UISettingsContext';
 import LoginPage from '@/pages/LoginPage';
 import AuthCallback from '@/pages/AuthCallback';
+import SalaryTemplatePrintPage from '@/pages/SalaryTemplatePrintPage';
 import Layout from '@/components/Layout';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -15,6 +16,8 @@ function App() {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          {/* 사이드바/헤더/탭바를 완전히 우회하는 순수 인쇄 문서 라우트 (Layout 밖) */}
+          <Route path="/print/salary-templates/:id" element={<SalaryTemplatePrintPage />} />
           <Route path="*" element={<Layout />} />
         </Routes>
         <Toaster />

@@ -167,6 +167,8 @@ export const rotationService = {
           status: 'draft',
           created_by: currentUser.id,
           notes: formData.notes,
+          base_departure_date: formData.base_departure_date,
+          port_id: formData.port_id,
         },
       ])
       .select()
@@ -232,6 +234,8 @@ export const rotationService = {
     if (updates.plan_name) updateData.plan_name = updates.plan_name;
     if (updates.rotation_date) updateData.rotation_date = updates.rotation_date;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
+    if (updates.base_departure_date !== undefined) updateData.base_departure_date = updates.base_departure_date;
+    if (updates.port_id !== undefined) updateData.port_id = updates.port_id;
     updateData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase

@@ -48,15 +48,20 @@ export default function PermissionsPage() {
 
   useEffect(() => {
     const init = async () => {
-      const user = await getCurrentUser();
-      if (!user || !['admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
-      setCurrentUser(user);
-      const targets = await loadUsers();
-      if (targets.length > 0) {
-        setSelectedUser(targets[0]);
-        setPermissions(await getPermissionsByUserId(targets[0].id));
+      try {
+        const user = await getCurrentUser();
+        if (!user || !['admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
+        setCurrentUser(user);
+        const targets = await loadUsers();
+        if (targets.length > 0) {
+          setSelectedUser(targets[0]);
+          setPermissions(await getPermissionsByUserId(targets[0].id));
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     init();
   }, [navigate, loadUsers]);

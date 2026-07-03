@@ -177,13 +177,14 @@ function getTitleFromPath(path: string): string {
     '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 유형 관리',
     '/shore-positions': '육상 직원 직급', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
     '/certificate-expiry': '증서 만료 현황', '/leave-management': '휴가 관리', '/reports': '통계 대시보드',
-    '/crew-evaluations': '선원 평가', '/contract-management': '계약 관리',
+    '/crew-evaluations': '선원 평가', '/contract-management': '계약 관리', '/ports': '교대지 관리',
   };
   if (map[path]) return map[path];
   const basePath = path.split('?')[0];
   if (map[basePath]) return map[basePath];
   if (basePath.match(/^\/crew\/[^/]+\/resume$/)) return '이력서';
   if (basePath.match(/^\/salary\/templates\/[^/]+\/edit$/)) return '급여 템플릿 수정';
+  if (basePath.match(/^\/salary\/templates\/[^/]+$/)) return '급여 템플릿 상세';
   if (basePath.match(/^\/crew\/[^/]+$/)) return '선원 정보';
   return basePath;
 }

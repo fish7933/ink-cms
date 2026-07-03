@@ -98,6 +98,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 10,
         is_active: true,
       },
+      {
+        id: 'ports',
+        label: '교대지 관리',
+        path: '/ports',
+        icon: 'Anchor',
+        roles: ['ship_manager'],
+        order: 11,
+        is_active: true,
+      },
     ],
   },
   {

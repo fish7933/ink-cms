@@ -9,9 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Trash2, ChevronUp, ChevronDown, Save } from 'lucide-react';
+import { Plus, Trash2, Save } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useTabContext } from '@/contexts/TabContext';
+import { SortableTableRow } from '@/components/ui/sortable-table-row';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 const EMPTY_FORM = { name: '', rank_code: '', department: 'deck' as 'deck'|'engine'|'catering', rank_category: 'officer' as 'officer'|'rating', stcw_requirement: '', display_order: 0 };
 const DEPT_LABELS = { deck: '갑판부', engine: '기관부', catering: '사무부' };
@@ -31,6 +34,11 @@ export default function RanksPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => {
     const init = async () => {
@@ -97,15 +105,30 @@ export default function RanksPage() {
     } catch { alert('삭제 중 오류가 발생했습니다.'); }
   };
 
-  const moveRank = async (rankId: string, dir: 'up'|'down') => {
-    const idx = ranks.findIndex(r => r.id === rankId);
-    if (idx === -1) return;
-    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= ranks.length) return;
-    const a = ranks[idx], b = ranks[targetIdx];
-    await supabase.from('ranks').update({ display_order: b.display_order }).eq('id', a.id);
-    await supabase.from('ranks').update({ display_order: a.display_order }).eq('id', b.id);
-    await loadData();
+  const handleDeptDragEnd = async (dept: keyof typeof DEPT_LABELS, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const deptRanks = ranks.filter(r => r.department === dept);
+    const oldIndex = deptRanks.findIndex(r => r.id === active.id);
+    const newIndex = deptRanks.findIndex(r => r.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const orderValues = deptRanks.map(r => r.display_order);
+    const reordered = arrayMove(deptRanks, oldIndex, newIndex);
+    const updates = reordered.map((r, i) => ({ id: r.id, display_order: orderValues[i] }));
+
+    setRanks(prev => prev.map(r => {
+      const u = updates.find(u => u.id === r.id);
+      return u ? { ...r, display_order: u.display_order } : r;
+    }));
+
+    try {
+      await Promise.all(updates.map(u => supabase.from('ranks').update({ display_order: u.display_order }).eq('id', u.id)));
+    } catch {
+      alert('순서 저장 중 오류가 발생했습니다.');
+      await loadData();
+    }
   };
 
   if (!currentUser || (loading && !isFormMode)) {
@@ -179,7 +202,7 @@ export default function RanksPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gray-50/50">
-                            <TableHead className="w-16 text-xs">순서</TableHead>
+                            <TableHead className="w-12 text-xs"></TableHead>
                             <TableHead className="text-xs">직급 코드</TableHead>
                             <TableHead className="text-xs">직급명</TableHead>
                             <TableHead className="text-xs">구분</TableHead>
@@ -188,27 +211,25 @@ export default function RanksPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {deptRanks.map((rank, i) => (
-                            <TableRow key={rank.id} className="hover:bg-gray-50/50 cursor-pointer" onClick={() => openNewTab(`/ranks?id=${rank.id}`, `${rank.name} 수정`)}>
-                              <TableCell className="py-2" onClick={e => e.stopPropagation()}>
-                                <div className="flex gap-0.5">
-                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveRank(rank.id, 'up')} disabled={i === 0}><ChevronUp className="h-3.5 w-3.5" /></Button>
-                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => moveRank(rank.id, 'down')} disabled={i === deptRanks.length - 1}><ChevronDown className="h-3.5 w-3.5" /></Button>
-                                </div>
-                              </TableCell>
-                              <TableCell className="font-bold text-sm py-2">{rank.rank_code}</TableCell>
-                              <TableCell className="font-medium text-sm py-2">{rank.name}</TableCell>
-                              <TableCell className="text-sm py-2">
-                                <Badge variant={rank.rank_category === 'officer' ? 'default' : 'secondary'} className="text-xs">{rank.rank_category === 'officer' ? '사관' : '부원'}</Badge>
-                              </TableCell>
-                              <TableCell className="text-sm py-2">{(rank as Record<string, string>).stcw_requirement}</TableCell>
-                              <TableCell className="text-right py-2" onClick={e => e.stopPropagation()}>
-                                <Button size="sm" variant="ghost" onClick={() => handleDelete(rank.id)} className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDeptDragEnd(dept, e)}>
+                            <SortableContext items={deptRanks.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                              {deptRanks.map((rank) => (
+                                <SortableTableRow key={rank.id} id={rank.id} className="hover:bg-gray-50/50" onClick={() => openNewTab(`/ranks?id=${rank.id}`, `${rank.name} 수정`)}>
+                                  <TableCell className="font-bold text-sm py-2">{rank.rank_code}</TableCell>
+                                  <TableCell className="font-medium text-sm py-2">{rank.name}</TableCell>
+                                  <TableCell className="text-sm py-2">
+                                    <Badge variant={rank.rank_category === 'officer' ? 'default' : 'secondary'} className="text-xs">{rank.rank_category === 'officer' ? '사관' : '부원'}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-sm py-2">{(rank as Record<string, string>).stcw_requirement}</TableCell>
+                                  <TableCell className="text-right py-2" onClick={e => e.stopPropagation()}>
+                                    <Button size="sm" variant="ghost" onClick={() => handleDelete(rank.id)} className="h-6 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  </TableCell>
+                                </SortableTableRow>
+                              ))}
+                            </SortableContext>
+                          </DndContext>
                         </TableBody>
                       </Table>
                     </div>

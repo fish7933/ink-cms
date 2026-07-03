@@ -40,7 +40,7 @@ export default function ShipTypeManagementPage() {
   useEffect(() => {
     const loadUser = async () => {
       const user = await getCurrentUser();
-      if (!user || !['ship_owner', 'ship_manager'].includes(user.role)) {
+      if (!user || !['ship_owner', 'ship_manager', 'admin', 'system_admin'].includes(user.role)) {
         navigate('/dashboard');
         return;
       }

@@ -1,9 +1,10 @@
 export type DispatchType = 'promotion' | 'demotion';
 export type DispatchStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'executed';
-export type RankGrade = 'A' | 'B' | 'C' | 'D';
+// 등급은 급여 템플릿에서 직급별로 자유롭게 정의되므로 고정 유니언이 아닌 문자열로 확장.
+export type RankGrade = string;
 export type RegistrationSource = 'agency_recommended' | 'agency_direct' | 'company_direct';
 
-export const RANK_GRADE_LABELS: Record<RankGrade, string> = {
+export const RANK_GRADE_LABELS: Record<string, string> = {
   A: 'A급 (최고)',
   B: 'B급',
   C: 'C급',

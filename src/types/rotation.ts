@@ -36,6 +36,8 @@ export interface CrewRotationPlan {
   approval_request_id: string | null;
   executed_at: string | null;
   notes: string | null;
+  base_departure_date: string | null;
+  port_id: string | null;
 }
 
 export interface CrewRotationAssignment {
@@ -113,6 +115,8 @@ export interface RotationPlanFormData {
   rotation_date: string;
   status?: string;
   notes: string | null;
+  base_departure_date: string | null;
+  port_id: string | null;
   assignments: CrewRotationAssignmentInput[];
 }
 

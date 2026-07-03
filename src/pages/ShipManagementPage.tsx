@@ -13,6 +13,7 @@ import ShipTable from '@/components/ship/ShipTable';
 import ShipDialog from '@/components/ship/ShipDialog';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getEffectiveTemplateMapForShips, type SalaryTemplate } from '@/lib/salary-store';
 
 export default function ShipManagementPage() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function ShipManagementPage() {
   const [ships, setShips] = useState<Ship[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
+  const [shipTemplateMap, setShipTemplateMap] = useState<Record<string, SalaryTemplate | null>>({});
   const [loading, setLoading] = useState(true);
 
   const permissions = usePermissions('ships');
@@ -77,7 +79,7 @@ export default function ShipManagementPage() {
       try {
         const user = await getCurrentUser();
         
-        if (!user || !['ship_owner', 'ship_manager'].includes(user.role)) {
+        if (!user || !['ship_owner', 'ship_manager', 'admin', 'system_admin'].includes(user.role)) {
           navigate('/dashboard');
           return;
         }
@@ -106,10 +108,11 @@ export default function ShipManagementPage() {
         getCompanies(),
         getFleets(),
       ]);
-      
+
       setShips(shipsData);
       setCompanies(companiesData);
       setFleets(fleetsData);
+      getEffectiveTemplateMapForShips(shipsData).then(setShipTemplateMap);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -456,6 +459,7 @@ export default function ShipManagementPage() {
                   isEditing={!!editingShip}
                   companies={companies}
                   shipId={editingShip || undefined}
+                  salaryTemplate={editingShip ? shipTemplateMap[editingShip] ?? null : null}
                   onClose={() => { setFormView(null); resetForm(); }}
                 />
               ) : (
@@ -596,6 +600,7 @@ export default function ShipManagementPage() {
                 ships={paginatedShips}
                 companies={companies}
                 fleets={fleets}
+                shipTemplateMap={shipTemplateMap}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 canEdit={permissions.canEdit}

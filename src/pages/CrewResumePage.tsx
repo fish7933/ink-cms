@@ -141,6 +141,10 @@ export default function CrewResumePage() {
           .then(({ data: r }) => { if (r) setRankName(`${r.rank_code} / ${r.name}`); });
       }
       setLoading(false);
+    }).catch((e) => {
+      console.error(e);
+      setError('선원 정보를 불러올 수 없습니다.');
+      setLoading(false);
     });
   }, [id]);
 

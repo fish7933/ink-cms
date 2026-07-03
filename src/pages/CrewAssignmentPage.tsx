@@ -66,7 +66,7 @@ export default function CrewAssignmentPage() {
   useEffect(() => {
     const loadUser = async () => {
       const user = await getCurrentUser();
-      if (!user || !['ship_owner', 'ship_manager', 'manning_agency'].includes(user.role)) {
+      if (!user || !['ship_owner', 'ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(user.role)) {
         navigate('/dashboard');
         return;
       }

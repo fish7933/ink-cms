@@ -13,6 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useTabContext } from '@/contexts/TabContext';
 import { getCurrentUser } from '@/services/auth.service';
+import { SortableTableRow } from '@/components/ui/sortable-table-row';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 const EMPTY_FORM = {
   country_code: '', country_name_en: '', country_name_ko: '',
@@ -36,10 +39,15 @@ export default function NationalityManagementPage() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
-      if (!user || user.role !== 'ship_manager') { navigate('/dashboard'); return; }
+      if (!user || !['ship_manager', 'admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       await loadData();
     };
     init();
@@ -88,13 +96,38 @@ export default function NationalityManagementPage() {
     catch { alert('삭제 중 오류가 발생했습니다.'); }
   };
 
+  const handleGroupDragEnd = async (groupItems: Nationality[], event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = groupItems.findIndex(n => n.id === active.id);
+    const newIndex = groupItems.findIndex(n => n.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const orderValues = groupItems.map(n => n.display_order);
+    const reordered = arrayMove(groupItems, oldIndex, newIndex);
+    const updates = reordered.map((n, i) => ({ id: n.id, display_order: orderValues[i] }));
+
+    setNationalities(prev => prev.map(n => {
+      const u = updates.find(u => u.id === n.id);
+      return u ? { ...n, display_order: u.display_order } : n;
+    }));
+
+    try {
+      await Promise.all(updates.map(u => updateNationality(u.id, { display_order: u.display_order })));
+    } catch {
+      alert('순서 저장 중 오류가 발생했습니다.');
+      await loadData();
+    }
+  };
+
   const renderTable = (items: Nationality[], emptyMsg: string) => (
     items.length === 0 ? <div className="text-center py-6 text-sm text-gray-500">{emptyMsg}</div> : (
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs w-16">순서</TableHead>
+              <TableHead className="text-xs w-12"></TableHead>
               <TableHead className="text-xs w-20">코드</TableHead>
               <TableHead className="text-xs">영문명</TableHead>
               <TableHead className="text-xs">한글명</TableHead>
@@ -104,23 +137,26 @@ export default function NationalityManagementPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map(n => (
-              <TableRow key={n.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openNewTab(`/nationalities?id=${n.id}`, `${n.country_name_ko} 수정`)}>
-                <TableCell className="text-sm">{n.display_order}</TableCell>
-                <TableCell className="text-sm font-mono font-semibold">{n.country_code}</TableCell>
-                <TableCell className="text-sm">{n.country_name_en}</TableCell>
-                <TableCell className="text-sm font-medium">{n.country_name_ko}</TableCell>
-                <TableCell className="text-sm">{REGION_LABELS[n.region || ''] || n.region}</TableCell>
-                <TableCell>
-                  {n.is_active ? <Badge variant="secondary" className="text-xs">활성</Badge> : <Badge variant="outline" className="text-xs">비활성</Badge>}
-                </TableCell>
-                <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                  <Button size="sm" variant="ghost" onClick={() => handleDelete(n.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleGroupDragEnd(items, e)}>
+              <SortableContext items={items.map(n => n.id)} strategy={verticalListSortingStrategy}>
+                {items.map(n => (
+                  <SortableTableRow key={n.id} id={n.id} onClick={() => openNewTab(`/nationalities?id=${n.id}`, `${n.country_name_ko} 수정`)}>
+                    <TableCell className="text-sm font-mono font-semibold">{n.country_code}</TableCell>
+                    <TableCell className="text-sm">{n.country_name_en}</TableCell>
+                    <TableCell className="text-sm font-medium">{n.country_name_ko}</TableCell>
+                    <TableCell className="text-sm">{REGION_LABELS[n.region || ''] || n.region}</TableCell>
+                    <TableCell>
+                      {n.is_active ? <Badge variant="secondary" className="text-xs">활성</Badge> : <Badge variant="outline" className="text-xs">비활성</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(n.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </TableCell>
+                  </SortableTableRow>
+                ))}
+              </SortableContext>
+            </DndContext>
           </TableBody>
         </Table>
       </div>
@@ -187,10 +223,6 @@ export default function NationalityManagementPage() {
                   <Label className="text-xs">한글명 *</Label>
                   <Input value={formData.country_name_ko} onChange={e => setFormData({ ...formData, country_name_ko: e.target.value })} placeholder="예: 대한민국" className="h-9 text-sm" />
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">표시 순서</Label>
-                <Input type="number" value={formData.display_order} onChange={e => setFormData({ ...formData, display_order: parseInt(e.target.value) || 999 })} min={1} className="h-9 text-sm w-32" />
               </div>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">

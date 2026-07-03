@@ -2,16 +2,19 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Eye, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { Ship, Company, Fleet } from '@/types/models';
 import { useEffect, useState } from 'react';
 import { getShipClassification } from '@/services/ship-classification.service';
 import type { ShipSizeClassification } from '@/types/ship-classification';
+import type { SalaryTemplate } from '@/lib/salary-store';
+import SalaryTemplateViewDialog from '@/components/salary/SalaryTemplateViewDialog';
 
 interface ShipTableProps {
   ships: Ship[];
   companies: Company[];
   fleets?: Fleet[];
+  shipTemplateMap?: Record<string, SalaryTemplate | null>;
   onEdit: (ship: Ship) => void;
   onDelete: (id: string) => void;
   canEdit?: boolean;
@@ -20,11 +23,12 @@ interface ShipTableProps {
   onSelectionChange?: (selectedIds: string[]) => void;
 }
 
-export default function ShipTable({ 
-  ships, 
+export default function ShipTable({
+  ships,
   companies,
   fleets = [],
-  onEdit, 
+  shipTemplateMap = {},
+  onEdit,
   onDelete,
   canEdit = true,
   canDelete = true,
@@ -32,6 +36,7 @@ export default function ShipTable({
   onSelectionChange
 }: ShipTableProps) {
   const [classifications, setClassifications] = useState<Record<string, ShipSizeClassification | null>>({});
+  const [viewingTemplateId, setViewingTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadClassifications = async () => {
@@ -66,7 +71,7 @@ export default function ShipTable({
     return fleets.find(f => f.id === fleetId)?.name || '-';
   };
 
-  const showActions = canEdit || canDelete;
+  const showActions = canDelete;
   const showCheckboxes = canDelete && onSelectionChange;
 
   const handleSelectAll = (checked: boolean) => {
@@ -106,12 +111,13 @@ export default function ShipTable({
               <TableHead className="text-xs">건조년도</TableHead>
               <TableHead className="text-xs">GT</TableHead>
               <TableHead className="text-xs">DWT</TableHead>
+              <TableHead className="text-xs">급여 템플릿</TableHead>
               {showActions && <TableHead className="text-right text-xs">작업</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow>
-              <TableCell colSpan={showCheckboxes ? 11 : 10} className="text-center py-8 text-sm text-gray-500">
+              <TableCell colSpan={showCheckboxes ? 12 : 11} className="text-center py-8 text-sm text-gray-500">
                 등록된 선박이 없습니다
               </TableCell>
             </TableRow>
@@ -145,6 +151,7 @@ export default function ShipTable({
             <TableHead className="text-xs">건조년도</TableHead>
             <TableHead className="text-xs">GT</TableHead>
             <TableHead className="text-xs">DWT</TableHead>
+            <TableHead className="text-xs">급여 템플릿</TableHead>
             {showActions && <TableHead className="text-right text-xs w-32">작업</TableHead>}
           </TableRow>
         </TableHeader>
@@ -154,9 +161,13 @@ export default function ShipTable({
             const isSelected = selectedShips.includes(ship.id);
             
             return (
-              <TableRow key={ship.id}>
+              <TableRow
+                key={ship.id}
+                className={canEdit ? 'cursor-pointer hover:bg-muted/50' : undefined}
+                onClick={canEdit ? () => onEdit(ship) : undefined}
+              >
                 {showCheckboxes && (
-                  <TableCell>
+                  <TableCell onClick={e => e.stopPropagation()}>
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={(checked) => handleSelectShip(ship.id, checked as boolean)}
@@ -204,31 +215,25 @@ export default function ShipTable({
                 <TableCell className="text-sm">
                   {ship.dwt ? ship.dwt.toLocaleString() : '-'}
                 </TableCell>
-                {showActions && (
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {canEdit && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onEdit(ship)}
-                          className="h-7 px-2 gap-1"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span className="text-xs">상세</span>
-                        </Button>
-                      )}
-                      {canDelete && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onDelete(ship.id)}
-                          className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                    </div>
+                <TableCell className="text-sm" onClick={e => e.stopPropagation()}>
+                  {shipTemplateMap[ship.id] ? (
+                    <button type="button" onClick={() => setViewingTemplateId(shipTemplateMap[ship.id]!.id)}>
+                      <Badge variant="secondary" className="text-xs cursor-pointer bg-green-100 text-green-700 hover:bg-green-200">배정됨</Badge>
+                    </button>
+                  ) : (
+                    <Badge variant="outline" className="text-xs text-gray-400">미배정</Badge>
+                  )}
+                </TableCell>
+                {canDelete && (
+                  <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onDelete(ship.id)}
+                      className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </TableCell>
                 )}
               </TableRow>
@@ -236,6 +241,11 @@ export default function ShipTable({
           })}
         </TableBody>
       </Table>
+      <SalaryTemplateViewDialog
+        open={viewingTemplateId !== null}
+        onOpenChange={open => { if (!open) setViewingTemplateId(null); }}
+        templateId={viewingTemplateId}
+      />
     </div>
   );
 }

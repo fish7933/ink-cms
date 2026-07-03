@@ -19,6 +19,9 @@ import {
   deleteSalaryComponent,
   type SalaryComponent,
 } from '@/lib/salary-store';
+import { SortableTableRow } from '@/components/ui/sortable-table-row';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 type TabType = 'earning' | 'deduction';
 
@@ -50,11 +53,16 @@ export default function SalaryComponentsPage() {
 
   const permissions = usePermissions('salary_components');
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
   useEffect(() => {
     const loadUser = async () => {
       const user = await getCurrentUser();
       if (!user) { navigate('/login'); return; }
-      if (user.role !== 'ship_manager' && user.role !== 'ship_owner') { navigate('/dashboard'); return; }
+      if (!['ship_manager', 'ship_owner', 'admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       loadComponents();
     };
     loadUser();
@@ -129,6 +137,31 @@ export default function SalaryComponentsPage() {
     else alert('삭제에 실패했습니다.');
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = tabComponents.findIndex(c => c.id === active.id);
+    const newIndex = tabComponents.findIndex(c => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const orderValues = tabComponents.map(c => c.display_order);
+    const reordered = arrayMove(tabComponents, oldIndex, newIndex);
+    const updates = reordered.map((c, i) => ({ id: c.id, display_order: orderValues[i] }));
+
+    setComponents(prev => prev.map(c => {
+      const u = updates.find(u => u.id === c.id);
+      return u ? { ...c, display_order: u.display_order } : c;
+    }));
+
+    try {
+      await Promise.all(updates.map(u => updateSalaryComponent(u.id, { display_order: u.display_order })));
+    } catch {
+      alert('순서 저장 중 오류가 발생했습니다.');
+      await loadComponents();
+    }
+  };
+
   if (loading) {
     return (
       <ProtectedRoute resource="salary_components">
@@ -193,26 +226,14 @@ export default function SalaryComponentsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">항목명 *</Label>
-                  <Input
-                    value={formData.name}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    placeholder={activeTab === 'earning' ? '예: 기본급, 시간외 수당' : '예: 본선불, 노조비'}
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">표시 순서</Label>
-                  <Input
-                    type="number"
-                    value={formData.display_order}
-                    onChange={e => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
-                    className="h-8 text-sm w-24"
-                    min="1"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">항목명 *</Label>
+                <Input
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  placeholder={activeTab === 'earning' ? '예: 기본급, 시간외 수당' : '예: 본선불, 노조비'}
+                  className="h-8 text-sm"
+                />
               </div>
               {activeTab === 'earning' && (
                 <div className="space-y-1.5">
@@ -281,7 +302,7 @@ export default function SalaryComponentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12 text-xs">순서</TableHead>
+                    <TableHead className="w-12 text-xs"></TableHead>
                     <TableHead className="text-xs">항목명</TableHead>
                     {activeTab === 'earning' && (
                       <TableHead className="text-xs w-28">지급 방식</TableHead>
@@ -293,38 +314,37 @@ export default function SalaryComponentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tabComponents.map(component => (
-                    <TableRow
-                      key={component.id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => openForm(component)}
-                    >
-                      <TableCell className="text-xs text-gray-500">{component.display_order}</TableCell>
-                      <TableCell className="font-medium text-sm">{component.name}</TableCell>
-                      {activeTab === 'earning' && (
-                        <TableCell>
-                          <span className={`text-xs px-2 py-0.5 rounded border ${PAYMENT_TYPE_COLOR[component.payment_type]}`}>
-                            {PAYMENT_TYPE_LABEL[component.payment_type]}
-                          </span>
-                        </TableCell>
-                      )}
-                      <TableCell className="text-gray-500 text-xs">{component.description || '-'}</TableCell>
-                      {(permissions.canEdit || permissions.canDelete) && (
-                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                          {permissions.canDelete && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(component.id)}
-                              className="h-6 w-6 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={tabComponents.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                      {tabComponents.map(component => (
+                        <SortableTableRow key={component.id} id={component.id} onClick={() => openForm(component)}>
+                          <TableCell className="font-medium text-sm">{component.name}</TableCell>
+                          {activeTab === 'earning' && (
+                            <TableCell>
+                              <span className={`text-xs px-2 py-0.5 rounded border ${PAYMENT_TYPE_COLOR[component.payment_type]}`}>
+                                {PAYMENT_TYPE_LABEL[component.payment_type]}
+                              </span>
+                            </TableCell>
                           )}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
+                          <TableCell className="text-gray-500 text-xs">{component.description || '-'}</TableCell>
+                          {(permissions.canEdit || permissions.canDelete) && (
+                            <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                              {permissions.canDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(component.id)}
+                                  className="h-6 w-6 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          )}
+                        </SortableTableRow>
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </TableBody>
               </Table>
             )}

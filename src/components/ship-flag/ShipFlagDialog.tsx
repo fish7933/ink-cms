@@ -10,7 +10,7 @@ interface ShipFlagDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   flag: ShipFlag | null;
-  onSave: (data: Omit<ShipFlag, 'id' | 'created_at' | 'updated_at'>) => void;
+  onSave: (data: Omit<ShipFlag, 'id' | 'created_at' | 'updated_at' | 'display_order'>) => void;
 }
 
 export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: ShipFlagDialogProps) {
@@ -19,7 +19,6 @@ export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: Shi
     name_ko: '',
     name_en: '',
     is_active: true,
-    display_order: 0,
   });
 
   useEffect(() => {
@@ -29,7 +28,6 @@ export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: Shi
         name_ko: flag.name_ko,
         name_en: flag.name_en,
         is_active: flag.is_active,
-        display_order: flag.display_order,
       });
     } else {
       setFormData({
@@ -37,7 +35,6 @@ export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: Shi
         name_ko: '',
         name_en: '',
         is_active: true,
-        display_order: 0,
       });
     }
   }, [flag, open]);
@@ -91,19 +88,6 @@ export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: Shi
               required
               className="h-9 text-sm"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="display_order" className="text-xs">표시 순서</Label>
-            <Input
-              id="display_order"
-              type="number"
-              value={formData.display_order}
-              onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
-              placeholder="0"
-              className="h-9 text-sm"
-            />
-            <p className="text-xs text-gray-500">숫자가 작을수록 먼저 표시됩니다</p>
           </div>
 
           <div className="flex items-center justify-between p-3 border rounded-md">

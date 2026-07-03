@@ -45,6 +45,7 @@ export const MENU_STRUCTURE: MenuStructure[] = [
       { id: 'ranks', name: '직급 관리', resource: 'ranks' },
       { id: 'nationalities', name: '선원 국적 관리', resource: 'nationalities' },
       { id: 'certificate-types', name: '증서 유형 관리', resource: 'certificate_types' },
+      { id: 'ports', name: '교대지 관리', resource: 'ports' },
     ],
   },
   {

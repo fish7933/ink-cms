@@ -1,36 +1,39 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser } from '@/lib/store';
 import {
   getSalaryTemplates,
-  getSalaryTemplateWithItems,
   deleteSalaryTemplate,
-  getSalaryComponents,
+  renewSalaryTemplate,
   type SalaryTemplate,
-  type SalaryTemplateWithItems,
-  type SalaryComponent,
 } from '@/lib/salary-store';
 import { useTabContext } from '@/contexts/TabContext';
 
 export default function SalaryTemplatesPage() {
   const navigate = useNavigate();
   const { openNewTab } = useTabContext();
+  const { toast } = useToast();
   const [templates, setTemplates] = useState<SalaryTemplate[]>([]);
-  const [components, setComponents] = useState<SalaryComponent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedData, setExpandedData] = useState<SalaryTemplateWithItems | null>(null);
+
+  const [renewTarget, setRenewTarget] = useState<SalaryTemplate | null>(null);
+  const [renewDate, setRenewDate] = useState('');
+  const [renewing, setRenewing] = useState(false);
 
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
       if (!user) { navigate('/login'); return; }
-      if (!['ship_manager', 'ship_owner'].includes(user.role || '')) { navigate('/dashboard'); return; }
+      if (!['ship_manager', 'ship_owner', 'admin', 'system_admin'].includes(user.role || '')) { navigate('/dashboard'); return; }
       await loadData();
     };
     init();
@@ -38,23 +41,49 @@ export default function SalaryTemplatesPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [tmpl, comp] = await Promise.all([getSalaryTemplates(), getSalaryComponents()]);
-    setTemplates(tmpl);
-    setComponents(comp);
-    setLoading(false);
+    try {
+      setTemplates(await getSalaryTemplates());
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleExpand = async (id: string) => {
-    if (expandedId === id) { setExpandedId(null); setExpandedData(null); return; }
-    const full = await getSalaryTemplateWithItems(id);
-    setExpandedId(id);
-    setExpandedData(full);
-  };
+  const openView = (t: SalaryTemplate) => openNewTab(`/salary/templates/${t.id}`, `급여 템플릿 상세: ${t.name}`);
+
+  useEffect(() => {
+    window.addEventListener('salary-template-data-changed', loadData);
+    return () => window.removeEventListener('salary-template-data-changed', loadData);
+  }, []);
 
   const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;
     await deleteSalaryTemplate(id);
     await loadData();
+  };
+
+  const openRenew = (t: SalaryTemplate) => {
+    setRenewTarget(t);
+    setRenewDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const handleRenew = async () => {
+    if (!renewTarget || !renewDate) return;
+    setRenewing(true);
+    try {
+      const newTemplate = await renewSalaryTemplate(renewTarget.id, renewDate);
+      if (!newTemplate) {
+        toast({ title: '갱신 실패', description: '적용 시작일은 기존 유효기간 이후여야 합니다.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: '갱신 완료', description: '새 버전이 생성되었습니다. 인상분 금액을 수정해주세요.' });
+      window.dispatchEvent(new CustomEvent('salary-template-data-changed'));
+      setRenewTarget(null);
+      openNewTab(`/salary/templates/${newTemplate.id}/edit`, `템플릿 수정: ${newTemplate.name}`);
+    } finally {
+      setRenewing(false);
+    }
   };
 
   if (loading) {
@@ -87,131 +116,56 @@ export default function SalaryTemplatesPage() {
                     <TableHead className="text-xs">템플릿명</TableHead>
                     <TableHead className="text-xs">통화</TableHead>
                     <TableHead className="text-xs">설명</TableHead>
+                    <TableHead className="text-xs">유효기간</TableHead>
                     <TableHead className="text-xs">상태</TableHead>
                     <TableHead className="text-right text-xs">작업</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {templates.map(t => (
-                    <>
-                      <TableRow key={t.id} className="hover:bg-muted/50">
-                        <TableCell className="font-medium text-sm">
-                          <button
-                            className="flex items-center gap-1 hover:text-blue-600"
-                            onClick={() => toggleExpand(t.id)}
+                    <TableRow key={t.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openView(t)}>
+                      <TableCell className="font-medium text-sm">{t.name}</TableCell>
+                      <TableCell className="text-sm">{t.currency}</TableCell>
+                      <TableCell className="text-gray-600 text-sm">{t.description || '-'}</TableCell>
+                      <TableCell className="text-xs">{t.effective_from} ~ 현재</TableCell>
+                      <TableCell>
+                        <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">
+                          {t.is_active ? '활성' : '비활성'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost" size="sm"
+                            className="gap-1 h-7 px-2"
+                            onClick={() => openView(t)}
                           >
-                            {expandedId === t.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                            {t.name}
-                          </button>
-                        </TableCell>
-                        <TableCell className="text-sm">{t.currency}</TableCell>
-                        <TableCell className="text-gray-600 text-sm">{t.description || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">
-                            {t.is_active ? '활성' : '비활성'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost" size="sm"
-                              className="gap-1 h-7 px-2"
-                              onClick={() => openNewTab(`/salary/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`)}
-                            >
-                              <Edit2 className="h-3.5 w-3.5" /><span className="text-xs">수정</span>
-                            </Button>
-                            <Button
-                              variant="ghost" size="sm"
-                              className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleDelete(t.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-
-                      {/* 상세 보기 */}
-                      {expandedId === t.id && expandedData && (
-                        <TableRow key={`${t.id}-exp`}>
-                          <TableCell colSpan={5} className="bg-gray-50 p-4">
-                            <div className="text-xs font-medium mb-3 text-gray-600">직급별 급여 현황</div>
-                            {expandedData.ranks.length === 0 ? (
-                              <p className="text-xs text-gray-400">등록된 직급 없음</p>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <table className="text-xs border rounded w-full bg-white">
-                                  <thead>
-                                    <tr className="bg-gray-100">
-                                      <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100">직급</th>
-                                      {components
-                                        .filter(c => expandedData.items.some(i => i.component_id === c.id))
-                                        .map(comp => {
-                                          const isDeduction = comp.component_type === 'deduction';
-                                          return (
-                                            <th key={comp.id} className={`text-right p-2 border-r font-semibold min-w-24 ${isDeduction ? 'text-red-600' : ''}`}>
-                                              {comp.name}
-                                              {isDeduction && <span className="block text-[10px] font-normal text-red-400">공제</span>}
-                                            </th>
-                                          );
-                                        })}
-                                      <th className="text-right p-2 font-semibold min-w-20 border-l-2 border-l-gray-300">
-                                        <div className="text-[10px] font-bold text-gray-500">TW</div>
-                                        <div>월 총액</div>
-                                      </th>
-                                      <th className="text-right p-2 font-semibold min-w-20 text-blue-700 bg-blue-50">
-                                        <div className="text-[10px] font-bold text-blue-500">AW</div>
-                                        <div>월 실지급액</div>
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {expandedData.ranks.map(r => {
-                                      // display_order 유지: components 배열 순서로 필터링
-                                      const orderedComps = components.filter(c =>
-                                        expandedData.items.some(i => i.component_id === c.id)
-                                      );
-                                      const earningTotal = orderedComps.reduce((s, comp) => {
-                                        if ((comp.component_type ?? 'earning') !== 'earning') return s;
-                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === comp.id)?.amount || 0);
-                                      }, 0);
-                                      const deferred = orderedComps.reduce((s, comp) => {
-                                        if ((comp.component_type ?? 'earning') !== 'earning' || comp.payment_type !== 'deferred') return s;
-                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === comp.id)?.amount || 0);
-                                      }, 0);
-                                      const deduction = orderedComps.reduce((s, comp) => {
-                                        if (comp.component_type !== 'deduction') return s;
-                                        return s + (expandedData.items.find(i => i.rank === r && i.component_id === comp.id)?.amount || 0);
-                                      }, 0);
-                                      return (
-                                        <tr key={r} className="border-t">
-                                          <td className="p-2 border-r font-medium text-gray-700 bg-gray-50 sticky left-0">{r}</td>
-                                          {orderedComps.map(comp => {
-                                            const item = expandedData.items.find(i => i.rank === r && i.component_id === comp.id);
-                                            const isDeduction = comp.component_type === 'deduction';
-                                            return (
-                                              <td key={comp.id} className={`p-2 border-r text-right ${isDeduction ? 'text-red-600 bg-red-50/20' : ''}`}>
-                                                {item ? item.amount.toLocaleString() : '-'}
-                                              </td>
-                                            );
-                                          })}
-                                          <td className="p-2 text-right font-semibold border-l-2 border-l-gray-300 bg-gray-50">
-                                            {earningTotal.toLocaleString()}
-                                          </td>
-                                          <td className="p-2 text-right font-bold text-blue-700 bg-blue-50">
-                                            {(earningTotal - deferred - deduction).toLocaleString()}
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </>
+                            <Eye className="h-3.5 w-3.5" /><span className="text-xs">보기</span>
+                          </Button>
+                          <Button
+                            variant="ghost" size="sm"
+                            className="gap-1 h-7 px-2"
+                            onClick={() => openNewTab(`/salary/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`)}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" /><span className="text-xs">수정</span>
+                          </Button>
+                          <Button
+                            variant="ghost" size="sm"
+                            className="gap-1 h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={() => openRenew(t)}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" /><span className="text-xs">갱신</span>
+                          </Button>
+                          <Button
+                            variant="ghost" size="sm"
+                            className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleDelete(t.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ))}
                 </TableBody>
               </Table>
@@ -219,6 +173,30 @@ export default function SalaryTemplatesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 갱신 다이얼로그 */}
+      <Dialog open={renewTarget !== null} onOpenChange={open => { if (!open) setRenewTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">템플릿 갱신 — {renewTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-gray-500">
+              새 유효기간 버전을 생성합니다. 기존 금액이 그대로 복사되며, 이 템플릿을 사용 중인 선박/플릿/선주 배정은 자동으로 새 버전으로 이전됩니다.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-sm">적용 시작일</Label>
+              <Input type="date" value={renewDate} onChange={e => setRenewDate(e.target.value)} className="h-9 text-sm" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRenewTarget(null)}>취소</Button>
+            <Button size="sm" onClick={handleRenew} disabled={renewing || !renewDate}>
+              {renewing ? '갱신 중...' : '갱신'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

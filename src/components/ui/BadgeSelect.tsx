@@ -79,11 +79,11 @@ export default function BadgeSelect({
     : (items ?? []).map(i => i.value);
 
   const toggle = (value: string) => {
-    onChange(
-      selected.includes(value)
-        ? selected.filter(v => v !== value)
-        : [...selected, value],
-    );
+    const next = selected.includes(value)
+      ? selected.filter(v => v !== value)
+      : [...selected, value];
+    // 선택 순서(클릭 순서)가 아니라 원래 목록 순서를 항상 유지
+    onChange(allValues.filter(v => next.includes(v)));
   };
 
   const selectAll = () => onChange(allValues);

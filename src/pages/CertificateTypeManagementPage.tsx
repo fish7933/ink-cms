@@ -15,6 +15,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useTabContext } from '@/contexts/TabContext';
+import { SortableTableRow } from '@/components/ui/sortable-table-row';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 type Category = 'stcw'|'national'|'medical'|'safety'|'technical'|'other';
 
@@ -36,10 +39,15 @@ export default function CertificateTypeManagementPage() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
-      if (!user || user.role !== 'ship_manager') { navigate('/dashboard'); return; }
+      if (!user || !['ship_manager', 'admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       await loadData();
     };
     init();
@@ -82,6 +90,32 @@ export default function CertificateTypeManagementPage() {
     if (!confirm('삭제하시겠습니까?')) return;
     try { await deleteCertificateType(id); await loadData(); }
     catch { alert('삭제 중 오류가 발생했습니다.'); }
+  };
+
+  const handleCategoryDragEnd = async (category: Category, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const items = types.filter(t => t.category === category);
+    const oldIndex = items.findIndex(t => t.id === active.id);
+    const newIndex = items.findIndex(t => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const orderValues = items.map(t => t.display_order);
+    const reordered = arrayMove(items, oldIndex, newIndex);
+    const updates = reordered.map((t, i) => ({ id: t.id, display_order: orderValues[i] }));
+
+    setTypes(prev => prev.map(t => {
+      const u = updates.find(u => u.id === t.id);
+      return u ? { ...t, display_order: u.display_order } : t;
+    }));
+
+    try {
+      await Promise.all(updates.map(u => updateCertificateType(u.id, { display_order: u.display_order })));
+    } catch {
+      alert('순서 저장 중 오류가 발생했습니다.');
+      await loadData();
+    }
   };
 
   if (loading && !isFormMode) {
@@ -144,15 +178,9 @@ export default function CertificateTypeManagementPage() {
                 <Label className="text-xs">설명</Label>
                 <Textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="text-sm min-h-[60px]" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">유효기간 (개월, 비워두면 무기한)</Label>
-                  <Input type="number" value={formData.validity_period_months || ''} onChange={e => setFormData({ ...formData, validity_period_months: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="예: 60" min={1} className="h-9 text-sm" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">표시 순서</Label>
-                  <Input type="number" value={formData.display_order} onChange={e => setFormData({ ...formData, display_order: parseInt(e.target.value) || 999 })} min={1} className="h-9 text-sm" />
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">유효기간 (개월, 비워두면 무기한)</Label>
+                <Input type="number" value={formData.validity_period_months || ''} onChange={e => setFormData({ ...formData, validity_period_months: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="예: 60" min={1} className="h-9 text-sm max-w-[200px]" />
               </div>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_mandatory} onCheckedChange={c => setFormData({ ...formData, is_mandatory: c === true })} /><span className="text-xs">필수 증서</span></label>
@@ -173,7 +201,7 @@ export default function CertificateTypeManagementPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead className="text-xs w-16">순서</TableHead>
+                              <TableHead className="text-xs w-12"></TableHead>
                               <TableHead className="text-xs w-32">코드</TableHead>
                               <TableHead className="text-xs">영문명</TableHead>
                               <TableHead className="text-xs">한글명</TableHead>
@@ -184,20 +212,23 @@ export default function CertificateTypeManagementPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {items.map(t => (
-                              <TableRow key={t.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openNewTab(`/certificate-types?id=${t.id}`, `${t.type_name_ko} 수정`)}>
-                                <TableCell className="text-sm">{t.display_order}</TableCell>
-                                <TableCell className="text-sm font-mono">{t.type_code}</TableCell>
-                                <TableCell className="text-sm">{t.type_name_en}</TableCell>
-                                <TableCell className="text-sm font-medium">{t.type_name_ko}</TableCell>
-                                <TableCell className="text-sm">{t.validity_period_months ? `${t.validity_period_months}개월` : '무기한'}</TableCell>
-                                <TableCell>{t.is_mandatory ? <Badge variant="destructive" className="text-xs">필수</Badge> : <Badge variant="outline" className="text-xs">선택</Badge>}</TableCell>
-                                <TableCell>{t.is_active ? <Badge variant="secondary" className="text-xs">활성</Badge> : <Badge variant="outline" className="text-xs">비활성</Badge>}</TableCell>
-                                <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                                  <Button size="sm" variant="ghost" onClick={() => handleDelete(t.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="w-3 h-3" /></Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleCategoryDragEnd(cat, e)}>
+                              <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                                {items.map(t => (
+                                  <SortableTableRow key={t.id} id={t.id} onClick={() => openNewTab(`/certificate-types?id=${t.id}`, `${t.type_name_ko} 수정`)}>
+                                    <TableCell className="text-sm font-mono">{t.type_code}</TableCell>
+                                    <TableCell className="text-sm">{t.type_name_en}</TableCell>
+                                    <TableCell className="text-sm font-medium">{t.type_name_ko}</TableCell>
+                                    <TableCell className="text-sm">{t.validity_period_months ? `${t.validity_period_months}개월` : '무기한'}</TableCell>
+                                    <TableCell>{t.is_mandatory ? <Badge variant="destructive" className="text-xs">필수</Badge> : <Badge variant="outline" className="text-xs">선택</Badge>}</TableCell>
+                                    <TableCell>{t.is_active ? <Badge variant="secondary" className="text-xs">활성</Badge> : <Badge variant="outline" className="text-xs">비활성</Badge>}</TableCell>
+                                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                                      <Button size="sm" variant="ghost" onClick={() => handleDelete(t.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="w-3 h-3" /></Button>
+                                    </TableCell>
+                                  </SortableTableRow>
+                                ))}
+                              </SortableContext>
+                            </DndContext>
                           </TableBody>
                         </Table>
                       </div>

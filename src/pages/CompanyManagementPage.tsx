@@ -81,14 +81,20 @@ export default function CompanyManagementPage() {
 
   async function load() {
     setLoading(true);
-    const [{ data: cd, error }, natData] = await Promise.all([
-      supabase.from('companies').select('id,name,type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
-      getNationalities(),
-    ]);
-    if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
-    else { setCompanies((cd || []) as Company[]); }
-    setNationalities(natData);
-    setLoading(false);
+    try {
+      const [{ data: cd, error }, natData] = await Promise.all([
+        supabase.from('companies').select('id,name,type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
+        getNationalities(),
+      ]);
+      if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
+      else { setCompanies((cd || []) as Company[]); }
+      setNationalities(natData);
+    } catch (e) {
+      console.error(e);
+      toast({ title: '불러오기 실패', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSave() {
