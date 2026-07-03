@@ -494,6 +494,91 @@ export async function getSalaryTemplateHistory(templateId: string): Promise<Sala
   })) as SalaryTemplate[];
 }
 
+// 갱신 히스토리 중 종료된(과거) 버전 삭제. 삭제 후 앞뒤 버전의 유효기간이 빈 틈 없이 이어붙도록 자동 조정.
+export async function deleteSalaryTemplateHistoryVersion(versionId: string): Promise<boolean> {
+  const { data: version, error: versionError } = await supabase
+    .from('salary_templates')
+    .select('id, effective_from, effective_until, root_template_id')
+    .eq('id', versionId)
+    .single();
+
+  if (versionError || !version) {
+    console.error('Error fetching template version to delete:', versionError);
+    return false;
+  }
+  if (!version.effective_until) {
+    console.error('Error deleting salary template version: cannot delete the current active version', versionId);
+    return false;
+  }
+
+  const root = version.root_template_id ? String(version.root_template_id) : versionId;
+
+  const { data: lineage, error: lineageError } = await supabase
+    .from('salary_templates')
+    .select('id, effective_from, root_template_id')
+    .or(`id.eq.${root},root_template_id.eq.${root}`);
+
+  if (lineageError) {
+    console.error('Error fetching lineage before history deletion:', lineageError);
+    return false;
+  }
+
+  const others = (lineage || []).filter(v => String(v.id) !== versionId);
+  const predecessor = others
+    .filter(v => v.effective_from < version.effective_from)
+    .sort((a, b) => (a.effective_from > b.effective_from ? -1 : 1))[0];
+  const successor = others
+    .filter(v => v.effective_from > version.effective_from)
+    .sort((a, b) => (a.effective_from < b.effective_from ? -1 : 1))[0];
+
+  if (predecessor) {
+    // 직전 버전의 종료일을 직후 버전의 시작일 하루 전으로 이어붙임 (직후 버전이 없으면 현재 버전이라는 뜻이므로 열어둠)
+    let newUntil: string | null = null;
+    if (successor) {
+      const d = new Date(successor.effective_from);
+      d.setDate(d.getDate() - 1);
+      newUntil = d.toISOString().slice(0, 10);
+    }
+    const { error } = await supabase.from('salary_templates').update({ effective_until: newUntil }).eq('id', predecessor.id);
+    if (error) {
+      console.error('Error extending predecessor version while deleting history:', error);
+      return false;
+    }
+  } else if (successor) {
+    // 삭제 대상이 계보의 원본(root)인 경우: 직후 버전이 새 원본이 되고, 시작일을 삭제되는 버전의 시작일까지 흡수
+    const { error: rootError } = await supabase
+      .from('salary_templates')
+      .update({ root_template_id: null, effective_from: version.effective_from })
+      .eq('id', successor.id);
+    if (rootError) {
+      console.error('Error promoting successor to new root while deleting history:', rootError);
+      return false;
+    }
+
+    const otherDescendantIds = others.filter(v => String(v.id) !== String(successor.id)).map(v => String(v.id));
+    if (otherDescendantIds.length > 0) {
+      const { error: repointError } = await supabase
+        .from('salary_templates')
+        .update({ root_template_id: successor.id })
+        .in('id', otherDescendantIds);
+      if (repointError) {
+        console.error('Error repointing lineage to new root while deleting history:', repointError);
+        return false;
+      }
+    }
+  }
+
+  await supabase.from('salary_template_items').delete().eq('template_id', versionId);
+  await supabase.from('salary_template_ranks').delete().eq('template_id', versionId);
+  const { error: deleteError } = await supabase.from('salary_templates').delete().eq('id', versionId);
+  if (deleteError) {
+    console.error('Error deleting salary template version:', deleteError);
+    return false;
+  }
+
+  return true;
+}
+
 // 급여 인상 등에 대응하기 위한 템플릿 갱신: 새 유효기간 버전을 생성하고, 기존 배정(선박/플릿/선주)을 자동으로 새 버전으로 이전
 export async function renewSalaryTemplate(templateId: string, newEffectiveFrom: string): Promise<SalaryTemplate | null> {
   const current = await getSalaryTemplateWithItems(templateId);

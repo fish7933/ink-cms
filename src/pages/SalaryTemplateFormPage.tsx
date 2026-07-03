@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Save, Plus, X, ChevronDown, ChevronRight, Ship as ShipIcon } from 'lucide-react';
+import { Save, Plus, X, ChevronDown, ChevronRight, Ship as ShipIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import {
   getSalaryComponents,
   getSalaryTemplateWithItems,
   getSalaryTemplateHistory,
+  deleteSalaryTemplateHistoryVersion,
   getEffectiveTemplateMapForShips,
   addSalaryTemplate,
   updateSalaryTemplate,
@@ -152,6 +153,25 @@ export default function SalaryTemplateFormPage() {
     if (!historyDetails[h.id]) {
       const full = await getSalaryTemplateWithItems(h.id);
       setHistoryDetails(prev => ({ ...prev, [h.id]: full }));
+    }
+  };
+
+  const handleDeleteHistory = async (h: SalaryTemplate) => {
+    if (!confirm(`${h.effective_from} ~ ${h.effective_until} 버전을 삭제하시겠습니까?\n앞뒤 버전의 유효기간이 자동으로 이어붙습니다.`)) return;
+    const ok = await deleteSalaryTemplateHistoryVersion(h.id);
+    if (!ok) {
+      toast({ title: '삭제 실패', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '삭제 완료' });
+    window.dispatchEvent(new CustomEvent('salary-template-data-changed'));
+    if (expandedHistoryId === h.id) setExpandedHistoryId(null);
+    setHistoryDetails(prev => { const next = { ...prev }; delete next[h.id]; return next; });
+    // 삭제된 버전의 앞뒤 이어붙이기로 현재 편집 중인 템플릿의 유효기간이 바뀌었을 수 있으니 함께 새로고침
+    if (id) {
+      const [tmpl, hist] = await Promise.all([getSalaryTemplateWithItems(id), getSalaryTemplateHistory(id)]);
+      if (tmpl) setEffectiveUntil(tmpl.effective_until ?? null);
+      setHistory(hist.filter(x => x.id !== id));
     }
   };
 
@@ -474,17 +494,23 @@ export default function SalaryTemplateFormPage() {
             ) : (
               history.map(h => (
                 <div key={h.id} className="border rounded-md">
-                  <button
-                    type="button"
-                    onClick={() => toggleHistory(h)}
-                    className="w-full flex items-center justify-between p-2.5 text-sm hover:bg-gray-50"
-                  >
-                    <span className="flex items-center gap-1.5">
+                  <div className="w-full flex items-center justify-between p-2.5 text-sm hover:bg-gray-50">
+                    <button type="button" onClick={() => toggleHistory(h)} className="flex items-center gap-1.5 flex-1 text-left">
                       {expandedHistoryId === h.id ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                       {h.effective_from} ~ {h.effective_until}
-                    </span>
-                    <Badge variant="secondary" className="text-xs">종료된 버전</Badge>
-                  </button>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">종료된 버전</Badge>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteHistory(h)}
+                        className="text-gray-400 hover:text-red-600"
+                        title="이 버전 삭제"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                   {expandedHistoryId === h.id && (
                     <div className="p-2.5 pt-0">
                       {historyDetails[h.id] ? (
