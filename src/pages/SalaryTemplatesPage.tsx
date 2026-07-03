@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Eye, RefreshCw } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, RefreshCw, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -100,9 +100,17 @@ export default function SalaryTemplatesPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">급여 템플릿 관리</CardTitle>
-            <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/salary/templates/new', '급여 템플릿 추가')}>
-              <Plus className="h-4 w-4" />템플릿 추가
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm" variant="outline" className="gap-1.5 h-8"
+                onClick={() => openNewTab('/salary/assignments', '할당 현황')}
+              >
+                <ClipboardList className="h-4 w-4" />템플릿 할당
+              </Button>
+              <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/salary/templates/new', '급여 템플릿 추가')}>
+                <Plus className="h-4 w-4" />템플릿 추가
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">

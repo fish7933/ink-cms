@@ -45,11 +45,18 @@ export default function SalaryTemplateDetailPage() {
   const [renewDate, setRenewDate] = useState('');
   const [renewing, setRenewing] = useState(false);
 
-  const loadData = async (templateId: string) => {
+  const loadData = async (templateId: string, isInitial = false) => {
     setLoading(true);
     try {
+      // 다른 탭에서 이 템플릿을 갱신했다면 URL의 id는 이미 종료된 과거 버전일 수 있음 —
+      // 항상 같은 계보의 실제 현재(활성) 버전을 찾아 표시 대상으로 삼는다 (탭 열어둔 채로 갱신 시
+      // "종료된 버전"과 "갱신된 버전"이 뒤바뀌어 보이던 문제 방지).
+      const hist = await getSalaryTemplateHistory(templateId);
+      const currentInLineage = hist.find(h => h.effective_until === null);
+      const resolvedId = currentInLineage ? currentInLineage.id : templateId;
+
       const [full, comp, rnk, ships] = await Promise.all([
-        getSalaryTemplateWithItems(templateId),
+        getSalaryTemplateWithItems(resolvedId),
         getSalaryComponents(),
         getRanks(),
         getShips(),
@@ -57,16 +64,17 @@ export default function SalaryTemplateDetailPage() {
       setData(full);
       setComponents(comp);
       setRanks(rnk);
-      if (activeTabId && full) updateTab(activeTabId, { title: `급여 템플릿 상세: ${full.name}` });
+      // 탭 제목 갱신은 최초 로드시에만 — 다른 탭이 활성화된 상태에서 이 이벤트가 발생하면
+      // activeTabId가 이 페이지의 탭이 아닐 수 있어, 매번 갱신하면 엉뚱한(현재 활성) 탭의 제목이 바뀌어버림.
+      if (isInitial && activeTabId && full) updateTab(activeTabId, { title: `급여 템플릿 상세: ${full.name}` });
 
       const templateMap = await getEffectiveTemplateMapForShips(ships);
       setAssignedShips(
-        ships.filter(s => templateMap[s.id]?.id === templateId).map(s => s.name)
+        ships.filter(s => templateMap[s.id]?.id === resolvedId).map(s => s.name)
       );
 
-      // 이 템플릿(어느 버전이든)의 과거 버전들만 (현재 버전 제외)
-      const hist = await getSalaryTemplateHistory(templateId);
-      setHistory(hist.filter(h => h.id !== templateId));
+      // 현재 버전을 제외한 과거 버전만 히스토리로 표시
+      setHistory(hist.filter(h => h.id !== resolvedId));
     } catch (e) {
       console.error(e);
       toast({ title: '불러오기 실패', variant: 'destructive' });
@@ -76,7 +84,7 @@ export default function SalaryTemplateDetailPage() {
   };
 
   useEffect(() => {
-    if (id) loadData(id);
+    if (id) loadData(id, true);
   }, [id]);
 
   useEffect(() => {
@@ -111,10 +119,10 @@ export default function SalaryTemplateDetailPage() {
   };
 
   const handleRenew = async () => {
-    if (!id || !renewDate) return;
+    if (!data || !renewDate) return;
     setRenewing(true);
     try {
-      const newTemplate = await renewSalaryTemplate(id, renewDate);
+      const newTemplate = await renewSalaryTemplate(data.id, renewDate);
       if (!newTemplate) {
         toast({ title: '갱신 실패', description: '적용 시작일은 기존 유효기간 이후여야 합니다.', variant: 'destructive' });
         return;
