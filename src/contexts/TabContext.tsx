@@ -186,5 +186,6 @@ function getTitleFromPath(path: string): string {
   if (basePath.match(/^\/salary\/templates\/[^/]+\/edit$/)) return '급여 템플릿 수정';
   if (basePath.match(/^\/salary\/templates\/[^/]+$/)) return '급여 템플릿 상세';
   if (basePath.match(/^\/crew\/[^/]+$/)) return '선원 정보';
+  if (basePath.match(/^\/crew-rotation\/(?!new$)[^/]+$/)) return '교대계획 상세';
   return basePath;
 }
