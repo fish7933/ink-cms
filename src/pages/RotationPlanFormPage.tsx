@@ -211,7 +211,8 @@ export default function RotationPlanFormPage() {
   const usedDisembarkIds = rows.map(r => r.disembarkCrewId).filter(Boolean) as string[];
 
   const boardingCandidates = availableCrew.filter(c => !usedBoardingIds.includes(c.id));
-  const disembarkCandidates = onboardCrew.filter(c => !usedDisembarkIds.includes(c.id));
+  // 하선 후보는 반드시 이 교대 계획의 해당 선박에 승선 중인 선원만 (다른 선박 승선자는 대상 아님)
+  const disembarkCandidates = onboardCrew.filter(c => !usedDisembarkIds.includes(c.id) && c.current_ship_id === shipId);
 
   // 급여 템플릿에서 특정 직급(이름)에 정의된 등급 목록
   const gradesForRank = (rankName: string): string[] => {
@@ -219,6 +220,11 @@ export default function RotationPlanFormPage() {
     return Array.from(new Set(
       effectiveTemplate.items.filter(i => i.rank === rankName && i.rank_grade).map(i => i.rank_grade as string)
     ));
+  };
+  // 직급 id 기준으로 등급 목록 조회 (행에는 rankId만 저장되어 있으므로)
+  const gradesForRankId = (rankId: string): string[] => {
+    const rank = ranks.find(r => r.id === rankId);
+    return rank ? gradesForRank(rank.name) : [];
   };
 
   // 선원 선택 시 직급/등급/계약개월 자동입력값 계산
@@ -274,7 +280,7 @@ export default function RotationPlanFormPage() {
     if (rowPicker.side === 'boarding') {
       return availableCrew.filter(c => c.id === row?.boardingCrewId || !usedBoardingIds.includes(c.id));
     }
-    return onboardCrew.filter(c => c.id === row?.disembarkCrewId || !usedDisembarkIds.includes(c.id));
+    return onboardCrew.filter(c => c.id === row?.disembarkCrewId || (c.current_ship_id === shipId && !usedDisembarkIds.includes(c.id)));
   };
 
   const handleRowPickerConfirm = (ids: string[]) => {
@@ -530,8 +536,21 @@ export default function RotationPlanFormPage() {
                         {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code || r.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
-                      placeholder="Grade" className="h-7 text-xs w-14 shrink-0" />
+                    {(() => {
+                      const opts = gradesForRankId(row.boardingRankId);
+                      return opts.length > 0 ? (
+                        <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })}>
+                          <SelectTrigger className="h-7 text-xs w-14 shrink-0 px-1"><SelectValue placeholder="Grade" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="_none">-</SelectItem>
+                            {opts.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
+                          placeholder="Grade" className="h-7 text-xs w-14 shrink-0" />
+                      );
+                    })()}
                   </div>
                   <div className="grid grid-cols-2 gap-1">
                     <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-xs" title="출국일" />
@@ -561,8 +580,21 @@ export default function RotationPlanFormPage() {
                         {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code || r.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Input value={row.disembarkGrade || ''} onChange={e => updateRow(row.id, { disembarkGrade: e.target.value || null })}
-                      placeholder="Grade" className="h-7 text-xs w-14 shrink-0" />
+                    {(() => {
+                      const opts = gradesForRankId(row.disembarkRankId);
+                      return opts.length > 0 ? (
+                        <Select value={row.disembarkGrade || '_none'} onValueChange={v => updateRow(row.id, { disembarkGrade: v === '_none' ? null : v })}>
+                          <SelectTrigger className="h-7 text-xs w-14 shrink-0 px-1"><SelectValue placeholder="Grade" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="_none">-</SelectItem>
+                            {opts.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input value={row.disembarkGrade || ''} onChange={e => updateRow(row.id, { disembarkGrade: e.target.value || null })}
+                          placeholder="Grade" className="h-7 text-xs w-14 shrink-0" />
+                      );
+                    })()}
                   </div>
                   <div className="grid grid-cols-2 gap-1">
                     <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-xs" title="하선일" />
