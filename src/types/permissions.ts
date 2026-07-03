@@ -82,7 +82,6 @@ export const MENU_STRUCTURE: MenuStructure[] = [
     name: '급여 관리',
     children: [
       { id: 'salary-templates', name: '급여 템플릿', resource: 'salary_templates' },
-      { id: 'salary-assignments', name: '할당 현황', resource: 'salary_assignments' },
       { id: 'salary-components', name: '급여 구성항목', resource: 'salary_components' },
       { id: 'allotment-management', name: '송금 관리', resource: 'allotment_management' },
     ],

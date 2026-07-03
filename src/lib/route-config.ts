@@ -28,7 +28,6 @@ const SalaryComponentsPage = lazy(() => import('@/pages/SalaryComponentsPage'));
 const SalaryTemplatesPage = lazy(() => import('@/pages/SalaryTemplatesPage'));
 const SalaryTemplateFormPage = lazy(() => import('@/pages/SalaryTemplateFormPage'));
 const SalaryTemplateDetailPage = lazy(() => import('@/pages/SalaryTemplateDetailPage'));
-const TemplateAssignmentsPage = lazy(() => import('@/pages/TemplateAssignmentsPage'));
 const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
 const PortManagementPage = lazy(() => import('@/pages/PortManagementPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
@@ -83,7 +82,6 @@ export const routeConfig: RouteEntry[] = [
   { path: '/salary/templates/:id/edit', component: SalaryTemplateFormPage },
   { path: '/salary/templates/:id', component: SalaryTemplateDetailPage },
   { path: '/salary/templates', component: SalaryTemplatesPage },
-  { path: '/salary/assignments', component: TemplateAssignmentsPage },
   { path: '/shore-positions', component: ShorePositionsPage },
   { path: '/ports', component: PortManagementPage },
   { path: '/profile', component: ProfilePage },

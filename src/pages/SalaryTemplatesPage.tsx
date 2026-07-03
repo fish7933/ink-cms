@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser } from '@/lib/store';
 import {
@@ -17,6 +18,7 @@ import {
   type SalaryTemplate,
 } from '@/lib/salary-store';
 import { useTabContext } from '@/contexts/TabContext';
+import TemplateAssignmentsSection from '@/components/salary/TemplateAssignmentsSection';
 
 export default function SalaryTemplatesPage() {
   const navigate = useNavigate();
@@ -28,6 +30,9 @@ export default function SalaryTemplatesPage() {
   const [renewTarget, setRenewTarget] = useState<SalaryTemplate | null>(null);
   const [renewDate, setRenewDate] = useState('');
   const [renewing, setRenewing] = useState(false);
+
+  const [activeTab, setActiveTab] = useState('templates');
+  const [prefillAssignId, setPrefillAssignId] = useState<string | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -51,6 +56,11 @@ export default function SalaryTemplatesPage() {
   };
 
   const openView = (t: SalaryTemplate) => openNewTab(`/salary/templates/${t.id}`, `급여 템플릿 상세: ${t.name}`);
+
+  const openAssign = (t: SalaryTemplate) => {
+    setPrefillAssignId(t.id);
+    setActiveTab('assignments');
+  };
 
   useEffect(() => {
     window.addEventListener('salary-template-data-changed', loadData);
@@ -96,91 +106,106 @@ export default function SalaryTemplatesPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">급여 템플릿 관리</CardTitle>
-            <div className="flex gap-2">
-              <Button
-                size="sm" variant="outline" className="gap-1.5 h-8"
-                onClick={() => openNewTab('/salary/assignments', '할당 현황')}
-              >
-                <ClipboardList className="h-4 w-4" />템플릿 할당
-              </Button>
-              <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/salary/templates/new', '급여 템플릿 추가')}>
-                <Plus className="h-4 w-4" />템플릿 추가
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {templates.length === 0 ? (
-            <div className="text-center py-6 text-sm text-gray-500">등록된 급여 템플릿이 없습니다.</div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">템플릿명</TableHead>
-                    <TableHead className="text-xs">통화</TableHead>
-                    <TableHead className="text-xs">설명</TableHead>
-                    <TableHead className="text-xs">유효기간</TableHead>
-                    <TableHead className="text-xs">상태</TableHead>
-                    <TableHead className="text-right text-xs">작업</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {templates.map(t => (
-                    <TableRow key={t.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openView(t)}>
-                      <TableCell className="font-medium text-sm">{t.name}</TableCell>
-                      <TableCell className="text-sm">{t.currency}</TableCell>
-                      <TableCell className="text-gray-600 text-sm">{t.description || '-'}</TableCell>
-                      <TableCell className="text-xs">{t.effective_from} ~ 현재</TableCell>
-                      <TableCell>
-                        <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">
-                          {t.is_active ? '활성' : '비활성'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost" size="sm"
-                            className="gap-1 h-7 px-2"
-                            onClick={() => openView(t)}
-                          >
-                            <Eye className="h-3.5 w-3.5" /><span className="text-xs">보기</span>
-                          </Button>
-                          <Button
-                            variant="ghost" size="sm"
-                            className="gap-1 h-7 px-2"
-                            onClick={() => openNewTab(`/salary/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`)}
-                          >
-                            <Edit2 className="h-3.5 w-3.5" /><span className="text-xs">수정</span>
-                          </Button>
-                          <Button
-                            variant="ghost" size="sm"
-                            className="gap-1 h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            onClick={() => openRenew(t)}
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" /><span className="text-xs">갱신</span>
-                          </Button>
-                          <Button
-                            variant="ghost" size="sm"
-                            className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleDelete(t.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 h-9 mb-3 max-w-md">
+          <TabsTrigger value="templates" className="text-xs">템플릿 목록</TabsTrigger>
+          <TabsTrigger value="assignments" className="text-xs">템플릿 할당</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="templates">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">급여 템플릿 관리</CardTitle>
+                <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/salary/templates/new', '급여 템플릿 추가')}>
+                  <Plus className="h-4 w-4" />템플릿 추가
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {templates.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-500">등록된 급여 템플릿이 없습니다.</div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">템플릿명</TableHead>
+                        <TableHead className="text-xs">통화</TableHead>
+                        <TableHead className="text-xs">설명</TableHead>
+                        <TableHead className="text-xs">유효기간</TableHead>
+                        <TableHead className="text-xs">상태</TableHead>
+                        <TableHead className="text-right text-xs">작업</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {templates.map(t => (
+                        <TableRow key={t.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openView(t)}>
+                          <TableCell className="font-medium text-sm">{t.name}</TableCell>
+                          <TableCell className="text-sm">{t.currency}</TableCell>
+                          <TableCell className="text-gray-600 text-sm">{t.description || '-'}</TableCell>
+                          <TableCell className="text-xs">{t.effective_from} ~ 현재</TableCell>
+                          <TableCell>
+                            <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">
+                              {t.is_active ? '활성' : '비활성'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost" size="sm"
+                                className="gap-1 h-7 px-2"
+                                onClick={() => openView(t)}
+                              >
+                                <Eye className="h-3.5 w-3.5" /><span className="text-xs">보기</span>
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="gap-1 h-7 px-2"
+                                onClick={() => openNewTab(`/salary/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`)}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" /><span className="text-xs">수정</span>
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="gap-1 h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={() => openRenew(t)}
+                              >
+                                <RefreshCw className="h-3.5 w-3.5" /><span className="text-xs">갱신</span>
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="gap-1 h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                onClick={() => openAssign(t)}
+                              >
+                                <ClipboardList className="h-3.5 w-3.5" /><span className="text-xs">할당</span>
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleDelete(t.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="assignments">
+          <TemplateAssignmentsSection
+            prefillTemplateId={prefillAssignId}
+            onPrefillConsumed={() => setPrefillAssignId(null)}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* 갱신 다이얼로그 */}
       <Dialog open={renewTarget !== null} onOpenChange={open => { if (!open) setRenewTarget(null); }}>
