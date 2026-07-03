@@ -15,6 +15,7 @@ import {
   getShipSalaryAssignments,
   getFleetSalaryAssignments,
   getOwnerSalaryAssignments,
+  getEffectiveTemplateMapForShips,
   assignTemplateToShip,
   assignTemplateToFleet,
   assignTemplateToOwner,
@@ -30,15 +31,12 @@ import {
 interface OwnerAssignmentRow extends OwnerSalaryAssignment {
   owner_name: string;
   template_name: string;
-  fleet_count: number;
-  ship_count: number;
 }
 
 interface FleetAssignmentRow extends FleetSalaryAssignment {
   fleet_name: string;
   owner_name: string;
   template_name: string;
-  ship_count: number;
 }
 
 interface ShipAssignmentRow extends ShipSalaryAssignment {
@@ -65,6 +63,8 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
   const [ownerAssignments, setOwnerAssignments] = useState<OwnerAssignmentRow[]>([]);
   const [fleetAssignments, setFleetAssignments] = useState<FleetAssignmentRow[]>([]);
   const [shipAssignments, setShipAssignments] = useState<ShipAssignmentRow[]>([]);
+  // 우선순위(선박 > 플릿 > 선주)를 반영해 실제로 이 템플릿이 적용되는 선박들 (템플릿 id -> 선박 목록)
+  const [effectiveShipsByTemplate, setEffectiveShipsByTemplate] = useState<Record<string, Ship[]>>({});
   const [loading, setLoading] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('all');
 
@@ -114,21 +114,10 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
       const shipMap = new Map<string, Ship>(shipsData.map(s => [String(s.id), s]));
       const templateMap = new Map<string, string>(templatesData.map(t => [String(t.id), t.name]));
 
-      const fleetsPerOwner = new Map<string, number>();
-      const shipsPerOwner = new Map<string, number>();
-      const shipsPerFleet = new Map<string, number>();
-      for (const f of fleetsData) { const o = String(f.owner_id); fleetsPerOwner.set(o, (fleetsPerOwner.get(o)||0)+1); }
-      for (const s of shipsData) {
-        const o = String(s.owner_id); shipsPerOwner.set(o, (shipsPerOwner.get(o)||0)+1);
-        if (s.fleet_id) { const f = String(s.fleet_id); shipsPerFleet.set(f, (shipsPerFleet.get(f)||0)+1); }
-      }
-
       setOwnerAssignments(ownerAssignmentsData.map((a: OwnerSalaryAssignment) => ({
         ...a,
         owner_name: ownerMap.get(String(a.owner_id)) || String(a.owner_id),
         template_name: templateMap.get(String(a.template_id)) || String(a.template_id),
-        fleet_count: fleetsPerOwner.get(String(a.owner_id)) || 0,
-        ship_count: shipsPerOwner.get(String(a.owner_id)) || 0,
       })));
 
       setFleetAssignments(fleetAssignmentsData.map((a: FleetSalaryAssignment) => {
@@ -139,7 +128,6 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
           fleet_name: fleet?.name || String(a.fleet_id),
           owner_name: ownerId ? ownerMap.get(ownerId) || '-' : '-',
           template_name: templateMap.get(String(a.template_id)) || String(a.template_id),
-          ship_count: shipsPerFleet.get(String(a.fleet_id)) || 0,
         };
       }));
 
@@ -155,6 +143,18 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
           template_name: templateMap.get(String(a.template_id)) || String(a.template_id),
         };
       }));
+
+      // 선박 > 플릿 > 선주 우선순위를 반영한, 각 템플릿이 실제로 최종 적용되는 선박 목록
+      const effectiveMap = await getEffectiveTemplateMapForShips(shipsData);
+      const byTemplate: Record<string, Ship[]> = {};
+      for (const ship of shipsData) {
+        const tmpl = effectiveMap[ship.id];
+        if (!tmpl) continue;
+        const key = String(tmpl.id);
+        if (!byTemplate[key]) byTemplate[key] = [];
+        byTemplate[key].push(ship);
+      }
+      setEffectiveShipsByTemplate(byTemplate);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -257,6 +257,24 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
       <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">해제</span>
     </Button>
   );
+
+  const ownerEffectiveShips = (a: OwnerAssignmentRow) =>
+    (effectiveShipsByTemplate[String(a.template_id)] || []).filter(s => String(s.owner_id) === String(a.owner_id));
+  const fleetEffectiveShips = (a: FleetAssignmentRow) =>
+    (effectiveShipsByTemplate[String(a.template_id)] || []).filter(s => String(s.fleet_id) === String(a.fleet_id));
+
+  // 특정 범위(선주/플릿 전체)에서 이 템플릿으로 최종 귀결되는 선박만 뽑아 뱃지로 표시 (다른 곳에 더 구체적으로 할당돼 제외된 선박은 자동으로 빠짐)
+  const renderShipBadges = (shipList: Ship[], max = 5) => {
+    if (shipList.length === 0) return <span className="text-xs text-gray-400">해당 선박 없음</span>;
+    const shown = shipList.slice(0, max);
+    const rest = shipList.length - shown.length;
+    return (
+      <div className="flex flex-wrap gap-1 max-w-xs">
+        {shown.map(s => <Badge key={s.id} variant="outline" className="text-[10px] px-1.5 py-0">{s.name}</Badge>)}
+        {rest > 0 && <span className="text-[10px] text-gray-400">외 {rest}척</span>}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -436,7 +454,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                                   <TableRow key={`o-${a.id}`}>
                                     <TableCell className="font-medium text-sm">{a.owner_name}</TableCell>
                                     <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                    <TableCell className="text-xs text-gray-600">{a.fleet_count}개 플릿 · {a.ship_count}척</TableCell>
+                                    <TableCell>{renderShipBadges(ownerEffectiveShips(a))}</TableCell>
                                     <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
                                     <TableCell>{unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}</TableCell>
                                   </TableRow>
@@ -459,7 +477,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                                     <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
                                     <TableCell className="font-medium text-sm">{a.fleet_name}</TableCell>
                                     <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                    <TableCell className="text-xs text-gray-600">{a.ship_count}척</TableCell>
+                                    <TableCell>{renderShipBadges(fleetEffectiveShips(a))}</TableCell>
                                     <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
                                     <TableCell>{unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}</TableCell>
                                   </TableRow>
@@ -508,7 +526,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                             <TableRow key={`o2-${a.id}`}>
                               <TableCell className="font-medium text-sm">{a.owner_name}</TableCell>
                               <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                              <TableCell className="text-xs text-gray-600">{a.fleet_count}개 플릿 · {a.ship_count}척</TableCell>
+                              <TableCell>{renderShipBadges(ownerEffectiveShips(a))}</TableCell>
                               <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
                               <TableCell>{unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}</TableCell>
                             </TableRow>
@@ -532,7 +550,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                               <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
                               <TableCell className="font-medium text-sm">{a.fleet_name}</TableCell>
                               <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                              <TableCell className="text-xs text-gray-600">{a.ship_count}척</TableCell>
+                              <TableCell>{renderShipBadges(fleetEffectiveShips(a))}</TableCell>
                               <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
                               <TableCell>{unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}</TableCell>
                             </TableRow>
@@ -592,6 +610,14 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                             <span className="text-xs text-gray-400">총 {tTotal}건 할당</span>
                           </div>
 
+                          {/* 최종 적용 선박: 우선순위(선박 > 플릿 > 선주)를 반영해 이 템플릿이 실제로 적용되는 선박 전체 */}
+                          <div className="px-4 py-3 bg-orange-50/40 border-b flex items-start gap-2">
+                            <span className="text-xs font-semibold text-gray-500 shrink-0 flex items-center gap-1 pt-0.5">
+                              <ShipIcon className="h-3.5 w-3.5" />최종 적용 선박 ({(effectiveShipsByTemplate[String(t.id)] || []).length})
+                            </span>
+                            {renderShipBadges(effectiveShipsByTemplate[String(t.id)] || [], 10)}
+                          </div>
+
                           {tTotal === 0 ? (
                             <div className="text-center py-4 text-xs text-gray-400">할당된 대상 없음</div>
                           ) : (
@@ -608,9 +634,9 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                                         <div className="flex items-center gap-2">
                                           <Building2 className="h-3.5 w-3.5 text-blue-500" />
                                           <span className="text-sm font-medium">{a.owner_name}</span>
-                                          <span className="text-xs text-gray-500">{a.fleet_count}개 플릿 · {a.ship_count}척</span>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                          {renderShipBadges(ownerEffectiveShips(a), 3)}
                                           <span className="text-xs text-gray-400">{formatDate(a.assigned_at)}</span>
                                           {unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}
                                         </div>
@@ -633,9 +659,9 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                                           <span className="text-xs text-gray-400">{a.owner_name}</span>
                                           <span className="text-gray-300">&#8250;</span>
                                           <span className="text-sm font-medium">{a.fleet_name}</span>
-                                          <span className="text-xs text-gray-500">{a.ship_count}척</span>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                          {renderShipBadges(fleetEffectiveShips(a), 3)}
                                           <span className="text-xs text-gray-400">{formatDate(a.assigned_at)}</span>
                                           {unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}
                                         </div>
