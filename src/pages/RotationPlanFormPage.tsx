@@ -317,7 +317,7 @@ export default function RotationPlanFormPage() {
     else { setManualCity(false); setCityName(value); }
   };
 
-  const handleSubmit = async (asDraft: boolean) => {
+  const handleSubmit = async () => {
     if (!ownerId) { toast({ title: '선주를 선택하세요', variant: 'destructive' }); return; }
     if (!shipId) { toast({ title: '선박을 선택하세요', variant: 'destructive' }); return; }
     const validRows = rows.filter(r => r.boardingCrewId || r.disembarkCrewId);
@@ -364,7 +364,7 @@ export default function RotationPlanFormPage() {
 
       if (!plan) throw new Error('저장에 실패했습니다');
 
-      toast({ title: asDraft ? '임시저장 완료' : '교대계획 저장 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
+      toast({ title: '작성 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
       if (activeTabId) closeTab(activeTabId);
     } catch (e) {
       toast({ title: '오류', description: String(e), variant: 'destructive' });
@@ -388,8 +388,7 @@ export default function RotationPlanFormPage() {
               <Ship className="w-4 h-4" />교대 계획 작성
             </CardTitle>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleSubmit(true)} disabled={submitting} className="h-8">임시저장</Button>
-              <Button size="sm" onClick={() => handleSubmit(false)} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">저장 →</Button>
+              <Button size="sm" onClick={() => handleSubmit()} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">작성 완료</Button>
             </div>
           </div>
         </CardHeader>
