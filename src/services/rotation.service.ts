@@ -324,46 +324,76 @@ export const rotationService = {
    * 승선자 → onboard, 하선자 → standby, 계획 → executed
    */
   async executeRotationPlan(planId: string): Promise<boolean> {
-    // 배정 목록 조회
-    const { data: assignments, error: fetchErr } = await supabase
-      .from('crew_rotation_assignments')
-      .select('on_crew_id, off_crew_id')
-      .eq('rotation_plan_id', planId);
+    // 계획 + 전체 배정 상세 조회
+    const [{ data: plan }, { data: assignments, error: fetchErr }] = await Promise.all([
+      supabase.from('crew_rotation_plans').select('*').eq('id', planId).single(),
+      supabase.from('crew_rotation_assignments').select('*').eq('rotation_plan_id', planId),
+    ]);
 
-    if (fetchErr) {
-      console.error('Error fetching assignments for execution:', fetchErr);
+    if (!plan || fetchErr) {
+      console.error('발령 실행 실패: 계획/배정 조회 오류', fetchErr);
       return false;
     }
 
-    const boardingIds = (assignments || [])
-      .map(a => a.on_crew_id)
-      .filter((id): id is string => Boolean(id));
-    const disembarkIds = (assignments || [])
-      .map(a => a.off_crew_id)
-      .filter((id): id is string => Boolean(id));
+    const now = new Date().toISOString();
 
-    // 승선자 → onboard
-    if (boardingIds.length > 0) {
-      const { error } = await supabase
-        .from('crew_members')
-        .update({ status: 'onboard', updated_at: new Date().toISOString() })
-        .in('id', boardingIds);
-      if (error) { console.error('Error updating boarding crew status:', error); return false; }
-    }
+    for (const a of (assignments || [])) {
+      // ── 하선자: 기존 승선 기록 완료 처리 + crew_members 초기화 ──
+      if (a.off_crew_id) {
+        await supabase
+          .from('crew_embarkation_records')
+          .update({
+            disembark_date: a.off_disembark_date || a.embark_date,
+            return_date: a.off_return_date || null,
+            status: 'completed',
+            updated_at: now,
+          })
+          .eq('crew_member_id', a.off_crew_id)
+          .eq('ship_id', plan.ship_id)
+          .eq('status', 'active');
 
-    // 하선자 → standby (대기)
-    if (disembarkIds.length > 0) {
-      const { error } = await supabase
-        .from('crew_members')
-        .update({ status: 'standby', updated_at: new Date().toISOString() })
-        .in('id', disembarkIds);
-      if (error) { console.error('Error updating disembarking crew status:', error); return false; }
+        await supabase
+          .from('crew_members')
+          .update({ status: 'standby', current_ship_id: null, current_grade: null, updated_at: now })
+          .eq('id', a.off_crew_id);
+      }
+
+      // ── 승선자: 새 승선 기록 생성 + crew_members 갱신 ──
+      if (a.on_crew_id) {
+        await supabase.from('crew_embarkation_records').insert({
+          crew_member_id: a.on_crew_id,
+          ship_id: plan.ship_id,
+          rank_id: a.on_rank_id,
+          rank_grade: a.on_rank_grade,
+          departure_date: a.on_departure_date || null,
+          embark_date: a.embark_date,
+          contract_months: a.contract_months,
+          salary_template_id: a.salary_template_id,
+          salary_amount: a.salary_amount,
+          salary_currency: a.salary_currency || 'USD',
+          status: 'active',
+          notes: a.notes,
+        });
+
+        await supabase
+          .from('crew_members')
+          .update({
+            status: 'onboard',
+            current_ship_id: plan.ship_id,
+            owner_id: plan.owner_id,
+            fleet_id: plan.fleet_id || null,
+            rank_id: a.on_rank_id || null,     // 발령 직급으로 갱신
+            current_grade: a.on_rank_grade || null,
+            updated_at: now,
+          })
+          .eq('id', a.on_crew_id);
+      }
     }
 
     // 계획 상태 → executed
     const { error: planErr } = await supabase
       .from('crew_rotation_plans')
-      .update({ status: 'executed', updated_at: new Date().toISOString() })
+      .update({ status: 'executed', executed_at: now, updated_at: now })
       .eq('id', planId);
 
     if (planErr) {
@@ -539,4 +569,93 @@ export const rotationService = {
 
     return records;
   },
+
+  /**
+   * 현재 승선 중인 선원의 계약만료 정보 조회
+   * crew_rotation_assignments 에서 executed 계획의 승선 기록을 토대로 만료일 계산
+   */
+  async getOnboardContractExpiry(): Promise<ContractExpiryInfo[]> {
+    // onboard 선원 목록
+    const { data: onboardCrew, error: crewErr } = await supabase
+      .from('crew_members')
+      .select('id, name, rank_id, current_ship_id, owner_id, fleet_id')
+      .eq('status', 'onboard');
+    if (crewErr || !onboardCrew || onboardCrew.length === 0) return [];
+
+    const crewIds = onboardCrew.map(c => c.id);
+
+    // executed 계획의 승선 배정 가져오기 (on_crew_id 기준)
+    const { data: assignments, error: aErr } = await supabase
+      .from('crew_rotation_assignments')
+      .select('on_crew_id, embark_date, contract_months, rotation_plan_id')
+      .in('on_crew_id', crewIds)
+      .not('embark_date', 'is', null)
+      .not('contract_months', 'is', null);
+    if (aErr || !assignments) return [];
+
+    // executed 계획 ID 필터
+    const planIds = [...new Set(assignments.map(a => a.rotation_plan_id))];
+    const { data: executedPlans } = await supabase
+      .from('crew_rotation_plans')
+      .select('id')
+      .in('id', planIds)
+      .eq('status', 'executed');
+    const executedIds = new Set((executedPlans || []).map(p => p.id));
+
+    // 선원별 최신 executed 배정 선택 (embark_date 내림차순)
+    const latestByCrewId = new Map<string, typeof assignments[number]>();
+    for (const a of assignments) {
+      if (!a.on_crew_id || !executedIds.has(a.rotation_plan_id)) continue;
+      const prev = latestByCrewId.get(a.on_crew_id);
+      if (!prev || a.embark_date > prev.embark_date) latestByCrewId.set(a.on_crew_id, a);
+    }
+
+    // 선박 정보
+    const shipIds = [...new Set(onboardCrew.map(c => c.current_ship_id).filter(Boolean))];
+    const { data: ships } = await supabase.from('ships').select('id, name').in('id', shipIds);
+    const shipMap = new Map((ships || []).map(s => [s.id, s.name]));
+
+    const today = new Date();
+    const results: ContractExpiryInfo[] = [];
+
+    for (const crew of onboardCrew) {
+      const asgn = latestByCrewId.get(crew.id);
+      if (!asgn || !asgn.embark_date || !asgn.contract_months) continue;
+
+      const [ey, em, ed] = asgn.embark_date.split('-').map(Number);
+      const expiry = new Date(ey, em - 1 + asgn.contract_months, ed);
+      const expiryStr = `${expiry.getFullYear()}-${String(expiry.getMonth()+1).padStart(2,'0')}-${String(expiry.getDate()).padStart(2,'0')}`;
+      const daysUntil = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+
+      results.push({
+        crew_id: crew.id,
+        crew_name: crew.name,
+        rank_id: crew.rank_id,
+        embark_date: asgn.embark_date,
+        contract_months: asgn.contract_months,
+        expiry_date: expiryStr,
+        days_until_expiry: daysUntil,
+        ship_id: crew.current_ship_id || '',
+        ship_name: shipMap.get(crew.current_ship_id || '') || '-',
+        owner_id: crew.owner_id || '',
+        fleet_id: crew.fleet_id || undefined,
+      });
+    }
+
+    return results.sort((a, b) => a.days_until_expiry - b.days_until_expiry);
+  },
 };
+
+export interface ContractExpiryInfo {
+  crew_id: string;
+  crew_name: string;
+  rank_id: string;
+  embark_date: string;
+  contract_months: number;
+  expiry_date: string;
+  days_until_expiry: number;
+  ship_id: string;
+  ship_name: string;
+  owner_id: string;
+  fleet_id?: string;
+}

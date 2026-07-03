@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { msg } from '@/lib/messages';
 import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
-  ArrowUpCircle, Ship, Users, UserCheck, UserMinus,
+  ArrowUpCircle, Ship, Users, UserCheck, UserMinus, LayoutList,
+  AlertTriangle, CheckCircle, XCircle,
 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
@@ -24,9 +24,10 @@ import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
 import { useToast } from '@/hooks/use-toast';
 
-type CategoryTab = 'registered' | 'standby' | 'onboard' | 'disembarked';
+type CategoryTab = 'all' | 'registered' | 'standby' | 'onboard' | 'disembarked';
 
 const CATEGORY_STATUS_MAP: Record<CategoryTab, string[]> = {
+  all:          [],
   registered:   ['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected'],
   standby:      ['deployment_decided', 'standby'],
   onboard:      ['onboard'],
@@ -46,7 +47,6 @@ const STATUS_BADGE: Record<string, { label: string; color: string }> = {
 
 export function CrewManagementPage() {
   const { toast } = useToast();
-  const navigate = useNavigate();
   const { openNewTab } = useTabContext();
 
   const [crew, setCrew] = useState<CrewWithDetails[]>([]);
@@ -105,12 +105,11 @@ export function CrewManagementPage() {
   };
 
   const filtered = useMemo(() => {
-    const statuses = CATEGORY_STATUS_MAP[category];
     let list = crew.filter(c => {
+      if (category === 'all') return true;
       const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
       if (category === 'disembarked') return st === 'standby';
-      if (category === 'standby') return statuses.includes(st);
-      return statuses.includes(st);
+      return CATEGORY_STATUS_MAP[category].includes(st);
     });
     if (searchTerm) {
       const t = searchTerm.toLowerCase();
@@ -132,11 +131,11 @@ export function CrewManagementPage() {
   }, [crew, category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality]);
 
   const countOf = (cat: CategoryTab) => {
-    const statuses = CATEGORY_STATUS_MAP[cat];
+    if (cat === 'all') return crew.length;
     return crew.filter(c => {
       const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
       if (cat === 'disembarked') return st === 'standby';
-      return statuses.includes(st);
+      return CATEGORY_STATUS_MAP[cat].includes(st);
     }).length;
   };
 
@@ -151,8 +150,33 @@ export function CrewManagementPage() {
 
   const openRotationPlan = (mode: 'boarding' | 'disembark') => {
     if (selectedIds.length === 0) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
-    const param = selectedIds.join(',');
-    openNewTab(`/crew-rotation/new?${mode}=${param}`, '교대계획 작성', true);
+
+    if (mode === 'disembark') {
+      // 선박별로 그룹화 — 선박이 다른 선원은 교대계획을 분리해야 함
+      const groups = new Map<string, { shipName: string; ids: string[] }>();
+      for (const id of selectedIds) {
+        const member = crew.find(c => c.id === id);
+        const key = member?.current_ship_id || '__none__';
+        if (!groups.has(key)) {
+          groups.set(key, { shipName: member?.current_ship_name || '미배정', ids: [] });
+        }
+        groups.get(key)!.ids.push(id);
+      }
+
+      if (groups.size > 1) {
+        // 선박별로 탭 분리 생성
+        for (const { ids } of groups.values()) {
+          openNewTab(`/crew-rotation/new?disembark=${ids.join(',')}`, '교대계획 작성', true);
+        }
+        toast({
+          title: `${groups.size}개 선박으로 분리됨`,
+          description: [...groups.values()].map(g => `${g.shipName} (${g.ids.length}명)`).join(', '),
+        });
+        return;
+      }
+    }
+
+    openNewTab(`/crew-rotation/new?${mode}=${selectedIds.join(',')}`, '교대계획 작성', true);
   };
 
   const openDispatchOrder = () => {
@@ -161,10 +185,32 @@ export function CrewManagementPage() {
   };
 
   const confirmDelete = async () => {
-    const { error } = await supabase.from('crew_members').delete().in('id', selectedIds);
-    if (error) { toast({ title: '삭제 실패', variant: 'destructive' }); return; }
-    toast({ title: '삭제 완료', description: `${selectedIds.length}명 삭제됨` });
-    setSelectedIds([]); setShowDeleteDialog(false); await loadData();
+    const ids = selectedIds;
+    try {
+      // 관련 테이블 먼저 삭제 (FK 제약 해제)
+      await supabase.from('crew_rotation_assignments').delete().in('on_crew_id', ids);
+      await supabase.from('crew_rotation_assignments').delete().in('off_crew_id', ids);
+      await supabase.from('crew_status_history').delete().in('crew_member_id', ids);
+      await supabase.from('crew_embarkation_records').delete().in('crew_member_id', ids);
+      await supabase.from('crew_certificates').delete().in('crew_id', ids);
+      await supabase.from('crew_appointments').delete().in('crew_id', ids);
+      await supabase.from('allotments').delete().in('crew_member_id', ids);
+      await supabase.from('contracts').delete().in('crew_member_id', ids);
+
+      const { error } = await supabase.from('crew_members').delete().in('id', ids);
+      if (error) {
+        console.error('선원 삭제 오류:', error);
+        toast({ title: '삭제 실패', description: error.message, variant: 'destructive' });
+        return;
+      }
+      toast({ title: '삭제 완료', description: `${ids.length}명 삭제됨` });
+      setSelectedIds([]);
+      setShowDeleteDialog(false);
+      await loadData();
+    } catch (err) {
+      console.error('삭제 중 예외:', err);
+      toast({ title: '삭제 실패', description: '예기치 않은 오류가 발생했습니다.', variant: 'destructive' });
+    }
   };
 
   const isFiltered = filterOwner !== 'all' || filterFleet !== 'all' || filterShip !== 'all' ||
@@ -198,7 +244,7 @@ export function CrewManagementPage() {
               <div className="flex gap-2">
                 {selectedIds.length > 0 && (
                   <>
-                    {category === 'standby' && (
+                    {(category === 'standby' || category === 'registered' || category === 'disembarked') && (
                       <Button onClick={() => openRotationPlan('boarding')} size="sm" className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700">
                         <Ship className="w-4 h-4" />교대계획(승선) ({selectedIds.length})
                       </Button>
@@ -253,7 +299,7 @@ export function CrewManagementPage() {
               </Select>
               <Select value={filterRank} onValueChange={setFilterRank}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="직급" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code ? `${r.rank_code} (${r.name})` : r.name}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={filterManning} onValueChange={setFilterManning}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="매닝사" /></SelectTrigger>
@@ -284,9 +330,13 @@ export function CrewManagementPage() {
               )}
             </div>
 
-            {/* 4단계 탭 */}
+            {/* 5단계 탭 */}
             <Tabs value={category} onValueChange={v => setCategory(v as CategoryTab)}>
               <TabsList className="h-9 gap-1">
+                <TabsTrigger value="all" className="text-xs h-8 gap-1.5">
+                  <LayoutList className="w-3.5 h-3.5" />전체
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('all')}</Badge>
+                </TabsTrigger>
                 <TabsTrigger value="registered" className="text-xs h-8 gap-1.5">
                   <Users className="w-3.5 h-3.5" />
                   {CREW_CATEGORY_LABELS.registered}
@@ -309,7 +359,7 @@ export function CrewManagementPage() {
                 </TabsTrigger>
               </TabsList>
 
-              {(['registered','standby','onboard','disembarked'] as CategoryTab[]).map(cat => (
+              {(['all','registered','standby','onboard','disembarked'] as CategoryTab[]).map(cat => (
                 <TabsContent key={cat} value={cat} className="mt-3">
                   {/* 카운트 + 페이지당 설정 */}
                   <div className="flex justify-between items-center mb-2">
@@ -329,32 +379,34 @@ export function CrewManagementPage() {
                   </div>
 
                   {/* 테이블 */}
-                  <div className="border rounded-md overflow-hidden">
-                    <table className="w-full text-sm">
+                  <div className="border rounded-md overflow-x-auto">
+                    <table className="w-full text-xs whitespace-nowrap">
                       <thead className="bg-gray-50 border-b">
                         <tr>
-                          <th className="w-8 px-3 py-2">
+                          <th className="w-8 px-2 py-2">
                             <Checkbox
                               checked={paginated.length > 0 && paginated.every(c => selectedIds.includes(c.id))}
                               onCheckedChange={checked => toggleAll(!!checked)}
                             />
                           </th>
-                          <th className="w-8 px-2 py-2 text-center text-xs font-medium text-gray-400">#</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">이름</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">직급</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">국적</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">
-                            {cat === 'onboard' ? '승선 선박' : cat === 'disembarked' ? '하선 선박' : cat === 'standby' ? '배정 선박' : '추천 선박'}
-                          </th>
-                          {cat === 'registered' && <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">등록출처</th>}
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">상태</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Grade</th>
-                          <th className="px-3 py-2"></th>
+                          <th className="w-8 px-2 py-2 text-center font-medium text-gray-400">#</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">선주사</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">플릿</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">선박</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">직급코드(등급)</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">이름</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">국적</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">생년월일(나이)</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">승선 예정일</th>
+                          <th className="px-2 py-2 text-center font-medium text-gray-600">급여표</th>
+                          <th className="px-2 py-2 text-center font-medium text-gray-600">증서</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">상태</th>
+                          <th className="px-2 py-2"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {paginated.length === 0 ? (
-                          <tr><td colSpan={cat === 'registered' ? 10 : 9} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                          <tr><td colSpan={14} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           const natEntry = nationalities.find(n => n.country_code === c.nationality);
@@ -363,38 +415,78 @@ export function CrewManagementPage() {
                           const badge = (cat === 'disembarked' && statusKey === 'standby')
                             ? { label: '휴가중', color: 'bg-sky-100 text-sky-700' }
                             : STATUS_BADGE[statusKey];
-                          const shipParts = [crewExt.owner_name, crewExt.fleet_name, crewExt.current_ship_name].filter(Boolean);
-                          const shipDisplay = (cat === 'registered' && crewExt.registration_source !== 'job_posting')
-                            ? '-'
-                            : shipParts.length > 0 ? shipParts.join(' › ') : '-';
                           return (
                             <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => toggleSelect(c.id)}>
-                              <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                              <td className="px-2 py-1.5" onClick={e => e.stopPropagation()}>
                                 <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
                               </td>
-                              <td className="px-2 py-2 text-center text-xs text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
-                              <td className="px-3 py-2 font-medium">{c.name}</td>
-                              <td className="px-3 py-2 text-gray-600">{c.rank_name || '-'}</td>
-                              <td className="px-3 py-2 text-gray-600">{nationalityDisplay}</td>
-                              <td className="px-3 py-2 text-xs text-gray-600 max-w-[200px] truncate" title={shipDisplay !== '-' ? shipDisplay : undefined}>{shipDisplay}</td>
-                              {cat === 'registered' && (
-                                <td className="px-3 py-2 text-xs text-gray-500">
-                                  {crewExt.registration_source ? REGISTRATION_SOURCE_LABELS[crewExt.registration_source as RegistrationSource] : '-'}
-                                </td>
-                              )}
-                              <td className="px-3 py-2">
+                              <td className="px-2 py-1.5 text-center text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.owner_name : (c.pending_owner_name || crewExt.owner_name)}>
+                                {c.is_active_onboard
+                                  ? <span className="text-gray-600">{crewExt.owner_name || '-'}</span>
+                                  : c.pending_owner_name
+                                    ? <span className="text-violet-600">{c.pending_owner_name}</span>
+                                    : <span className="text-gray-600">{crewExt.owner_name || '-'}</span>}
+                              </td>
+                              <td className="px-2 py-1.5 max-w-[80px] truncate" title={c.is_active_onboard ? crewExt.fleet_name : (c.pending_fleet_name || crewExt.fleet_name)}>
+                                {c.is_active_onboard
+                                  ? <span className="text-gray-500">{crewExt.fleet_name || '-'}</span>
+                                  : c.pending_fleet_name
+                                    ? <span className="text-violet-500">{c.pending_fleet_name}</span>
+                                    : <span className="text-gray-500">{crewExt.fleet_name || '-'}</span>}
+                              </td>
+                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.current_ship_name : (c.pending_ship_name || crewExt.current_ship_name)}>
+                                {c.is_active_onboard
+                                  ? <span className="font-medium">{crewExt.current_ship_name || '-'}</span>
+                                  : c.pending_ship_name
+                                    ? <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
+                                    : <span className="font-medium">{crewExt.current_ship_name || '-'}</span>}
+                              </td>
+                              <td className="px-2 py-1.5">
+                                {(() => {
+                                  const showCode = c.is_active_onboard ? c.rank_code : (c.pending_rank_code || c.rank_code);
+                                  const showGrade = c.is_active_onboard ? crewExt.current_grade : (c.pending_rank_grade || crewExt.current_grade);
+                                  const isPending = !c.is_active_onboard && (c.pending_rank_code || c.pending_rank_grade);
+                                  return <>
+                                    <span className={`font-mono ${isPending ? 'text-violet-700' : 'text-gray-700'}`}>{showCode || c.rank_name || '-'}</span>
+                                    {showGrade && (
+                                      <span className={`ml-1 font-mono px-1 rounded ${isPending ? 'text-violet-600 bg-violet-50' : 'text-blue-600 bg-blue-50'}`}>{showGrade}급</span>
+                                    )}
+                                  </>;
+                                })()}
+                              </td>
+                              <td className="px-2 py-1.5 font-medium text-gray-900">{c.name}</td>
+                              <td className="px-2 py-1.5 text-gray-500">{nationalityDisplay}</td>
+                              <td className="px-2 py-1.5 text-gray-500">
+                                {c.date_of_birth
+                                  ? <span>{c.date_of_birth}<span className="text-gray-400 ml-1">({c.age}세)</span></span>
+                                  : '-'}
+                              </td>
+                              <td className="px-2 py-1.5">
+                                {c.is_active_onboard
+                                  ? <span className="text-gray-500">{c.latest_embark_date || '-'}</span>
+                                  : c.pending_embark_date
+                                    ? <span className="text-violet-600">{c.pending_embark_date}</span>
+                                    : <span className="text-gray-400">{c.latest_embark_date || '-'}</span>}
+                              </td>
+                              <td className="px-2 py-1.5 text-center">
+                                {c.has_salary_template
+                                  ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
+                                  : <XCircle className="w-4 h-4 text-gray-300 mx-auto" />}
+                              </td>
+                              <td className="px-2 py-1.5 text-center">
+                                {c.has_expired_certificate
+                                  ? <AlertTriangle className="w-4 h-4 text-red-500 mx-auto" title="만료된 증서 있음" />
+                                  : <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />}
+                              </td>
+                              <td className="px-2 py-1.5">
                                 {badge && (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full ${badge.color}`}>{badge.label}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${badge.color}`}>{badge.label}</span>
                                 )}
                               </td>
-                              <td className="px-3 py-2">
-                                {crewExt.current_grade ? (
-                                  <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{crewExt.current_grade}급</span>
-                                ) : '-'}
-                              </td>
-                              <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
+                              <td className="px-2 py-1.5 text-right" onClick={e => e.stopPropagation()}>
                                 <Button
-                                  size="sm" variant="ghost" className="h-7 text-xs"
+                                  size="sm" variant="ghost" className="h-6 text-xs px-2"
                                   onClick={() => openNewTab(`/crew/${c.id}`, c.name || '선원 정보')}
                                 >
                                   열람
