@@ -145,6 +145,31 @@ export const rotationService = {
   },
 
   /**
+   * 아직 반려되지 않은(임시저장/결재대기/승인) 교대 계획에 승선자 또는 하선자로 이미 배정된
+   * 선원 id 목록. 새 교대 계획 작성 시 같은 선원이 다른 계획에 중복으로 들어가지 않도록
+   * 후보 목록에서 제외하는 데 사용. (반려된 계획은 무효이므로 제외 대상 아님. 실행완료된
+   * 계획은 crew_members.status가 이미 실제 상태로 바뀌어 자연히 걸러지므로 별도 제외 불필요.)
+   */
+  async getActivelyReservedCrewIds(): Promise<Set<string>> {
+    const { data, error } = await supabase
+      .from('crew_rotation_assignments')
+      .select('on_crew_id, off_crew_id, plan:crew_rotation_plans!inner(status)')
+      .in('plan.status', ['draft', 'pending_approval', 'approved']);
+
+    if (error) {
+      console.error('Error fetching reserved crew ids:', error);
+      return new Set();
+    }
+
+    const ids = new Set<string>();
+    for (const row of data || []) {
+      if (row.on_crew_id) ids.add(row.on_crew_id as string);
+      if (row.off_crew_id) ids.add(row.off_crew_id as string);
+    }
+    return ids;
+  },
+
+  /**
    * Create a new rotation plan
    */
   async createRotationPlan(formData: RotationPlanFormData): Promise<CrewRotationPlan | null> {

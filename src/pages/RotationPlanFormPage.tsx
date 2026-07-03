@@ -78,6 +78,8 @@ export default function RotationPlanFormPage() {
 
   const [availableCrew, setAvailableCrew] = useState<CrewWithDetails[]>([]);
   const [onboardCrew, setOnboardCrew] = useState<CrewWithDetails[]>([]);
+  // 반려되지 않은 다른 교대 계획(임시저장/결재대기/승인)에 이미 승선·하선자로 들어간 선원 — 중복 배정 방지
+  const [reservedCrewIds, setReservedCrewIds] = useState<Set<string>>(new Set());
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,14 +120,16 @@ export default function RotationPlanFormPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [allCrew, ranksRes, ownersRes, portsData] = await Promise.all([
+    const [allCrew, ranksRes, ownersRes, portsData, reserved] = await Promise.all([
       crewService.getAllWithDetails(),
       supabase.from('ranks').select('*').order('display_order'),
       supabase.from('companies').select('*').eq('type', 'owner').order('name'),
       getPorts(),
+      rotationService.getActivelyReservedCrewIds(),
     ]);
     setAvailableCrew(allCrew.filter(c => BOARDING_CANDIDATE_STATUSES.includes(getCrewStatus(c))).sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     setOnboardCrew(allCrew.filter(c => getCrewStatus(c) === 'onboard').sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+    setReservedCrewIds(reserved);
     setRanks(ranksRes.data || []);
     setOwners(ownersRes.data || []);
     setPorts(portsData);
@@ -210,9 +214,10 @@ export default function RotationPlanFormPage() {
   const usedBoardingIds = rows.map(r => r.boardingCrewId).filter(Boolean) as string[];
   const usedDisembarkIds = rows.map(r => r.disembarkCrewId).filter(Boolean) as string[];
 
-  const boardingCandidates = availableCrew.filter(c => !usedBoardingIds.includes(c.id));
+  // reservedCrewIds: 반려되지 않은 다른 교대 계획에 이미 승선/하선자로 들어간 선원 — 중복 배정 방지로 후보에서 제외
+  const boardingCandidates = availableCrew.filter(c => !usedBoardingIds.includes(c.id) && !reservedCrewIds.has(c.id));
   // 하선 후보는 반드시 이 교대 계획의 해당 선박에 승선 중인 선원만 (다른 선박 승선자는 대상 아님)
-  const disembarkCandidates = onboardCrew.filter(c => !usedDisembarkIds.includes(c.id) && c.current_ship_id === shipId);
+  const disembarkCandidates = onboardCrew.filter(c => !usedDisembarkIds.includes(c.id) && c.current_ship_id === shipId && !reservedCrewIds.has(c.id));
 
   // 급여 템플릿에서 특정 직급(이름)에 정의된 등급 목록
   const gradesForRank = (rankName: string): string[] => {
@@ -278,9 +283,9 @@ export default function RotationPlanFormPage() {
     if (!rowPicker) return [];
     const row = rows.find(r => r.id === rowPicker.rowId);
     if (rowPicker.side === 'boarding') {
-      return availableCrew.filter(c => c.id === row?.boardingCrewId || !usedBoardingIds.includes(c.id));
+      return availableCrew.filter(c => c.id === row?.boardingCrewId || (!usedBoardingIds.includes(c.id) && !reservedCrewIds.has(c.id)));
     }
-    return onboardCrew.filter(c => c.id === row?.disembarkCrewId || (c.current_ship_id === shipId && !usedDisembarkIds.includes(c.id)));
+    return onboardCrew.filter(c => c.id === row?.disembarkCrewId || (c.current_ship_id === shipId && !usedDisembarkIds.includes(c.id) && !reservedCrewIds.has(c.id)));
   };
 
   const handleRowPickerConfirm = (ids: string[]) => {
