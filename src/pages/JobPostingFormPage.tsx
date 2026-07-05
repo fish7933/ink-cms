@@ -1,22 +1,40 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { msg } from '@/lib/messages';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
+import { useTabContext } from '@/contexts/TabContext';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
-import { JobPostingReadOnlyView } from './JobPostingReadOnlyView';
-import { JobPostingForm } from './JobPostingForm';
-import { useJobPostingData } from './useJobPostingData';
+import { JobPostingReadOnlyView } from '@/components/job-postings/JobPostingReadOnlyView';
+import { JobPostingForm } from '@/components/job-postings/JobPostingForm';
+import { useJobPostingData } from '@/components/job-postings/useJobPostingData';
 import type { JobPostingGroupWithDetails } from '@/types/models';
-import type { RankWithSalary, SelectedRankDetail, SalaryTemplateItem } from './types';
+import type { RankWithSalary, SelectedRankDetail, SalaryTemplateItem } from '@/components/job-postings/types';
 
-interface JobPostingDialogProps {
-  open: boolean;
-  posting: JobPostingGroupWithDetails | null;
-  onClose: (saved: boolean) => void;
-}
+export default function JobPostingFormPage() {
+  const { id } = useParams<{ id?: string }>();
+  const navigate = useNavigate();
+  const { closeTab, activeTabId, updateTab } = useTabContext();
 
-export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogProps) {
+  const [posting, setPosting] = useState<JobPostingGroupWithDetails | null>(null);
+  const [loadingPosting, setLoadingPosting] = useState(Boolean(id));
+
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      setLoadingPosting(true);
+      const data = await jobPostingGroupService.getById(id);
+      setPosting(data);
+      if (data && activeTabId) {
+        updateTab(activeTabId, { title: `공고 수정: ${data.ship_name}` });
+      }
+      setLoadingPosting(false);
+    })();
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const {
     currentUser,
     filteredCompanies,
@@ -41,10 +59,18 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
     loadFleets,
     loadShips,
     checkShipTemplate,
-  } = useJobPostingData(open, posting);
+  } = useJobPostingData(!loadingPosting, posting);
 
   const [crewRecommendationOpen, setCrewRecommendationOpen] = useState(false);
   const [selectedRankForRecommendation, setSelectedRankForRecommendation] = useState<SelectedRankDetail | null>(null);
+
+  const finish = (saved: boolean) => {
+    if (saved) {
+      window.dispatchEvent(new CustomEvent('job-posting-data-changed'));
+    }
+    if (activeTabId) closeTab(activeTabId);
+    else navigate('/job-postings');
+  };
 
   const handleCompanyChange = async (companyId: string) => {
     const cid = String(companyId);
@@ -170,7 +196,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
   const handleCrewRecommendationClose = (saved: boolean) => {
     setCrewRecommendationOpen(false);
     setSelectedRankForRecommendation(null);
-    if (saved) onClose(true);
+    if (saved) finish(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -195,9 +221,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
       const warningMessage = duplicateWarnings.map(w =>
         `${w.rank_code}: ${w.existing_postings.length}개의 유사한 공고 존재`
       ).join('\n');
-      const confirmed = confirm(
-        msg.jobPosting.duplicateWarning(warningMessage)
-      );
+      const confirmed = confirm(msg.jobPosting.duplicateWarning(warningMessage));
       if (!confirmed) return;
     }
 
@@ -252,71 +276,92 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
         await jobPostingGroupService.create(postingData);
       }
 
-      onClose(true);
+      finish(true);
     } catch (error) {
       console.error('Failed to save job posting:', error);
       alert(msg.jobPosting.saveFailed(error instanceof Error ? error.message : '알 수 없는 오류'));
     }
   };
 
+  if (loadingPosting || !currentUser) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
+          <p className="text-sm text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (isReadOnly && posting) {
     return (
-      <JobPostingReadOnlyView
-        open={open}
-        posting={posting}
-        shipDetails={shipDetails}
-        selectedRankDetails={selectedRankDetails}
-        manningAgencies={manningAgencies}
-        crewRecommendationOpen={crewRecommendationOpen}
-        selectedRankForRecommendation={selectedRankForRecommendation}
-        onClose={onClose}
-        onRecommendCrew={handleRecommendCrew}
-        onCrewRecommendationClose={handleCrewRecommendationClose}
-      />
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+        <div className="mb-3">
+          <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={() => finish(false)}>
+            <ArrowLeft className="w-4 h-4" />목록
+          </Button>
+        </div>
+        <JobPostingReadOnlyView
+          posting={posting}
+          shipDetails={shipDetails}
+          selectedRankDetails={selectedRankDetails}
+          manningAgencies={manningAgencies}
+          crewRecommendationOpen={crewRecommendationOpen}
+          selectedRankForRecommendation={selectedRankForRecommendation}
+          onClose={finish}
+          onRecommendCrew={handleRecommendCrew}
+          onCrewRecommendationClose={handleCrewRecommendationClose}
+        />
+      </div>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={() => onClose(false)}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{posting ? '구인 공고 수정' : '다직급 구인 공고 등록'}</DialogTitle>
-        </DialogHeader>
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+      <div className="mb-3">
+        <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={() => finish(false)}>
+          <ArrowLeft className="w-4 h-4" />목록
+        </Button>
+      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{posting ? '구인 공고 수정' : '다직급 구인 공고 등록'}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoadingExistingData && (
+            <div className="text-center py-4 text-muted-foreground">기존 데이터를 불러오는 중...</div>
+          )}
 
-        {isLoadingExistingData && (
-          <div className="text-center py-4 text-muted-foreground">
-            기존 데이터를 불러오는 중...
-          </div>
-        )}
-
-        <JobPostingForm
-          formData={formData}
-          filteredCompanies={filteredCompanies}
-          filteredFleets={filteredFleets}
-          filteredShips={filteredShips}
-          manningAgencies={manningAgencies}
-          availableRanks={availableRanks}
-          selectedRankDetails={selectedRankDetails}
-          hasTemplate={hasTemplate}
-          duplicateWarnings={duplicateWarnings}
-          showDuplicateWarning={showDuplicateWarning}
-          isLoadingExistingData={isLoadingExistingData}
-          posting={posting}
-          onCompanyChange={handleCompanyChange}
-          onFleetChange={handleFleetChange}
-          onShipChange={handleShipChange}
-          onRankToggle={handleRankToggle}
-          onSelectAllRanks={handleSelectAllRanks}
-          onClearRanks={handleClearRanks}
-          onUpdateRankDetail={handleUpdateRankDetail}
-          onUpdateRankNationalities={handleUpdateRankNationalities}
-          onRemoveRank={handleRemoveRank}
-          onFormDataChange={handleFormDataChange}
-          onAgencyToggle={handleAgencyToggle}
-          onSubmit={handleSubmit}
-          onCancel={() => onClose(false)}
-        />
-      </DialogContent>
-    </Dialog>
+          <JobPostingForm
+            formData={formData}
+            filteredCompanies={filteredCompanies}
+            filteredFleets={filteredFleets}
+            filteredShips={filteredShips}
+            manningAgencies={manningAgencies}
+            availableRanks={availableRanks}
+            selectedRankDetails={selectedRankDetails}
+            hasTemplate={hasTemplate}
+            duplicateWarnings={duplicateWarnings}
+            showDuplicateWarning={showDuplicateWarning}
+            isLoadingExistingData={isLoadingExistingData}
+            posting={posting}
+            onCompanyChange={handleCompanyChange}
+            onFleetChange={handleFleetChange}
+            onShipChange={handleShipChange}
+            onRankToggle={handleRankToggle}
+            onSelectAllRanks={handleSelectAllRanks}
+            onClearRanks={handleClearRanks}
+            onUpdateRankDetail={handleUpdateRankDetail}
+            onUpdateRankNationalities={handleUpdateRankNationalities}
+            onRemoveRank={handleRemoveRank}
+            onFormDataChange={handleFormDataChange}
+            onAgencyToggle={handleAgencyToggle}
+            onSubmit={handleSubmit}
+            onCancel={() => finish(false)}
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

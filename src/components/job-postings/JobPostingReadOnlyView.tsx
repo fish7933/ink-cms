@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserPlus } from 'lucide-react';
 import { CrewRecommendationDialog } from '@/components/crew/CrewRecommendationDialog';
 import type { JobPostingGroupWithDetails, Ship, Company } from '@/types/models';
@@ -9,7 +9,6 @@ import type { SelectedRankDetail } from './types';
 import { departmentColors } from './utils';
 
 interface JobPostingReadOnlyViewProps {
-  open: boolean;
   posting: JobPostingGroupWithDetails;
   shipDetails: Ship | null;
   selectedRankDetails: SelectedRankDetail[];
@@ -22,7 +21,6 @@ interface JobPostingReadOnlyViewProps {
 }
 
 export function JobPostingReadOnlyView({
-  open,
   posting,
   shipDetails,
   selectedRankDetails,
@@ -43,12 +41,11 @@ export function JobPostingReadOnlyView({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={() => onClose(false)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>구인 공고 및 선원 추천</DialogTitle>
-          </DialogHeader>
-          
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">구인 공고 및 선원 추천</CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="space-y-4">
             {/* Company and Ship Basic Info */}
             <div className="grid grid-cols-2 gap-3">
@@ -277,8 +274,8 @@ export function JobPostingReadOnlyView({
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
 
       {/* Crew Recommendation Dialog */}
       {selectedRankForRecommendation && (

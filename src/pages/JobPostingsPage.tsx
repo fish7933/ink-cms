@@ -26,7 +26,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from '@/components/ui/alert';
-import { JobPostingDialog } from '@/components/job-postings/JobPostingDialog';
+import { useTabContext } from '@/contexts/TabContext';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { getCompanies, getFleets, getShips, getCurrentUser } from '@/lib/store';
@@ -35,6 +35,7 @@ import type { JobPostingGroupWithDetails, Company, Fleet, Ship, User, CrewRecomm
 const ITEMS_PER_PAGE = 20;
 
 export default function JobPostingsPage() {
+  const { openNewTab } = useTabContext();
   const [postings, setPostings] = useState<JobPostingGroupWithDetails[]>([]);
   const [filteredPostings, setFilteredPostings] = useState<JobPostingGroupWithDetails[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -42,7 +43,6 @@ export default function JobPostingsPage() {
   const [ships, setShips] = useState<Ship[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedPosting, setSelectedPosting] = useState<JobPostingGroupWithDetails | null>(null);
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
 
@@ -67,6 +67,8 @@ export default function JobPostingsPage() {
 
   useEffect(() => {
     loadData();
+    window.addEventListener('job-posting-data-changed', loadData);
+    return () => window.removeEventListener('job-posting-data-changed', loadData);
   }, []);
 
   useEffect(() => {
@@ -291,13 +293,11 @@ export default function JobPostingsPage() {
   };
 
   const handleAdd = () => {
-    setSelectedPosting(null);
-    setDialogOpen(true);
+    openNewTab('/job-postings/new', '다직급 공고 등록', true);
   };
 
   const handleView = (posting: JobPostingGroupWithDetails) => {
-    setSelectedPosting(posting);
-    setDialogOpen(true);
+    openNewTab(`/job-postings/${posting.id}/edit`, `공고 수정: ${posting.ship_name}`);
   };
 
   const handleViewRecommendations = async (posting: JobPostingGroupWithDetails) => {
@@ -342,14 +342,6 @@ export default function JobPostingsPage() {
     } catch (error) {
       console.error('Failed to delete job posting:', error);
       alert('구인 공고 삭제에 실패했습니다.');
-    }
-  };
-
-  const handleDialogClose = async (saved: boolean) => {
-    setDialogOpen(false);
-    setSelectedPosting(null);
-    if (saved) {
-      await loadData();
     }
   };
 
@@ -877,12 +869,6 @@ export default function JobPostingsPage() {
             </div>
           </>
         )}
-
-        <JobPostingDialog
-          open={dialogOpen}
-          posting={selectedPosting}
-          onClose={handleDialogClose}
-        />
       </div>
     </>
   );
