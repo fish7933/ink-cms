@@ -99,3 +99,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  /* 급여 템플릿 인쇄 모달이 열려있는 동안은 뒤에 있는 앱 화면을 인쇄에서 제외한다 */
+  body.salary-print-dialog-open #root {
+    display: none !important;
+  }
+}

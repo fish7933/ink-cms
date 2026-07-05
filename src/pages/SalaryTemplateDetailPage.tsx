@@ -24,6 +24,7 @@ import { getRanks } from '@/lib/store';
 import { getShips } from '@/services/ship.service';
 import type { Rank } from '@/types/models';
 import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixTable';
+import SalaryTemplatePrintDialog from '@/components/salary/SalaryTemplatePrintDialog';
 import { exportSalaryTemplateToExcel } from '@/utils/salary-template-export';
 
 export default function SalaryTemplateDetailPage() {
@@ -44,6 +45,7 @@ export default function SalaryTemplateDetailPage() {
   const [renewOpen, setRenewOpen] = useState(false);
   const [renewDate, setRenewDate] = useState('');
   const [renewing, setRenewing] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
   const loadData = async (templateId: string, isInitial = false) => {
     setLoading(true);
@@ -161,7 +163,7 @@ export default function SalaryTemplateDetailPage() {
             <div className="flex gap-2">
               <Button
                 size="sm" variant="outline" className="gap-1.5 h-8"
-                onClick={() => window.open(`/print/salary-templates/${data.id}`, '_blank')}
+                onClick={() => setPrintOpen(true)}
               >
                 <Printer className="h-4 w-4" />인쇄
               </Button>
@@ -302,6 +304,14 @@ export default function SalaryTemplateDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SalaryTemplatePrintDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        template={data}
+        components={components}
+        ranks={ranks}
+      />
     </div>
   );
 }
