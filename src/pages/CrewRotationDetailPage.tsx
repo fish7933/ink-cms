@@ -118,7 +118,7 @@ export default function CrewRotationDetailPage() {
               <div className="mt-0.5">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">기준 출국일</Label>
+              <Label className="text-xs text-gray-500">기준 교대일</Label>
               <div className="mt-0.5">{plan.base_departure_date || '-'}</div>
             </div>
             <div>
@@ -126,8 +126,8 @@ export default function CrewRotationDetailPage() {
               <div className="mt-0.5">{plan.creator_name || '-'}</div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">작성일</Label>
-              <div className="mt-0.5">{format(new Date(plan.created_at), 'yyyy-MM-dd', { locale: ko })}</div>
+              <Label className="text-xs text-gray-500">작성일시</Label>
+              <div className="mt-0.5">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</div>
             </div>
           </div>
           {plan.notes && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,6 +93,23 @@ export function CrewRotationPage() {
     if (filterShip) list = list.filter(p => p.ship_id === filterShip);
     return list;
   }, [plans, statusTab, filterOwner, filterFleet, filterShip]);
+
+  // 교대일(rotation_date) 기준 연/월로 묶어서 표시 — 최신 연월이 위로
+  const groupedPlans = useMemo(() => {
+    const groups = new Map<string, CrewRotationPlanWithDetails[]>();
+    for (const p of filteredPlans) {
+      const d = new Date(p.rotation_date);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(p);
+    }
+    return [...groups.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([key, list]) => {
+        const [y, m] = key.split('-');
+        return { key, label: `${y}년 ${m}월`, plans: list };
+      });
+  }, [filteredPlans]);
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
@@ -347,48 +364,57 @@ export function CrewRotationPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPlans.map(plan => (
-                  <TableRow key={plan.id} className="cursor-pointer" onClick={() => openNewTab(`/crew-rotation/${plan.id}`, plan.plan_name || '교대계획')}>
-                    <TableCell onClick={e => e.stopPropagation()}>
-                      {plan.status === 'draft' && (
-                        <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
-                    <TableCell className="text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <Ship className="h-3.5 w-3.5 text-muted-foreground" />
-                        {plan.ship_name}
-                        {plan.fleet_name && <span className="text-muted-foreground">({plan.fleet_name})</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</TableCell>
-                    <TableCell className="text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                        {plan.assignments.length}명
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(plan.status)}</TableCell>
-                    <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd', { locale: ko })}</TableCell>
-                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        {plan.status === 'draft' && (
-                          <>
-                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleDelete(plan.id)}>삭제</Button>
-                            <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => handleSubmitApproval(plan.id)}>결재 상신</Button>
-                          </>
-                        )}
-                        {plan.status === 'pending_approval' && (
-                          <Button variant="default" size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => handleApprove(plan.id)}>승인</Button>
-                        )}
-                        {plan.status === 'approved' && (
-                          <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleExecute(plan.id)}>발령 실행</Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                {groupedPlans.map(group => (
+                  <Fragment key={group.key}>
+                    <TableRow className="bg-gray-50/80 hover:bg-gray-50/80">
+                      <TableCell colSpan={9} className="text-xs font-semibold text-gray-600 py-1.5">
+                        {group.label} <span className="ml-1 font-normal text-gray-400">({group.plans.length}건)</span>
+                      </TableCell>
+                    </TableRow>
+                    {group.plans.map(plan => (
+                      <TableRow key={plan.id} className="cursor-pointer" onClick={() => openNewTab(`/crew-rotation/${plan.id}`, plan.plan_name || '교대계획')}>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          {plan.status === 'draft' && (
+                            <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <Ship className="h-3.5 w-3.5 text-muted-foreground" />
+                            {plan.ship_name}
+                            {plan.fleet_name && <span className="text-muted-foreground">({plan.fleet_name})</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                            {plan.assignments.length}명
+                          </div>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(plan.status)}</TableCell>
+                        <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
+                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            {plan.status === 'draft' && (
+                              <>
+                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleDelete(plan.id)}>삭제</Button>
+                                <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => handleSubmitApproval(plan.id)}>결재 상신</Button>
+                              </>
+                            )}
+                            {plan.status === 'pending_approval' && (
+                              <Button variant="default" size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => handleApprove(plan.id)}>승인</Button>
+                            )}
+                            {plan.status === 'approved' && (
+                              <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleExecute(plan.id)}>발령 실행</Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>
