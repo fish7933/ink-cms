@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, X, ChevronLeft, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, X, Trash2, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import ShipTable from '@/components/ship/ShipTable';
+import ShipTree from '@/components/ship/ShipTree';
 import ShipDialog from '@/components/ship/ShipDialog';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -34,10 +34,6 @@ export default function ShipManagementPage() {
   const [selectedOwner, setSelectedOwner] = useState<string>('all');
   const [selectedFleet, setSelectedFleet] = useState<string>('all');
   const [selectedShipType, setSelectedShipType] = useState<string>('all');
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Bulk selection state
   const [selectedShipIds, setSelectedShipIds] = useState<string[]>([]);
@@ -199,18 +195,12 @@ export default function ShipManagementPage() {
     });
   }, [ships, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType]);
 
-  // Reset to page 1 when filters change
+  // Clear selection when filters change
   useEffect(() => {
-    setCurrentPage(1);
-    setSelectedShipIds([]); // Clear selection when filters change
+    setSelectedShipIds([]);
   }, [searchTerm, selectedOwner, selectedFleet, selectedShipType]);
 
-  // Pagination calculations
   const totalItems = filteredShips.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedShips = filteredShips.slice(startIndex, endIndex);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -573,31 +563,14 @@ export default function ShipManagementPage() {
                 {/* Results Count and Items Per Page */}
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-500">
-                    총 {totalItems}척의 선박 {totalPages > 0 && msg.ship.pageInfo(currentPage, totalPages)}
+                    총 {totalItems}척의 선박
                     {selectedShipIds.length > 0 && msg.ship.selectedCount(selectedShipIds.length)}
                   </p>
-                  <Select 
-                    value={itemsPerPage.toString()} 
-                    onValueChange={(value) => {
-                      setItemsPerPage(Number(value));
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <SelectTrigger className="w-32 h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10" className="text-xs">10개씩 보기</SelectItem>
-                      <SelectItem value="20" className="text-xs">20개씩 보기</SelectItem>
-                      <SelectItem value="50" className="text-xs">50개씩 보기</SelectItem>
-                      <SelectItem value="100" className="text-xs">100개씩 보기</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
 
-              <ShipTable
-                ships={paginatedShips}
+              <ShipTree
+                ships={filteredShips}
                 companies={companies}
                 fleets={fleets}
                 shipTemplateMap={shipTemplateMap}
@@ -608,60 +581,6 @@ export default function ShipManagementPage() {
                 selectedShips={selectedShipIds}
                 onSelectionChange={setSelectedShipIds}
               />
-
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    disabled={currentPage === 1}
-                    className="h-8 px-3"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    이전
-                  </Button>
-                  
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={currentPage === pageNum ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setCurrentPage(pageNum)}
-                          className="h-8 w-8 p-0"
-                        >
-                          {pageNum}
-                        </Button>
-                      );
-                    })}
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={currentPage === totalPages}
-                    className="h-8 px-3"
-                  >
-                    다음
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
               </>
               )}
             </CardContent>
