@@ -40,6 +40,7 @@ export interface CrewRotationPlan {
   port_id: string | null;
   deleted_by: string | null;
   deleted_at: string | null;
+  approval_document_id: string | null;
 }
 
 export interface CrewRotationAssignment {

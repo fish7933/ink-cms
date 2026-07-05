@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { supabase } from '@/lib/supabase';
 import { rotationService } from '@/services/rotation.service';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import { useTabContext } from '@/contexts/TabContext';
@@ -40,22 +39,10 @@ export default function CrewRotationDetailPage() {
   useEffect(() => { loadPlan(); }, [id]);
 
   const handleSubmitApproval = async () => {
-    if (!plan || !confirm('결재 상신하시겠습니까?')) return;
-    const { error } = await supabase
-      .from('crew_rotation_plans')
-      .update({ status: 'pending_approval', updated_at: new Date().toISOString() })
-      .eq('id', plan.id);
-    if (error) { toast({ title: '오류가 발생했습니다', variant: 'destructive' }); return; }
-    loadPlan();
-  };
-
-  const handleApprove = async () => {
-    if (!plan || !confirm('이 교대 계획을 승인하시겠습니까?')) return;
-    const { error } = await supabase
-      .from('crew_rotation_plans')
-      .update({ status: 'approved', updated_at: new Date().toISOString() })
-      .eq('id', plan.id);
-    if (error) { toast({ title: '오류가 발생했습니다', variant: 'destructive' }); return; }
+    if (!plan || !confirm('결재 상신하시겠습니까? 작성자 소속 부서를 기준으로 결재라인이 자동 구성됩니다.')) return;
+    const result = await rotationService.submitRotationPlanForApproval(plan.id);
+    if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
+    toast({ title: '결재 상신 완료', description: '내 결재함(일반 문서)에서 진행 상황을 확인할 수 있습니다.' });
     loadPlan();
   };
 
@@ -101,9 +88,6 @@ export default function CrewRotationDetailPage() {
               <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
               {plan.status === 'draft' && (
                 <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={handleSubmitApproval}>결재 상신</Button>
-              )}
-              {plan.status === 'pending_approval' && (
-                <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}>승인</Button>
               )}
               {plan.status === 'approved' && (
                 <Button size="sm" className="h-8" onClick={handleExecute}>발령 실행</Button>

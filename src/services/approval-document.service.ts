@@ -13,6 +13,23 @@ import type {
 const SELF_APPROVE_COMMENT = '본인 기안으로 자동 승인 처리됨';
 const ALREADY_PROCESSED_ERROR = '이미 처리되었거나 결재 순서가 아닙니다.';
 
+// 시스템 연동형 문서(reference_type/reference_id)가 최종 승인/반려되면 원본 레코드의
+// 상태도 함께 동기화한다. 현재는 교대계획 결재 통합에만 쓰이지만, 다른 화면의 결재
+// 연동도 여기에 케이스를 추가하면 된다.
+async function applyReferenceSideEffect(
+  referenceType: string,
+  referenceId: string | null,
+  newStatus: 'approved' | 'rejected'
+): Promise<void> {
+  if (!referenceId) return;
+  if (referenceType === 'crew_rotation_plan') {
+    await supabase
+      .from('crew_rotation_plans')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', referenceId);
+  }
+}
+
 // 전결규정에 지정된 직급의 position_order(선임도 기준값)를 조회
 async function resolveAuthorityThreshold(documentTypeId: string): Promise<number | undefined> {
   const { data: limit } = await supabase
@@ -125,6 +142,8 @@ export const approvalDocumentService = {
     org_unit_id: string;
     created_by: string;
     requester_comment?: string;
+    reference_type?: string;
+    reference_id?: string;
   }): Promise<ApprovalDocumentWithDetails> {
     const chain = await this.previewChain(input.org_unit_id, input.document_type_id);
     if (chain.length === 0) {
@@ -159,6 +178,8 @@ export const approvalDocumentService = {
         org_unit_id: input.org_unit_id,
         created_by: input.created_by,
         requester_comment: input.requester_comment || null,
+        reference_type: input.reference_type || null,
+        reference_id: input.reference_id || null,
         status: allApproved ? 'approved' : 'pending',
         current_step: allApproved ? stepRows.length : firstPending!.step_order,
         completed_at: allApproved ? now : null,
@@ -166,6 +187,10 @@ export const approvalDocumentService = {
       .select()
       .single();
     if (docError) throw docError;
+
+    if (allApproved && doc.reference_type) {
+      await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
+    }
 
     const { data: steps, error: stepsError } = await supabase
       .from('approval_document_steps')
@@ -235,7 +260,7 @@ export const approvalDocumentService = {
   async approveDocumentStep(documentId: string, approverId: string, comment?: string): Promise<void> {
     const { data: doc, error: docError } = await supabase
       .from('approval_documents')
-      .select('current_step')
+      .select('current_step, reference_type, reference_id')
       .eq('id', documentId)
       .single();
     if (docError) throw docError;
@@ -266,6 +291,7 @@ export const approvalDocumentService = {
         .eq('id', documentId)
         .eq('status', 'pending');
       if (error) throw error;
+      if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
     } else {
       const { error } = await supabase
         .from('approval_documents')
@@ -279,7 +305,7 @@ export const approvalDocumentService = {
   async rejectDocumentStep(documentId: string, approverId: string, comment: string): Promise<void> {
     const { data: doc, error: docError } = await supabase
       .from('approval_documents')
-      .select('current_step')
+      .select('current_step, reference_type, reference_id')
       .eq('id', documentId)
       .single();
     if (docError) throw docError;
@@ -301,13 +327,14 @@ export const approvalDocumentService = {
       .eq('id', documentId)
       .eq('status', 'pending');
     if (error) throw error;
+    if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'rejected');
   },
 
   // 관리자 전용: 결재라인 무관하게 즉시 승인
   async adminForceApproveDocumentStep(documentId: string, adminId: string, comment?: string): Promise<void> {
     const { data: doc, error: docError } = await supabase
       .from('approval_documents')
-      .select('current_step')
+      .select('current_step, reference_type, reference_id')
       .eq('id', documentId)
       .single();
     if (docError) throw docError;
@@ -324,13 +351,14 @@ export const approvalDocumentService = {
       .update({ status: 'approved', completed_at: now })
       .eq('id', documentId);
     if (error) throw error;
+    if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
   },
 
   // 관리자 전용: 결재라인 무관하게 즉시 반려
   async adminForceRejectDocumentStep(documentId: string, adminId: string, comment: string): Promise<void> {
     const { data: doc, error: docError } = await supabase
       .from('approval_documents')
-      .select('current_step')
+      .select('current_step, reference_type, reference_id')
       .eq('id', documentId)
       .single();
     if (docError) throw docError;
@@ -347,6 +375,7 @@ export const approvalDocumentService = {
       .update({ status: 'rejected', final_comment: comment, completed_at: now })
       .eq('id', documentId);
     if (error) throw error;
+    if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'rejected');
   },
 
   async cancelDocument(documentId: string): Promise<void> {

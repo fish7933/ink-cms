@@ -1,6 +1,7 @@
 import { addMonths, format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
+import { approvalDocumentService } from '@/services/approval-document.service';
 import type {
   CrewRotationPlan,
   CrewRotationPlanWithDetails,
@@ -12,6 +13,8 @@ import type {
   RotationPlanStatus,
 } from '@/types/rotation';
 import type { CrewMember } from '@/types/models';
+
+const ROTATION_PLAN_DOCUMENT_TYPE_CODE = 'rotation_plan';
 
 export const rotationService = {
   /**
@@ -283,6 +286,64 @@ export const rotationService = {
     }
 
     return data;
+  },
+
+  /**
+   * 교대계획을 범용 결재 엔진(approval_documents)으로 상신한다.
+   * 기안자(작성자)가 소속된 부서를 기준으로 결재라인을 자동 구성 — 선원채용 승인,
+   * 기안서와 동일한 조직도 기반 결재 로직을 그대로 재사용한다.
+   */
+  async submitRotationPlanForApproval(planId: string): Promise<{ ok: boolean; message?: string }> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return { ok: false, message: '로그인 정보를 확인할 수 없습니다.' };
+
+    const { data: plan, error: planError } = await supabase
+      .from('crew_rotation_plans')
+      .select('id, plan_name, created_by')
+      .eq('id', planId)
+      .single();
+    if (planError || !plan) return { ok: false, message: '교대계획을 찾을 수 없습니다.' };
+
+    const { data: membership } = await supabase
+      .from('org_unit_members')
+      .select('org_unit_id')
+      .eq('user_id', plan.created_by)
+      .limit(1)
+      .maybeSingle();
+    if (!membership) {
+      return { ok: false, message: '작성자가 소속된 부서가 없습니다. 조직도에서 소속 부서를 먼저 지정해주세요.' };
+    }
+
+    const { data: docType } = await supabase
+      .from('approval_document_types')
+      .select('id')
+      .eq('code', ROTATION_PLAN_DOCUMENT_TYPE_CODE)
+      .single();
+    if (!docType) return { ok: false, message: '교대계획 결재 문서유형이 설정되어 있지 않습니다.' };
+
+    try {
+      const doc = await approvalDocumentService.createDocument({
+        document_type_id: docType.id,
+        title: plan.plan_name || '교대계획',
+        org_unit_id: membership.org_unit_id,
+        created_by: plan.created_by,
+        reference_type: 'crew_rotation_plan',
+        reference_id: plan.id,
+      });
+
+      await supabase
+        .from('crew_rotation_plans')
+        .update({
+          approval_document_id: doc.id,
+          status: doc.status === 'approved' ? 'approved' : 'pending_approval',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', planId);
+
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : '결재 상신 중 오류가 발생했습니다.' };
+    }
   },
 
   /**

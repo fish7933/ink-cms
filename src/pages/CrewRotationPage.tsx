@@ -140,18 +140,10 @@ export function CrewRotationPage() {
   };
 
   const handleSubmitApproval = async (planId: string) => {
-    if (!confirm('결재 상신하시겠습니까?')) return;
-    const { error } = await supabase.from('crew_rotation_plans')
-      .update({ status: 'pending_approval', updated_at: new Date().toISOString() }).eq('id', planId);
-    if (error) { alert('오류가 발생했습니다.'); return; }
-    loadPlans();
-  };
-
-  const handleApprove = async (planId: string) => {
-    if (!confirm('이 교대 계획을 승인하시겠습니까?')) return;
-    const { error } = await supabase.from('crew_rotation_plans')
-      .update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', planId);
-    if (error) { alert('오류가 발생했습니다.'); return; }
+    if (!confirm('결재 상신하시겠습니까? 작성자 소속 부서를 기준으로 결재라인이 자동 구성됩니다.')) return;
+    const result = await rotationService.submitRotationPlanForApproval(planId);
+    if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
+    toast({ title: '결재 상신 완료', description: '내 결재함(일반 문서)에서 진행 상황을 확인할 수 있습니다.' });
     loadPlans();
   };
 
@@ -407,9 +399,6 @@ export function CrewRotationPage() {
                             )}
                             {isAdmin && (
                               <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
-                            )}
-                            {plan.status === 'pending_approval' && (
-                              <Button variant="default" size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => handleApprove(plan.id)}>승인</Button>
                             )}
                             {plan.status === 'approved' && (
                               <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleExecute(plan.id)}>발령 실행</Button>
