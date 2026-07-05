@@ -82,10 +82,15 @@ export default {
             height: "0",
           },
         },
+        "urgent-flash": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(239,68,68,0.75)", backgroundColor: "rgb(220 38 38)" },
+          "50%": { boxShadow: "0 0 10px 4px rgba(239,68,68,0.55)", backgroundColor: "rgb(248 113 113)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "urgent-flash": "urgent-flash 1.1s ease-in-out infinite",
       },
     },
   },

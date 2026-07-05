@@ -16,6 +16,7 @@ const ShipFlagManagementPage = lazy(() => import('@/pages/ShipFlagManagementPage
 const FleetManagementPage = lazy(() => import('@/pages/FleetManagementPage'));
 const JobPostingsPage = lazy(() => import('@/pages/JobPostingsPage'));
 const JobPostingFormPage = lazy(() => import('@/pages/JobPostingFormPage'));
+const CrewRecommendationPage = lazy(() => import('@/pages/CrewRecommendationPage'));
 const CrewRecommendationsPage = lazy(() => import('@/pages/CrewRecommendationsPage'));
 const MyRecommendationsPage = lazy(() => import('@/pages/MyRecommendationsPage'));
 const RecommendationReviewPage = lazy(() => import('@/pages/RecommendationReviewPage'));
@@ -77,6 +78,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/fleet-management', component: FleetManagementPage },
   { path: '/job-postings/new', component: JobPostingFormPage },
   { path: '/job-postings/:id/edit', component: JobPostingFormPage },
+  { path: '/job-postings/:groupId/recommend/:rankId', component: CrewRecommendationPage },
   { path: '/job-postings', component: JobPostingsPage },
   { path: '/crew-recommendations', component: CrewRecommendationsPage },
   { path: '/my-recommendations', component: MyRecommendationsPage },

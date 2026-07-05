@@ -17,7 +17,7 @@ import type { RankWithSalary, SelectedRankDetail, SalaryTemplateItem } from '@/c
 export default function JobPostingFormPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
-  const { closeTab, activeTabId, updateTab } = useTabContext();
+  const { closeTab, activeTabId, updateTab, openNewTab } = useTabContext();
 
   const [posting, setPosting] = useState<JobPostingGroupWithDetails | null>(null);
   const [loadingPosting, setLoadingPosting] = useState(Boolean(id));
@@ -60,9 +60,6 @@ export default function JobPostingFormPage() {
     loadShips,
     checkShipTemplate,
   } = useJobPostingData(true, posting);
-
-  const [crewRecommendationOpen, setCrewRecommendationOpen] = useState(false);
-  const [selectedRankForRecommendation, setSelectedRankForRecommendation] = useState<SelectedRankDetail | null>(null);
 
   const finish = (saved: boolean) => {
     if (saved) {
@@ -189,14 +186,8 @@ export default function JobPostingFormPage() {
   };
 
   const handleRecommendCrew = (rankDetail: SelectedRankDetail) => {
-    setSelectedRankForRecommendation(rankDetail);
-    setCrewRecommendationOpen(true);
-  };
-
-  const handleCrewRecommendationClose = (saved: boolean) => {
-    setCrewRecommendationOpen(false);
-    setSelectedRankForRecommendation(null);
-    if (saved) finish(true);
+    if (!posting) return;
+    openNewTab(`/job-postings/${posting.id}/recommend/${rankDetail.rank_id}`, `${rankDetail.rank_code} 선원 추천`, true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -307,11 +298,8 @@ export default function JobPostingFormPage() {
           shipDetails={shipDetails}
           selectedRankDetails={selectedRankDetails}
           manningAgencies={manningAgencies}
-          crewRecommendationOpen={crewRecommendationOpen}
-          selectedRankForRecommendation={selectedRankForRecommendation}
           onClose={finish}
           onRecommendCrew={handleRecommendCrew}
-          onCrewRecommendationClose={handleCrewRecommendationClose}
         />
       </div>
     );

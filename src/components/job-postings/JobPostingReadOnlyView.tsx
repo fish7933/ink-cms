@@ -1,9 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { UrgentBadge } from '@/components/ui/urgent-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserPlus } from 'lucide-react';
-import { CrewRecommendationDialog } from '@/components/crew/CrewRecommendationDialog';
 import type { JobPostingGroupWithDetails, Ship, Company } from '@/types/models';
 import type { SelectedRankDetail } from './types';
 import { departmentColors } from './utils';
@@ -13,11 +13,8 @@ interface JobPostingReadOnlyViewProps {
   shipDetails: Ship | null;
   selectedRankDetails: SelectedRankDetail[];
   manningAgencies: Company[];
-  crewRecommendationOpen: boolean;
-  selectedRankForRecommendation: SelectedRankDetail | null;
   onClose: (saved: boolean) => void;
   onRecommendCrew: (rankDetail: SelectedRankDetail) => void;
-  onCrewRecommendationClose: (saved: boolean) => void;
 }
 
 export function JobPostingReadOnlyView({
@@ -25,11 +22,8 @@ export function JobPostingReadOnlyView({
   shipDetails,
   selectedRankDetails,
   manningAgencies,
-  crewRecommendationOpen,
-  selectedRankForRecommendation,
   onClose,
   onRecommendCrew,
-  onCrewRecommendationClose,
 }: JobPostingReadOnlyViewProps) {
   const getAgencyNames = (agencyIds: string[]) => {
     if (!agencyIds || agencyIds.length === 0) return '전체 매닝사';
@@ -245,7 +239,7 @@ export function JobPostingReadOnlyView({
                 <Label className="text-xs text-gray-500">긴급여부</Label>
                 <div className="mt-0.5">
                   {posting.urgency === 'urgent' ? (
-                    <Badge variant="destructive" className="text-xs">긴급</Badge>
+                    <UrgentBadge />
                   ) : (
                     <Badge variant="outline" className="text-xs">일반</Badge>
                   )}
@@ -276,27 +270,6 @@ export function JobPostingReadOnlyView({
           </div>
         </CardContent>
       </Card>
-
-      {/* Crew Recommendation Dialog */}
-      {selectedRankForRecommendation && (
-        <CrewRecommendationDialog
-          open={crewRecommendationOpen}
-          onClose={onCrewRecommendationClose}
-          jobPostingGroupId={posting.id}
-          companyId={posting.company_id}
-          companyName={posting.company_name}
-          fleetId={posting.fleet_id}
-          fleetName={posting.fleet_name}
-          shipId={posting.ship_id}
-          shipName={posting.ship_name}
-          rankId={selectedRankForRecommendation.rank_id}
-          rankCode={selectedRankForRecommendation.rank_code}
-          rankName={selectedRankForRecommendation.rank_name}
-          salary={selectedRankForRecommendation.base_salary}
-          currency={selectedRankForRecommendation.currency}
-          contractMonths={selectedRankForRecommendation.contract_months}
-        />
-      )}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, ArrowLeft } 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { UrgentBadge } from '@/components/ui/urgent-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
@@ -360,7 +361,7 @@ export default function JobPostingsPage() {
 
   const getUrgencyBadge = (urgency: string) => {
     if (urgency === 'urgent') {
-      return <Badge variant="destructive" className="text-xs">긴급</Badge>;
+      return <UrgentBadge />;
     }
     return null;
   };

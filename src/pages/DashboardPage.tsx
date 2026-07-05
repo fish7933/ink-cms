@@ -2,15 +2,33 @@ import { useState, useEffect } from 'react';
 import { getShips, getCrewMembers, getJobPostings, getJobApplications, getCurrentUser } from '@/lib/store';
 import type { User, Ship, CrewMember, JobPosting, JobApplication } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Ship as ShipIcon, Users, Briefcase, FileText } from 'lucide-react';
+import { Ship as ShipIcon, Users, Briefcase, FileText, AlertTriangle } from 'lucide-react';
+import { UrgentBadge } from '@/components/ui/urgent-badge';
+import { useTabContext } from '@/contexts/TabContext';
+import { jobPostingGroupService } from '@/services/job-posting-group.service';
+import { crewRecommendationService } from '@/services/crew-recommendation.service';
+import type { JobPostingGroupWithDetails, CrewRecommendationWithDetails } from '@/types/models';
+
+const REC_STATUS_LABELS: Record<string, string> = { pending: '검토 대기', reviewed: '결재중', accepted: '수락', rejected: '거절' };
+const REC_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-gray-100 text-gray-600',
+  reviewed: 'bg-blue-100 text-blue-700',
+  accepted: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+};
 
 export default function DashboardPage() {
+  const { openNewTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [ships, setShips] = useState<Ship[]>([]);
   const [crewMembers, setCrewMembers] = useState<CrewMember[]>([]);
   const [jobPostings, setJobPostings] = useState<JobPosting[]>([]);
   const [jobApplications, setJobApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 매닝사 대시보드 전용 데이터 — 채용공고 위젯 + 채용과정(내 추천 현황)
+  const [postings, setPostings] = useState<JobPostingGroupWithDetails[]>([]);
+  const [myRecs, setMyRecs] = useState<CrewRecommendationWithDetails[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -27,11 +45,20 @@ export default function DashboardPage() {
           getJobPostings(),
           getJobApplications(),
         ]);
-        
+
         setShips(shipsData);
         setCrewMembers(crewData);
         setJobPostings(jobsData);
         setJobApplications(appsData);
+
+        if (user.role === 'manning_agency' && user.company_id) {
+          const [postingsData, recsData] = await Promise.all([
+            jobPostingGroupService.getAll(),
+            crewRecommendationService.getByManningAgency(user.company_id),
+          ]);
+          setPostings(postingsData.filter(p => p.status === 'active'));
+          setMyRecs(recsData);
+        }
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -41,6 +68,18 @@ export default function DashboardPage() {
 
     loadData();
   }, []);
+
+  // 공고별 내 추천 현황 (상태별 건수) — 채용과정 표시용
+  const recsByGroup = new Map<string, CrewRecommendationWithDetails[]>();
+  for (const rec of myRecs) {
+    if (!rec.job_posting_group_id) continue;
+    if (!recsByGroup.has(rec.job_posting_group_id)) recsByGroup.set(rec.job_posting_group_id, []);
+    recsByGroup.get(rec.job_posting_group_id)!.push(rec);
+  }
+  const sortedPostings = [...postings].sort((a, b) => {
+    if (a.urgency !== b.urgency) return a.urgency === 'urgent' ? -1 : 1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   const getStats = () => {
     if (!currentUser) return [];
@@ -67,11 +106,11 @@ export default function DashboardPage() {
         ];
       case 'manning_agency': {
         const myCrews = crewMembers.filter(c => c.manning_agency_id === currentUser.company_id);
-        const myApplications = jobApplications.filter(a => a.applied_by === currentUser.id);
         return [
           { label: '소속 선원', value: myCrews.length, icon: Users },
-          { label: '지원 공고', value: myApplications.length, icon: Briefcase },
-          { label: '검토 중', value: myApplications.filter(a => a.status === 'under_review').length, icon: FileText },
+          { label: '진행중 공고', value: postings.length, icon: Briefcase },
+          { label: '긴급 공고', value: postings.filter(p => p.urgency === 'urgent').length, icon: AlertTriangle },
+          { label: '내 추천 건수', value: myRecs.length, icon: FileText },
         ];
       }
       case 'crew': {
@@ -129,6 +168,71 @@ export default function DashboardPage() {
           </h2>
           <p className="text-sm text-gray-600">{getRoleDescription()}</p>
         </div>
+
+        {/* 매닝사: 채용공고 위젯 — 가장 중요한 정보이므로 최상단에 배치 */}
+        {currentUser.role === 'manning_agency' && (
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Briefcase className="w-4 h-4" />채용 공고 ({sortedPostings.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {sortedPostings.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">현재 진행중인 채용 공고가 없습니다.</p>
+              ) : (
+                <div className="space-y-2">
+                  {sortedPostings.map(posting => {
+                    const recs = recsByGroup.get(posting.id) || [];
+                    const statusCounts = recs.reduce<Record<string, number>>((acc, r) => {
+                      acc[r.status] = (acc[r.status] || 0) + 1;
+                      return acc;
+                    }, {});
+                    return (
+                      <div
+                        key={posting.id}
+                        className="border rounded-md p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => openNewTab('/job-postings', '구인 공고')}
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{posting.ship_name || '선박 미정'}</span>
+                            <span className="text-xs text-gray-400">
+                              {posting.company_name}{posting.fleet_name ? ` · ${posting.fleet_name}` : ''}
+                            </span>
+                            {posting.urgency === 'urgent' && <UrgentBadge />}
+                          </div>
+                          <span className="text-xs text-gray-400">
+                            승선(예정)일 {new Date(posting.embarkation_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mb-1.5">
+                          {posting.ranks.map(r => (
+                            <span key={r.id} className="text-[11px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              {r.rank_code} ({r.positions_available}명)
+                            </span>
+                          ))}
+                        </div>
+                        {recs.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                            <span className="text-gray-500">채용과정:</span>
+                            {Object.entries(statusCounts).map(([status, count]) => (
+                              <span key={status} className={`px-1.5 py-0.5 rounded-full ${REC_STATUS_COLORS[status] || 'bg-gray-100 text-gray-600'}`}>
+                                {REC_STATUS_LABELS[status] || status} {count}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">아직 추천한 선원이 없습니다.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Compact Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
