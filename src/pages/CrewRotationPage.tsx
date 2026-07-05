@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2 } from 'lucide-react';
+import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -228,7 +228,9 @@ export function CrewRotationPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold">선원 교대 발령</h1>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <RefreshCw className="w-5 h-5 text-muted-foreground" />선원 교대 발령
+          </h1>
           <p className="text-xs text-muted-foreground mt-1">선원 승선/하선 교대 계획을 작성하고 결재를 진행합니다</p>
         </div>
         <div className="flex gap-2">

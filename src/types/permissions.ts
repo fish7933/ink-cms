@@ -36,7 +36,6 @@ export const MENU_STRUCTURE: MenuStructure[] = [
     name: '선원 관리',
     children: [
       { id: 'crew', name: '선원 목록', resource: 'crew' },
-      { id: 'assignments', name: '발령 관리', resource: 'assignments' },
       { id: 'crew-rotation', name: '선원 교대 발령', resource: 'crew_rotation' },
       { id: 'leave-management', name: '휴가 관리', resource: 'leave_management' },
       { id: 'crew-evaluations', name: '선원 평가', resource: 'crew_evaluations' },

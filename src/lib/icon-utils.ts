@@ -23,6 +23,15 @@ import {
   Shield,
   Layout,
   Network,
+  AlertTriangle,
+  Anchor,
+  Archive,
+  Banknote,
+  BarChart3,
+  CalendarOff,
+  FileSignature,
+  RefreshCw,
+  Star,
   LucideIcon,
 } from 'lucide-react';
 
@@ -51,6 +60,15 @@ const iconMap: Record<string, LucideIcon> = {
   Shield,
   Layout,
   Network,
+  AlertTriangle,
+  Anchor,
+  Archive,
+  Banknote,
+  BarChart3,
+  CalendarOff,
+  FileSignature,
+  RefreshCw,
+  Star,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {

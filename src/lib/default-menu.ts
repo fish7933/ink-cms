@@ -18,21 +18,12 @@ export const defaultMenuStructure: MenuCategory[] = [
         is_active: true,
       },
       {
-        id: 'crew-assignment',
-        label: '발령 관리',
-        path: '/assignments',
-        icon: 'Calendar',
-        roles: ['ship_owner', 'ship_manager', 'manning_agency'],
-        order: 2,
-        is_active: true,
-      },
-      {
         id: 'crew-rotation',
         label: '선원 교대 발령',
         path: '/crew-rotation',
         icon: 'RefreshCw',
         roles: ['ship_owner', 'ship_manager'],
-        order: 3,
+        order: 2,
         is_active: true,
       },
       {
@@ -41,7 +32,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/nationalities',
         icon: 'Globe',
         roles: ['ship_manager'],
-        order: 4,
+        order: 3,
         is_active: true,
       },
       {
@@ -50,7 +41,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/certificate-types',
         icon: 'FileText',
         roles: ['ship_manager'],
-        order: 5,
+        order: 4,
         is_active: true,
       },
       {
