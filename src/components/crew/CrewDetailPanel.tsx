@@ -17,6 +17,7 @@ import type { CertificateType } from '@/types/certificate-type';
 import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
 import SeaServiceDialog from '@/components/crew/SeaServiceDialog';
 import SeaServiceEvaluationDialog from '@/components/crew/SeaServiceEvaluationDialog';
+import { getEvaluations } from '@/services/evaluation.service';
 import TrainingRecordDialog from '@/components/crew/TrainingRecordDialog';
 import MedicalRecordDialog from '@/components/crew/MedicalRecordDialog';
 import SalaryRecordDialog from '@/components/crew/SalaryRecordDialog';
@@ -141,6 +142,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [formData, setFormData] = useState(EMPTY_FORM);
 
   const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
+  const [evaluationCounts, setEvaluationCounts] = useState<Record<string, number>>({});
   const [trainingRecords, setTrainingRecords] = useState<TrainingRecord[]>([]);
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
   const [salaryRecords, setSalaryRecords] = useState<CrewSalaryRecord[]>([]);
@@ -244,16 +246,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   const loadExtendedRecords = async (crewId: string) => {
     try {
-      const [sea, train, med, sal] = await Promise.all([
+      const [sea, train, med, sal, evals] = await Promise.all([
         getSeaServiceRecords(crewId),
         getTrainingRecords(crewId),
         getMedicalRecords(crewId),
         getCrewSalaryRecords(crewId),
+        getEvaluations(crewId),
       ]);
       setSeaServiceRecords(sea);
       setTrainingRecords(train);
       setMedicalRecords(med);
       setSalaryRecords(sal);
+      const counts: Record<string, number> = {};
+      evals.forEach(e => { if (e.sea_service_record_id) counts[e.sea_service_record_id] = (counts[e.sea_service_record_id] || 0) + 1; });
+      setEvaluationCounts(counts);
     } catch (e) {
       console.error('Extended records load error:', e);
     }
@@ -915,9 +921,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                           <td className="p-2 text-gray-600">{r.ship_manager_name || '-'}</td>
                           <td className="p-2 text-gray-600">{r.manning_agency_name || '-'}</td>
                           <td className="p-2 text-center">
-                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => { setEvaluationDialogRecord(r); setEvaluationDialogOpen(true); }}>
-                              <Star className="h-3 w-3" />고과
-                            </Button>
+                            {evaluationCounts[r.id] ? (
+                              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-yellow-700 bg-yellow-50 hover:bg-yellow-100" onClick={() => { setEvaluationDialogRecord(r); setEvaluationDialogOpen(true); }}>
+                                <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />고과 {evaluationCounts[r.id]}건
+                              </Button>
+                            ) : (
+                              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-gray-400" onClick={() => { setEvaluationDialogRecord(r); setEvaluationDialogOpen(true); }}>
+                                <Star className="h-3 w-3" />고과
+                              </Button>
+                            )}
                           </td>
                           <td className="p-2 text-center">
                             <div className="flex justify-center gap-1">
@@ -933,7 +945,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               )}
             </div>
             <SeaServiceDialog open={seaServiceDialogOpen} onOpenChange={setSeaServiceDialogOpen} crewId={id!} record={editingSeaService} onSuccess={() => loadExtendedRecords(id!)} />
-            <SeaServiceEvaluationDialog open={evaluationDialogOpen} onOpenChange={setEvaluationDialogOpen} crewId={id!} record={evaluationDialogRecord} />
+            <SeaServiceEvaluationDialog open={evaluationDialogOpen} onOpenChange={setEvaluationDialogOpen} crewId={id!} record={evaluationDialogRecord} onChanged={() => loadExtendedRecords(id!)} />
           </TabsContent>
         )}
 

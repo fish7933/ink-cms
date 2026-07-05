@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Star, Trash2, Edit2, ArrowLeft, Save } from 'lucide-react';
+import { Plus, Search, Star, Trash2, Edit2, ArrowLeft, Save, Upload, X, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getEvaluations, addEvaluation, updateEvaluation, deleteEvaluation } from '@/services/evaluation.service';
-import type { CrewEvaluationWithDetails } from '@/types/evaluation';
+import type { CrewEvaluationWithDetails, EvaluationAttachment } from '@/types/evaluation';
+import type { Rank } from '@/types/models';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -29,16 +30,21 @@ export default function CrewEvaluationPage() {
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
+  const [officerRanks, setOfficerRanks] = useState<Rank[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [formView, setFormView] = useState<{ record?: CrewEvaluationWithDetails } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ crew_member_id: '', ship_id: '', evaluation_period_start: '', evaluation_period_end: '', evaluator_name: '', evaluator_rank: '', scores: {} as Record<string, number>, strengths: '', areas_for_improvement: '', recommendation: '', comments: '' });
+  const [uploading, setUploading] = useState(false);
+  const [form, setForm] = useState({ crew_member_id: '', ship_id: '', evaluation_period_start: '', evaluation_period_end: '', evaluator_name: '', evaluator_rank: '', scores: {} as Record<string, number>, overallOverride: '', strengths: '', areas_for_improvement: '', recommendation: '', comments: '' });
+  const [attachments, setAttachments] = useState<EvaluationAttachment[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
 
   useEffect(() => {
     loadData();
     supabase.from('crew_members').select('id, name, rank').then(({ data }) => { if (data) setCrewOptions(data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '' }))); });
     supabase.from('ships').select('id, name').then(({ data }) => { if (data) setShipOptions(data); });
+    supabase.from('ranks').select('*').eq('rank_category', 'officer').order('display_order').then(({ data }) => setOfficerRanks(data || []));
   }, []);
 
   const loadData = async () => { try { setLoading(true); setEvaluations(await getEvaluations()); } catch (e) { console.error(e); } finally { setLoading(false); } };
@@ -47,27 +53,59 @@ export default function CrewEvaluationPage() {
     if (record) {
       const scores: Record<string, number> = {};
       CATEGORIES.forEach(c => { const v = record[c.key as keyof typeof record] as number | undefined; if (v) scores[c.key] = v; });
-      setForm({ crew_member_id: record.crew_member_id, ship_id: record.ship_id || '', evaluation_period_start: record.evaluation_period_start, evaluation_period_end: record.evaluation_period_end, evaluator_name: record.evaluator_name || '', evaluator_rank: record.evaluator_rank || '', scores, strengths: record.strengths || '', areas_for_improvement: record.areas_for_improvement || '', recommendation: record.recommendation || '', comments: record.comments || '' });
+      setForm({ crew_member_id: record.crew_member_id, ship_id: record.ship_id || '', evaluation_period_start: record.evaluation_period_start, evaluation_period_end: record.evaluation_period_end, evaluator_name: record.evaluator_name || '', evaluator_rank: record.evaluator_rank || '', scores, overallOverride: record.overall_rating != null ? String(record.overall_rating) : '', strengths: record.strengths || '', areas_for_improvement: record.areas_for_improvement || '', recommendation: record.recommendation || '', comments: record.comments || '' });
+      setAttachments(record.attachments || []);
     } else {
-      setForm({ crew_member_id: '', ship_id: '', evaluation_period_start: '', evaluation_period_end: '', evaluator_name: '', evaluator_rank: '', scores: {}, strengths: '', areas_for_improvement: '', recommendation: '', comments: '' });
+      setForm({ crew_member_id: '', ship_id: '', evaluation_period_start: '', evaluation_period_end: '', evaluator_name: '', evaluator_rank: '', scores: {}, overallOverride: '', strengths: '', areas_for_improvement: '', recommendation: '', comments: '' });
+      setAttachments([]);
     }
+    setNewFiles([]);
     setFormView({ record });
   };
   const closeForm = () => { setFormView(null); loadData(); };
 
   const calcOverall = () => { const vals = Object.values(form.scores); return vals.length ? parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)) : 0; };
+  const getOverallRating = () => form.overallOverride.trim() !== '' ? parseFloat(form.overallOverride) : (calcOverall() || undefined);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files).filter(f => {
+      if (f.size > 10 * 1024 * 1024) { toast({ title: `${f.name}은 10MB를 초과합니다.`, variant: 'destructive' }); return false; }
+      return true;
+    });
+    setNewFiles(prev => [...prev, ...files]);
+    e.target.value = '';
+  };
+  const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
+  const removeExistingAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
+  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+
+  const uploadNewFiles = async (files: File[]): Promise<EvaluationAttachment[]> => {
+    const uploaded: EvaluationAttachment[] = [];
+    for (const file of files) {
+      const ext = file.name.split('.').pop();
+      const path = `evaluations/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const { error } = await supabase.storage.from('documents').upload(path, file);
+      if (error) throw new Error(`${file.name} 업로드 실패`);
+      uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+    }
+    return uploaded;
+  };
 
   const handleSave = async () => {
     if (!form.crew_member_id || !form.evaluation_period_start || !form.evaluation_period_end) { toast({ title: '필수 항목을 입력하세요', variant: 'destructive' }); return; }
     try {
       setSaving(true);
+      setUploading(true);
+      const uploadedFiles = await uploadNewFiles(newFiles);
+      setUploading(false);
       const scoreFields: Record<string, number | undefined> = {};
       CATEGORIES.forEach(c => { scoreFields[c.key] = form.scores[c.key] || undefined; });
-      const data = { crew_member_id: form.crew_member_id, evaluation_period_start: form.evaluation_period_start, evaluation_period_end: form.evaluation_period_end, ship_id: form.ship_id || undefined, evaluator_name: form.evaluator_name || undefined, evaluator_rank: form.evaluator_rank || undefined, ...scoreFields, overall_rating: calcOverall() || undefined, strengths: form.strengths || undefined, areas_for_improvement: form.areas_for_improvement || undefined, recommendation: (form.recommendation || undefined) as CrewEvaluationWithDetails['recommendation'], comments: form.comments || undefined, status: 'submitted' as const };
+      const data = { crew_member_id: form.crew_member_id, evaluation_period_start: form.evaluation_period_start, evaluation_period_end: form.evaluation_period_end, ship_id: form.ship_id || undefined, evaluator_name: form.evaluator_name || undefined, evaluator_rank: form.evaluator_rank || undefined, ...scoreFields, overall_rating: getOverallRating(), strengths: form.strengths || undefined, areas_for_improvement: form.areas_for_improvement || undefined, recommendation: (form.recommendation || undefined) as CrewEvaluationWithDetails['recommendation'], comments: form.comments || undefined, attachments: [...attachments, ...uploadedFiles], status: 'submitted' as const };
       if (formView?.record) { await updateEvaluation(formView.record.id, data); toast({ title: '수정 완료' }); }
       else { await addEvaluation(data); toast({ title: '등록 완료' }); }
       closeForm();
-    } catch { toast({ title: '저장 실패', variant: 'destructive' }); } finally { setSaving(false); }
+    } catch (e) { toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); } finally { setSaving(false); setUploading(false); }
   };
 
   const handleDelete = async (id: string) => { if (!confirm('삭제하시겠습니까?')) return; try { await deleteEvaluation(id); toast({ title: '삭제 완료' }); loadData(); } catch { toast({ title: '실패', variant: 'destructive' }); } };
@@ -89,7 +127,7 @@ export default function CrewEvaluationPage() {
               </div>
             </div>
             {formView !== null ? (
-              <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button>
+              <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{uploading ? '업로드 중...' : saving ? '저장 중...' : '저장'}</Button>
             ) : (
               <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />평가 작성</Button>
             )}
@@ -106,12 +144,27 @@ export default function CrewEvaluationPage() {
                 <div className="space-y-1.5"><Label className="text-xs">평가 기간 시작 *</Label><Input type="date" value={form.evaluation_period_start} onChange={e => setForm({ ...form, evaluation_period_start: e.target.value })} className="h-9 text-sm" /></div>
                 <div className="space-y-1.5"><Label className="text-xs">평가 기간 종료 *</Label><Input type="date" value={form.evaluation_period_end} onChange={e => setForm({ ...form, evaluation_period_end: e.target.value })} className="h-9 text-sm" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="text-xs">평가자 이름</Label><Input value={form.evaluator_name} onChange={e => setForm({ ...form, evaluator_name: e.target.value })} className="h-9 text-sm" /></div>
-                <div className="space-y-1.5"><Label className="text-xs">평가자 직급</Label><Input value={form.evaluator_rank} onChange={e => setForm({ ...form, evaluator_rank: e.target.value })} className="h-9 text-sm" /></div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">평가자 직급/성명</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={form.evaluator_rank || '_none'} onValueChange={v => setForm({ ...form, evaluator_rank: v === '_none' ? '' : v })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">선택 안함</SelectItem>
+                      {officerRanks.map(r => <SelectItem key={r.id} value={r.rank_code}>{r.rank_code} · {r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Input value={form.evaluator_name} onChange={e => setForm({ ...form, evaluator_name: e.target.value })} placeholder="성명" className="h-9 text-sm" />
+                </div>
               </div>
               <div className="border-t pt-3">
-                <div className="flex items-center justify-between mb-2"><p className="text-xs font-semibold text-gray-600">평가 항목 (1~5점)</p><p className="text-xs text-blue-600 font-semibold">평균: {calcOverall() || '-'}점</p></div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-600">평가 항목 (1~5점)</p>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-500 whitespace-nowrap">종합점수 직접입력</Label>
+                    <Input type="number" step="0.1" min="0" max="5" value={form.overallOverride} onChange={e => setForm({ ...form, overallOverride: e.target.value })} placeholder={String(calcOverall() || '-')} className="h-7 w-16 text-xs" />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {CATEGORIES.map(cat => (
                     <div key={cat.key} className="flex items-center gap-2">
@@ -127,6 +180,41 @@ export default function CrewEvaluationPage() {
               <div className="space-y-1.5"><Label className="text-xs">강점</Label><Textarea value={form.strengths} onChange={e => setForm({ ...form, strengths: e.target.value })} rows={2} className="text-sm resize-none" /></div>
               <div className="space-y-1.5"><Label className="text-xs">개선 필요 사항</Label><Textarea value={form.areas_for_improvement} onChange={e => setForm({ ...form, areas_for_improvement: e.target.value })} rows={2} className="text-sm resize-none" /></div>
               <div className="space-y-1.5"><Label className="text-xs">총평</Label><Textarea value={form.comments} onChange={e => setForm({ ...form, comments: e.target.value })} rows={2} className="text-sm resize-none" /></div>
+              <div className="space-y-1.5 border-t pt-3">
+                <Label className="text-xs">고과표 첨부 <span className="text-gray-400 font-normal">(여러 장 업로드 가능)</span></Label>
+                <div className="border-2 border-dashed rounded-md p-3 text-center">
+                  <input type="file" id="eval-page-file-upload" multiple onChange={handleFileChange} className="hidden" disabled={saving} />
+                  <label htmlFor="eval-page-file-upload" className={`cursor-pointer flex flex-col items-center gap-1.5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <Upload className="w-6 h-6 text-gray-400" />
+                    <div className="text-xs text-gray-600"><span className="text-blue-600 font-medium">파일 선택</span> 또는 드래그 앤 드롭 (최대 10MB)</div>
+                  </label>
+                </div>
+                {(attachments.length > 0 || newFiles.length > 0) && (
+                  <div className="space-y-1.5">
+                    {attachments.map((a, idx) => (
+                      <div key={`existing-${idx}`} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-xs truncate">{a.name}</span>
+                          <span className="text-xs text-gray-500 shrink-0">({(a.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => window.open(getAttachmentUrl(a.path), '_blank')}><Download className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeExistingAttachment(idx)} disabled={saving}><X className="h-3.5 w-3.5" /></Button>
+                        </div>
+                      </div>
+                    ))}
+                    {newFiles.map((f, idx) => (
+                      <div key={`new-${idx}`} className="flex items-center justify-between p-2 bg-blue-50 rounded-md">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-xs truncate">{f.name}</span>
+                          <span className="text-xs text-gray-500 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => removeNewFile(idx)} disabled={saving}><X className="h-3.5 w-3.5" /></Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <>

@@ -1,3 +1,10 @@
+export interface EvaluationAttachment {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 export interface CrewEvaluation {
   id: string;
   crew_member_id: string;
@@ -20,6 +27,7 @@ export interface CrewEvaluation {
   areas_for_improvement?: string;
   recommendation?: 'highly_recommend' | 'recommend' | 'neutral' | 'not_recommend';
   comments?: string;
+  attachments?: EvaluationAttachment[];
   status: 'draft' | 'submitted' | 'acknowledged';
   acknowledged_by_crew?: boolean;
   acknowledged_at?: string;
