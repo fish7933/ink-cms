@@ -172,10 +172,11 @@ function getTitleFromPath(path: string): string {
     '/ships': '선박 목록', '/ship-types': '선종/분류 관리', '/ship-flags': '선적국 관리', '/fleet-management': '플릿 관리',
     '/job-postings': '구인 공고', '/my-recommendations': '내 추천 선원', '/recommendation-review': '추천 검토',
     '/approval-inbox': '내 결재함', '/approval-archive': '완료 문서함', '/approval-management': '결재 캐비넷', '/approval-lines': '결재선 관리',
+    '/documents/new': '기안서 작성', '/documents': '기안함', '/document-types': '문서유형/전결규정 관리',
     '/salary/templates': '급여 템플릿', '/salary/templates/new': '급여 템플릿 추가', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',
     '/companies': '회사 관리', '/companies?type=owner': '선주사 관리', '/companies?type=manning': '선원 매닝사 관리', '/user-groups': '사용자 그룹', '/manager-assignments': '선주 사용자 관리', '/supervisor-management': '우리회사 담당자 관리',
     '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 유형 관리',
-    '/shore-positions': '육상 직원 직급', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
+    '/shore-positions': '육상 직원 직급', '/org-chart': '조직도 관리', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
     '/certificate-expiry': '증서 만료 현황', '/leave-management': '휴가 관리', '/reports': '통계 대시보드',
     '/crew-evaluations': '선원 평가', '/contract-management': '계약 관리', '/ports': '교대지 관리',
   };

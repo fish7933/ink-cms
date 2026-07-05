@@ -162,8 +162,19 @@ export const orgChartService = {
    * 특정 부서를 기준으로, 그 부서장부터 상위 부서장을 거쳐 최상위 부서장까지
    * 결재라인을 자동으로 구성한다. 부서장이 없는 단계는 건너뛰고, 같은 사람이
    * 연속으로 나오면(겸직 등) 한 번만 포함한다.
+   *
+   * authorityThresholdOrder(전결규정)를 주면, 어떤 단계의 결재자가 그 직급
+   * 순위(position_order) 이상(=숫자가 같거나 작음, 즉 더 선임)이면 그 자리에서
+   * 결재라인을 종결하고 더 이상 상위 부서로 올라가지 않는다. 단, 그 부서에
+   * 결재자를 확정할 수 없으면(부서장 미지정 + 소속 인원도 없음) 이 단계는
+   * 그냥 건너뛰고 상위 부서로 계속 올라간다 — 전결 대상이 없으니 당연한 동작.
    */
-  buildApprovalChain(startUnitId: string, units: OrgUnit[], members: OrgMember[]): ApprovalChainStep[] {
+  buildApprovalChain(
+    startUnitId: string,
+    units: OrgUnit[],
+    members: OrgMember[],
+    authorityThresholdOrder?: number,
+  ): ApprovalChainStep[] {
     const unitsById = new Map(units.map(u => [u.id, u]));
     const membersById = new Map(members.map(m => [m.id, m]));
     const membersByUnit = buildMembersByUnit(members);
@@ -181,16 +192,23 @@ export const orgChartService = {
       guard++;
       const headId = resolveHeadId(current);
       if (headId) {
+        const headMember = membersById.get(headId);
         const last = chain[chain.length - 1];
         if (!last || last.approver_id !== headId) {
-          const member = membersById.get(headId);
           chain.push({
             approver_id: headId,
-            approver_name: member?.name || '알 수 없음',
-            approver_role: `${current.name}${member?.position_name ? ' · ' + member.position_name : ''}`,
+            approver_name: headMember?.name || '알 수 없음',
+            approver_role: `${current.name}${headMember?.position_name ? ' · ' + headMember.position_name : ''}`,
             org_unit_id: current.id,
             org_unit_name: current.name,
           });
+        }
+        if (
+          authorityThresholdOrder !== undefined &&
+          headMember?.position_order != null &&
+          headMember.position_order <= authorityThresholdOrder
+        ) {
+          break; // 전결 처리 — 여기서 결재라인 종결
         }
       }
       current = current.parent_id ? unitsById.get(current.parent_id) : undefined;

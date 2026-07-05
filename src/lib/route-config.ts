@@ -31,6 +31,9 @@ const SalaryTemplateFormPage = lazy(() => import('@/pages/SalaryTemplateFormPage
 const SalaryTemplateDetailPage = lazy(() => import('@/pages/SalaryTemplateDetailPage'));
 const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
 const OrgChartManagementPage = lazy(() => import('@/pages/OrgChartManagementPage'));
+const DocumentTypesManagementPage = lazy(() => import('@/pages/DocumentTypesManagementPage'));
+const DocumentDraftPage = lazy(() => import('@/pages/DocumentDraftPage'));
+const MyDocumentsPage = lazy(() => import('@/pages/MyDocumentsPage'));
 const PortManagementPage = lazy(() => import('@/pages/PortManagementPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const CompanyManagementPage = lazy(() => import('@/pages/CompanyManagementPage'));
@@ -87,6 +90,9 @@ export const routeConfig: RouteEntry[] = [
   { path: '/salary/templates', component: SalaryTemplatesPage },
   { path: '/shore-positions', component: ShorePositionsPage },
   { path: '/org-chart', component: OrgChartManagementPage },
+  { path: '/document-types', component: DocumentTypesManagementPage },
+  { path: '/documents/new', component: DocumentDraftPage },
+  { path: '/documents', component: MyDocumentsPage },
   { path: '/ports', component: PortManagementPage },
   { path: '/profile', component: ProfilePage },
   { path: '/companies', component: CompanyManagementPage },
