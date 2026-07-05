@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { dispatchService } from '@/services/dispatch.service';
+import { loadShipSalaryRankMaps, getRankOptionsForShip, getGradeOptionsForShipRank, type ShipSalaryRankMaps } from '@/services/ship-salary-rank.service';
 import type { CrewMember, Rank } from '@/types/models';
 import type { RankGrade, DispatchType } from '@/types/dispatch';
 import { RANK_GRADE_LABELS } from '@/types/dispatch';
@@ -55,8 +56,7 @@ export default function DispatchOrderPage() {
   const [crews, setCrews] = useState<CrewForDispatch[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [embarkByCrew, setEmbarkByCrew] = useState<Map<string, { embark_date: string; contract_months: number | null }>>(new Map());
-  const [rankOptionsByShip, setRankOptionsByShip] = useState<Map<string, { rank: Rank; templateId: string }[]>>(new Map());
-  const [gradesByTemplate, setGradesByTemplate] = useState<Map<string, string[]>>(new Map());
+  const [salaryRankMaps, setSalaryRankMaps] = useState<ShipSalaryRankMaps>({ rankOptionsByShip: new Map(), gradesByTemplate: new Map() });
   const [dispatchType, setDispatchType] = useState<DispatchType>('promotion');
   const [rows, setRows] = useState<DispatchRow[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -73,20 +73,18 @@ export default function DispatchOrderPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [crewRes, ranksRes, ownersRes, fleetsRes, shipAssignRes, templatesRes, itemsRes, embarkRes] = await Promise.all([
+    const [crewRes, ranksRes, ownersRes, fleetsRes, embarkRes, salaryMaps] = await Promise.all([
       supabase.from('crew_members').select('*, ships(name, owner_id, fleet_id)').eq('status', 'onboard').order('name'),
       supabase.from('ranks').select('*'),
       supabase.from('companies').select('id, name'),
       supabase.from('fleets').select('id, name'),
-      supabase.from('ship_salary_assignments').select('ship_id, template_id'),
-      supabase.from('salary_templates').select('id, rank'),
-      supabase.from('salary_template_items').select('template_id, rank_grade').not('rank_grade', 'is', null),
       supabase.from('crew_embarkation_records').select('crew_member_id, embark_date, contract_months').eq('status', 'active'),
+      loadShipSalaryRankMaps(),
     ]);
 
     const sortedRanks = sortRanksByDisplayOrder(ranksRes.data || []);
     setRanks(sortedRanks);
-    const ranksByName = new Map(sortedRanks.map(r => [r.name, r]));
+    setSalaryRankMaps(salaryMaps);
 
     const ownersMap = new Map((ownersRes.data || []).map(o => [o.id, o.name]));
     const fleetsMap = new Map((fleetsRes.data || []).map(f => [f.id, f.name]));
@@ -98,29 +96,6 @@ export default function DispatchOrderPage() {
       fleet_name: c.ships?.fleet_id ? (fleetsMap.get(c.ships.fleet_id) || '') : '',
     }));
     setCrews(crewData);
-
-    // 선박 → 배정된 급여템플릿(들) → 그 템플릿의 직급명과 매칭되는 ranks 항목
-    const templateRankName = new Map((templatesRes.data || []).map(t => [t.id, t.rank]));
-    const rankOptMap = new Map<string, { rank: Rank; templateId: string }[]>();
-    for (const a of (shipAssignRes.data || [])) {
-      const rankName = templateRankName.get(a.template_id);
-      const rank = rankName ? ranksByName.get(rankName) : undefined;
-      if (!rank) continue;
-      const list = rankOptMap.get(a.ship_id) || [];
-      list.push({ rank, templateId: a.template_id });
-      rankOptMap.set(a.ship_id, list);
-    }
-    setRankOptionsByShip(rankOptMap);
-
-    // 템플릿별로 등록된 Grade 목록 (NULL 제외)
-    const gradeSetMap = new Map<string, Set<string>>();
-    for (const item of (itemsRes.data || []) as { template_id: string; rank_grade: string | null }[]) {
-      if (!item.rank_grade) continue;
-      const set = gradeSetMap.get(item.template_id) || new Set<string>();
-      set.add(item.rank_grade);
-      gradeSetMap.set(item.template_id, set);
-    }
-    setGradesByTemplate(new Map([...gradeSetMap.entries()].map(([k, v]) => [k, [...v].sort()])));
 
     const embarkMap = new Map((embarkRes.data || []).map(e => [e.crew_member_id, { embark_date: e.embark_date, contract_months: e.contract_months }]));
     setEmbarkByCrew(embarkMap);
@@ -178,22 +153,8 @@ export default function DispatchOrderPage() {
   };
 
   const getRankCode = (id: string) => ranks.find(r => r.id === id)?.rank_code || '';
-
-  // 변경후 직급 선택지 — 해당 선박에 배정된 급여템플릿에 있는 직급만 (템플릿 미배정 선박은 전체 직급으로 대체)
-  const getRankOptions = (shipId: string | null): Rank[] => {
-    const opts = shipId ? rankOptionsByShip.get(shipId) : undefined;
-    if (!opts || opts.length === 0) return ranks;
-    return sortRanksByDisplayOrder(opts.map(o => o.rank));
-  };
-
-  // 변경후 Grade 선택지 — 선택한 직급이 속한 템플릿에 등록된 Grade만 (템플릿 미배정 선박은 전체 Grade로 대체)
-  const getGradeOptions = (shipId: string | null, rankId: string): string[] => {
-    const opts = shipId ? rankOptionsByShip.get(shipId) : undefined;
-    if (!opts || opts.length === 0) return Object.keys(RANK_GRADE_LABELS);
-    const match = opts.find(o => o.rank.id === rankId);
-    if (!match) return [];
-    return gradesByTemplate.get(match.templateId) || [];
-  };
+  const getRankOptions = (shipId: string | null): Rank[] => getRankOptionsForShip(salaryRankMaps, shipId);
+  const getGradeOptions = (shipId: string | null, rankId: string): string[] => getGradeOptionsForShipRank(salaryRankMaps, shipId, rankId);
 
   const handleSubmit = async (asDraft: boolean) => {
     const validRows = rows.filter(r => r.crewId && (r.newRankId !== r.previousRankId || r.newGrade !== r.previousGrade));
@@ -343,21 +304,24 @@ export default function DispatchOrderPage() {
                   <div className="space-y-3">
                     <div className="space-y-1">
                       <Label className="text-xs font-medium text-blue-700">변경 후 직급 <span className="text-gray-400 font-normal">(급여템플릿 등록 직급만)</span></Label>
-                      <Select value={row.newRankId || '_none'} onValueChange={v => updateRow(idx, { newRankId: v === '_none' ? '' : v })}>
+                      <Select value={row.newRankId || '_none'} onValueChange={v => updateRow(idx, { newRankId: v === '_none' ? '' : v })} disabled={rankOptions.length === 0}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="직급 선택" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="_none">직급 선택</SelectItem>
                           {rankOptions.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                      {row.shipId && rankOptions.length === 0 && (
+                        <p className="text-xs text-red-500">이 선박에 배정된 급여템플릿이 없어 직급을 선택할 수 없습니다.</p>
+                      )}
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-blue-700">변경 후 Grade</Label>
-                      <Select value={row.newGrade || '_none'} onValueChange={v => updateRow(idx, { newGrade: v === '_none' ? null : v as RankGrade })}>
+                      <Label className="text-xs font-medium text-blue-700">변경 후 Grade <span className="text-gray-400 font-normal">(급여템플릿 등록 등급만)</span></Label>
+                      <Select value={row.newGrade || '_none'} onValueChange={v => updateRow(idx, { newGrade: v === '_none' ? null : v as RankGrade })} disabled={gradeOptions.length === 0}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Grade 선택" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="_none">{gradeOptions.length === 0 ? '등급 없음' : 'Grade 없음'}</SelectItem>
+                          <SelectItem value="_none">Grade 없음</SelectItem>
                           {gradeOptions.map(g => (
                             <SelectItem key={g} value={g}>{RANK_GRADE_LABELS[g] || `${g}급`}</SelectItem>
                           ))}

@@ -58,6 +58,7 @@ export interface SeaServiceRecord {
   id: string;
   crew_member_id: string;
   record_type: 'pre_company' | 'company_assignment';
+  ship_id?: string | null;
   ship_name: string;
   ship_type?: string;
   flag?: string;

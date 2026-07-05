@@ -22,6 +22,7 @@ import { addSeaServiceRecord, updateSeaServiceRecord } from '@/services/crew-ext
 import { getShipTypes } from '@/services/ship-classification.service';
 import { getActiveShipFlags } from '@/services/ship-flag.service';
 import { getSignOffReasons } from '@/services/sign-off-reason.service';
+import { loadShipSalaryRankMaps, getRankOptionsForShip, getGradeOptionsForShipRank, type ShipSalaryRankMaps } from '@/services/ship-salary-rank.service';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { RANK_GRADE_LABELS } from '@/types/dispatch';
@@ -31,6 +32,13 @@ import type { ShipFlag } from '@/types/ship-flag';
 import type { Rank } from '@/types/models';
 import type { SignOffReason } from '@/types/sign-off-reason';
 import { useToast } from '@/hooks/use-toast';
+
+interface RegisteredShip {
+  id: string;
+  name: string;
+  owner_id: string;
+  fleet_id?: string | null;
+}
 
 interface SeaServiceDialogProps {
   open: boolean;
@@ -53,9 +61,15 @@ export default function SeaServiceDialog({
   const [shipFlags, setShipFlags] = useState<ShipFlag[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [signOffReasons, setSignOffReasons] = useState<SignOffReason[]>([]);
+  const [registeredShips, setRegisteredShips] = useState<RegisteredShip[]>([]);
+  const [companiesMap, setCompaniesMap] = useState<Map<string, string>>(new Map());
+  const [shipManagerCompanyName, setShipManagerCompanyName] = useState('');
+  const [crewManningAgencyName, setCrewManningAgencyName] = useState('');
+  const [salaryRankMaps, setSalaryRankMaps] = useState<ShipSalaryRankMaps>({ rankOptionsByShip: new Map(), gradesByTemplate: new Map() });
 
   const [formData, setFormData] = useState({
     record_type: 'pre_company' as 'pre_company' | 'company_assignment',
+    ship_id: '',
     ship_name: '',
     ship_type: '',
     flag: '',
@@ -79,18 +93,31 @@ export default function SeaServiceDialog({
       getActiveShipFlags(),
       supabase.from('ranks').select('*'),
       getSignOffReasons(),
-    ]).then(([types, flags, ranksRes, reasons]) => {
+      supabase.from('ships').select('id, name, owner_id, fleet_id').order('name'),
+      supabase.from('companies').select('id, name, company_type'),
+      supabase.from('crew_members').select('manning_agency_id').eq('id', crewId).single(),
+      loadShipSalaryRankMaps(),
+    ]).then(([types, flags, ranksRes, reasons, shipsRes, companiesRes, crewRes, salaryMaps]) => {
       setShipTypes(types);
       setShipFlags(flags);
       setRanks(sortRanksByDisplayOrder(ranksRes.data || []));
       setSignOffReasons(reasons);
+      setRegisteredShips(shipsRes.data || []);
+      const cMap = new Map((companiesRes.data || []).map((c: { id: string; name: string }) => [c.id, c.name]));
+      setCompaniesMap(cMap);
+      const mgmtCompany = (companiesRes.data || []).find((c: { company_type?: string }) => c.company_type === '선박관리사');
+      setShipManagerCompanyName(mgmtCompany?.name || '');
+      const manningId = (crewRes.data as { manning_agency_id?: string } | null)?.manning_agency_id;
+      setCrewManningAgencyName(manningId ? (cMap.get(manningId) || '') : '');
+      setSalaryRankMaps(salaryMaps);
     }).catch(console.error);
-  }, [open]);
+  }, [open, crewId]);
 
   useEffect(() => {
     if (record) {
       setFormData({
         record_type: record.record_type,
+        ship_id: record.ship_id || '',
         ship_name: record.ship_name,
         ship_type: record.ship_type || '',
         flag: record.flag || '',
@@ -109,6 +136,7 @@ export default function SeaServiceDialog({
     } else {
       setFormData({
         record_type: 'pre_company',
+        ship_id: '',
         ship_name: '',
         ship_type: '',
         flag: '',
@@ -127,6 +155,28 @@ export default function SeaServiceDialog({
     }
   }, [record, open]);
 
+  // 회사 배치: 실제 등록된 선박을 고르면 선주사/선박관리사/매닝사, 직급/등급 선택지를 실제 데이터에서 채운다
+  const handleShipSelect = (shipId: string) => {
+    const ship = registeredShips.find(s => s.id === shipId);
+    setFormData(prev => ({
+      ...prev,
+      ship_id: shipId,
+      ship_name: ship?.name || '',
+      owner_company_name: ship?.owner_id ? (companiesMap.get(ship.owner_id) || '') : '',
+      ship_manager_name: shipManagerCompanyName || prev.ship_manager_name,
+      manning_agency_name: crewManningAgencyName || prev.manning_agency_name,
+      rank: '',
+      rank_grade: '',
+    }));
+  };
+
+  const isCompanyAssignment = formData.record_type === 'company_assignment';
+  const rankOptions = isCompanyAssignment && formData.ship_id ? getRankOptionsForShip(salaryRankMaps, formData.ship_id) : ranks;
+  const selectedRank = rankOptions.find(r => r.rank_code === formData.rank);
+  const gradeOptions = isCompanyAssignment && formData.ship_id
+    ? (selectedRank ? getGradeOptionsForShipRank(salaryRankMaps, formData.ship_id, selectedRank.id) : [])
+    : Object.keys(RANK_GRADE_LABELS);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -135,6 +185,7 @@ export default function SeaServiceDialog({
       const recordData = {
         crew_member_id: crewId,
         record_type: formData.record_type,
+        ship_id: formData.ship_id || undefined,
         ship_name: formData.ship_name,
         ship_type: formData.ship_type || undefined,
         flag: formData.flag || undefined,
@@ -219,7 +270,8 @@ export default function SeaServiceDialog({
                   value={formData.owner_company_name}
                   onChange={(e) => setFormData({ ...formData, owner_company_name: e.target.value })}
                   placeholder="선주사명"
-                  className="h-9 text-sm"
+                  readOnly={isCompanyAssignment && !!formData.ship_id}
+                  className={`h-9 text-sm ${isCompanyAssignment && formData.ship_id ? 'bg-gray-100' : ''}`}
                 />
               </div>
               <div className="space-y-1.5">
@@ -247,14 +299,26 @@ export default function SeaServiceDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="ship_name" className="text-xs">선박명 *</Label>
-                <Input
-                  id="ship_name"
-                  value={formData.ship_name}
-                  onChange={(e) => setFormData({ ...formData, ship_name: e.target.value })}
-                  placeholder="선박명을 입력하세요"
-                  required
-                  className="h-9 text-sm"
-                />
+                {isCompanyAssignment ? (
+                  <Select value={formData.ship_id || '_none'} onValueChange={v => v !== '_none' && handleShipSelect(v)}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none" className="text-sm">선박 선택</SelectItem>
+                      {registeredShips.map(s => (
+                        <SelectItem key={s.id} value={s.id} className="text-sm">{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="ship_name"
+                    value={formData.ship_name}
+                    onChange={(e) => setFormData({ ...formData, ship_name: e.target.value })}
+                    placeholder="선박명을 입력하세요"
+                    required
+                    className="h-9 text-sm"
+                  />
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -286,28 +350,36 @@ export default function SeaServiceDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="rank" className="text-xs">직급 *</Label>
-                <Select value={formData.rank || '_none'} onValueChange={v => setFormData({ ...formData, rank: v === '_none' ? '' : v })} required>
+                <Label htmlFor="rank" className="text-xs">직급 * {isCompanyAssignment && <span className="text-gray-400 font-normal">(급여템플릿 등록 직급만)</span>}</Label>
+                <Select
+                  value={formData.rank || '_none'}
+                  onValueChange={v => setFormData({ ...formData, rank: v === '_none' ? '' : v, rank_grade: '' })}
+                  required
+                  disabled={isCompanyAssignment && !!formData.ship_id && rankOptions.length === 0}
+                >
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급 선택" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
-                    {ranks.map(r => (
+                    {rankOptions.map(r => (
                       <SelectItem key={r.id} value={r.rank_code} className="text-sm">{r.rank_code}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {isCompanyAssignment && formData.ship_id && rankOptions.length === 0 && (
+                  <p className="text-xs text-red-500">이 선박에 배정된 급여템플릿이 없어 직급을 선택할 수 없습니다.</p>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="rank_grade" className="text-xs">등급 (Grade)</Label>
-                <Select value={formData.rank_grade || '_none'} onValueChange={v => setFormData({ ...formData, rank_grade: v === '_none' ? '' : v })}>
+                <Label htmlFor="rank_grade" className="text-xs">등급 (Grade) {isCompanyAssignment && <span className="text-gray-400 font-normal">(급여템플릿 등록 등급만)</span>}</Label>
+                <Select value={formData.rank_grade || '_none'} onValueChange={v => setFormData({ ...formData, rank_grade: v === '_none' ? '' : v })} disabled={isCompanyAssignment && gradeOptions.length === 0}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Grade 선택" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none" className="text-sm">Grade 없음</SelectItem>
-                    {(Object.entries(RANK_GRADE_LABELS) as [string, string][]).map(([g, label]) => (
-                      <SelectItem key={g} value={g} className="text-sm">{label}</SelectItem>
+                    {gradeOptions.map(g => (
+                      <SelectItem key={g} value={g} className="text-sm">{RANK_GRADE_LABELS[g] || `${g}급`}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
