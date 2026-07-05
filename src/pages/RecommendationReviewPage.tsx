@@ -448,7 +448,9 @@ export default function RecommendationReviewPage() {
                       <TableCell className="py-2">{sBadge(rec.status)}</TableCell>
                       <TableCell className="py-2">
                         <div className="text-sm font-medium truncate max-w-[120px]">{rec.ship_name}</div>
-                        {rec.fleet_name && <div className="text-xs text-muted-foreground truncate">{rec.fleet_name}</div>}
+                        <div className="text-xs text-muted-foreground truncate max-w-[120px]">
+                          {rec.company_name}{rec.fleet_name ? ` · ${rec.fleet_name}` : ''}
+                        </div>
                       </TableCell>
                       <TableCell className="py-2">
                         {rec.rank_code
