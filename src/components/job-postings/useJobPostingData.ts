@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { supervisorService } from '@/services/supervisor.service';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
 import type { Company, Fleet, Ship, Rank, User, JobPostingGroupWithDetails } from '@/types/models';
@@ -235,7 +236,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
       const [companiesRes, manningRes, ranksRes] = await Promise.all([
         supabase.from('companies').select('*').eq('type', 'owner').order('name'),
         supabase.from('companies').select('*').eq('type', 'manning').order('name'),
-        supabase.from('ranks').select('*').order('display_order'),
+        supabase.from('ranks').select('*'),
       ]);
 
       if (companiesRes.data) {
@@ -269,7 +270,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
       
       if (ranksRes.data) {
         console.log('📋 [loadInitialData] Ranks loaded:', ranksRes.data.length);
-        setRanks(ranksRes.data);
+        setRanks(sortRanksByDisplayOrder(ranksRes.data));
       }
     } catch (error) {
       console.error('❌ [loadInitialData] Failed to load initial data:', error);
@@ -358,8 +359,8 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
   // has_salary=false로 표시해서 직접 입력하도록 안내).
   const checkShipTemplate = async (shipId: string) => {
     try {
-      const { data: allRanks } = await supabase.from('ranks').select('*').order('display_order');
-      const rankList = allRanks || [];
+      const { data: allRanks } = await supabase.from('ranks').select('*');
+      const rankList = sortRanksByDisplayOrder(allRanks || []);
 
       const { data: ship } = await supabase
         .from('ships')

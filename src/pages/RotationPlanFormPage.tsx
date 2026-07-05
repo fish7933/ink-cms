@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { rotationService } from '@/services/rotation.service';
 import { getPorts, findOrCreatePort } from '@/services/port.service';
 import { getEffectiveTemplateForShip, type SalaryTemplateWithItems } from '@/lib/salary-store';
@@ -139,13 +140,13 @@ export default function RotationPlanFormPage() {
     setLoading(true);
     const [allCrew, ranksRes, ownersRes, portsData, reserved] = await Promise.all([
       crewService.getAllWithDetails(),
-      supabase.from('ranks').select('*').order('display_order'),
+      supabase.from('ranks').select('*'),
       supabase.from('companies').select('*').eq('type', 'owner').order('name'),
       getPorts(),
       rotationService.getActivelyReservedCrewIds(),
     ]);
 
-    const ranksData: Rank[] = ranksRes.data || [];
+    const ranksData: Rank[] = sortRanksByDisplayOrder(ranksRes.data || []);
     const ownersData: Company[] = ownersRes.data || [];
     const ranksById = new Map(ranksData.map(r => [r.id, r]));
     const crewById = new Map(allCrew.map(c => [c.id, c]));

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Upload, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { getCurrentUser } from '@/lib/store';
 import { getNationalities } from '@/services/nationality.service';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
@@ -64,8 +65,8 @@ export default function CrewRecommendationPage() {
 
   useEffect(() => {
     (async () => {
-      const { data: ranksData } = await supabase.from('ranks').select('*').order('display_order');
-      if (ranksData) setRanks(ranksData);
+      const { data: ranksData } = await supabase.from('ranks').select('*');
+      if (ranksData) setRanks(sortRanksByDisplayOrder(ranksData));
 
       const nationalitiesData = await getNationalities(true);
       setNationalities(nationalitiesData);

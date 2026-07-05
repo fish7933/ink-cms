@@ -1,18 +1,18 @@
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import type { Rank } from '@/types/models';
 
 export async function getRanks(): Promise<Rank[]> {
   const { data, error } = await supabase
     .from('ranks')
-    .select('*')
-    .order('display_order', { ascending: true });
+    .select('*');
 
   if (error) {
     console.error('Error fetching ranks:', error);
     return [];
   }
 
-  return data as Rank[];
+  return sortRanksByDisplayOrder(data as Rank[]);
 }
 
 export async function addRank(rank: Omit<Rank, 'id'>): Promise<Rank | null> {

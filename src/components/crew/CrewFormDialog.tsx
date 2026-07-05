@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import type { Rank } from '@/types/models';
 import { Upload, User, X, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -185,7 +186,7 @@ export function CrewFormDialog({ crew, onClose }: CrewFormDialogProps) {
   const [formData, setFormData] = useState(EMPTY_FORM);
 
   useEffect(() => {
-    supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
+    supabase.from('ranks').select('*').then(({ data }) => { if (data) setRanks(sortRanksByDisplayOrder(data)); });
     getNationalities(true).then(setNationalities).catch(console.error);
     setSelectedFile(null);
     setCertFiles({});

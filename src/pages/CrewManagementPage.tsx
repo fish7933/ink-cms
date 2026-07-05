@@ -17,6 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import type { Rank } from '@/types/models';
 import type { RegistrationSource } from '@/types/dispatch';
 import { REGISTRATION_SOURCE_LABELS, CREW_CATEGORY_LABELS } from '@/types/dispatch';
@@ -100,11 +101,11 @@ export function CrewManagementPage() {
     try {
       const [crewData, ranksRes, natData] = await Promise.all([
         crewService.getAllWithDetails(),
-        supabase.from('ranks').select('*').order('display_order'),
+        supabase.from('ranks').select('*'),
         getNationalities(),
       ]);
       setCrew(crewData);
-      if (ranksRes.data) setRanks(ranksRes.data);
+      if (ranksRes.data) setRanks(sortRanksByDisplayOrder(ranksRes.data));
       setNationalities(natData);
     } finally { setLoading(false); }
   };

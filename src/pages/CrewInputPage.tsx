@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewService } from '@/services/crew.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
@@ -138,8 +139,8 @@ export default function CrewInputPage() {
   }, [recommendation, loadingRec]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadRanks = async () => {
-    const { data } = await supabase.from('ranks').select('*').order('display_order');
-    if (data) setRanks(data);
+    const { data } = await supabase.from('ranks').select('*');
+    if (data) setRanks(sortRanksByDisplayOrder(data));
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

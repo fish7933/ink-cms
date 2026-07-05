@@ -11,6 +11,7 @@ import { getEvaluations, addEvaluation, updateEvaluation, deleteEvaluation } fro
 import type { CrewEvaluationWithDetails, EvaluationAttachment } from '@/types/evaluation';
 import type { Rank } from '@/types/models';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
 
 const CATEGORIES = [
@@ -44,7 +45,7 @@ export default function CrewEvaluationPage() {
     loadData();
     supabase.from('crew_members').select('id, name, rank').then(({ data }) => { if (data) setCrewOptions(data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '' }))); });
     supabase.from('ships').select('id, name').then(({ data }) => { if (data) setShipOptions(data); });
-    supabase.from('ranks').select('*').eq('rank_category', 'officer').order('display_order').then(({ data }) => setOfficerRanks(data || []));
+    supabase.from('ranks').select('*').eq('rank_category', 'officer').then(({ data }) => setOfficerRanks(sortRanksByDisplayOrder(data || [])));
   }, []);
 
   const loadData = async () => { try { setLoading(true); setEvaluations(await getEvaluations()); } catch (e) { console.error(e); } finally { setLoading(false); } };
@@ -151,7 +152,7 @@ export default function CrewEvaluationPage() {
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급 선택" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">선택 안함</SelectItem>
-                      {officerRanks.map(r => <SelectItem key={r.id} value={r.rank_code}>{r.rank_code} · {r.name}</SelectItem>)}
+                      {officerRanks.map(r => <SelectItem key={r.id} value={r.rank_code}>{r.rank_code}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Input value={form.evaluator_name} onChange={e => setForm({ ...form, evaluator_name: e.target.value })} placeholder="성명" className="h-9 text-sm" />

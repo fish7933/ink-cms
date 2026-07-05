@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sortRanksByDisplayOrder } from './rank-order';
 import { getCurrentUser } from './store';
 
 // Types
@@ -194,9 +195,10 @@ export async function getSalaryTemplateWithItems(templateId: string): Promise<Sa
     return null;
   }
 
-  // 직급은 항상 display_order 기준으로 정렬해서 반환 (저장/선택 순서와 무관하게)
-  const { data: allRanks } = await supabase.from('ranks').select('name, display_order').order('display_order');
-  const rankOrder = new Map((allRanks || []).map((r, i) => [r.name, i]));
+  // 직급은 항상 직급 관리 화면과 같은 순서(부서별 그룹 + display_order)로 정렬해서 반환
+  const { data: allRanks } = await supabase.from('ranks').select('name, department, display_order');
+  const sortedRanks = sortRanksByDisplayOrder(allRanks || []);
+  const rankOrder = new Map(sortedRanks.map((r, i) => [r.name, i]));
   const ranks = (templateRanks?.map(tr => tr.rank) || [])
     .sort((a, b) => (rankOrder.get(a) ?? 999) - (rankOrder.get(b) ?? 999));
 

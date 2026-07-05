@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sortRanksByDisplayOrder } from './rank-order';
 import { login as authLogin, logout as authLogout, getCurrentUser as authGetCurrentUser } from '@/services/auth.service';
 import type { 
   User, 
@@ -392,11 +393,10 @@ export const getEffectiveManager = async (shipId: string): Promise<User | null> 
 export const getRanks = async (): Promise<Rank[]> => {
   const { data, error } = await supabase
     .from('ranks')
-    .select('*')
-    .order('display_order');
+    .select('*');
 
   if (error) throw error;
-  return data || [];
+  return sortRanksByDisplayOrder(data || []);
 };
 
 export const addRank = async (rank: Omit<Rank, 'id' | 'created_at'>): Promise<Rank> => {

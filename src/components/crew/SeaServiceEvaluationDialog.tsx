@@ -14,6 +14,7 @@ import type { CrewEvaluationWithDetails, EvaluationAttachment } from '@/types/ev
 import type { SeaServiceRecord } from '@/types/crew-extended';
 import type { Rank } from '@/types/models';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
 
 const CATEGORIES = [
@@ -55,8 +56,8 @@ export default function SeaServiceEvaluationDialog({ open, onOpenChange, crewId,
   useEffect(() => { if (open) { loadData(); setFormView(null); } }, [open, loadData]);
   useEffect(() => {
     if (!open) return;
-    supabase.from('ranks').select('*').eq('rank_category', 'officer').order('display_order')
-      .then(({ data }) => setOfficerRanks(data || []));
+    supabase.from('ranks').select('*').eq('rank_category', 'officer')
+      .then(({ data }) => setOfficerRanks(sortRanksByDisplayOrder(data || [])));
   }, [open]);
 
   const openForm = (evalRecord?: CrewEvaluationWithDetails) => {
@@ -167,7 +168,7 @@ export default function SeaServiceEvaluationDialog({ open, onOpenChange, crewId,
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급 선택" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">선택 안함</SelectItem>
-                    {officerRanks.map(r => <SelectItem key={r.id} value={r.rank_code}>{r.rank_code} · {r.name}</SelectItem>)}
+                    {officerRanks.map(r => <SelectItem key={r.id} value={r.rank_code}>{r.rank_code}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Input value={form.evaluator_name} onChange={e => setForm({ ...form, evaluator_name: e.target.value })} placeholder="성명" className="h-9 text-sm" />

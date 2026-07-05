@@ -22,6 +22,7 @@ import { addSeaServiceRecord, updateSeaServiceRecord } from '@/services/crew-ext
 import { getShipTypes } from '@/services/ship-classification.service';
 import { getActiveShipFlags } from '@/services/ship-flag.service';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import type { SeaServiceRecord } from '@/types/crew-extended';
 import type { ShipType } from '@/types/ship-classification';
 import type { ShipFlag } from '@/types/ship-flag';
@@ -71,11 +72,11 @@ export default function SeaServiceDialog({
     Promise.all([
       getShipTypes(),
       getActiveShipFlags(),
-      supabase.from('ranks').select('*').order('display_order'),
+      supabase.from('ranks').select('*'),
     ]).then(([types, flags, ranksRes]) => {
       setShipTypes(types);
       setShipFlags(flags);
-      setRanks(ranksRes.data || []);
+      setRanks(sortRanksByDisplayOrder(ranksRes.data || []));
     }).catch(console.error);
   }, [open]);
 

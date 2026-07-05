@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
 import { getNationalities } from '@/services/nationality.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
@@ -158,7 +159,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [editingSalary, setEditingSalary] = useState<CrewSalaryRecord | undefined>();
 
   useEffect(() => {
-    supabase.from('ranks').select('*').order('display_order').then(({ data }) => { if (data) setRanks(data); });
+    supabase.from('ranks').select('*').then(({ data }) => { if (data) setRanks(sortRanksByDisplayOrder(data)); });
     getNationalities(true).then(setNationalities).catch(console.error);
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
     if (!isNew) loadCrew(id!);

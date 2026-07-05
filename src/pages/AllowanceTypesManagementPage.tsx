@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { allowanceService } from '@/services/allowance.service';
 import type { AllowanceType, AllowanceRankRateWithDetails, AllowancePaymentBasis, AllowancePaymentMethod } from '@/types/allowance';
 import type { Rank } from '@/types/models';
@@ -47,10 +48,10 @@ export default function AllowanceTypesManagementPage() {
     (async () => {
       setLoading(true);
       const [{ data: ranksData }] = await Promise.all([
-        supabase.from('ranks').select('*').order('display_order'),
+        supabase.from('ranks').select('*'),
         loadTypes(),
       ]);
-      setRanks(ranksData || []);
+      setRanks(sortRanksByDisplayOrder(ranksData || []));
       setLoading(false);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

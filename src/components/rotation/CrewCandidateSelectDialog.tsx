@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { getNationalities } from '@/services/nationality.service';
 import type { CrewWithDetails } from '@/services/crew.service';
 import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
@@ -61,11 +62,11 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
   // 선원 목록(CrewManagementPage)과 동일한 참조 데이터 로딩
   useEffect(() => {
     Promise.all([
-      supabase.from('ranks').select('*').order('display_order'),
+      supabase.from('ranks').select('*'),
       supabase.from('companies').select('*'),
       getNationalities(),
     ]).then(([ranksRes, companiesRes, natData]) => {
-      setRanks(ranksRes.data || []);
+      setRanks(sortRanksByDisplayOrder(ranksRes.data || []));
       if (companiesRes.data) {
         setOwners(companiesRes.data.filter((c: Company) => c.type === 'owner'));
         setManningAgencies(companiesRes.data.filter((c: Company) => c.type === 'manning'));
