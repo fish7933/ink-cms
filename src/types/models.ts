@@ -5,6 +5,7 @@ export interface User {
   name: string;
   role: 'admin' | 'system_admin' | 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew';
   company_id?: string;
+  position_id?: string | null; // shore_positions.id (육상 직원 직급)
   created_at: string;
 }
 

@@ -10,6 +10,8 @@ import { X, GripVertical } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
+import { orgChartService } from '@/services/org-chart.service';
+import type { OrgUnit, OrgMember } from '@/types/org-chart';
 
 interface ApprovalStep {
   step_order: number;
@@ -31,20 +33,6 @@ interface ApprovalLineFormProps {
   onCancel: () => void;
 }
 
-interface User {
-  id: string;
-  name: string;
-  username: string;
-  company_id: string;
-  user_groups?: {
-    id: string;
-    name: string;
-  };
-  companies?: {
-    name: string;
-  };
-}
-
 export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: ApprovalLineFormProps) {
   const { toast } = useToast();
   const [name, setName] = useState(approvalLine?.name || '');
@@ -52,75 +40,44 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
   const [approvalType, setApprovalType] = useState(approvalLine?.approval_type || 'hiring');
   const [isActive, setIsActive] = useState(approvalLine?.is_active ?? true);
   const [steps, setSteps] = useState<ApprovalStep[]>(approvalLine?.steps || []);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
+  const [orgMembers, setOrgMembers] = useState<OrgMember[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState('_none');
+
   useEffect(() => {
-    loadUsers();
+    loadOrgChart();
   }, []);
 
-  const loadUsers = async () => {
+  const loadOrgChart = async () => {
     try {
-      console.log('🔍 Loading users for approval line form...');
-      
-      const currentUser = await getCurrentUser();
-      if (!currentUser) {
-        console.log('❌ No current user found');
-        return;
-      }
-
-      console.log('✅ Current user:', currentUser.username, 'Company ID:', currentUser.company_id);
-
-      // First, get the "선박관리사" group ID
-      const { data: shipManagerGroup, error: groupError } = await supabase
-        .from('user_groups')
-        .select('id, name')
-        .eq('name', '선박관리사')
-        .single();
-
-      if (groupError) {
-        console.error('❌ Error loading 선박관리사 group:', groupError);
-      }
-
-      console.log('📋 선박관리사 group:', shipManagerGroup);
-
-      // Get all users with "선박관리사" role, regardless of company
-      // Using the correct foreign key relationship: users_company_id_fkey
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          id,
-          name,
-          username,
-          company_id,
-          user_groups (
-            id,
-            name
-          ),
-          companies!users_company_id_fkey (
-            name
-          )
-        `)
-        .eq('user_group_id', shipManagerGroup?.id)
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) {
-        console.error('❌ Error loading users:', error);
-        throw error;
-      }
-
-      console.log('✅ Loaded 선박관리사 users:', data?.length || 0);
-      console.log('📋 Users:', data);
-      setUsers(data || []);
+      const [u, m] = await Promise.all([orgChartService.getOrgUnits(), orgChartService.getOrgMembers()]);
+      setOrgUnits(u);
+      setOrgMembers(m);
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error('Error loading org chart:', error);
       toast({
         title: '오류',
-        description: '사용자 목록을 불러오는 중 오류가 발생했습니다.',
+        description: '조직도/사용자 목록을 불러오는 중 오류가 발생했습니다.',
         variant: 'destructive',
       });
     }
+  };
+
+  const generateFromDept = () => {
+    if (selectedDeptId === '_none') { alert('부서를 선택해주세요.'); return; }
+    const chain = orgChartService.buildApprovalChain(selectedDeptId, orgUnits, orgMembers);
+    if (chain.length === 0) {
+      alert('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
+      return;
+    }
+    setSteps(chain.map((c, i) => ({
+      step_order: i + 1,
+      approver_id: c.approver_id,
+      approver_name: c.approver_name,
+      approver_role: c.approver_role,
+    })));
   };
 
   const addStep = () => {
@@ -143,15 +100,15 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
   };
 
   const updateStep = (index: number, approverId: string) => {
-    const user = users.find(u => u.id === approverId);
-    if (!user) return;
+    const member = orgMembers.find(m => m.id === approverId);
+    if (!member) return;
 
     const newSteps = [...steps];
     newSteps[index] = {
       ...newSteps[index],
       approver_id: approverId,
-      approver_name: user.name,
-      approver_role: user.user_groups?.name || '미지정',
+      approver_name: member.name,
+      approver_role: member.position_name || '미지정',
     };
     setSteps(newSteps);
   };
@@ -380,6 +337,30 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
       </div>
 
       <div className="space-y-4">
+        <div className="rounded-md border bg-gray-50 p-3 space-y-2">
+          <Label className="text-sm">조직도에서 자동 생성</Label>
+          <p className="text-xs text-gray-500">
+            부서를 선택하면 그 부서장 → 상위 부서장 → … 순서로 결재 단계가 자동으로 채워집니다. 생성 후에도 아래에서 자유롭게 추가/삭제/순서 변경할 수 있습니다.
+          </p>
+          <div className="flex items-center gap-2">
+            <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="부서 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— 부서 선택 —</SelectItem>
+                {orgUnits.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="secondary" onClick={generateFromDept} disabled={selectedDeptId === '_none'}>
+              자동 생성
+            </Button>
+          </div>
+          {orgUnits.length === 0 && (
+            <p className="text-xs text-amber-600">등록된 부서가 없습니다. 설정 &gt; 조직도 관리에서 먼저 부서를 만들어주세요.</p>
+          )}
+        </div>
+
         <div className="flex items-center justify-between">
           <Label>결재 단계</Label>
           <Button type="button" onClick={addStep} size="sm">
@@ -437,14 +418,14 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
                           <SelectValue placeholder="결재자 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                          {users.length === 0 ? (
+                          {orgMembers.length === 0 ? (
                             <div className="px-2 py-1.5 text-sm text-gray-500">
-                              선박관리사 역할을 가진 사용자가 없습니다
+                              선박관리사 직원이 없습니다
                             </div>
                           ) : (
-                            users.map((user) => (
-                              <SelectItem key={user.id} value={String(user.id)}>
-                                {user.name} ({user.companies?.name || '회사 미지정'}) - {user.user_groups?.name || '미지정'}
+                            orgMembers.map((member) => (
+                              <SelectItem key={member.id} value={String(member.id)}>
+                                {member.name} ({member.position_name || '직급 미지정'})
                               </SelectItem>
                             ))
                           )}

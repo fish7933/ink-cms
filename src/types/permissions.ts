@@ -102,6 +102,7 @@ export const MENU_STRUCTURE: MenuStructure[] = [
       { id: 'manager-assignments', name: '선주 사용자 관리', resource: 'manager_assignments' },
       { id: 'supervisor-management', name: '우리회사 담당자 관리', resource: 'supervisor_management' },
       { id: 'shore-positions', name: '육상 직원 직급', resource: 'shore_positions' },
+      { id: 'org-chart', name: '조직도 관리', resource: 'org_chart' },
       { id: 'menu-configuration', name: 'UI 구성 관리', resource: 'menu_configuration' },
     ],
   },

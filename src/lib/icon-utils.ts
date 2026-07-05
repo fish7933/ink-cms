@@ -22,6 +22,7 @@ import {
   UserCheck,
   Shield,
   Layout,
+  Network,
   LucideIcon,
 } from 'lucide-react';
 
@@ -49,6 +50,7 @@ const iconMap: Record<string, LucideIcon> = {
   UserCheck,
   Shield,
   Layout,
+  Network,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {

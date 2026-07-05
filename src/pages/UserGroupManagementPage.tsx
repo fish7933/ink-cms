@@ -18,8 +18,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 
-const ROLE_LABELS: Record<string, string> = { ship_owner: '선주', ship_manager: '선박관리사', manning_agency: '선원매닝사', crew: '선원', admin: '관리자' };
-const ROLE_COLORS: Record<string, string> = { ship_owner: 'bg-purple-500', ship_manager: 'bg-blue-500', manning_agency: 'bg-green-500', crew: 'bg-gray-500', admin: 'bg-red-500' };
+const ROLE_LABELS: Record<string, string> = { ship_owner: '선주', ship_manager: '선박관리사', manning_agency: '선원매닝사', crew: '선원', admin: '슈퍼관리자', system_admin: '시스템관리자' };
+const ROLE_COLORS: Record<string, string> = { ship_owner: 'bg-purple-500', ship_manager: 'bg-blue-500', manning_agency: 'bg-green-500', crew: 'bg-gray-500', admin: 'bg-red-500', system_admin: 'bg-indigo-500' };
+// 선박관리사 탭에는 우리회사 내부 직원(선박관리사 + 관리자 계정)을 함께 보여준다
+const SHIP_MANAGER_TAB_ROLES = ['ship_manager', 'admin', 'system_admin'];
 
 type CompanyExt = Company & { company_type?: string };
 interface CrewOption { id: string; name: string; }
@@ -149,7 +151,9 @@ export default function UserGroupManagementPage() {
   };
 
   const renderTable = (role: string) => {
-    const roleUsers = users.filter(u => u.role === role);
+    const roleUsers = role === 'ship_manager'
+      ? users.filter(u => SHIP_MANAGER_TAB_ROLES.includes(u.role))
+      : users.filter(u => u.role === role);
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -230,7 +234,7 @@ export default function UserGroupManagementPage() {
           <TabsList className="grid w-full grid-cols-4 h-9">
             {['ship_manager','ship_owner','manning_agency','crew'].map(role => (
               <TabsTrigger key={role} value={role} className="text-sm">
-                {ROLE_LABELS[role]} ({users.filter(u => u.role === role).length})
+                {ROLE_LABELS[role]} ({(role === 'ship_manager' ? users.filter(u => SHIP_MANAGER_TAB_ROLES.includes(u.role)) : users.filter(u => u.role === role)).length})
               </TabsTrigger>
             ))}
           </TabsList>
