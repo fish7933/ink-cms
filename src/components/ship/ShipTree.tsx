@@ -21,6 +21,7 @@ interface ShipTreeProps {
   shipTemplateMap?: Record<string, SalaryTemplate | null>;
   onEdit: (ship: Ship) => void;
   onDelete: (id: string) => void;
+  onToggleActive?: (ship: Ship) => void;
   canEdit?: boolean;
   canDelete?: boolean;
   selectedShips?: string[];
@@ -98,6 +99,7 @@ export default function ShipTree({
   shipTemplateMap = {},
   onEdit,
   onDelete,
+  onToggleActive,
   canEdit = true,
   canDelete = true,
   selectedShips = [],
@@ -165,37 +167,68 @@ export default function ShipTree({
     }
   };
 
-  const renderShipRow = (ship: Ship) => {
+  const renderShipCard = (ship: Ship) => {
     const { icon: Icon, className } = getShipIconInfo(ship);
     const classification = classifications[ship.id];
     const isSelected = selectedShips.includes(ship.id);
     const isBbchp = (ship as Ship & { is_bbchp?: boolean }).is_bbchp;
+    const isInactive = ship.is_active === false;
 
     return (
       <div
         key={ship.id}
-        className={`flex items-center gap-2.5 py-2 pl-14 pr-2 border-t first:border-t-0 ${canEdit ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+        className={`flex flex-col gap-1.5 rounded-md border p-2.5 bg-white ${isInactive ? 'opacity-60' : ''} ${canEdit ? 'cursor-pointer hover:border-blue-300 hover:shadow-sm' : ''}`}
         onClick={canEdit ? () => onEdit(ship) : undefined}
       >
-        {showCheckboxes && (
-          <div onClick={e => e.stopPropagation()}>
-            <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(ship.id)} aria-label={`${ship.name} 선택`} />
+        <div className="flex items-start gap-2">
+          {showCheckboxes && (
+            <div onClick={e => e.stopPropagation()} className="pt-0.5">
+              <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(ship.id)} aria-label={`${ship.name} 선택`} />
+            </div>
+          )}
+          <span className={`shrink-0 w-8 h-8 rounded-md flex items-center justify-center ${className}`}>
+            <Icon className="w-4 h-4" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-medium text-sm truncate">{ship.name}</span>
+              {isInactive && <Badge variant="outline" className="text-[10px] text-gray-400 border-gray-300">비활성</Badge>}
+            </div>
+            {ship.flag && <span className="text-xs text-muted-foreground">{ship.flag}</span>}
           </div>
-        )}
-        <span className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center ${className}`}>
-          <Icon className="w-4 h-4" />
-        </span>
-        <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm truncate">{ship.name}</span>
+          <div className="flex shrink-0 gap-0.5" onClick={e => e.stopPropagation()}>
+            {onToggleActive && (
+              <Button
+                size="sm" variant="ghost"
+                onClick={() => onToggleActive(ship)}
+                className={`h-7 px-2 text-xs ${isInactive ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-gray-400 hover:text-gray-600'}`}
+                title={isInactive ? '활성화' : '비활성화'}
+              >
+                {isInactive ? '활성화' : '비활성화'}
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                size="sm" variant="ghost"
+                onClick={() => onDelete(ship.id)}
+                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap pl-1">
           {ship.ship_type && <Badge variant="outline" className="text-xs">{ship.ship_type}</Badge>}
           {classification && (
             <Badge variant="secondary" className="text-xs">{classification.name_ko || classification.name}</Badge>
           )}
-          {ship.flag && <span className="text-xs text-muted-foreground">{ship.flag}</span>}
           {isBbchp && <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">BBCHP</Badge>}
           {ship.built_year && <span className="text-xs text-muted-foreground">{ship.built_year}년</span>}
           {ship.gt != null && <span className="text-xs text-muted-foreground">GT {ship.gt.toLocaleString()}</span>}
           {ship.dwt != null && <span className="text-xs text-muted-foreground">DWT {ship.dwt.toLocaleString()}</span>}
+        </div>
+        <div className="pl-1">
           {shipTemplateMap[ship.id] ? (
             <button type="button" onClick={e => { e.stopPropagation(); setViewingTemplateId(shipTemplateMap[ship.id]!.id); }}>
               <Badge variant="secondary" className="text-xs cursor-pointer bg-green-100 text-green-700 hover:bg-green-200">급여 배정됨</Badge>
@@ -204,15 +237,6 @@ export default function ShipTree({
             <Badge variant="outline" className="text-xs text-gray-400">급여 미배정</Badge>
           )}
         </div>
-        {canDelete && (
-          <Button
-            size="sm" variant="ghost"
-            onClick={e => { e.stopPropagation(); onDelete(ship.id); }}
-            className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 shrink-0"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        )}
       </div>
     );
   };
@@ -221,8 +245,14 @@ export default function ShipTree({
     return <div className="rounded-md border py-12 text-center text-sm text-gray-500">등록된 선박이 없습니다</div>;
   }
 
+  const shipGrid = (shipList: Ship[]) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 p-2">
+      {shipList.map(renderShipCard)}
+    </div>
+  );
+
   return (
-    <div className="rounded-md border divide-y">
+    <div className="space-y-3">
       {groups.map(group => {
         const ownerKey = group.owner?.id || '__no_owner__';
         const ownerShipIds = [...group.ships, ...group.fleetGroups.flatMap(f => f.ships)].map(s => s.id);
@@ -230,8 +260,8 @@ export default function ShipTree({
         const ownerCollapsed = collapsed.has(ownerKey);
 
         return (
-          <div key={ownerKey}>
-            <div className="flex items-center gap-2 py-2.5 pl-3 pr-2 bg-slate-50">
+          <div key={ownerKey} className="rounded-md border overflow-hidden">
+            <div className="flex items-center gap-2 py-2.5 pl-3 pr-2 bg-blue-50 border-b">
               <button type="button" className="shrink-0" onClick={() => toggleCollapse(ownerKey)}>
                 {ownerCollapsed ? <ChevronRight className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
               </button>
@@ -250,7 +280,7 @@ export default function ShipTree({
             </div>
 
             {!ownerCollapsed && (
-              <div>
+              <div className="divide-y bg-slate-50/40">
                 {group.fleetGroups.map(fg => {
                   const fleetKey = `${ownerKey}::${fg.fleet.id}`;
                   const fleetShipIds = fg.ships.map(s => s.id);
@@ -259,7 +289,7 @@ export default function ShipTree({
 
                   return (
                     <div key={fg.fleet.id}>
-                      <div className="flex items-center gap-2 py-2 pl-8 pr-2 bg-slate-50/60 border-t">
+                      <div className="flex items-center gap-2 py-1.5 pl-4 pr-2">
                         <button type="button" className="shrink-0" onClick={() => toggleCollapse(fleetKey)}>
                           {fleetCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
                         </button>
@@ -270,17 +300,17 @@ export default function ShipTree({
                             className={fleetSelectedCount > 0 && fleetSelectedCount < fleetShipIds.length ? 'data-[state=checked]:bg-gray-400' : ''}
                           />
                         )}
-                        <span className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-violet-100 text-violet-700">
-                          <Layers className="w-3.5 h-3.5" />
+                        <span className="shrink-0 w-5 h-5 rounded flex items-center justify-center bg-violet-100 text-violet-700">
+                          <Layers className="w-3 h-3" />
                         </span>
-                        <span className="font-medium text-sm text-gray-700">{fg.fleet.name}</span>
+                        <span className="font-medium text-xs text-gray-600 uppercase tracking-wide">{fg.fleet.name}</span>
                         <Badge variant="secondary" className="text-xs">{fleetShipIds.length}척</Badge>
                       </div>
-                      {!fleetCollapsed && fg.ships.map(renderShipRow)}
+                      {!fleetCollapsed && shipGrid(fg.ships)}
                     </div>
                   );
                 })}
-                {group.ships.map(renderShipRow)}
+                {group.ships.length > 0 && shipGrid(group.ships)}
               </div>
             )}
           </div>

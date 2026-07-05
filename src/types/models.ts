@@ -33,6 +33,7 @@ export interface Ship {
   id: string;
   owner_id: string;
   fleet_id?: string;
+  is_active?: boolean;
   name: string;
   imo_number?: string;
   ship_type?: string;
@@ -107,7 +108,10 @@ export interface JobPostingGroup {
   id: string;
   company_id: string;
   fleet_id?: string;
-  ship_id: string;
+  ship_id?: string | null; // null = 선박 미정(선종/GT/항로로 대체)
+  ship_type_id?: string | null;
+  estimated_gt?: number | null;
+  trade_route?: string | null;
   embarkation_date: string;
   application_deadline?: string;
   requirements?: string;

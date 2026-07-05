@@ -34,6 +34,7 @@ export default function ShipManagementPage() {
   const [selectedOwner, setSelectedOwner] = useState<string>('all');
   const [selectedFleet, setSelectedFleet] = useState<string>('all');
   const [selectedShipType, setSelectedShipType] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('active');
 
   // Bulk selection state
   const [selectedShipIds, setSelectedShipIds] = useState<string[]>([]);
@@ -190,15 +191,19 @@ export default function ShipManagementPage() {
       if (selectedShipType !== 'all' && ship.ship_type !== selectedShipType) {
         return false;
       }
-      
+
+      // Status filter (활성/비활성) - 컬럼이 없는 과거 데이터는 활성으로 취급
+      if (selectedStatus === 'active' && ship.is_active === false) return false;
+      if (selectedStatus === 'inactive' && ship.is_active !== false) return false;
+
       return true;
     });
-  }, [ships, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType]);
+  }, [ships, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus]);
 
   // Clear selection when filters change
   useEffect(() => {
     setSelectedShipIds([]);
-  }, [searchTerm, selectedOwner, selectedFleet, selectedShipType]);
+  }, [searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus]);
 
   const totalItems = filteredShips.length;
 
@@ -339,6 +344,11 @@ export default function ShipManagementPage() {
     }
   };
 
+  const handleToggleActive = async (ship: Ship) => {
+    await updateShip(ship.id, { is_active: !(ship.is_active !== false) });
+    await loadData();
+  };
+
   const handleBulkDelete = async () => {
     if (selectedShipIds.length === 0) return;
     
@@ -364,12 +374,14 @@ export default function ShipManagementPage() {
     setSelectedOwner(currentUser && currentUser.role === 'ship_owner' && currentUser.company_id ? currentUser.company_id : 'all');
     setSelectedFleet('all');
     setSelectedShipType('all');
+    setSelectedStatus('active');
   };
 
-  const hasActiveFilters = searchTerm || 
-    (selectedOwner !== 'all' && !(currentUser && currentUser.role === 'ship_owner' && selectedOwner === currentUser.company_id)) || 
-    selectedFleet !== 'all' || 
-    selectedShipType !== 'all';
+  const hasActiveFilters = searchTerm ||
+    (selectedOwner !== 'all' && !(currentUser && currentUser.role === 'ship_owner' && selectedOwner === currentUser.company_id)) ||
+    selectedFleet !== 'all' ||
+    selectedShipType !== 'all' ||
+    selectedStatus !== 'active';
 
   const getOwnerDisplayName = (ownerId: string) => {
     if (ownerId === 'none') return '선주 없음';
@@ -503,8 +515,8 @@ export default function ShipManagementPage() {
                     </SelectContent>
                   </Select>
                   
-                  <Select 
-                    value={selectedShipType} 
+                  <Select
+                    value={selectedShipType}
                     onValueChange={setSelectedShipType}
                     disabled={availableShipTypes.length === 0}
                   >
@@ -518,6 +530,17 @@ export default function ShipManagementPage() {
                           {type}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                    <SelectTrigger className="w-32 h-9 text-sm">
+                      <SelectValue placeholder="상태" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-sm">전체 상태</SelectItem>
+                      <SelectItem value="active" className="text-sm">활성</SelectItem>
+                      <SelectItem value="inactive" className="text-sm">비활성</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -576,6 +599,7 @@ export default function ShipManagementPage() {
                 shipTemplateMap={shipTemplateMap}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onToggleActive={permissions.canEdit ? handleToggleActive : undefined}
                 canEdit={permissions.canEdit}
                 canDelete={permissions.canDelete}
                 selectedShips={selectedShipIds}
