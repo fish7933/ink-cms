@@ -407,17 +407,26 @@ export const rotationService = {
     // 승선경력/계약 자동 생성에 필요한 참조 데이터 일괄 조회
     const rankIds = [...new Set((assignments || []).flatMap(a => [a.on_rank_id, a.off_rank_id]).filter(Boolean))];
     const crewIds = [...new Set((assignments || []).flatMap(a => [a.on_crew_id, a.off_crew_id]).filter(Boolean))];
-    const [{ data: ship }, { data: port }, { data: ranksData }, { data: crewData }] = await Promise.all([
+    const [{ data: ship }, { data: port }, { data: ranksData }, { data: crewData }, { data: ownerCompany }] = await Promise.all([
       supabase.from('ships').select('name, ship_type, flag, gross_tonnage, engine_power').eq('id', plan.ship_id).single(),
       plan.port_id
         ? supabase.from('ports').select('country_name, city_name').eq('id', plan.port_id).single()
         : Promise.resolve({ data: null }),
-      rankIds.length > 0 ? supabase.from('ranks').select('id, name').in('id', rankIds) : Promise.resolve({ data: [] }),
-      crewIds.length > 0 ? supabase.from('crew_members').select('id, nationality').in('id', crewIds) : Promise.resolve({ data: [] }),
+      rankIds.length > 0 ? supabase.from('ranks').select('id, rank_code').in('id', rankIds) : Promise.resolve({ data: [] }),
+      crewIds.length > 0 ? supabase.from('crew_members').select('id, nationality, manning_agency_id').in('id', crewIds) : Promise.resolve({ data: [] }),
+      supabase.from('companies').select('name').eq('id', plan.owner_id).single(),
     ]);
-    const ranksById = new Map((ranksData || []).map(r => [r.id, r.name]));
+    const ranksById = new Map((ranksData || []).map(r => [r.id, r.rank_code]));
     const nationalityById = new Map((crewData || []).map(c => [c.id, c.nationality]));
+    const manningAgencyIdByCrew = new Map((crewData || []).map(c => [c.id, c.manning_agency_id]));
     const portLabel = port ? `${port.city_name}, ${port.country_name}` : undefined;
+    const ownerCompanyName = ownerCompany?.name;
+
+    const manningAgencyIds = [...new Set((crewData || []).map(c => c.manning_agency_id).filter(Boolean))];
+    const { data: manningAgencies } = manningAgencyIds.length > 0
+      ? await supabase.from('companies').select('id, name').in('id', manningAgencyIds)
+      : { data: [] as { id: string; name: string }[] };
+    const manningAgencyNameById = new Map((manningAgencies || []).map(c => [c.id, c.name]));
 
     for (const a of (assignments || [])) {
       // ── 하선자: 기존 승선 기록 완료 처리 + crew_members 초기화 ──
@@ -502,8 +511,9 @@ export const rotationService = {
           ? format(addMonths(new Date(a.embark_date), a.contract_months), 'yyyy-MM-dd')
           : a.embark_date;
 
-        // 승선 경력에 새 항목 추가 (본선/직급/톤수 등은 발령 당시 선박 기준)
+        // 승선 경력에 새 항목 추가 (본선/직급/톤수 등은 발령 당시 선박 기준, 선주사/매닝사도 함께 기록)
         if (ship) {
+          const crewManningAgencyId = manningAgencyIdByCrew.get(a.on_crew_id);
           await supabase.from('sea_service_records').insert({
             crew_member_id: a.on_crew_id,
             record_type: 'company_assignment',
@@ -515,6 +525,8 @@ export const rotationService = {
             rank: rankName,
             sign_on_date: a.embark_date,
             port_of_sign_on: portLabel,
+            owner_company_name: ownerCompanyName,
+            manning_agency_name: crewManningAgencyId ? manningAgencyNameById.get(crewManningAgencyId) : undefined,
           });
         }
 

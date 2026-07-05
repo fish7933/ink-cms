@@ -122,7 +122,6 @@ export default function SeaServiceDialog({
     setLoading(true);
 
     try {
-      const isPreCompany = formData.record_type === 'pre_company';
       const recordData = {
         crew_member_id: crewId,
         record_type: formData.record_type,
@@ -135,9 +134,9 @@ export default function SeaServiceDialog({
         sign_on_date: formData.sign_on_date,
         sign_off_date: formData.sign_off_date || undefined,
         sign_off_reason: formData.sign_off_reason || undefined,
-        owner_company_name: isPreCompany ? (formData.owner_company_name || undefined) : undefined,
-        ship_manager_name: isPreCompany ? (formData.ship_manager_name || undefined) : undefined,
-        manning_agency_name: isPreCompany ? (formData.manning_agency_name || undefined) : undefined,
+        owner_company_name: formData.owner_company_name || undefined,
+        ship_manager_name: formData.ship_manager_name || undefined,
+        manning_agency_name: formData.manning_agency_name || undefined,
         notes: formData.notes || undefined,
       };
 
@@ -201,40 +200,38 @@ export default function SeaServiceDialog({
               </Select>
             </div>
 
-            {formData.record_type === 'pre_company' && (
-              <div className="grid grid-cols-3 gap-3 p-3 bg-gray-50 rounded-md">
-                <div className="space-y-1.5">
-                  <Label htmlFor="owner_company_name" className="text-xs">선주사</Label>
-                  <Input
-                    id="owner_company_name"
-                    value={formData.owner_company_name}
-                    onChange={(e) => setFormData({ ...formData, owner_company_name: e.target.value })}
-                    placeholder="선주사명"
-                    className="h-9 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="ship_manager_name" className="text-xs">선박관리사</Label>
-                  <Input
-                    id="ship_manager_name"
-                    value={formData.ship_manager_name}
-                    onChange={(e) => setFormData({ ...formData, ship_manager_name: e.target.value })}
-                    placeholder="선박관리사명"
-                    className="h-9 text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="manning_agency_name" className="text-xs">매닝사</Label>
-                  <Input
-                    id="manning_agency_name"
-                    value={formData.manning_agency_name}
-                    onChange={(e) => setFormData({ ...formData, manning_agency_name: e.target.value })}
-                    placeholder="매닝사명"
-                    className="h-9 text-sm"
-                  />
-                </div>
+            <div className="grid grid-cols-3 gap-3 p-3 bg-gray-50 rounded-md">
+              <div className="space-y-1.5">
+                <Label htmlFor="owner_company_name" className="text-xs">선주사</Label>
+                <Input
+                  id="owner_company_name"
+                  value={formData.owner_company_name}
+                  onChange={(e) => setFormData({ ...formData, owner_company_name: e.target.value })}
+                  placeholder="선주사명"
+                  className="h-9 text-sm"
+                />
               </div>
-            )}
+              <div className="space-y-1.5">
+                <Label htmlFor="ship_manager_name" className="text-xs">선박관리사</Label>
+                <Input
+                  id="ship_manager_name"
+                  value={formData.ship_manager_name}
+                  onChange={(e) => setFormData({ ...formData, ship_manager_name: e.target.value })}
+                  placeholder="선박관리사명"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="manning_agency_name" className="text-xs">매닝사</Label>
+                <Input
+                  id="manning_agency_name"
+                  value={formData.manning_agency_name}
+                  onChange={(e) => setFormData({ ...formData, manning_agency_name: e.target.value })}
+                  placeholder="매닝사명"
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
