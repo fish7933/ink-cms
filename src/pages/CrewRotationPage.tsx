@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X } from 'lucide-react';
+import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -36,6 +37,7 @@ export function CrewRotationPage() {
   const [plans, setPlans] = useState<CrewRotationPlanWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // 필터
   const [owners, setOwners] = useState<Company[]>([]);
@@ -94,9 +96,26 @@ export function CrewRotationPage() {
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
+  // 결재 상신 전(임시저장) 계획만 삭제 가능 — 발령 없이 계획 단계에서 빠지는 것이므로
+  // 삭제되면 그만큼 해당 월/선박의 계획 개수에서도 빠져 번호가 다시 채워진다.
+  const deletableIds = useMemo(() => filteredPlans.filter(p => p.status === 'draft').map(p => p.id), [filteredPlans]);
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSelectAll = (checked: boolean) =>
+    setSelectedIds(checked ? deletableIds : []);
+
   const handleDelete = async (planId: string) => {
     if (!confirm('이 교대 계획서를 삭제하시겠습니까?')) return;
     if (await rotationService.deleteRotationPlan(planId)) loadPlans();
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`선택한 ${selectedIds.length}개의 교대 계획서를 삭제하시겠습니까?`)) return;
+    await Promise.all(selectedIds.map(id => rotationService.deleteRotationPlan(id)));
+    setSelectedIds([]);
+    loadPlans();
   };
 
   const handleSubmitApproval = async (planId: string) => {
@@ -287,8 +306,17 @@ export function CrewRotationPage() {
       {/* 계획 목록 */}
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-sm">교대 계획 목록</CardTitle>
-          <CardDescription className="text-xs">작성된 선원 교대 계획서 목록입니다</CardDescription>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-sm">교대 계획 목록</CardTitle>
+              <CardDescription className="text-xs">작성된 선원 교대 계획서 목록입니다</CardDescription>
+            </div>
+            {selectedIds.length > 0 && (
+              <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" />선택 삭제 ({selectedIds.length})
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -299,6 +327,13 @@ export function CrewRotationPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">
+                    <Checkbox
+                      checked={deletableIds.length > 0 && deletableIds.every(id => selectedIds.includes(id))}
+                      onCheckedChange={checked => toggleSelectAll(!!checked)}
+                      disabled={deletableIds.length === 0}
+                    />
+                  </TableHead>
                   <TableHead className="text-xs">계획명</TableHead>
                   <TableHead className="text-xs">선주사</TableHead>
                   <TableHead className="text-xs">선박</TableHead>
@@ -312,6 +347,11 @@ export function CrewRotationPage() {
               <TableBody>
                 {filteredPlans.map(plan => (
                   <TableRow key={plan.id} className="cursor-pointer" onClick={() => openNewTab(`/crew-rotation/${plan.id}`, plan.plan_name || '교대계획')}>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      {plan.status === 'draft' && (
+                        <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
                     <TableCell className="text-xs">
