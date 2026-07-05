@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Upload, User, X, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +11,13 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { crewService } from '@/services/crew.service';
+import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
 import { getNationalities } from '@/services/nationality.service';
 import type { CrewRecommendationWithDetails, Rank } from '@/types/models';
 import type { CertificateType } from '@/types/certificate-type';
 import type { Nationality } from '@/types/nationality';
+import { useTabContext } from '@/contexts/TabContext';
 
 interface Certificate {
   name: string;
@@ -36,7 +38,28 @@ export default function CrewInputPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const recommendation = location.state?.recommendation as CrewRecommendationWithDetails;
+  const { recommendationId } = useParams<{ recommendationId?: string }>();
+  const { activeTabId, closeTab, updateTab } = useTabContext();
+
+  const [recommendation, setRecommendation] = useState<CrewRecommendationWithDetails | null>(
+    (location.state?.recommendation as CrewRecommendationWithDetails) || null
+  );
+  const [loadingRec, setLoadingRec] = useState(Boolean(recommendationId));
+
+  const finish = () => {
+    if (activeTabId) closeTab(activeTabId);
+    else navigate('/my-recommendations');
+  };
+
+  useEffect(() => {
+    if (!recommendationId) { setLoadingRec(false); return; }
+    (async () => {
+      setLoadingRec(true);
+      const rec = await crewRecommendationService.getById(recommendationId);
+      setRecommendation(rec);
+      setLoadingRec(false);
+    })();
+  }, [recommendationId]);
 
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
@@ -74,16 +97,19 @@ export default function CrewInputPage() {
   });
 
   useEffect(() => {
+    if (loadingRec) return;
     if (!recommendation) {
       toast({ title: '잘못된 접근', description: '추천 선원 정보가 없습니다.', variant: 'destructive' });
-      navigate('/my-recommendations');
+      finish();
       return;
     }
     // 결재 승인 시 등록 선원 목록에 자동 반영되므로, 이미 등록된 건이면
     // 여권/증서 등 세부 정보를 보완할 수 있도록 해당 선원의 수정 화면으로 이동한다.
     if (recommendation.crew_member_id) {
       toast({ title: '이미 등록된 선원', description: '세부 정보를 보완할 수 있도록 선원 정보 화면으로 이동합니다.' });
-      navigate(`/crew/${recommendation.crew_member_id}`, { replace: true });
+      const path = `/crew/${recommendation.crew_member_id}`;
+      if (activeTabId) updateTab(activeTabId, { path, title: '선원 정보' });
+      navigate(path, { replace: true });
       return;
     }
     loadRanks();
@@ -109,7 +135,7 @@ export default function CrewInputPage() {
         if (Array.isArray(certs)) setCertificates(certs);
       } catch (e) { console.error(e); }
     }
-  }, [recommendation, navigate, toast]);
+  }, [recommendation, loadingRec]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadRanks = async () => {
     const { data } = await supabase.from('ranks').select('*').order('display_order');
@@ -182,6 +208,7 @@ const addCert = (name?: string) => {
 
  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!recommendation) return;
     if (!formData.name || !formData.rank_id) {
       toast({ title: '필수 항목 누락', description: '이름과 직급은 필수 항목입니다.', variant: 'destructive' });
       return;
@@ -199,7 +226,7 @@ const addCert = (name?: string) => {
 
       if (existing?.crew_member_id) {
         toast({ title: '이미 등록됨', description: '이 선원은 이미 등록되어 있습니다. 선원 목록에서 수정하세요.', variant: 'destructive' });
-        navigate('/crew/management');
+        finish();
         return;
       }
 
@@ -271,7 +298,7 @@ const addCert = (name?: string) => {
       }
 
       toast({ title: '등록 완료', description: '선원 정보가 성공적으로 등록되었습니다.' });
-      navigate('/crew/management');
+      finish();
     } catch (error) {
       console.error('Failed to save crew member:', error);
       toast({ title: '저장 실패', description: '선원 정보 저장 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -280,13 +307,21 @@ const addCert = (name?: string) => {
     }
   };
 
+  if (loadingRec) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
   if (!recommendation) return null;
 
   return (
     <>
       <div className="max-w-4xl mx-auto px-4 py-6">
         <div className="mb-6 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={finish}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div>
@@ -546,7 +581,7 @@ const addCert = (name?: string) => {
           </Card>
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={loading}>취소</Button>
+            <Button type="button" variant="outline" onClick={finish} disabled={loading}>취소</Button>
             <Button type="submit" disabled={loading} className="min-w-[100px]">
               {loading ? (
                 <div className="flex items-center gap-2">

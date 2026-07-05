@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
 import type { CrewRecommendationWithDetails, User as UserType, Company, Fleet, Ship, Rank } from '@/types/models';
 import { useNavigate } from 'react-router-dom';
+import { useTabContext } from '@/contexts/TabContext';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -26,6 +27,7 @@ const calcAge = (birthDate: string): number => {
 
 export default function MyRecommendationsPage() {
   const navigate = useNavigate();
+  const { openNewTab } = useTabContext();
   const [recommendations, setRecommendations] = useState<CrewRecommendationWithDetails[]>([]);
   const [filtered, setFiltered] = useState<CrewRecommendationWithDetails[]>([]);
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
@@ -262,7 +264,7 @@ export default function MyRecommendationsPage() {
                         <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                           {rec.status === 'accepted' && (
                             <>
-                              <Button variant="default" size="sm" onClick={() => navigate('/crew/input', { state: { recommendation: rec } })} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
+                              <Button variant="default" size="sm" onClick={() => openNewTab(`/crew/input/${rec.id}`, '선원 상세입력', true)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
                                 <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
                               </Button>
                               <Button variant="outline" size="sm" onClick={() => { setSelectedRecForCert(rec); setCertDialogOpen(true); }} className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50">

@@ -59,6 +59,7 @@ export interface RouteEntry {
 export const routeConfig: RouteEntry[] = [
   { path: '/dashboard', component: DashboardPage },
   { path: '/crew/management', component: CrewManagementPage },
+  { path: '/crew/input/:recommendationId', component: CrewInputPage },
   { path: '/crew/input', component: CrewInputPage },
   { path: '/crew/new', component: CrewDetailPage },
   { path: '/crew/:id/resume', component: CrewResumePage },

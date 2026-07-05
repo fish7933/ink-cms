@@ -27,6 +27,35 @@ class CrewRecommendationService {
     }));
   }
 
+  async getById(id: string): Promise<CrewRecommendationWithDetails | null> {
+    const { data: rec, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !rec) return null;
+
+    const [rankRes, companyRes, fleetRes, shipRes, agencyRes] = await Promise.all([
+      supabase.from('ranks').select('id, name, rank_code, department').eq('id', rec.rank_id).single(),
+      rec.company_id ? supabase.from('companies').select('id, name').eq('id', rec.company_id).single() : Promise.resolve({ data: null }),
+      rec.fleet_id ? supabase.from('fleets').select('id, name').eq('id', rec.fleet_id).single() : Promise.resolve({ data: null }),
+      rec.ship_id ? supabase.from('ships').select('id, name').eq('id', rec.ship_id).single() : Promise.resolve({ data: null }),
+      supabase.from('companies').select('id, name').eq('id', rec.manning_agency_id).single(),
+    ]);
+
+    return {
+      ...rec,
+      rank_name: rankRes.data?.name || '',
+      rank_code: rankRes.data?.rank_code || '',
+      department: rankRes.data?.department || '',
+      company_name: companyRes.data?.name || '',
+      fleet_name: fleetRes.data?.name || '',
+      ship_name: shipRes.data?.name || '',
+      manning_agency_name: agencyRes.data?.name || '',
+    };
+  }
+
   async getRecommendationsByCompany(companyId: string): Promise<CrewRecommendationWithDetails[]> {
     // First, get all recommendations for this company
     const { data: recommendations, error: recError } = await supabase
