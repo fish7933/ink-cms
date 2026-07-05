@@ -7,6 +7,7 @@ export interface CrewContract {
   nationality?: string;
   contract_number?: string;
   contract_type: 'initial' | 'renewal' | 'extension' | 'transfer';
+  root_contract_id?: string | null;
   rank: string;
   start_date: string;
   end_date: string;

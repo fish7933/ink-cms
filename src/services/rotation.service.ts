@@ -458,10 +458,11 @@ export const rotationService = {
           }).eq('id', openService[0].id);
         }
 
-        // 진행중이던 계약을 하선일로 완료 처리
+        // 진행중이던 계약을 완료 처리 — 계약종료일(end_date)은 승선/하선일과 별개로
+        // 계약서에 기입된 값이므로 실제 하선일로 덮어쓰지 않고 상태만 변경한다.
         await supabase
           .from('crew_contracts')
-          .update({ status: 'completed', end_date: disembarkDate, updated_at: now })
+          .update({ status: 'completed', updated_at: now })
           .eq('crew_member_id', a.off_crew_id)
           .eq('status', 'active');
       }

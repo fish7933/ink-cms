@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, ArrowLeft, Save, Coins } from 'lucide-react';
+import { Plus, Search, Trash2, ArrowLeft, Save, Coins, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,11 @@ import { getContracts, addContract, updateContract, deleteContract } from '@/ser
 import { allowanceService } from '@/services/allowance.service';
 import type { CrewContractWithDetails } from '@/types/contract';
 import type { AllowanceType, AllowancePaymentBasis, AllowancePaymentMethod, CrewContractAllowanceWithDetails } from '@/types/allowance';
+import { buildContractChains, getEffectiveStatus, EFFECTIVE_STATUS_CONFIG, DISEMBARK_NEEDED_THRESHOLD_MONTHS, type ContractChain, type EffectiveStatus } from '@/utils/contract-chain';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
 const TYPE_LABELS: Record<string, string> = { initial: '최초', renewal: '갱신', extension: '연장', transfer: '이적' };
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = { draft: { label: '임시', color: 'bg-gray-100 text-gray-600' }, active: { label: '활성', color: 'bg-green-100 text-green-700' }, completed: { label: '완료', color: 'bg-blue-100 text-blue-700' }, terminated: { label: '해지', color: 'bg-red-100 text-red-700' }, renewed: { label: '갱신됨', color: 'bg-purple-100 text-purple-700' } };
 const CURRENCIES = ['USD', 'KRW', 'EUR', 'JPY', 'SGD'];
 const BASIS_LABELS: Record<AllowancePaymentBasis, string> = { monthly: '매월 지급', lump_sum: '일시불' };
 const METHOD_LABELS: Record<AllowancePaymentMethod, string> = { ship_direct: '본선 직접지급', owner_billed: '선주 청구' };
@@ -39,6 +39,9 @@ export default function ContractManagementPage() {
   const [contractAllowances, setContractAllowances] = useState<CrewContractAllowanceWithDetails[]>([]);
   const [newAllowance, setNewAllowance] = useState({ allowance_type_id: '', amount: '', currency: 'USD', payment_basis: 'monthly' as AllowancePaymentBasis, payment_method: 'owner_billed' as AllowancePaymentMethod, notes: '' });
 
+  // 갱신 진행 중이면 저장 시 root_contract_id를 넣고, 저장 성공 후 이전 계약을 renewed로 표시
+  const [renewContext, setRenewContext] = useState<{ rootId: string; previousId: string } | null>(null);
+
   useEffect(() => {
     Promise.all([supabase.from('crew_members').select('id, name, rank, rank_id'), supabase.from('ships').select('id, name')]).then(([crew, ships]) => {
       if (crew.data) setCrewOptions(crew.data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '', rank_id: c.rank_id || '' })));
@@ -58,10 +61,40 @@ export default function ContractManagementPage() {
     if (c) setForm({ crew_member_id: c.crew_member_id, ship_id: c.ship_id || '', contract_number: c.contract_number || '', contract_type: c.contract_type, rank: c.rank, start_date: c.start_date, end_date: c.end_date, duration_months: c.duration_months?.toString() || '', salary_amount: c.salary_amount?.toString() || '', salary_currency: c.salary_currency || 'USD', overtime_rate: c.overtime_rate?.toString() || '', leave_pay: c.leave_pay?.toString() || '', signing_port: c.signing_port || '', repatriation_port: c.repatriation_port || '', terms_and_conditions: c.terms_and_conditions || '', notes: c.notes || '' });
     else setForm({ crew_member_id: '', ship_id: '', contract_number: '', contract_type: 'initial', rank: '', start_date: '', end_date: '', duration_months: '', salary_amount: '', salary_currency: 'USD', overtime_rate: '', leave_pay: '', signing_port: '', repatriation_port: '', terms_and_conditions: '', notes: '' });
     setContractAllowances([]);
+    setRenewContext(null);
     if (c) loadContractAllowances(c.id);
     setFormView({ record: c });
   };
-  const closeForm = () => { setFormView(null); loadData(); };
+
+  // 만료된(또는 만료 예정인) 계약을 갱신 — 이전 계약 정보를 이어받아 새 계약 기간만 다시 입력받는다.
+  const openRenewForm = (chain: ContractChain) => {
+    const prev = chain.latest;
+    const nextStart = new Date(prev.end_date);
+    nextStart.setDate(nextStart.getDate() + 1);
+    setForm({
+      crew_member_id: prev.crew_member_id,
+      ship_id: prev.ship_id || '',
+      contract_number: '',
+      contract_type: 'renewal',
+      rank: prev.rank,
+      start_date: nextStart.toISOString().slice(0, 10),
+      end_date: '',
+      duration_months: '',
+      salary_amount: prev.salary_amount?.toString() || '',
+      salary_currency: prev.salary_currency || 'USD',
+      overtime_rate: prev.overtime_rate?.toString() || '',
+      leave_pay: prev.leave_pay?.toString() || '',
+      signing_port: prev.signing_port || '',
+      repatriation_port: prev.repatriation_port || '',
+      terms_and_conditions: prev.terms_and_conditions || '',
+      notes: '',
+    });
+    setContractAllowances([]);
+    setRenewContext({ rootId: chain.rootId, previousId: prev.id });
+    setFormView({ record: undefined });
+  };
+
+  const closeForm = () => { setFormView(null); setRenewContext(null); loadData(); };
 
   useEffect(() => {
     if (form.start_date && form.end_date) {
@@ -74,19 +107,22 @@ export default function ContractManagementPage() {
     if (!form.crew_member_id || !form.rank || !form.start_date || !form.end_date) { toast({ title: '필수 항목을 입력하세요', variant: 'destructive' }); return; }
     try {
       setSaving(true);
-      const data = { crew_member_id: form.crew_member_id, ship_id: form.ship_id || undefined, contract_number: form.contract_number || undefined, contract_type: form.contract_type as CrewContractWithDetails['contract_type'], rank: form.rank, start_date: form.start_date, end_date: form.end_date, duration_months: form.duration_months ? parseInt(form.duration_months) : undefined, salary_amount: form.salary_amount ? parseFloat(form.salary_amount) : undefined, salary_currency: form.salary_currency, overtime_rate: form.overtime_rate ? parseFloat(form.overtime_rate) : undefined, leave_pay: form.leave_pay ? parseFloat(form.leave_pay) : undefined, signing_port: form.signing_port || undefined, repatriation_port: form.repatriation_port || undefined, terms_and_conditions: form.terms_and_conditions || undefined, status: (formView?.record?.status || 'active') as CrewContractWithDetails['status'], notes: form.notes || undefined };
+      const data = { crew_member_id: form.crew_member_id, ship_id: form.ship_id || undefined, contract_number: form.contract_number || undefined, contract_type: form.contract_type as CrewContractWithDetails['contract_type'], root_contract_id: renewContext?.rootId, rank: form.rank, start_date: form.start_date, end_date: form.end_date, duration_months: form.duration_months ? parseInt(form.duration_months) : undefined, salary_amount: form.salary_amount ? parseFloat(form.salary_amount) : undefined, salary_currency: form.salary_currency, overtime_rate: form.overtime_rate ? parseFloat(form.overtime_rate) : undefined, leave_pay: form.leave_pay ? parseFloat(form.leave_pay) : undefined, signing_port: form.signing_port || undefined, repatriation_port: form.repatriation_port || undefined, terms_and_conditions: form.terms_and_conditions || undefined, status: (formView?.record?.status || 'active') as CrewContractWithDetails['status'], notes: form.notes || undefined };
       if (formView?.record) {
         await updateContract(formView.record.id, data);
         toast({ title: '수정 완료' });
         closeForm();
       } else {
         const created = await addContract(data);
-        toast({ title: '등록 완료', description: created ? '이어서 수당을 추가할 수 있습니다.' : undefined });
+        if (created && renewContext) {
+          await updateContract(renewContext.previousId, { status: 'renewed' });
+        }
+        toast({ title: renewContext ? '갱신 완료' : '등록 완료', description: created ? '이어서 수당을 추가할 수 있습니다.' : undefined });
         if (created) {
           const list = await getContracts();
           setContracts(list);
           const withDetails = list.find(c => c.id === created.id);
-          if (withDetails) { setFormView({ record: withDetails }); setContractAllowances([]); return; }
+          if (withDetails) { setFormView({ record: withDetails }); setContractAllowances([]); setRenewContext(null); return; }
         }
         closeForm();
       }
@@ -131,8 +167,17 @@ export default function ContractManagementPage() {
     await allowanceService.deleteContractAllowance(id);
     await loadContractAllowances(formView.record.id);
   };
-  const getCount = (s: string) => s === 'all' ? contracts.length : contracts.filter(c => c.status === s).length;
-  const filtered = contracts.filter(c => { if (activeTab !== 'all' && c.status !== activeTab) return false; if (searchTerm) { const t = searchTerm.toLowerCase(); return c.crew_name.toLowerCase().includes(t) || (c.ship_name || '').toLowerCase().includes(t); } return true; });
+  const chains = buildContractChains(contracts);
+  const chainStatus = (chain: ContractChain): EffectiveStatus => getEffectiveStatus(chain.latest);
+  const getCount = (s: string) => s === 'all' ? chains.length : chains.filter(c => chainStatus(c) === s).length;
+  const filteredChains = chains.filter(c => {
+    if (activeTab !== 'all' && chainStatus(c) !== activeTab) return false;
+    if (searchTerm) {
+      const t = searchTerm.toLowerCase();
+      return c.latest.crew_name.toLowerCase().includes(t) || (c.latest.ship_name || '').toLowerCase().includes(t);
+    }
+    return true;
+  });
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
@@ -143,7 +188,7 @@ export default function ContractManagementPage() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               {formView !== null && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>}
-              <div><CardTitle className="text-base">{formView !== null ? (formView.record ? '계약 수정' : '계약 등록') : '계약 관리'}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 고용 계약 정보를 입력합니다' : '선원 고용 계약을 관리합니다'}</p></div>
+              <div><CardTitle className="text-base">{formView !== null ? (renewContext ? '계약 갱신' : formView.record ? '계약 수정' : '계약 등록') : '계약 관리'}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 고용 계약 정보를 입력합니다' : '선원 고용 계약을 관리합니다'}</p></div>
             </div>
             {formView !== null ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button> : <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />계약 등록</Button>}
           </div>
@@ -236,13 +281,30 @@ export default function ContractManagementPage() {
             <>
               <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 선박명으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="h-8"><TabsTrigger value="all" className="text-xs h-7">전체 ({getCount('all')})</TabsTrigger><TabsTrigger value="active" className="text-xs h-7">활성 ({getCount('active')})</TabsTrigger><TabsTrigger value="completed" className="text-xs h-7">완료 ({getCount('completed')})</TabsTrigger><TabsTrigger value="terminated" className="text-xs h-7">해지 ({getCount('terminated')})</TabsTrigger></TabsList>
-                {['all','active','completed','terminated'].map(tab => (
+                <TabsList className="h-8">
+                  <TabsTrigger value="all" className="text-xs h-7">전체 ({getCount('all')})</TabsTrigger>
+                  <TabsTrigger value="valid" className="text-xs h-7">유효 ({getCount('valid')})</TabsTrigger>
+                  <TabsTrigger value="expired" className="text-xs h-7">만료 ({getCount('expired')})</TabsTrigger>
+                  <TabsTrigger value="completed" className="text-xs h-7">완료 ({getCount('completed')})</TabsTrigger>
+                  <TabsTrigger value="terminated" className="text-xs h-7">해지 ({getCount('terminated')})</TabsTrigger>
+                </TabsList>
+                {['all','valid','expired','completed','terminated'].map(tab => (
                   <TabsContent key={tab} value={tab} className="mt-2">
-                    <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50"><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">직급</th><th className="text-left p-2">선주사/플릿/선박</th><th className="text-left p-2">유형</th><th className="text-left p-2">기간</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-center p-2">작업</th></tr></thead>
-                      <tbody>{filtered.length === 0 ? <tr><td colSpan={9} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(c => (
-                        <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(c)}>
-                          <td className="p-2 font-medium">{c.crew_name}</td>
+                    <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50"><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">직급</th><th className="text-left p-2">선주사/플릿/선박</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">갱신일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-center p-2">작업</th></tr></thead>
+                      <tbody>{filteredChains.length === 0 ? <tr><td colSpan={10} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filteredChains.map(chain => {
+                        const c = chain.latest;
+                        const status = chainStatus(chain);
+                        const needsDisembark = chain.totalMonths >= DISEMBARK_NEEDED_THRESHOLD_MONTHS && (status === 'valid' || status === 'expired');
+                        return (
+                        <tr key={chain.rootId} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(c)}>
+                          <td className="p-2 font-medium">
+                            {c.crew_name}
+                            {needsDisembark && (
+                              <Badge className="ml-1.5 text-[10px] bg-orange-100 text-orange-700 gap-0.5 align-middle">
+                                <AlertTriangle className="w-2.5 h-2.5" />하선 필요
+                              </Badge>
+                            )}
+                          </td>
                           <td className="p-2 text-muted-foreground">{c.nationality || '-'}</td>
                           <td className="p-2">{c.rank}</td>
                           <td className="p-2">
@@ -251,11 +313,22 @@ export default function ContractManagementPage() {
                               {c.owner_name}{c.fleet_name ? ` · ${c.fleet_name}` : ''}
                             </div>
                           </td>
-                          <td className="p-2">{TYPE_LABELS[c.contract_type]}</td>
-                          <td className="p-2">{c.start_date} ~ {c.end_date}{c.duration_months ? ` (${c.duration_months}개월)` : ''}</td><td className="p-2 text-right font-mono">{c.salary_amount ? `${c.salary_amount.toLocaleString()} ${c.salary_currency}` : '-'}</td>
-                          <td className="p-2 text-center"><Badge className={`text-xs ${STATUS_CONFIG[c.status]?.color}`}>{STATUS_CONFIG[c.status]?.label}</Badge></td>
-                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(c.id)}><Trash2 className="h-3 w-3" /></Button></td>
-                        </tr>))}</tbody></table>
+                          <td className="p-2">{chain.root.start_date}</td>
+                          <td className="p-2">{c.end_date}</td>
+                          <td className="p-2 text-muted-foreground">{c.contract_type === 'renewal' ? c.created_at.slice(0, 10) : '-'}</td>
+                          <td className="p-2 text-right font-mono">{c.salary_amount ? `${c.salary_amount.toLocaleString()} ${c.salary_currency}` : '-'}</td>
+                          <td className="p-2 text-center"><Badge className={`text-xs ${EFFECTIVE_STATUS_CONFIG[status].color}`}>{EFFECTIVE_STATUS_CONFIG[status].label}</Badge></td>
+                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                            <div className="flex justify-center gap-1">
+                              {status === 'expired' && (
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="갱신" onClick={() => openRenewForm(chain)}><RefreshCw className="h-3 w-3" /></Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(c.id)}><Trash2 className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                        );
+                      })}</tbody></table>
                   </TabsContent>
                 ))}
               </Tabs>
