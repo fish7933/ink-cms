@@ -19,7 +19,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { addSeaServiceRecord, updateSeaServiceRecord } from '@/services/crew-extended.service';
+import { getShipTypes } from '@/services/ship-classification.service';
+import { getActiveShipFlags } from '@/services/ship-flag.service';
+import { supabase } from '@/lib/supabase';
 import type { SeaServiceRecord } from '@/types/crew-extended';
+import type { ShipType } from '@/types/ship-classification';
+import type { ShipFlag } from '@/types/ship-flag';
+import type { Rank } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
 
 interface SeaServiceDialogProps {
@@ -39,7 +45,10 @@ export default function SeaServiceDialog({
 }: SeaServiceDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
+  const [shipTypes, setShipTypes] = useState<ShipType[]>([]);
+  const [shipFlags, setShipFlags] = useState<ShipFlag[]>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
+
   const [formData, setFormData] = useState({
     record_type: 'pre_company' as 'pre_company' | 'company_assignment',
     ship_name: '',
@@ -51,10 +60,24 @@ export default function SeaServiceDialog({
     sign_on_date: '',
     sign_off_date: '',
     sign_off_reason: '',
-    port_of_sign_on: '',
-    port_of_sign_off: '',
+    owner_company_name: '',
+    ship_manager_name: '',
+    manning_agency_name: '',
     notes: '',
   });
+
+  useEffect(() => {
+    if (!open) return;
+    Promise.all([
+      getShipTypes(),
+      getActiveShipFlags(),
+      supabase.from('ranks').select('*').order('display_order'),
+    ]).then(([types, flags, ranksRes]) => {
+      setShipTypes(types);
+      setShipFlags(flags);
+      setRanks(ranksRes.data || []);
+    }).catch(console.error);
+  }, [open]);
 
   useEffect(() => {
     if (record) {
@@ -69,8 +92,9 @@ export default function SeaServiceDialog({
         sign_on_date: record.sign_on_date,
         sign_off_date: record.sign_off_date || '',
         sign_off_reason: record.sign_off_reason || '',
-        port_of_sign_on: record.port_of_sign_on || '',
-        port_of_sign_off: record.port_of_sign_off || '',
+        owner_company_name: record.owner_company_name || '',
+        ship_manager_name: record.ship_manager_name || '',
+        manning_agency_name: record.manning_agency_name || '',
         notes: record.notes || '',
       });
     } else {
@@ -85,8 +109,9 @@ export default function SeaServiceDialog({
         sign_on_date: '',
         sign_off_date: '',
         sign_off_reason: '',
-        port_of_sign_on: '',
-        port_of_sign_off: '',
+        owner_company_name: '',
+        ship_manager_name: '',
+        manning_agency_name: '',
         notes: '',
       });
     }
@@ -97,6 +122,7 @@ export default function SeaServiceDialog({
     setLoading(true);
 
     try {
+      const isPreCompany = formData.record_type === 'pre_company';
       const recordData = {
         crew_member_id: crewId,
         record_type: formData.record_type,
@@ -109,8 +135,9 @@ export default function SeaServiceDialog({
         sign_on_date: formData.sign_on_date,
         sign_off_date: formData.sign_off_date || undefined,
         sign_off_reason: formData.sign_off_reason || undefined,
-        port_of_sign_on: formData.port_of_sign_on || undefined,
-        port_of_sign_off: formData.port_of_sign_off || undefined,
+        owner_company_name: isPreCompany ? (formData.owner_company_name || undefined) : undefined,
+        ship_manager_name: isPreCompany ? (formData.ship_manager_name || undefined) : undefined,
+        manning_agency_name: isPreCompany ? (formData.manning_agency_name || undefined) : undefined,
         notes: formData.notes || undefined,
       };
 
@@ -159,7 +186,7 @@ export default function SeaServiceDialog({
               <Label htmlFor="record_type" className="text-xs">기록 유형 *</Label>
               <Select
                 value={formData.record_type}
-                onValueChange={(value: 'pre_company' | 'company_assignment') => 
+                onValueChange={(value: 'pre_company' | 'company_assignment') =>
                   setFormData({ ...formData, record_type: value })
                 }
                 required
@@ -173,6 +200,41 @@ export default function SeaServiceDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            {formData.record_type === 'pre_company' && (
+              <div className="grid grid-cols-3 gap-3 p-3 bg-gray-50 rounded-md">
+                <div className="space-y-1.5">
+                  <Label htmlFor="owner_company_name" className="text-xs">선주사</Label>
+                  <Input
+                    id="owner_company_name"
+                    value={formData.owner_company_name}
+                    onChange={(e) => setFormData({ ...formData, owner_company_name: e.target.value })}
+                    placeholder="선주사명"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ship_manager_name" className="text-xs">선박관리사</Label>
+                  <Input
+                    id="ship_manager_name"
+                    value={formData.ship_manager_name}
+                    onChange={(e) => setFormData({ ...formData, ship_manager_name: e.target.value })}
+                    placeholder="선박관리사명"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="manning_agency_name" className="text-xs">매닝사</Label>
+                  <Input
+                    id="manning_agency_name"
+                    value={formData.manning_agency_name}
+                    onChange={(e) => setFormData({ ...formData, manning_agency_name: e.target.value })}
+                    placeholder="매닝사명"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -189,38 +251,43 @@ export default function SeaServiceDialog({
 
               <div className="space-y-1.5">
                 <Label htmlFor="ship_type" className="text-xs">선종</Label>
-                <Input
-                  id="ship_type"
-                  value={formData.ship_type}
-                  onChange={(e) => setFormData({ ...formData, ship_type: e.target.value })}
-                  placeholder="예: Tanker, Bulk Carrier"
-                  className="h-9 text-sm"
-                />
+                <Select value={formData.ship_type || '_none'} onValueChange={v => setFormData({ ...formData, ship_type: v === '_none' ? '' : v })}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선종 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
+                    {shipTypes.map(t => (
+                      <SelectItem key={t.id} value={t.name_ko || t.name} className="text-sm">{t.name_ko || t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="flag" className="text-xs">국적</Label>
-                <Input
-                  id="flag"
-                  value={formData.flag}
-                  onChange={(e) => setFormData({ ...formData, flag: e.target.value })}
-                  placeholder="선박 국적"
-                  className="h-9 text-sm"
-                />
+                <Label htmlFor="flag" className="text-xs">국적(선적)</Label>
+                <Select value={formData.flag || '_none'} onValueChange={v => setFormData({ ...formData, flag: v === '_none' ? '' : v })}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선적 국가 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
+                    {shipFlags.map(f => (
+                      <SelectItem key={f.id} value={f.name_ko} className="text-sm">{f.name_ko} ({f.code})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="rank" className="text-xs">직급 *</Label>
-                <Input
-                  id="rank"
-                  value={formData.rank}
-                  onChange={(e) => setFormData({ ...formData, rank: e.target.value })}
-                  placeholder="승선 시 직급"
-                  required
-                  className="h-9 text-sm"
-                />
+                <Select value={formData.rank || '_none'} onValueChange={v => setFormData({ ...formData, rank: v === '_none' ? '' : v })} required>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
+                    {ranks.map(r => (
+                      <SelectItem key={r.id} value={r.rank_code} className="text-sm">{r.rank_code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -275,30 +342,6 @@ export default function SeaServiceDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="port_of_sign_on" className="text-xs">승선 항구</Label>
-                <Input
-                  id="port_of_sign_on"
-                  value={formData.port_of_sign_on}
-                  onChange={(e) => setFormData({ ...formData, port_of_sign_on: e.target.value })}
-                  placeholder="예: Busan, Korea"
-                  className="h-9 text-sm"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="port_of_sign_off" className="text-xs">하선 항구</Label>
-                <Input
-                  id="port_of_sign_off"
-                  value={formData.port_of_sign_off}
-                  onChange={(e) => setFormData({ ...formData, port_of_sign_off: e.target.value })}
-                  placeholder="예: Singapore"
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-
             <div className="space-y-1.5">
               <Label htmlFor="sign_off_reason" className="text-xs">하선 사유</Label>
               <Input
@@ -333,9 +376,9 @@ export default function SeaServiceDialog({
             >
               취소
             </Button>
-            <Button 
-              type="submit" 
-              size="sm" 
+            <Button
+              type="submit"
+              size="sm"
               className="h-8"
               disabled={loading}
             >

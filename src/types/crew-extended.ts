@@ -69,6 +69,10 @@ export interface SeaServiceRecord {
   sign_off_reason?: string;
   port_of_sign_on?: string;
   port_of_sign_off?: string;
+  // 입사 전 경력(pre_company)인 경우의 선주사/선박관리사/매닝사 (외부 회사일 수 있어 자유 텍스트)
+  owner_company_name?: string;
+  ship_manager_name?: string;
+  manning_agency_name?: string;
   assignment_id?: string;
   notes?: string;
   created_at: string;
