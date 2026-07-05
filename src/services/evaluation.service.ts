@@ -26,6 +26,28 @@ export async function getEvaluations(crewId?: string): Promise<CrewEvaluationWit
   });
 }
 
+export async function getEvaluationsBySeaServiceRecord(seaServiceRecordId: string): Promise<CrewEvaluationWithDetails[]> {
+  const { data, error } = await supabase
+    .from('crew_evaluations')
+    .select(`*, crew_members!crew_member_id(name, rank_id, ranks:rank_id(name, rank_code)), ships!ship_id(name)`)
+    .eq('sea_service_record_id', seaServiceRecordId)
+    .order('evaluation_period_end', { ascending: false });
+  if (error) { console.error(error); return []; }
+
+  return (data || []).map((r: Record<string, unknown>) => {
+    const crew = r.crew_members as Record<string, unknown> | null;
+    const ranks = crew?.ranks as Record<string, unknown> | null;
+    const ship = r.ships as Record<string, unknown> | null;
+    return {
+      ...r,
+      crew_name: (crew?.name as string) || '',
+      rank_name: (ranks?.name as string) || '',
+      rank_code: (ranks?.rank_code as string) || '',
+      ship_name: (ship?.name as string) || undefined,
+    } as CrewEvaluationWithDetails;
+  });
+}
+
 export async function addEvaluation(data: Omit<CrewEvaluation, 'id' | 'created_at' | 'updated_at'>): Promise<CrewEvaluation> {
   const { data: result, error } = await supabase
     .from('crew_evaluations')

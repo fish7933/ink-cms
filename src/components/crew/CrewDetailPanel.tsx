@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText, Edit2 } from 'lucide-react';
+import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText, Edit2, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import type { Nationality } from '@/types/nationality';
 import type { CertificateType } from '@/types/certificate-type';
 import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
 import SeaServiceDialog from '@/components/crew/SeaServiceDialog';
+import SeaServiceEvaluationDialog from '@/components/crew/SeaServiceEvaluationDialog';
 import TrainingRecordDialog from '@/components/crew/TrainingRecordDialog';
 import MedicalRecordDialog from '@/components/crew/MedicalRecordDialog';
 import SalaryRecordDialog from '@/components/crew/SalaryRecordDialog';
@@ -144,6 +145,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
   const [salaryRecords, setSalaryRecords] = useState<CrewSalaryRecord[]>([]);
   const [seaServiceDialogOpen, setSeaServiceDialogOpen] = useState(false);
+  const [evaluationDialogOpen, setEvaluationDialogOpen] = useState(false);
+  const [evaluationDialogRecord, setEvaluationDialogRecord] = useState<SeaServiceRecord | null>(null);
   const [trainingDialogOpen, setTrainingDialogOpen] = useState(false);
   const [medicalDialogOpen, setMedicalDialogOpen] = useState(false);
   const [salaryDialogOpen, setSalaryDialogOpen] = useState(false);
@@ -898,7 +901,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">유형</th><th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">유형</th><th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-center p-2">고과</th><th className="text-center p-2">작업</th>
                     </tr></thead>
                     <tbody>
                       {seaServiceRecords.map(r => (
@@ -911,6 +914,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                           <td className="p-2 text-gray-600">{r.owner_company_name || '-'}</td>
                           <td className="p-2 text-gray-600">{r.ship_manager_name || '-'}</td>
                           <td className="p-2 text-gray-600">{r.manning_agency_name || '-'}</td>
+                          <td className="p-2 text-center">
+                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => { setEvaluationDialogRecord(r); setEvaluationDialogOpen(true); }}>
+                              <Star className="h-3 w-3" />고과
+                            </Button>
+                          </td>
                           <td className="p-2 text-center">
                             <div className="flex justify-center gap-1">
                               <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingSeaService(r); setSeaServiceDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
@@ -925,6 +933,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               )}
             </div>
             <SeaServiceDialog open={seaServiceDialogOpen} onOpenChange={setSeaServiceDialogOpen} crewId={id!} record={editingSeaService} onSuccess={() => loadExtendedRecords(id!)} />
+            <SeaServiceEvaluationDialog open={evaluationDialogOpen} onOpenChange={setEvaluationDialogOpen} crewId={id!} record={evaluationDialogRecord} />
           </TabsContent>
         )}
 

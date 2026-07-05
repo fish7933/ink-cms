@@ -1,6 +1,7 @@
 export interface CrewEvaluation {
   id: string;
   crew_member_id: string;
+  sea_service_record_id?: string | null;
   evaluation_period_start: string;
   evaluation_period_end: string;
   ship_id?: string;
