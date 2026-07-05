@@ -96,8 +96,9 @@ export default function RecommendationReviewPage() {
       setShips(allShips);
       setRanks(allRanks);
 
-      if (!fetchedUser || fetchedUser.role !== 'ship_manager') {
-        console.log('⚠️ not ship_manager, skipping');
+      const isAdminUser = fetchedUser?.role === 'admin' || fetchedUser?.role === 'system_admin';
+      if (!fetchedUser || (fetchedUser.role !== 'ship_manager' && !isAdminUser)) {
+        console.log('⚠️ not ship_manager/admin, skipping');
         setLoading(false);
         return;
       }
@@ -301,7 +302,8 @@ export default function RecommendationReviewPage() {
     return 'bg-gray-100 text-gray-700 border-gray-300';
   };
 
-  const canAp = (r: CrewRecommendationWithDetails) => supervisorPerms.get(r.ship_id) || false;
+  const canAp = (r: CrewRecommendationWithDetails) =>
+    loggedUser?.role === 'admin' || loggedUser?.role === 'system_admin' || (supervisorPerms.get(r.ship_id) || false);
 
   const ApProgress = ({ recId }: { recId: string }) => {
     const ap = approvalMap.get(recId);

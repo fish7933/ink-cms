@@ -116,8 +116,8 @@ export default function JobPostingsPage() {
               posting.id,
               user.company_id
             );
-          } else if (user?.role === 'ship_manager' || user?.role === 'ship_owner') {
-            // For ship managers/owners, show all recommendations
+          } else if (user?.role === 'ship_manager' || user?.role === 'ship_owner' || user?.role === 'admin' || user?.role === 'system_admin') {
+            // For ship managers/owners/admins, show all recommendations
             count = await crewRecommendationService.getRecommendationCountByJobPostingGroup(posting.id);
           }
           return { ...posting, recommendation_count: count };
