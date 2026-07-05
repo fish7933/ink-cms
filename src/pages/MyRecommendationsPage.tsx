@@ -77,14 +77,11 @@ export default function MyRecommendationsPage() {
       setShips(allShips);
       setRanks(allRanks);
       if (!user?.company_id) return;
+      // 결재 승인 시 자동으로 등록 선원 목록에 반영되므로, 등록 완료 여부와 무관하게
+      // 추천 이력은 계속 보여준다(예전엔 등록되면 목록에서 사라져서 승인 직후 바로
+      // 안 보이는 것처럼 느껴지는 문제가 있었음).
       const recs = await crewRecommendationService.getByManningAgency(user.company_id);
-      // 등록 완료된 선원(crew_member_id 있는 것) 제외
-      const { data: rawRecs } = await supabase
-        .from('crew_recommendations')
-        .select('id, crew_member_id')
-        .eq('manning_agency_id', user.company_id);
-      const registeredIds = new Set((rawRecs || []).filter(r => r.crew_member_id).map(r => r.id));
-      setRecommendations(recs.filter((r: CrewRecommendationWithDetails) => !registeredIds.has(r.id)));
+      setRecommendations(recs);
     } catch (e) {
       console.error('Failed to load recommendations:', e);
     } finally {
