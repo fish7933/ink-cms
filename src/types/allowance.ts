@@ -6,6 +6,9 @@ export interface AllowanceType {
   code: string;
   name: string;
   description?: string;
+  // 지급방식/지급주체는 직급별이 아니라 수당 유형 전체에 일괄 적용
+  payment_basis: AllowancePaymentBasis;
+  payment_method: AllowancePaymentMethod;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -17,8 +20,6 @@ export interface AllowanceRankRate {
   rank_id: string;
   amount: number;
   currency: string;
-  default_payment_basis: AllowancePaymentBasis;
-  default_payment_method: AllowancePaymentMethod;
   created_at: string;
   updated_at: string;
 }

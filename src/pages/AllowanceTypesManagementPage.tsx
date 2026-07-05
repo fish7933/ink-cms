@@ -19,8 +19,6 @@ const METHOD_LABELS: Record<AllowancePaymentMethod, string> = { ship_direct: '�
 interface RateDraft {
   amount: string;
   currency: string;
-  default_payment_basis: AllowancePaymentBasis;
-  default_payment_method: AllowancePaymentMethod;
 }
 
 export default function AllowanceTypesManagementPage() {
@@ -34,7 +32,11 @@ export default function AllowanceTypesManagementPage() {
 
   const [typeFormOpen, setTypeFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<AllowanceType | null>(null);
-  const [typeForm, setTypeForm] = useState({ code: '', name: '', description: '' });
+  const [typeForm, setTypeForm] = useState({
+    code: '', name: '', description: '',
+    payment_basis: 'monthly' as AllowancePaymentBasis,
+    payment_method: 'owner_billed' as AllowancePaymentMethod,
+  });
 
   const loadTypes = useCallback(async () => {
     const data = await allowanceService.getTypes(true);
@@ -61,8 +63,8 @@ export default function AllowanceTypesManagementPage() {
     for (const rank of ranks) {
       const existing = data.find(r => r.rank_id === rank.id);
       nextDrafts[rank.id] = existing
-        ? { amount: String(existing.amount), currency: existing.currency, default_payment_basis: existing.default_payment_basis, default_payment_method: existing.default_payment_method }
-        : { amount: '', currency: 'USD', default_payment_basis: 'monthly', default_payment_method: 'owner_billed' };
+        ? { amount: String(existing.amount), currency: existing.currency }
+        : { amount: '', currency: 'USD' };
     }
     setDrafts(nextDrafts);
   }, [selectedTypeId, ranks]);
@@ -74,13 +76,13 @@ export default function AllowanceTypesManagementPage() {
 
   const openNewTypeForm = () => {
     setEditingType(null);
-    setTypeForm({ code: '', name: '', description: '' });
+    setTypeForm({ code: '', name: '', description: '', payment_basis: 'monthly', payment_method: 'owner_billed' });
     setTypeFormOpen(true);
   };
 
   const openEditTypeForm = (t: AllowanceType) => {
     setEditingType(t);
-    setTypeForm({ code: t.code, name: t.name, description: t.description || '' });
+    setTypeForm({ code: t.code, name: t.name, description: t.description || '', payment_basis: t.payment_basis, payment_method: t.payment_method });
     setTypeFormOpen(true);
   };
 
@@ -90,7 +92,12 @@ export default function AllowanceTypesManagementPage() {
       return;
     }
     if (editingType) {
-      await allowanceService.updateType(editingType.id, { name: typeForm.name, description: typeForm.description || undefined });
+      await allowanceService.updateType(editingType.id, {
+        name: typeForm.name,
+        description: typeForm.description || undefined,
+        payment_basis: typeForm.payment_basis,
+        payment_method: typeForm.payment_method,
+      });
       toast({ title: '수정되었습니다' });
       await loadTypes();
       setTypeFormOpen(false);
@@ -126,8 +133,6 @@ export default function AllowanceTypesManagementPage() {
       rank_id: rankId,
       amount: parseFloat(draft.amount),
       currency: draft.currency,
-      default_payment_basis: draft.default_payment_basis,
-      default_payment_method: draft.default_payment_method,
     });
     toast({ title: '저장되었습니다' });
     await loadRates();
@@ -158,7 +163,7 @@ export default function AllowanceTypesManagementPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Coins className="w-5 h-5 text-muted-foreground" />수당 기준 관리</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          급여표와 별개로 계약에 붙는 수당(재고용수당 등)의 유형과 직급별 기준 금액/지급방식을 관리합니다.
+          급여표와 별개로 계약에 붙는 수당(재고용수당 등)의 유형과 직급별 기준 금액을 관리합니다. 지급방식/지급주체는 유형 전체에 일괄 적용됩니다.
         </p>
       </div>
 
@@ -176,7 +181,21 @@ export default function AllowanceTypesManagementPage() {
             <div className="space-y-1.5"><Label className="text-xs">코드 *</Label><Input value={typeForm.code} disabled={!!editingType} onChange={e => setTypeForm(p => ({ ...p, code: e.target.value }))} placeholder="예: overtime_fixed" className="h-9 text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-xs">이름 *</Label><Input value={typeForm.name} onChange={e => setTypeForm(p => ({ ...p, name: e.target.value }))} placeholder="예: 고정 초과근무수당" className="h-9 text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-xs">설명</Label><Input value={typeForm.description} onChange={e => setTypeForm(p => ({ ...p, description: e.target.value }))} className="h-9 text-sm" /></div>
-            <div className="col-span-3 flex gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">지급방식 (일괄)</Label>
+              <Select value={typeForm.payment_basis} onValueChange={v => setTypeForm(p => ({ ...p, payment_basis: v as AllowancePaymentBasis }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(BASIS_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">지급주체 (일괄)</Label>
+              <Select value={typeForm.payment_method} onValueChange={v => setTypeForm(p => ({ ...p, payment_method: v as AllowancePaymentMethod }))}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 items-end">
               <Button size="sm" onClick={handleSaveType}>{editingType ? '수정 저장' : '추가'}</Button>
               <Button size="sm" variant="outline" onClick={() => setTypeFormOpen(false)}>취소</Button>
             </div>
@@ -195,7 +214,8 @@ export default function AllowanceTypesManagementPage() {
                   <TableHead className="text-xs w-8"></TableHead>
                   <TableHead className="text-xs">코드</TableHead>
                   <TableHead className="text-xs">이름</TableHead>
-                  <TableHead className="text-xs">설명</TableHead>
+                  <TableHead className="text-xs">지급방식</TableHead>
+                  <TableHead className="text-xs">지급주체</TableHead>
                   <TableHead className="text-xs w-24 text-center">직급기준</TableHead>
                   <TableHead className="text-xs w-20 text-center">상태</TableHead>
                   <TableHead className="text-right text-xs w-28">작업</TableHead>
@@ -210,8 +230,12 @@ export default function AllowanceTypesManagementPage() {
                   >
                     <TableCell>{selectedTypeId === t.id && <ChevronRight className="w-3.5 h-3.5 text-blue-600" />}</TableCell>
                     <TableCell className="text-xs font-mono text-muted-foreground">{t.code}</TableCell>
-                    <TableCell className="text-xs font-medium">{t.name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground truncate max-w-[240px]">{t.description || '-'}</TableCell>
+                    <TableCell className="text-xs font-medium">
+                      {t.name}
+                      {t.description && <div className="text-[11px] text-muted-foreground font-normal truncate max-w-[220px]">{t.description}</div>}
+                    </TableCell>
+                    <TableCell className="text-xs">{BASIS_LABELS[t.payment_basis]}</TableCell>
+                    <TableCell className="text-xs">{METHOD_LABELS[t.payment_method]}</TableCell>
                     <TableCell className="text-xs text-center">{rateCountByType(t.id) ?? '-'}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className={`text-xs ${t.is_active ? 'text-green-700 border-green-300' : 'text-gray-400'}`}>
@@ -238,8 +262,10 @@ export default function AllowanceTypesManagementPage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <CardTitle className="text-sm">직급별 기준 — {selectedType.name}</CardTitle>
-                <CardDescription className="text-xs mt-0.5">직급마다 기준 금액과 기본 지급방식/지급주체를 설정합니다. 계약에 부여할 때 이 값이 기본으로 채워지며, 계약별로 재정의할 수 있습니다.</CardDescription>
+                <CardTitle className="text-sm">직급별 기준 금액 — {selectedType.name}</CardTitle>
+                <CardDescription className="text-xs mt-0.5">
+                  직급마다 기준 금액만 다르게 설정합니다. 지급방식({BASIS_LABELS[selectedType.payment_basis]})/지급주체({METHOD_LABELS[selectedType.payment_method]})는 이 수당 유형 전체에 일괄 적용되며, 유형 수정에서 변경할 수 있습니다.
+                </CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -250,14 +276,12 @@ export default function AllowanceTypesManagementPage() {
                   <TableHead className="text-xs">직급</TableHead>
                   <TableHead className="text-xs">금액</TableHead>
                   <TableHead className="text-xs w-24">통화</TableHead>
-                  <TableHead className="text-xs w-40">지급방식</TableHead>
-                  <TableHead className="text-xs w-40">지급주체</TableHead>
                   <TableHead className="text-right text-xs w-28">작업</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {ranks.map(rank => {
-                  const draft = drafts[rank.id] || { amount: '', currency: 'USD', default_payment_basis: 'monthly' as const, default_payment_method: 'owner_billed' as const };
+                  const draft = drafts[rank.id] || { amount: '', currency: 'USD' };
                   const hasRate = rates.some(r => r.rank_id === rank.id);
                   return (
                     <TableRow key={rank.id}>
@@ -273,22 +297,6 @@ export default function AllowanceTypesManagementPage() {
                           <SelectContent>
                             <SelectItem value="USD">USD</SelectItem>
                             <SelectItem value="KRW">KRW</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select value={draft.default_payment_basis} onValueChange={v => updateDraft(rank.id, 'default_payment_basis', v)}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(BASIS_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select value={draft.default_payment_method} onValueChange={v => updateDraft(rank.id, 'default_payment_method', v)}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </TableCell>

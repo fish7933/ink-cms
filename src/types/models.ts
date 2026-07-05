@@ -276,6 +276,13 @@ export interface CrewMemberWithDetails extends CrewMember {
   department: string;
 }
 
+export interface CrewRecommendationResumeFile {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 export interface CrewRecommendation {
   id: string;
   job_posting_group_id?: string;
@@ -288,12 +295,17 @@ export interface CrewRecommendation {
   ship_id?: string;
   ship_type?: string;
   ship_size?: string;
+  nationality?: string;
+  education?: string;
   desired_salary: number;
   desired_currency: string;
   desired_contract_months: number;
   available_date: string;
   remarks?: string;
-  resume_files: string[];
+  // DB에는 JSON 문자열로 저장되지만, 서비스 계층에서 파싱해 배열로 내려준다
+  resume_files: CrewRecommendationResumeFile[];
+  certificates?: unknown;
+  crew_member_id?: string | null;
   status: 'pending' | 'reviewed' | 'accepted' | 'rejected';
   created_by: string;
   created_at: string;

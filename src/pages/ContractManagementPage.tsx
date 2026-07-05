@@ -134,12 +134,13 @@ export default function ContractManagementPage() {
   const handleAllowanceTypeSelect = async (typeId: string) => {
     const crew = crewOptions.find(c => c.id === form.crew_member_id);
     const rate = crew?.rank_id ? await allowanceService.getRankRateFor(typeId, crew.rank_id) : null;
+    const type = allowanceTypes.find(t => t.id === typeId);
     setNewAllowance({
       allowance_type_id: typeId,
       amount: rate ? String(rate.amount) : '',
       currency: rate?.currency || 'USD',
-      payment_basis: rate?.default_payment_basis || 'monthly',
-      payment_method: rate?.default_payment_method || 'owner_billed',
+      payment_basis: type?.payment_basis || 'monthly',
+      payment_method: type?.payment_method || 'owner_billed',
       notes: '',
     });
   };

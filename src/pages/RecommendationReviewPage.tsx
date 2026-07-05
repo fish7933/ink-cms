@@ -13,7 +13,7 @@ import { approvalService } from '@/services/approval.service';
 import { supervisorService } from '@/services/supervisor.service';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
-import type { CrewRecommendationWithDetails, User, Company, Fleet, Ship, Rank } from '@/types/models';
+import type { CrewRecommendationWithDetails, CrewRecommendationResumeFile, User, Company, Fleet, Ship, Rank } from '@/types/models';
 import type { ApprovalLineWithSteps, CrewRecommendationApprovalWithDetails } from '@/types/approval';
 
 const ITEMS_PER_PAGE = 20;
@@ -143,9 +143,9 @@ export default function RecommendationReviewPage() {
       const aMap = new Map((aRes.data || []).map((a: NM) => [a.id, a.name]));
 
       const enriched = recs.map((rec: Record<string, unknown>) => {
-        let rf = rec.resume_files;
-        if (typeof rf === 'string') { try { rf = JSON.parse(rf); } catch { rf = []; } }
-        if (!Array.isArray(rf)) rf = [];
+        let rf: CrewRecommendationResumeFile[] = [];
+        if (typeof rec.resume_files === 'string') { try { rf = JSON.parse(rec.resume_files); } catch { rf = []; } }
+        else if (Array.isArray(rec.resume_files)) { rf = rec.resume_files; }
         const ri = rMap.get(rec.rank_id as string) as RM | undefined;
         return {
           ...rec,
@@ -160,7 +160,7 @@ export default function RecommendationReviewPage() {
         };
       });
 
-      setRecommendations(enriched);
+      setRecommendations(enriched as unknown as CrewRecommendationWithDetails[]);
 
       // 결재 진행 현황
       const reviewed = recs.filter((r: Record<string, string>) => r.status === 'reviewed');

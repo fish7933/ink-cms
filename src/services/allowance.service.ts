@@ -3,6 +3,8 @@ import type {
   AllowanceType,
   AllowanceRankRate,
   AllowanceRankRateWithDetails,
+  AllowancePaymentBasis,
+  AllowancePaymentMethod,
   CrewContractAllowance,
   CrewContractAllowanceWithDetails,
 } from '@/types/allowance';
@@ -16,13 +18,13 @@ export const allowanceService = {
     return data || [];
   },
 
-  async createType(data: { code: string; name: string; description?: string }): Promise<AllowanceType | null> {
+  async createType(data: { code: string; name: string; description?: string; payment_basis?: AllowancePaymentBasis; payment_method?: AllowancePaymentMethod }): Promise<AllowanceType | null> {
     const { data: result, error } = await supabase.from('allowance_types').insert(data).select().single();
     if (error) { console.error('Error creating allowance type:', error); return null; }
     return result;
   },
 
-  async updateType(id: string, data: Partial<Pick<AllowanceType, 'name' | 'description' | 'is_active'>>): Promise<void> {
+  async updateType(id: string, data: Partial<Pick<AllowanceType, 'name' | 'description' | 'is_active' | 'payment_basis' | 'payment_method'>>): Promise<void> {
     const { error } = await supabase.from('allowance_types')
       .update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) throw error;

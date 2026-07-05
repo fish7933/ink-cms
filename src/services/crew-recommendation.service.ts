@@ -5,6 +5,15 @@ import { crewService } from './crew.service';
 
 const TABLE_NAME = 'crew_recommendations';
 
+// resume_files는 DB에 JSON 문자열로 저장되어 있어(jsonb 아님), 매번 파싱해서 내려준다.
+function parseResumeFiles(raw: unknown): { name: string; path: string; size: number; type: string }[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+  }
+  return [];
+}
+
 class CrewRecommendationService {
   async getAll(): Promise<CrewRecommendationWithDetails[]> {
     const { data, error } = await supabase
@@ -17,6 +26,7 @@ class CrewRecommendationService {
     // Return data with empty strings for joined fields
     return (data || []).map(item => ({
       ...item,
+      resume_files: parseResumeFiles(item.resume_files),
       manning_agency_name: '',
       rank_name: '',
       rank_code: '',
@@ -46,6 +56,7 @@ class CrewRecommendationService {
 
     return {
       ...rec,
+      resume_files: parseResumeFiles(rec.resume_files),
       rank_name: rankRes.data?.name || '',
       rank_code: rankRes.data?.rank_code || '',
       department: rankRes.data?.department || '',
@@ -100,6 +111,7 @@ class CrewRecommendationService {
 
       return {
         ...rec,
+        resume_files: parseResumeFiles(rec.resume_files),
         manning_agency_name: agency?.name || '',
         rank_name: rank?.name || '',
         rank_code: rank?.rank_code || '',
@@ -155,6 +167,7 @@ class CrewRecommendationService {
 
       return {
         ...rec,
+        resume_files: parseResumeFiles(rec.resume_files),
         manning_agency_name: agency?.name || '',
         rank_name: rank?.name || '',
         rank_code: rank?.rank_code || '',
@@ -211,6 +224,7 @@ class CrewRecommendationService {
 
       return {
         ...rec,
+        resume_files: parseResumeFiles(rec.resume_files),
         manning_agency_name: agency?.name || '',
         rank_name: rank?.name || '',
         rank_code: rank?.rank_code || '',
@@ -266,6 +280,7 @@ class CrewRecommendationService {
 
       return {
         ...rec,
+        resume_files: parseResumeFiles(rec.resume_files),
         manning_agency_name: agency?.name || '',
         rank_name: rank?.name || '',
         rank_code: rank?.rank_code || '',
@@ -288,6 +303,7 @@ class CrewRecommendationService {
 
     return (data || []).map(item => ({
       ...item,
+      resume_files: parseResumeFiles(item.resume_files),
       manning_agency_name: '',
       rank_name: '',
       rank_code: '',

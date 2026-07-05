@@ -612,7 +612,6 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
               </div>
             </div>
           )}
-          </div>
           {components.length === 0 && (
             <div className="text-center py-4 text-sm text-gray-500">
               등록된 급여 항목이 없습니다. 급여 항목을 먼저 등록해주세요.
