@@ -74,7 +74,6 @@ export const MENU_STRUCTURE: MenuStructure[] = [
       { id: 'approval-inbox', name: '내 결재함', resource: 'approval_inbox' },
       { id: 'approval-archive', name: '완료 문서함', resource: 'approval_archive' },
       { id: 'approval-management', name: '결재 캐비넷', resource: 'approval_management' },
-      { id: 'approval-lines', name: '결재선 관리', resource: 'approval_lines' },
     ],
   },
   {
@@ -103,6 +102,7 @@ export const MENU_STRUCTURE: MenuStructure[] = [
       { id: 'supervisor-management', name: '우리회사 담당자 관리', resource: 'supervisor_management' },
       { id: 'shore-positions', name: '육상 직원 직급', resource: 'shore_positions' },
       { id: 'org-chart', name: '조직도 관리', resource: 'org_chart' },
+      { id: 'approval-lines', name: '결재선 관리', resource: 'approval_lines' },
       { id: 'menu-configuration', name: 'UI 구성 관리', resource: 'menu_configuration' },
     ],
   },
