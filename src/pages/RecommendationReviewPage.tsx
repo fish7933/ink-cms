@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Eye, XCircle, Clock, ExternalLink, FileText, Send, CheckCircle2, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Search, Filter, Eye, XCircle, Clock, ExternalLink, FileText, Send, CheckCircle2, ChevronRight, ArrowLeft, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -246,6 +246,17 @@ export default function RecommendationReviewPage() {
   };
 
   const openDetail = (r: CrewRecommendationWithDetails) => { setSelectedRec(r); setViewMode('detail'); };
+  const handleDelete = async (r: CrewRecommendationWithDetails) => {
+    if (!confirm(`${r.crew_name}님의 추천 건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    try {
+      await crewRecommendationService.delete(r.id);
+      if (selectedRec?.id === r.id) { setViewMode('list'); setSelectedRec(null); }
+      await loadAll();
+    } catch (e) {
+      console.error(e);
+      alert('삭제 중 오류가 발생했습니다.');
+    }
+  };
   const openApproval = (r: CrewRecommendationWithDetails, action: 'accept' | 'reject') => {
     setSelectedRec(r); setApprovalAction(action); setApprovalComment('');
     setSaveLineDefault(false);
@@ -445,6 +456,11 @@ export default function RecommendationReviewPage() {
                               </Button>
                             </>
                           )}
+                          {rec.status !== 'pending' && (
+                            <Button variant="outline" size="sm" onClick={() => handleDelete(rec)} className="h-7 px-2 text-xs text-red-600 hover:bg-red-50">
+                              <Trash2 className="w-3.5 h-3.5 mr-1" />삭제
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -485,11 +501,18 @@ export default function RecommendationReviewPage() {
           const names = shipSupervisors.get(selectedRec.ship_id) || [];
           return (
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <Button variant="ghost" size="sm" onClick={() => { setViewMode('list'); setSelectedRec(null); }} className="h-8 px-2">
-                  <ArrowLeft className="w-4 h-4 mr-1" />목록
-                </Button>
-                <h2 className="text-lg font-semibold">추천 선원 상세 정보</h2>
+              <div className="flex items-center gap-3 mb-6 justify-between">
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" size="sm" onClick={() => { setViewMode('list'); setSelectedRec(null); }} className="h-8 px-2">
+                    <ArrowLeft className="w-4 h-4 mr-1" />목록
+                  </Button>
+                  <h2 className="text-lg font-semibold">추천 선원 상세 정보</h2>
+                </div>
+                {selectedRec.status !== 'pending' && (
+                  <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRec)} className="h-8 px-2 text-xs text-red-600 hover:bg-red-50">
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />삭제
+                  </Button>
+                )}
               </div>
 
               <div className="space-y-4">

@@ -356,4 +356,10 @@ export const approvalDocumentService = {
       .eq('id', documentId);
     if (error) throw error;
   },
+
+  // 결재가 끝난(승인/반려/취소) 문서를 완전히 삭제 — approval_document_steps는 CASCADE로 함께 삭제됨
+  async deleteDocument(documentId: string): Promise<void> {
+    const { error } = await supabase.from('approval_documents').delete().eq('id', documentId);
+    if (error) throw error;
+  },
 };

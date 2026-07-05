@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { FileText, Plus, ArrowLeft, CheckCircle, XCircle, Clock, Ban, Paperclip } from 'lucide-react';
+import { FileText, Plus, ArrowLeft, CheckCircle, XCircle, Clock, Ban, Paperclip, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +64,9 @@ export default function MyDocumentsPage() {
   const canCancel = (doc: ApprovalDocumentWithDetails) =>
     doc.status === 'pending' && (doc.created_by === currentUser?.id || isAdmin);
 
+  const canDelete = (doc: ApprovalDocumentWithDetails) =>
+    doc.status !== 'pending' && (doc.created_by === currentUser?.id || isAdmin);
+
   const handleCancel = async (doc: ApprovalDocumentWithDetails) => {
     if (!confirm('이 기안서를 취소하시겠습니까?')) return;
     try {
@@ -73,6 +76,18 @@ export default function MyDocumentsPage() {
       if (currentUser) await loadData(currentUser.id);
     } catch (e) {
       toast({ title: '취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async (doc: ApprovalDocumentWithDetails) => {
+    if (!confirm('이 기안서를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+    try {
+      await approvalDocumentService.deleteDocument(doc.id);
+      toast({ title: '삭제되었습니다.' });
+      setSelected(null);
+      if (currentUser) await loadData(currentUser.id);
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -129,9 +144,16 @@ export default function MyDocumentsPage() {
                   {selected.document_type_name} · {selected.org_unit_name || '부서 미지정'} · {format(new Date(selected.created_at), 'PPP', { locale: ko })}
                 </p>
               </div>
-              {canCancel(selected) && (
-                <Button size="sm" variant="outline" className="text-red-600 border-red-300" onClick={() => handleCancel(selected)}>취소</Button>
-              )}
+              <div className="flex gap-2 shrink-0">
+                {canCancel(selected) && (
+                  <Button size="sm" variant="outline" className="text-red-600 border-red-300" onClick={() => handleCancel(selected)}>취소</Button>
+                )}
+                {canDelete(selected) && (
+                  <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDelete(selected)}>
+                    <Trash2 className="w-3.5 h-3.5" />삭제
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -210,6 +232,15 @@ export default function MyDocumentsPage() {
                         {doc.document_type_name} · {doc.org_unit_name || '부서 미지정'} · {format(new Date(doc.created_at), 'PPP', { locale: ko })}
                       </p>
                     </div>
+                    {canDelete(doc) && (
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 shrink-0"
+                        onClick={e => { e.stopPropagation(); handleDelete(doc); }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                   </div>
                 );
               })}
