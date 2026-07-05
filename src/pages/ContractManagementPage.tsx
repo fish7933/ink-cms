@@ -123,10 +123,19 @@ export default function ContractManagementPage() {
                 <TabsList className="h-8"><TabsTrigger value="all" className="text-xs h-7">전체 ({getCount('all')})</TabsTrigger><TabsTrigger value="active" className="text-xs h-7">활성 ({getCount('active')})</TabsTrigger><TabsTrigger value="completed" className="text-xs h-7">완료 ({getCount('completed')})</TabsTrigger><TabsTrigger value="terminated" className="text-xs h-7">해지 ({getCount('terminated')})</TabsTrigger></TabsList>
                 {['all','active','completed','terminated'].map(tab => (
                   <TabsContent key={tab} value={tab} className="mt-2">
-                    <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50"><th className="text-left p-2">선원명</th><th className="text-left p-2">직급</th><th className="text-left p-2">선박</th><th className="text-left p-2">유형</th><th className="text-left p-2">기간</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-center p-2">작업</th></tr></thead>
-                      <tbody>{filtered.length === 0 ? <tr><td colSpan={8} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(c => (
+                    <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50"><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">직급</th><th className="text-left p-2">선주사/플릿/선박</th><th className="text-left p-2">유형</th><th className="text-left p-2">기간</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-center p-2">작업</th></tr></thead>
+                      <tbody>{filtered.length === 0 ? <tr><td colSpan={9} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(c => (
                         <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(c)}>
-                          <td className="p-2 font-medium">{c.crew_name}</td><td className="p-2">{c.rank}</td><td className="p-2">{c.ship_name || '-'}</td><td className="p-2">{TYPE_LABELS[c.contract_type]}</td>
+                          <td className="p-2 font-medium">{c.crew_name}</td>
+                          <td className="p-2 text-muted-foreground">{c.nationality || '-'}</td>
+                          <td className="p-2">{c.rank}</td>
+                          <td className="p-2">
+                            <div>{c.ship_name || '-'}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {c.owner_name}{c.fleet_name ? ` · ${c.fleet_name}` : ''}
+                            </div>
+                          </td>
+                          <td className="p-2">{TYPE_LABELS[c.contract_type]}</td>
                           <td className="p-2">{c.start_date} ~ {c.end_date}{c.duration_months ? ` (${c.duration_months}개월)` : ''}</td><td className="p-2 text-right font-mono">{c.salary_amount ? `${c.salary_amount.toLocaleString()} ${c.salary_currency}` : '-'}</td>
                           <td className="p-2 text-center"><Badge className={`text-xs ${STATUS_CONFIG[c.status]?.color}`}>{STATUS_CONFIG[c.status]?.label}</Badge></td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(c.id)}><Trash2 className="h-3 w-3" /></Button></td>

@@ -2,6 +2,9 @@ export interface CrewContract {
   id: string;
   crew_member_id: string;
   ship_id?: string;
+  owner_id?: string;
+  fleet_id?: string;
+  nationality?: string;
   contract_number?: string;
   contract_type: 'initial' | 'renewal' | 'extension' | 'transfer';
   rank: string;
@@ -29,4 +32,6 @@ export interface CrewContractWithDetails extends CrewContract {
   rank_name: string;
   rank_code: string;
   ship_name?: string;
+  owner_name?: string;
+  fleet_name?: string;
 }

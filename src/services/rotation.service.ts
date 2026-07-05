@@ -1,3 +1,4 @@
+import { addMonths, format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import type {
@@ -337,13 +338,30 @@ export const rotationService = {
 
     const now = new Date().toISOString();
 
+    // 승선경력/계약 자동 생성에 필요한 참조 데이터 일괄 조회
+    const rankIds = [...new Set((assignments || []).flatMap(a => [a.on_rank_id, a.off_rank_id]).filter(Boolean))];
+    const crewIds = [...new Set((assignments || []).flatMap(a => [a.on_crew_id, a.off_crew_id]).filter(Boolean))];
+    const [{ data: ship }, { data: port }, { data: ranksData }, { data: crewData }] = await Promise.all([
+      supabase.from('ships').select('name, ship_type, flag, gross_tonnage, engine_power').eq('id', plan.ship_id).single(),
+      plan.port_id
+        ? supabase.from('ports').select('country_name, city_name').eq('id', plan.port_id).single()
+        : Promise.resolve({ data: null }),
+      rankIds.length > 0 ? supabase.from('ranks').select('id, name').in('id', rankIds) : Promise.resolve({ data: [] }),
+      crewIds.length > 0 ? supabase.from('crew_members').select('id, nationality').in('id', crewIds) : Promise.resolve({ data: [] }),
+    ]);
+    const ranksById = new Map((ranksData || []).map(r => [r.id, r.name]));
+    const nationalityById = new Map((crewData || []).map(c => [c.id, c.nationality]));
+    const portLabel = port ? `${port.city_name}, ${port.country_name}` : undefined;
+
     for (const a of (assignments || [])) {
       // ── 하선자: 기존 승선 기록 완료 처리 + crew_members 초기화 ──
       if (a.off_crew_id) {
+        const disembarkDate = a.off_disembark_date || a.embark_date;
+
         await supabase
           .from('crew_embarkation_records')
           .update({
-            disembark_date: a.off_disembark_date || a.embark_date,
+            disembark_date: disembarkDate,
             return_date: a.off_return_date || null,
             status: 'completed',
             updated_at: now,
@@ -356,6 +374,30 @@ export const rotationService = {
           .from('crew_members')
           .update({ status: 'standby', current_ship_id: null, current_grade: null, updated_at: now })
           .eq('id', a.off_crew_id);
+
+        // 승선 경력의 진행중이던 항목을 하선일로 종결
+        const { data: openService } = await supabase
+          .from('sea_service_records')
+          .select('id')
+          .eq('crew_member_id', a.off_crew_id)
+          .eq('record_type', 'company_assignment')
+          .is('sign_off_date', null)
+          .order('sign_on_date', { ascending: false })
+          .limit(1);
+        if (openService?.[0]) {
+          await supabase.from('sea_service_records').update({
+            sign_off_date: disembarkDate,
+            port_of_sign_off: portLabel,
+            updated_at: now,
+          }).eq('id', openService[0].id);
+        }
+
+        // 진행중이던 계약을 하선일로 완료 처리
+        await supabase
+          .from('crew_contracts')
+          .update({ status: 'completed', end_date: disembarkDate, updated_at: now })
+          .eq('crew_member_id', a.off_crew_id)
+          .eq('status', 'active');
       }
 
       // ── 승선자: 새 승선 기록 생성 + crew_members 갱신 ──
@@ -387,6 +429,45 @@ export const rotationService = {
             updated_at: now,
           })
           .eq('id', a.on_crew_id);
+
+        const rankName = (a.on_rank_id && ranksById.get(a.on_rank_id)) || '';
+        const forecastEndDate = a.contract_months
+          ? format(addMonths(new Date(a.embark_date), a.contract_months), 'yyyy-MM-dd')
+          : a.embark_date;
+
+        // 승선 경력에 새 항목 추가 (본선/직급/톤수 등은 발령 당시 선박 기준)
+        if (ship) {
+          await supabase.from('sea_service_records').insert({
+            crew_member_id: a.on_crew_id,
+            record_type: 'company_assignment',
+            ship_name: ship.name,
+            ship_type: ship.ship_type || undefined,
+            flag: ship.flag || undefined,
+            gross_tonnage: ship.gross_tonnage || undefined,
+            engine_power: ship.engine_power || undefined,
+            rank: rankName,
+            sign_on_date: a.embark_date,
+            port_of_sign_on: portLabel,
+          });
+        }
+
+        // 계약 자동 생성 — 승선/하선(예정)일, 선주/플릿/선박/국적/직급 포함
+        await supabase.from('crew_contracts').insert({
+          crew_member_id: a.on_crew_id,
+          ship_id: plan.ship_id,
+          owner_id: plan.owner_id,
+          fleet_id: plan.fleet_id || null,
+          nationality: nationalityById.get(a.on_crew_id) || undefined,
+          contract_type: 'initial',
+          rank: rankName,
+          start_date: a.embark_date,
+          end_date: forecastEndDate,
+          duration_months: a.contract_months,
+          salary_amount: a.salary_amount,
+          salary_currency: a.salary_currency || 'USD',
+          signing_port: portLabel,
+          status: 'active',
+        });
       }
     }
 

@@ -43,6 +43,17 @@ const CATEGORY_STATUS_MAP: Record<CategoryTab, string[]> = {
   disembarked:  ['standby'],
 };
 
+// status='standby'인 선원은 "승선 계획에 들어가 있으나 발령 전(대기)"과 "하선 후 아직 계획 없음(하선)"
+// 두 경우를 모두 포함하므로, has_pending_plan(예정된 교대계획 배정 존재 여부)으로 구분해야
+// 두 탭에 동일 인원이 중복으로 보이지 않는다.
+const matchesCategory = (c: CrewWithDetails & { status?: string }, cat: CategoryTab): boolean => {
+  if (cat === 'all') return true;
+  const st = c.status || c.current_status || '';
+  if (cat === 'standby') return CATEGORY_STATUS_MAP.standby.includes(st) && Boolean(c.has_pending_plan);
+  if (cat === 'disembarked') return st === 'standby' && !c.has_pending_plan;
+  return CATEGORY_STATUS_MAP[cat].includes(st);
+};
+
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
   registered:        { label: '등록',      color: 'bg-gray-100 text-gray-700' },
   under_review:      { label: '검토중',    color: 'bg-blue-100 text-blue-700' },
@@ -109,12 +120,7 @@ export function CrewManagementPage() {
   const effRankId = (c: CrewWithDetails) => (c.is_active_onboard ? c.rank_id : (c.pending_rank_id || c.rank_id));
 
   const filtered = useMemo(() => {
-    let list = crew.filter(c => {
-      if (category === 'all') return true;
-      const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
-      if (category === 'disembarked') return st === 'standby';
-      return CATEGORY_STATUS_MAP[category].includes(st);
-    });
+    let list = crew.filter(c => matchesCategory(c, category));
     if (searchTerm) {
       const t = searchTerm.toLowerCase();
       list = list.filter(c =>
@@ -136,12 +142,7 @@ export function CrewManagementPage() {
 
   // category/검색어만 적용된 목록 — 각 필터 셀렉트박스의 옵션/카운트 계산 기준
   const facetCrew = useMemo(() => {
-    let list = crew.filter(c => {
-      if (category === 'all') return true;
-      const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
-      if (category === 'disembarked') return st === 'standby';
-      return CATEGORY_STATUS_MAP[category].includes(st);
-    });
+    let list = crew.filter(c => matchesCategory(c, category));
     if (searchTerm) {
       const t = searchTerm.toLowerCase();
       list = list.filter(c =>
@@ -250,11 +251,7 @@ export function CrewManagementPage() {
 
   const countOf = (cat: CategoryTab) => {
     if (cat === 'all') return crew.length;
-    return crew.filter(c => {
-      const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
-      if (cat === 'disembarked') return st === 'standby';
-      return CATEGORY_STATUS_MAP[cat].includes(st);
-    }).length;
+    return crew.filter(c => matchesCategory(c, cat)).length;
   };
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
