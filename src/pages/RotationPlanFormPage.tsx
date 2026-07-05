@@ -49,6 +49,7 @@ function makeRow(overrides?: Partial<AssignmentRow>): AssignmentRow {
   };
 }
 
+// baseDate는 "기준 교대일" — 승선/하선일은 그날 그대로, 출국일은 하루 전날, 귀국일은 하루 뒷날로 계산한다.
 function cascadeDatesFromBase(baseDate: string): Pick<AssignmentRow, 'departureDate' | 'boardingDate' | 'disembarkDate' | 'returnDate'> {
   if (!baseDate) return { departureDate: '', boardingDate: '', disembarkDate: '', returnDate: '' };
   const addDays = (iso: string, n: number) => {
@@ -56,10 +57,10 @@ function cascadeDatesFromBase(baseDate: string): Pick<AssignmentRow, 'departureD
     const date = new Date(y, m - 1, d + n);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
-  const departureDate = baseDate;
-  const boardingDate = addDays(baseDate, 1);
-  const disembarkDate = boardingDate;
-  const returnDate = addDays(disembarkDate, 1);
+  const boardingDate = baseDate;
+  const disembarkDate = baseDate;
+  const departureDate = addDays(baseDate, -1);
+  const returnDate = addDays(baseDate, 1);
   return { departureDate, boardingDate, disembarkDate, returnDate };
 }
 
@@ -404,6 +405,19 @@ export default function RotationPlanFormPage() {
     else if (value === '_none') { setManualCity(false); setCityName(''); }
     else { setManualCity(false); setCityName(value); }
   };
+  // 직접입력한 국가명이 실제로 목록에 있는 국가와 일치하면 선택 목록 모드로 되돌려서
+  // 교대지 도시 셀렉트 박스가 뜨도록 한다.
+  const handleManualCountryChange = (value: string) => {
+    const match = countryOptions.find(c => c.toLowerCase() === value.trim().toLowerCase());
+    if (match) {
+      setManualCountry(false);
+      setCountryName(match);
+      setManualCity(false);
+      setCityName('');
+    } else {
+      setCountryName(value);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!ownerId) { toast({ title: '선주를 선택하세요', variant: 'destructive' }); return; }
@@ -531,7 +545,7 @@ export default function RotationPlanFormPage() {
               <Label className="text-xs">교대지 국가</Label>
               {manualCountry ? (
                 <div className="flex gap-1">
-                  <Input value={countryName} onChange={e => setCountryName(e.target.value)} placeholder="국가명 (영어)" className="h-8 text-xs" />
+                  <Input value={countryName} onChange={e => handleManualCountryChange(e.target.value)} placeholder="국가명 (영어)" className="h-8 text-xs" />
                   <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCountry(false); setCountryName(''); }}>목록</Button>
                 </div>
               ) : (
@@ -566,9 +580,9 @@ export default function RotationPlanFormPage() {
               )}
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">기준 출국일</Label>
+              <Label className="text-xs">기준 교대일</Label>
               <Input type="date" value={baseDepartureDate} onChange={e => setBaseDepartureDate(e.target.value)} className="h-8 text-xs" />
-              <p className="text-[10px] text-gray-400">모든 행의 출국/승선/하선/귀국일을 일괄 설정합니다</p>
+              <p className="text-[10px] text-gray-400">승선/하선일은 기준일, 출국일은 하루 전날, 귀국일은 하루 뒷날로 일괄 설정합니다</p>
             </div>
           </div>
 
