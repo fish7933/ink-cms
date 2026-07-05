@@ -533,7 +533,14 @@ export function CrewManagementPage() {
                           {DATE_COLUMN_LABELS[cat].col2 && (
                             <th className="px-2 py-2 text-left font-medium text-gray-600">{DATE_COLUMN_LABELS[cat].col2}</th>
                           )}
-                          <th className="px-2 py-2 text-center font-medium text-gray-600">급여표</th>
+                          {cat === 'registered' ? (
+                            <>
+                              <th className="px-2 py-2 text-right font-medium text-gray-600">제시급여</th>
+                              <th className="px-2 py-2 text-right font-medium text-gray-600">희망급여</th>
+                            </>
+                          ) : (
+                            <th className="px-2 py-2 text-center font-medium text-gray-600">급여표</th>
+                          )}
                           <th className="px-2 py-2 text-center font-medium text-gray-600">증서</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">상태</th>
                           <th className="px-2 py-2"></th>
@@ -541,7 +548,7 @@ export function CrewManagementPage() {
                       </thead>
                       <tbody>
                         {paginated.length === 0 ? (
-                          <tr><td colSpan={DATE_COLUMN_LABELS[cat].col2 ? 16 : 15} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                          <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 16 : 15) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           const natEntry = nationalities.find(n => n.country_code === c.nationality);
@@ -641,11 +648,26 @@ export function CrewManagementPage() {
                                   </td>
                                 </>
                               )}
-                              <td className="px-2 py-1.5 text-center">
-                                {c.has_salary_template
-                                  ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
-                                  : <XCircle className="w-4 h-4 text-gray-300 mx-auto" />}
-                              </td>
+                              {cat === 'registered' ? (
+                                <>
+                                  <td className="px-2 py-1.5 text-right text-gray-500">
+                                    {c.offered_salary_amount != null
+                                      ? `${c.offered_salary_amount.toLocaleString()} ${c.offered_salary_currency}`
+                                      : '-'}
+                                  </td>
+                                  <td className="px-2 py-1.5 text-right text-gray-700">
+                                    {c.recommended_salary_amount != null
+                                      ? `${c.recommended_salary_amount.toLocaleString()} ${c.recommended_salary_currency}`
+                                      : '-'}
+                                  </td>
+                                </>
+                              ) : (
+                                <td className="px-2 py-1.5 text-center">
+                                  {c.has_salary_template
+                                    ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
+                                    : <XCircle className="w-4 h-4 text-gray-300 mx-auto" />}
+                                </td>
+                              )}
                               <td className="px-2 py-1.5 text-center">
                                 {c.has_expired_certificate
                                   ? <AlertTriangle className="w-4 h-4 text-red-500 mx-auto" title="만료된 증서 있음" />

@@ -7,6 +7,7 @@ import type {
   CrewRecommendationApprovalWithDetails,
   ApprovalAction,
 } from '@/types/approval';
+import { crewRecommendationService } from './crew-recommendation.service';
 
 class ApprovalService {
   // Approval Lines Management
@@ -522,6 +523,9 @@ class ApprovalService {
         .eq('id', approval.crew_recommendation_id);
 
       if (recError) throw recError;
+
+      // 최종 승인되면 등록 선원 목록에도 바로 반영되도록 자동 등록
+      await crewRecommendationService.registerCrewFromRecommendation(approval.crew_recommendation_id);
     } else {
       // Move to next step
       const { error: updateError } = await supabase
@@ -640,6 +644,9 @@ class ApprovalService {
       .eq('id', approval.crew_recommendation_id);
 
     if (recError) throw recError;
+
+    // 최종 승인되면 등록 선원 목록에도 바로 반영되도록 자동 등록
+    await crewRecommendationService.registerCrewFromRecommendation(approval.crew_recommendation_id);
   }
 
   // 관리자 전용: 결재라인 무관하게 즉시 반려

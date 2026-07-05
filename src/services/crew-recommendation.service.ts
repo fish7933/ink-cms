@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { CrewRecommendation, CrewRecommendationWithDetails } from '@/types/models';
 import { supervisorService } from './supervisor.service';
+import { crewService } from './crew.service';
 
 const TABLE_NAME = 'crew_recommendations';
 
@@ -350,6 +351,43 @@ class CrewRecommendationService {
 
     if (error) throw error;
     return count || 0;
+  }
+
+  /**
+   * 결재 승인(accepted)된 추천 건을 등록 선원 목록에 자동으로 반영한다.
+   * 이미 crew_member_id가 있으면 건드리지 않음(중복 등록 방지).
+   * 여권/승선증서 등 세부 정보는 여전히 "선원 등록" 화면에서 보완 입력한다.
+   */
+  async registerCrewFromRecommendation(recommendationId: string): Promise<string | null> {
+    const { data: rec, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('id', recommendationId)
+      .single();
+
+    if (error || !rec) return null;
+    if (rec.crew_member_id) return rec.crew_member_id;
+
+    const newCrew = await crewService.create({
+      name: rec.crew_name,
+      rank_id: rec.rank_id,
+      nationality: rec.nationality || undefined,
+      date_of_birth: rec.crew_birth_date,
+      owner_id: rec.company_id || undefined,
+      fleet_id: rec.fleet_id || undefined,
+      current_ship_id: rec.ship_id || undefined,
+      manning_agency_id: rec.manning_agency_id,
+      current_status: 'registered',
+    });
+
+    if (!newCrew?.id) return null;
+
+    await supabase
+      .from(TABLE_NAME)
+      .update({ crew_member_id: newCrew.id, updated_at: new Date().toISOString() })
+      .eq('id', recommendationId);
+
+    return newCrew.id;
   }
 
   async getRecommendationCountByJobPostingGroupAndAgency(groupId: string, agencyId: string): Promise<number> {

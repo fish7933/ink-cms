@@ -79,6 +79,13 @@ export default function CrewInputPage() {
       navigate('/my-recommendations');
       return;
     }
+    // 결재 승인 시 등록 선원 목록에 자동 반영되므로, 이미 등록된 건이면
+    // 여권/증서 등 세부 정보를 보완할 수 있도록 해당 선원의 수정 화면으로 이동한다.
+    if (recommendation.crew_member_id) {
+      toast({ title: '이미 등록된 선원', description: '세부 정보를 보완할 수 있도록 선원 정보 화면으로 이동합니다.' });
+      navigate(`/crew/${recommendation.crew_member_id}`, { replace: true });
+      return;
+    }
     loadRanks();
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
     getNationalities().then(setNationalities).catch(console.error);

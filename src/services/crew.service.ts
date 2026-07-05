@@ -82,6 +82,13 @@ export interface CrewWithDetails extends CrewMember {
   disembark_forecast_date?: string;
   // 매닝사 추천 시 입력한 승선가능일 (crew_recommendations.available_date, 등록/하선 선원용)
   recommended_available_date?: string;
+  // 매닝사 추천 시 입력한 희망 급여 (crew_recommendations.desired_salary/desired_currency, 등록 선원용 —
+  // 아직 승선 전이라 선박 급여표가 아닌 추천 당시 입력된 금액을 그대로 보여준다)
+  recommended_salary_amount?: number;
+  recommended_salary_currency?: string;
+  // 채용 공고에 제시된 급여 (job_posting_ranks.salary_amount/salary_currency, 등록 선원용)
+  offered_salary_amount?: number;
+  offered_salary_currency?: string;
 }
 
 interface CrewMemberRow {
@@ -188,7 +195,7 @@ export const crewService = {
         .eq('is_active', true)
         .not('ship_id', 'is', null),
       supabase.from('crew_recommendations')
-        .select('crew_member_id, available_date')
+        .select('crew_member_id, available_date, desired_salary, desired_currency, job_posting_group_id, rank_id')
         .not('crew_member_id', 'is', null)
         .order('created_at', { ascending: false }),
     ]);
@@ -243,11 +250,37 @@ export const crewService = {
 
     // 매닝사 추천 시 입력한 승선가능일 맵 (등록된 선원 기준, 최신 추천이 우선)
     const recommendationAvailableMap = new Map<string, string>();
+    // 매닝사 추천 시 입력한 희망급여 맵 (등록된 선원 기준, 최신 추천이 우선)
+    const recommendationSalaryMap = new Map<string, { amount: number; currency: string }>();
     for (const r of (recommendationData || [])) {
-      if (!r.crew_member_id || !r.available_date) continue;
-      if (!recommendationAvailableMap.has(r.crew_member_id)) {
+      if (!r.crew_member_id) continue;
+      if (r.available_date && !recommendationAvailableMap.has(r.crew_member_id)) {
         recommendationAvailableMap.set(r.crew_member_id, r.available_date);
       }
+      if (r.desired_salary != null && !recommendationSalaryMap.has(r.crew_member_id)) {
+        recommendationSalaryMap.set(r.crew_member_id, { amount: r.desired_salary, currency: r.desired_currency || 'USD' });
+      }
+    }
+
+    // 추천 건에 연결된 공고의 제시급여(직급별) 조회
+    const recommendedGroupIds = [...new Set((recommendationData || []).map(r => r.job_posting_group_id).filter(Boolean))];
+    const { data: offeredRanksData } = recommendedGroupIds.length > 0
+      ? await supabase.from('job_posting_ranks')
+          .select('group_id, rank_id, salary_amount, salary_currency')
+          .in('group_id', recommendedGroupIds)
+      : { data: [] as { group_id: string; rank_id: string; salary_amount: number | null; salary_currency: string }[] };
+    const offeredSalaryMap = new Map<string, { amount: number; currency: string }>();
+    for (const o of (offeredRanksData || [])) {
+      if (o.salary_amount == null) continue;
+      offeredSalaryMap.set(`${o.group_id}_${o.rank_id}`, { amount: o.salary_amount, currency: o.salary_currency || 'USD' });
+    }
+    // crew_member_id → 제시급여 (해당 선원 추천 건의 공고+직급 기준)
+    const crewOfferedSalaryMap = new Map<string, { amount: number; currency: string }>();
+    for (const r of (recommendationData || [])) {
+      if (!r.crew_member_id || !r.job_posting_group_id) continue;
+      if (crewOfferedSalaryMap.has(r.crew_member_id)) continue;
+      const offered = offeredSalaryMap.get(`${r.job_posting_group_id}_${r.rank_id}`);
+      if (offered) crewOfferedSalaryMap.set(r.crew_member_id, offered);
     }
 
     // 승선(예정)일 + 계약 개월수로 하선예정일을 계산 — 대기 시절 계산값이 승선 후에도 그대로 이어짐
@@ -319,12 +352,16 @@ export const crewService = {
         ? calcDisembarkForecast(activeEmbark?.embark_date, activeEmbark?.contract_months)
         : (pendingAssign ? calcDisembarkForecast(pendingAssign.embark_date, pendingAssign.contract_months) : undefined);
 
-      // 급여 템플릿: 승선 중이면 활성 기록 기준, 대기 중이면 교대 계획 또는 선박 보유 여부
+      // 급여 템플릿: 승선 중이면 활성 기록 기준, 대기 중이면 교대 계획 또는 선박 보유 여부,
+      // 등록(아직 배정 전) 상태는 선박 급여표가 아니라 추천 당시 입력된 희망급여 존재 여부로 판단
       const hasSalaryTemplate = isActiveOnboard
         ? Boolean(activeEmbark?.salary_template_id)
         : pendingAssign
           ? Boolean(pendingAssign.salary_template_id) || shipsWithTemplate.has(pendingAssign.ship_id)
-          : false;
+          : recommendationSalaryMap.has(item.id);
+
+      const recommendedSalary = recommendationSalaryMap.get(item.id);
+      const offeredSalary = crewOfferedSalaryMap.get(item.id);
 
       let emergencyContacts = item.emergency_contacts;
       if (typeof emergencyContacts === 'string') {
@@ -394,6 +431,10 @@ export const crewService = {
         pending_rank_id: pendingRankId,
         disembark_forecast_date: disembarkForecastDate,
         recommended_available_date: recommendationAvailableMap.get(item.id),
+        recommended_salary_amount: recommendedSalary?.amount,
+        recommended_salary_currency: recommendedSalary?.currency,
+        offered_salary_amount: offeredSalary?.amount,
+        offered_salary_currency: offeredSalary?.currency,
       };
     });
 
