@@ -241,14 +241,18 @@ class SupervisorService {
   }
 
   /**
-   * Get all ship managers (potential supervisors)
+   * Get all ship managers (potential supervisors) — 담당자로 배정 가능한 우리회사 내부 직원.
+   * ship_manager만 조회하면, admin/system_admin 계정으로 이미 배정된 건(예: 관리자가
+   * 직접 배정한 경우)은 이 목록에 없는 사람으로 취급돼 배지가 렌더링되지 않고, 그 안에
+   * 있던 삭제(×) 버튼도 같이 사라져 배정을 해제할 방법이 없어진다 (KSS Line Ltd 등에서
+   * 관리자 배정이 안 지워지던 원인).
    */
   async getShipManagers(): Promise<Array<{ id: string; name: string; email: string }>> {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('id, name, email')
-        .eq('role', 'ship_manager')
+        .in('role', ['ship_manager', 'admin', 'system_admin'])
         .order('name');
 
       if (error) throw error;
