@@ -432,8 +432,8 @@ export default function JobPostingsPage() {
   // Get owner companies
   const ownerCompanies = companies.filter(c => c.type === 'owner');
 
-  // Check if user can edit postings (only ship_manager and ship_owner)
-  const canEditPostings = currentUser?.role === 'ship_manager' || currentUser?.role === 'ship_owner';
+  // Check if user can edit postings (ship_manager, ship_owner, and admins)
+  const canEditPostings = ['ship_manager', 'ship_owner', 'admin', 'system_admin'].includes(currentUser?.role ?? '');
 
   // Check if user is manning agency or crew (can only recommend)
   const isManningOrCrew = currentUser?.role === 'manning_agency' || currentUser?.role === 'crew';

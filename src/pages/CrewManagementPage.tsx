@@ -17,7 +17,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supabase } from '@/lib/supabase';
-import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
+import type { Rank } from '@/types/models';
 import type { RegistrationSource } from '@/types/dispatch';
 import { REGISTRATION_SOURCE_LABELS, CREW_CATEGORY_LABELS } from '@/types/dispatch';
 import { getNationalities } from '@/services/nationality.service';
@@ -25,6 +25,15 @@ import type { Nationality } from '@/types/nationality';
 import { useToast } from '@/hooks/use-toast';
 
 type CategoryTab = 'all' | 'registered' | 'standby' | 'onboard' | 'disembarked';
+
+// 탭별 날짜 컬럼 헤더 — registered는 승선가능일 하나만, 나머지는 두 컬럼
+const DATE_COLUMN_LABELS: Record<CategoryTab, { col1: string; col2?: string }> = {
+  all:         { col1: '승선(예정)일', col2: '하선(예정)일' },
+  registered:  { col1: '승선가능일' },
+  standby:     { col1: '승선예정일', col2: '하선예정일' },
+  onboard:     { col1: '승선일', col2: '하선예정일' },
+  disembarked: { col1: '하선일', col2: '승선가능일' },
+};
 
 const CATEGORY_STATUS_MAP: Record<CategoryTab, string[]> = {
   all:          [],
@@ -52,10 +61,6 @@ export function CrewManagementPage() {
   const [crew, setCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
-  const [owners, setOwners] = useState<Company[]>([]);
-  const [manningAgencies, setManningAgencies] = useState<Company[]>([]);
-  const [fleets, setFleets] = useState<Fleet[]>([]);
-  const [ships, setShips] = useState<ShipType[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [category, setCategory] = useState<CategoryTab>('registered');
@@ -75,34 +80,33 @@ export function CrewManagementPage() {
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality]);
-  useEffect(() => {
-    if (filterOwner !== 'all') supabase.from('fleets').select('*').eq('owner_id', filterOwner).then(({ data }) => setFleets(data || []));
-    else { setFleets([]); setFilterFleet('all'); }
-  }, [filterOwner]);
-  useEffect(() => {
-    if (filterFleet !== 'all') supabase.from('ships').select('*').eq('fleet_id', filterFleet).then(({ data }) => setShips(data || []));
-    else if (filterOwner !== 'all') supabase.from('ships').select('*').eq('owner_id', filterOwner).then(({ data }) => setShips(data || []));
-    else { setShips([]); setFilterShip('all'); }
-  }, [filterFleet, filterOwner]);
+  // 선주사가 바뀌면 하위(플릿/선박) 선택은 더 이상 유효하지 않을 수 있어 초기화
+  useEffect(() => { if (filterOwner === 'all') setFilterFleet('all'); }, [filterOwner]);
+  useEffect(() => { if (filterFleet === 'all' && filterOwner === 'all') setFilterShip('all'); }, [filterFleet, filterOwner]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [crewData, ranksRes, companiesRes, natData] = await Promise.all([
+      const [crewData, ranksRes, natData] = await Promise.all([
         crewService.getAllWithDetails(),
         supabase.from('ranks').select('*').order('display_order'),
-        supabase.from('companies').select('*'),
         getNationalities(),
       ]);
       setCrew(crewData);
       if (ranksRes.data) setRanks(ranksRes.data);
-      if (companiesRes.data) {
-        setOwners(companiesRes.data.filter((c: Company) => c.type === 'owner'));
-        setManningAgencies(companiesRes.data.filter((c: Company) => c.type === 'manning'));
-      }
       setNationalities(natData);
     } finally { setLoading(false); }
   };
+
+  // 승선 중이 아닌 선원은 표에 예정된 교대계획의 선주/플릿/선박/직급이 표시되므로(하선/대기 상태),
+  // 필터·카운트도 이 "실제로 보이는 값" 기준으로 맞춘다 (안 그러면 화면에 보이는 값과 필터 결과가 어긋남).
+  const effOwnerId = (c: CrewWithDetails) => (c.is_active_onboard ? c.owner_id : (c.pending_owner_id || c.owner_id));
+  const effOwnerName = (c: CrewWithDetails) => (c.is_active_onboard ? c.owner_name : (c.pending_owner_name || c.owner_name));
+  const effFleetId = (c: CrewWithDetails) => (c.is_active_onboard ? c.fleet_id : (c.pending_fleet_id || c.fleet_id));
+  const effFleetName = (c: CrewWithDetails) => (c.is_active_onboard ? c.fleet_name : (c.pending_fleet_name || c.fleet_name));
+  const effShipId = (c: CrewWithDetails) => (c.is_active_onboard ? c.current_ship_id : (c.pending_ship_id || c.current_ship_id));
+  const effShipName = (c: CrewWithDetails) => (c.is_active_onboard ? c.current_ship_name : (c.pending_ship_name || c.current_ship_name));
+  const effRankId = (c: CrewWithDetails) => (c.is_active_onboard ? c.rank_id : (c.pending_rank_id || c.rank_id));
 
   const filtered = useMemo(() => {
     let list = crew.filter(c => {
@@ -120,15 +124,129 @@ export function CrewManagementPage() {
         c.seaman_book_number?.toLowerCase().includes(t)
       );
     }
-    if (filterOwner !== 'all') list = list.filter(c => c.owner_id === filterOwner);
-    if (filterFleet !== 'all') list = list.filter(c => c.fleet_id === filterFleet);
-    if (filterShip !== 'all') list = list.filter(c => c.current_ship_id === filterShip);
-    if (filterRank !== 'all') list = list.filter(c => c.rank_id === filterRank);
+    if (filterOwner !== 'all') list = list.filter(c => effOwnerId(c) === filterOwner);
+    if (filterFleet !== 'all') list = list.filter(c => effFleetId(c) === filterFleet);
+    if (filterShip !== 'all') list = list.filter(c => effShipId(c) === filterShip);
+    if (filterRank !== 'all') list = list.filter(c => effRankId(c) === filterRank);
     if (filterManning !== 'all') list = list.filter(c => c.manning_agency_id === filterManning);
     if (filterSource !== 'all') list = list.filter(c => (c as CrewWithDetails & { registration_source?: string }).registration_source === filterSource);
     if (filterNationality !== 'all') list = list.filter(c => c.nationality === filterNationality);
     return list;
   }, [crew, category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality]);
+
+  // category/검색어만 적용된 목록 — 각 필터 셀렉트박스의 옵션/카운트 계산 기준
+  const facetCrew = useMemo(() => {
+    let list = crew.filter(c => {
+      if (category === 'all') return true;
+      const st = (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
+      if (category === 'disembarked') return st === 'standby';
+      return CATEGORY_STATUS_MAP[category].includes(st);
+    });
+    if (searchTerm) {
+      const t = searchTerm.toLowerCase();
+      list = list.filter(c =>
+        c.name?.toLowerCase().includes(t) ||
+        c.rank_name?.toLowerCase().includes(t) ||
+        c.passport_number?.toLowerCase().includes(t) ||
+        c.seaman_book_number?.toLowerCase().includes(t)
+      );
+    }
+    return list;
+  }, [crew, category, searchTerm]);
+
+  type FacetKey = 'owner' | 'fleet' | 'ship' | 'rank' | 'manning' | 'nationality' | 'source';
+
+  // 자기 자신을 제외한 나머지 필터를 적용한 목록 — 다른 조건에 맞춰 실시간으로 갱신되는 옵션/카운트를 위함
+  const facetFilter = (list: CrewWithDetails[], exclude: FacetKey) => {
+    let l = list;
+    if (exclude !== 'owner' && filterOwner !== 'all') l = l.filter(c => effOwnerId(c) === filterOwner);
+    if (exclude !== 'fleet' && filterFleet !== 'all') l = l.filter(c => effFleetId(c) === filterFleet);
+    if (exclude !== 'ship' && filterShip !== 'all') l = l.filter(c => effShipId(c) === filterShip);
+    if (exclude !== 'rank' && filterRank !== 'all') l = l.filter(c => effRankId(c) === filterRank);
+    if (exclude !== 'manning' && filterManning !== 'all') l = l.filter(c => c.manning_agency_id === filterManning);
+    if (exclude !== 'nationality' && filterNationality !== 'all') l = l.filter(c => c.nationality === filterNationality);
+    if (exclude !== 'source' && filterSource !== 'all') l = l.filter(c => (c as CrewWithDetails & { registration_source?: string }).registration_source === filterSource);
+    return l;
+  };
+
+  interface FacetOption { value: string; label: string; count: number }
+
+  const buildFacetOptions = (
+    list: CrewWithDetails[],
+    keyOf: (c: CrewWithDetails) => string | undefined | null,
+    labelOf: (c: CrewWithDetails) => string,
+  ): FacetOption[] => {
+    const map = new Map<string, FacetOption>();
+    for (const c of list) {
+      const key = keyOf(c);
+      if (!key) continue;
+      const existing = map.get(key);
+      if (existing) existing.count += 1;
+      else map.set(key, { value: key, label: labelOf(c), count: 1 });
+    }
+    return [...map.values()];
+  };
+
+  const ownerFacet = useMemo(() => {
+    const base = facetFilter(facetCrew, 'owner');
+    const options = buildFacetOptions(base, effOwnerId, c => effOwnerName(c) || '(이름없음)')
+      .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
+    return { total: base.length, options };
+  }, [facetCrew, filterFleet, filterShip, filterRank, filterManning, filterNationality, filterSource]);
+
+  const fleetFacet = useMemo(() => {
+    const base = facetFilter(facetCrew, 'fleet');
+    const options = buildFacetOptions(base, effFleetId, c => effFleetName(c) || '(이름없음)')
+      .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
+    return { total: base.length, options };
+  }, [facetCrew, filterOwner, filterShip, filterRank, filterManning, filterNationality, filterSource]);
+
+  const shipFacet = useMemo(() => {
+    const base = facetFilter(facetCrew, 'ship');
+    const options = buildFacetOptions(base, effShipId, c => effShipName(c) || '(이름없음)')
+      .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
+    return { total: base.length, options };
+  }, [facetCrew, filterOwner, filterFleet, filterRank, filterManning, filterNationality, filterSource]);
+
+  const manningFacet = useMemo(() => {
+    const base = facetFilter(facetCrew, 'manning');
+    const options = buildFacetOptions(base, c => c.manning_agency_id, c => c.manning_agency_name || '(이름없음)')
+      .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
+    return { total: base.length, options };
+  }, [facetCrew, filterOwner, filterFleet, filterShip, filterRank, filterNationality, filterSource]);
+
+  const rankFacet = useMemo(() => {
+    const base = facetFilter(facetCrew, 'rank');
+    const rankLabel = (c: CrewWithDetails) => {
+      const code = c.is_active_onboard ? c.rank_code : (c.pending_rank_code || c.rank_code);
+      return code ? `${code} (${c.rank_name})` : (c.rank_name || '(이름없음)');
+    };
+    const options = buildFacetOptions(base, effRankId, rankLabel);
+    const orderIndex = new Map(ranks.map((r, i) => [r.id, i]));
+    options.sort((a, b) => (orderIndex.get(a.value) ?? 999) - (orderIndex.get(b.value) ?? 999));
+    return { total: base.length, options };
+  }, [facetCrew, filterOwner, filterFleet, filterShip, filterManning, filterNationality, filterSource, ranks]);
+
+  const nationalityFacet = useMemo(() => {
+    const base = facetFilter(facetCrew, 'nationality');
+    const options = buildFacetOptions(base, c => c.nationality, c => {
+      const nat = nationalities.find(n => n.country_code === c.nationality);
+      return nat ? `${nat.country_name_ko} (${nat.country_code})` : (c.nationality || '');
+    }).sort((a, b) => a.label.localeCompare(b.label, 'ko'));
+    return { total: base.length, options };
+  }, [facetCrew, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, nationalities]);
+
+  const sourceFacet = useMemo(() => {
+    const base = facetFilter(facetCrew, 'source');
+    const options = buildFacetOptions(
+      base,
+      c => (c as CrewWithDetails & { registration_source?: string }).registration_source,
+      c => REGISTRATION_SOURCE_LABELS[(c as CrewWithDetails & { registration_source?: RegistrationSource }).registration_source as RegistrationSource] || '기타',
+    );
+    const orderIndex = new Map((Object.keys(REGISTRATION_SOURCE_LABELS) as RegistrationSource[]).map((k, i) => [k, i]));
+    options.sort((a, b) => (orderIndex.get(a.value as RegistrationSource) ?? 999) - (orderIndex.get(b.value as RegistrationSource) ?? 999));
+    return { total: base.length, options };
+  }, [facetCrew, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterNationality]);
 
   const countOf = (cat: CategoryTab) => {
     if (cat === 'all') return crew.length;
@@ -287,39 +405,52 @@ export function CrewManagementPage() {
             <div className="flex flex-wrap gap-2">
               <Select value={filterOwner} onValueChange={setFilterOwner}>
                 <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="선주사" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 선주사</SelectItem>{owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <SelectItem value="all">전체 선주사 ({ownerFacet.total})</SelectItem>
+                  {ownerFacet.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label} ({o.count})</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select value={filterFleet} onValueChange={setFilterFleet} disabled={filterOwner === 'all'}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="플릿" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <SelectItem value="all">전체 플릿 ({fleetFacet.total})</SelectItem>
+                  {fleetFacet.options.map(f => <SelectItem key={f.value} value={f.value}>{f.label} ({f.count})</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select value={filterShip} onValueChange={setFilterShip} disabled={filterOwner === 'all'}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="선박" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <SelectItem value="all">전체 선박 ({shipFacet.total})</SelectItem>
+                  {shipFacet.options.map(s => <SelectItem key={s.value} value={s.value}>{s.label} ({s.count})</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select value={filterRank} onValueChange={setFilterRank}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="직급" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code ? `${r.rank_code} (${r.name})` : r.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <SelectItem value="all">전체 직급 ({rankFacet.total})</SelectItem>
+                  {rankFacet.options.map(r => <SelectItem key={r.value} value={r.value}>{r.label} ({r.count})</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select value={filterManning} onValueChange={setFilterManning}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="매닝사" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 매닝사</SelectItem>{manningAgencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <SelectItem value="all">전체 매닝사 ({manningFacet.total})</SelectItem>
+                  {manningFacet.options.map(a => <SelectItem key={a.value} value={a.value}>{a.label} ({a.count})</SelectItem>)}
+                </SelectContent>
               </Select>
               <Select value={filterNationality} onValueChange={setFilterNationality}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="국적" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체 국적</SelectItem>
-                  {nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}
+                  <SelectItem value="all">전체 국적 ({nationalityFacet.total})</SelectItem>
+                  {nationalityFacet.options.map(n => <SelectItem key={n.value} value={n.value}>{n.label} ({n.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               {category === 'registered' && (
                 <Select value={filterSource} onValueChange={setFilterSource}>
                   <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="등록출처" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체 출처</SelectItem>
-                    {(Object.keys(REGISTRATION_SOURCE_LABELS) as RegistrationSource[]).map(s => (
-                      <SelectItem key={s} value={s}>{REGISTRATION_SOURCE_LABELS[s]}</SelectItem>
-                    ))}
+                    <SelectItem value="all">전체 출처 ({sourceFacet.total})</SelectItem>
+                    {sourceFacet.options.map(s => <SelectItem key={s.value} value={s.value}>{s.label} ({s.count})</SelectItem>)}
                   </SelectContent>
                 </Select>
               )}
@@ -393,11 +524,15 @@ export function CrewManagementPage() {
                           <th className="px-2 py-2 text-left font-medium text-gray-600">선주사</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">플릿</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">선박</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">직급코드(등급)</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">매닝사</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">직급(등급)</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">이름</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">국적</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">생년월일(나이)</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">승선 예정일</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600">{DATE_COLUMN_LABELS[cat].col1}</th>
+                          {DATE_COLUMN_LABELS[cat].col2 && (
+                            <th className="px-2 py-2 text-left font-medium text-gray-600">{DATE_COLUMN_LABELS[cat].col2}</th>
+                          )}
                           <th className="px-2 py-2 text-center font-medium text-gray-600">급여표</th>
                           <th className="px-2 py-2 text-center font-medium text-gray-600">증서</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">상태</th>
@@ -406,7 +541,7 @@ export function CrewManagementPage() {
                       </thead>
                       <tbody>
                         {paginated.length === 0 ? (
-                          <tr><td colSpan={14} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                          <tr><td colSpan={DATE_COLUMN_LABELS[cat].col2 ? 16 : 15} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           const natEntry = nationalities.find(n => n.country_code === c.nationality);
@@ -442,17 +577,20 @@ export function CrewManagementPage() {
                                     ? <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
                                     : <span className="font-medium">{crewExt.current_ship_name || '-'}</span>}
                               </td>
+                              <td className="px-2 py-1.5 max-w-[80px] truncate text-gray-500" title={crewExt.manning_agency_name}>
+                                {crewExt.manning_agency_name || '-'}
+                              </td>
                               <td className="px-2 py-1.5">
                                 {(() => {
                                   const showCode = c.is_active_onboard ? c.rank_code : (c.pending_rank_code || c.rank_code);
                                   const showGrade = c.is_active_onboard ? crewExt.current_grade : (c.pending_rank_grade || crewExt.current_grade);
                                   const isPending = !c.is_active_onboard && (c.pending_rank_code || c.pending_rank_grade);
-                                  return <>
-                                    <span className={`font-mono ${isPending ? 'text-violet-700' : 'text-gray-700'}`}>{showCode || c.rank_name || '-'}</span>
-                                    {showGrade && (
-                                      <span className={`ml-1 font-mono px-1 rounded ${isPending ? 'text-violet-600 bg-violet-50' : 'text-blue-600 bg-blue-50'}`}>{showGrade}급</span>
-                                    )}
-                                  </>;
+                                  const label = showCode || c.rank_name || '-';
+                                  return (
+                                    <span className={`font-mono ${isPending ? 'text-violet-700' : 'text-gray-700'}`}>
+                                      {label}{showGrade ? `(${showGrade})` : ''}
+                                    </span>
+                                  );
                                 })()}
                               </td>
                               <td className="px-2 py-1.5 font-medium text-gray-900">{c.name}</td>
@@ -462,13 +600,47 @@ export function CrewManagementPage() {
                                   ? <span>{c.date_of_birth}<span className="text-gray-400 ml-1">({c.age}세)</span></span>
                                   : '-'}
                               </td>
-                              <td className="px-2 py-1.5">
-                                {c.is_active_onboard
-                                  ? <span className="text-gray-500">{c.latest_embark_date || '-'}</span>
-                                  : c.pending_embark_date
-                                    ? <span className="text-violet-600">{c.pending_embark_date}</span>
-                                    : <span className="text-gray-400">{c.latest_embark_date || '-'}</span>}
-                              </td>
+                              {cat === 'registered' && (
+                                <td className="px-2 py-1.5">
+                                  <span className="text-gray-500">{c.recommended_available_date || '-'}</span>
+                                </td>
+                              )}
+                              {cat === 'standby' && (
+                                <>
+                                  <td className="px-2 py-1.5"><span className="text-violet-600">{c.pending_embark_date || '-'}</span></td>
+                                  <td className="px-2 py-1.5"><span className="text-violet-600">{c.disembark_forecast_date || '-'}</span></td>
+                                </>
+                              )}
+                              {cat === 'onboard' && (
+                                <>
+                                  <td className="px-2 py-1.5"><span className="text-gray-500">{c.latest_embark_date || '-'}</span></td>
+                                  <td className="px-2 py-1.5"><span className="text-violet-600">{c.disembark_forecast_date || '-'}</span></td>
+                                </>
+                              )}
+                              {cat === 'disembarked' && (
+                                <>
+                                  <td className="px-2 py-1.5"><span className="text-gray-500">{c.latest_disembark_date || '-'}</span></td>
+                                  <td className="px-2 py-1.5"><span className="text-gray-500">{c.recommended_available_date || '-'}</span></td>
+                                </>
+                              )}
+                              {cat === 'all' && (
+                                <>
+                                  <td className="px-2 py-1.5">
+                                    {c.is_active_onboard
+                                      ? <span className="text-gray-500">{c.latest_embark_date || '-'}</span>
+                                      : c.pending_embark_date
+                                        ? <span className="text-violet-600">{c.pending_embark_date}</span>
+                                        : <span className="text-gray-400">{c.latest_embark_date || '-'}</span>}
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    {c.is_active_onboard
+                                      ? (c.disembark_forecast_date
+                                          ? <span className="text-violet-600">{c.disembark_forecast_date}</span>
+                                          : <span className="text-gray-300">-</span>)
+                                      : <span className="text-gray-500">{c.latest_disembark_date || '-'}</span>}
+                                  </td>
+                                </>
+                              )}
                               <td className="px-2 py-1.5 text-center">
                                 {c.has_salary_template
                                   ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />

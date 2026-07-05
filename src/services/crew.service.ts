@@ -1,3 +1,4 @@
+import { addMonths, format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import type { CrewMember, CrewStatus, CrewExperience } from '@/types/models';
@@ -73,6 +74,14 @@ export interface CrewWithDetails extends CrewMember {
   pending_rank_code?: string;
   pending_rank_grade?: string | null;
   pending_embark_date?: string;
+  pending_ship_id?: string;
+  pending_owner_id?: string;
+  pending_fleet_id?: string;
+  pending_rank_id?: string;
+  // 승선(예정)일 + 계약 개월수로 계산한 하선예정일 (대기/승선중 공통 — 승선 시점 값이 그대로 이어짐)
+  disembark_forecast_date?: string;
+  // 매닝사 추천 시 입력한 승선가능일 (crew_recommendations.available_date, 등록/하선 선원용)
+  recommended_available_date?: string;
 }
 
 interface CrewMemberRow {
@@ -145,22 +154,24 @@ export const crewService = {
       { data: companiesData },
       { data: fleetsData },
       { data: shipsData },
-      // 현재 승선 중인 기록: rank_id, rank_grade, salary_template_id, ship_id 포함
+      // 현재 승선 중인 기록: rank_id, rank_grade, salary_template_id, ship_id, contract_months 포함
       { data: activeEmbarkData },
       // 전체 이력: 최신 승선일/하선일 파악용
       { data: allEmbarkData },
       { data: expiredCertData },
-      // 미실행 교대 계획 배정: 대기 선원의 예정 선박/직급 표시용
+      // 미실행 교대 계획 배정: 대기 선원의 예정 선박/직급/계약개월 표시용
       { data: pendingAssignData },
       // 급여 템플릿 보유 선박 목록
       { data: shipTemplateData },
+      // 매닝사 추천 시 입력한 승선가능일 (등록된 선원과 연결된 것만, 최신순)
+      { data: recommendationData },
     ] = await Promise.all([
       supabase.from('ranks').select('*'),
       supabase.from('companies').select('*'),
       supabase.from('fleets').select('*'),
       supabase.from('ships').select('*'),
       supabase.from('crew_embarkation_records')
-        .select('crew_member_id, embark_date, rank_id, rank_grade, salary_template_id, ship_id')
+        .select('crew_member_id, embark_date, rank_id, rank_grade, salary_template_id, ship_id, contract_months')
         .eq('status', 'active'),
       supabase.from('crew_embarkation_records')
         .select('crew_member_id, embark_date, disembark_date')
@@ -170,12 +181,16 @@ export const crewService = {
         .lt('expiry_date', todayStr)
         .not('expiry_date', 'is', null),
       supabase.from('crew_rotation_assignments')
-        .select('on_crew_id, on_rank_id, on_rank_grade, embark_date, salary_template_id, crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status)')
+        .select('on_crew_id, on_rank_id, on_rank_grade, embark_date, salary_template_id, contract_months, crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status)')
         .not('on_crew_id', 'is', null),
       supabase.from('salary_templates')
         .select('ship_id')
         .eq('is_active', true)
         .not('ship_id', 'is', null),
+      supabase.from('crew_recommendations')
+        .select('crew_member_id, available_date')
+        .not('crew_member_id', 'is', null)
+        .order('created_at', { ascending: false }),
     ]);
 
     const ranksById = new Map(ranksData?.map(r => [r.id, r]) || []);
@@ -206,6 +221,7 @@ export const crewService = {
       ship_id: string; owner_id?: string; fleet_id?: string;
       on_rank_id?: string; on_rank_grade?: string | null;
       embark_date?: string; salary_template_id?: string | null;
+      contract_months?: number | null;
     }>();
     for (const a of (pendingAssignData || [])) {
       if (!a.on_crew_id) continue;
@@ -220,9 +236,26 @@ export const crewService = {
           on_rank_grade: a.on_rank_grade,
           embark_date: a.embark_date,
           salary_template_id: a.salary_template_id,
+          contract_months: a.contract_months,
         });
       }
     }
+
+    // 매닝사 추천 시 입력한 승선가능일 맵 (등록된 선원 기준, 최신 추천이 우선)
+    const recommendationAvailableMap = new Map<string, string>();
+    for (const r of (recommendationData || [])) {
+      if (!r.crew_member_id || !r.available_date) continue;
+      if (!recommendationAvailableMap.has(r.crew_member_id)) {
+        recommendationAvailableMap.set(r.crew_member_id, r.available_date);
+      }
+    }
+
+    // 승선(예정)일 + 계약 개월수로 하선예정일을 계산 — 대기 시절 계산값이 승선 후에도 그대로 이어짐
+    const calcDisembarkForecast = (embarkDate?: string, contractMonths?: number | null): string | undefined => {
+      if (!embarkDate || !contractMonths) return undefined;
+      return format(addMonths(new Date(embarkDate), contractMonths), 'yyyy-MM-dd');
+    };
+
     // 활성 급여 템플릿이 있는 선박 ID 집합
     const shipsWithTemplate = new Set((shipTemplateData || []).map((t: any) => t.ship_id).filter(Boolean));
 
@@ -262,6 +295,10 @@ export const crewService = {
       let pendingFleetName: string | undefined;
       let pendingRankCode: string | undefined;
       let pendingRankGrade: string | null = null;
+      let pendingShipId: string | undefined;
+      let pendingOwnerId: string | undefined;
+      let pendingFleetId: string | undefined;
+      let pendingRankId: string | undefined;
       if (pendingAssign) {
         const pShip = pendingAssign.ship_id ? shipsMap.get(pendingAssign.ship_id) : undefined;
         const pOwnerId = pendingAssign.owner_id || pShip?.owner_id;
@@ -271,7 +308,16 @@ export const crewService = {
         pendingFleetName = pFleetId ? fleetsMap.get(pFleetId)?.name : undefined;
         pendingRankCode = pendingAssign.on_rank_id ? ranksById.get(pendingAssign.on_rank_id)?.rank_code : undefined;
         pendingRankGrade = pendingAssign.on_rank_grade || null;
+        pendingShipId = pendingAssign.ship_id;
+        pendingOwnerId = pOwnerId;
+        pendingFleetId = pFleetId;
+        pendingRankId = pendingAssign.on_rank_id;
       }
+
+      // 하선예정일: 승선 중이면 활성 승선기록의 승선일+계약개월, 대기 중이면 예정 배정의 승선예정일+계약개월
+      const disembarkForecastDate = isActiveOnboard
+        ? calcDisembarkForecast(activeEmbark?.embark_date, activeEmbark?.contract_months)
+        : (pendingAssign ? calcDisembarkForecast(pendingAssign.embark_date, pendingAssign.contract_months) : undefined);
 
       // 급여 템플릿: 승선 중이면 활성 기록 기준, 대기 중이면 교대 계획 또는 선박 보유 여부
       const hasSalaryTemplate = isActiveOnboard
@@ -342,6 +388,12 @@ export const crewService = {
         pending_rank_code: pendingRankCode,
         pending_rank_grade: pendingRankGrade,
         pending_embark_date: pendingAssign?.embark_date,
+        pending_ship_id: pendingShipId,
+        pending_owner_id: pendingOwnerId,
+        pending_fleet_id: pendingFleetId,
+        pending_rank_id: pendingRankId,
+        disembark_forecast_date: disembarkForecastDate,
+        recommended_available_date: recommendationAvailableMap.get(item.id),
       };
     });
 
