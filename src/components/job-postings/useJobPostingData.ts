@@ -440,10 +440,22 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
 
       const ranksWithSalary: RankWithSalary[] = rankList.map(rank => {
         const rankItems = itemsByRank.get(rank.name) || [];
-        // 등급(rank_grade) 구분 없이 공통으로 적용되는 금액만 합산 — 등급별 금액까지
-        // 합치면(A/B/C 등) 말이 안 되는 총액이 나오므로 공통 항목만 기본값으로 사용
-        const commonItems = rankItems.filter(item => !item.rank_grade);
-        const baseSalary = commonItems.reduce((sum, item) => sum + item.amount, 0);
+
+        // 등급(A/B/C 등)별 금액까지 전부 더하면 말이 안 되는 총액이 나오므로,
+        // 급여 구성 항목(component)마다 대표값 하나만 골라 합산한다 — 공통(등급 없음)
+        // 항목이 있으면 그것을, 없으면(전부 등급별로만 존재하는 직급) 등급 중 가장
+        // 앞선 것을 대표값으로 사용한다.
+        const itemsByComponent = new Map<string, SalaryTemplateItem[]>();
+        for (const item of rankItems) {
+          if (!itemsByComponent.has(item.component_id)) itemsByComponent.set(item.component_id, []);
+          itemsByComponent.get(item.component_id)!.push(item);
+        }
+        let baseSalary = 0;
+        for (const componentItems of itemsByComponent.values()) {
+          const common = componentItems.find(item => !item.rank_grade);
+          const representative = common || [...componentItems].sort((a, b) => (a.rank_grade || '').localeCompare(b.rank_grade || ''))[0];
+          baseSalary += representative?.amount || 0;
+        }
 
         return {
           ...rank,
