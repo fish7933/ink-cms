@@ -269,6 +269,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 3,
         is_active: true,
       },
+      {
+        id: 'allowance-types',
+        label: '수당 기준 관리',
+        path: '/allowance-types',
+        icon: 'Coins',
+        roles: ['ship_manager'],
+        order: 4,
+        is_active: true,
+      },
     ],
   },
   {

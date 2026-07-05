@@ -84,6 +84,7 @@ export const MENU_STRUCTURE: MenuStructure[] = [
       { id: 'salary-templates', name: '급여 템플릿', resource: 'salary_templates' },
       { id: 'salary-components', name: '급여 구성항목', resource: 'salary_components' },
       { id: 'allotment-management', name: '송금 관리', resource: 'allotment_management' },
+      { id: 'allowance-types', name: '수당 기준 관리', resource: 'allowance_types' },
     ],
   },
   {

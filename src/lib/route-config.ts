@@ -31,6 +31,7 @@ const SalaryTemplatesPage = lazy(() => import('@/pages/SalaryTemplatesPage'));
 const SalaryTemplateFormPage = lazy(() => import('@/pages/SalaryTemplateFormPage'));
 const SalaryTemplateDetailPage = lazy(() => import('@/pages/SalaryTemplateDetailPage'));
 const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
+const AllowanceTypesManagementPage = lazy(() => import('@/pages/AllowanceTypesManagementPage'));
 const OrgChartManagementPage = lazy(() => import('@/pages/OrgChartManagementPage'));
 const DocumentTypesManagementPage = lazy(() => import('@/pages/DocumentTypesManagementPage'));
 const DocumentDraftPage = lazy(() => import('@/pages/DocumentDraftPage'));
@@ -111,4 +112,5 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew-evaluations', component: CrewEvaluationPage },
   { path: '/allotment-management', component: AllotmentManagementPage },
   { path: '/contract-management', component: ContractManagementPage },
+  { path: '/allowance-types', component: AllowanceTypesManagementPage },
 ];

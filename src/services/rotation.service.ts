@@ -457,7 +457,7 @@ export const rotationService = {
         }
 
         // 계약 자동 생성 — 승선/하선(예정)일, 선주/플릿/선박/국적/직급 포함
-        await supabase.from('crew_contracts').insert({
+        const { data: newContract } = await supabase.from('crew_contracts').insert({
           crew_member_id: a.on_crew_id,
           ship_id: plan.ship_id,
           owner_id: plan.owner_id,
@@ -472,7 +472,25 @@ export const rotationService = {
           salary_currency: a.salary_currency || 'USD',
           signing_port: portLabel,
           status: 'active',
-        });
+        }).select('id').single();
+
+        // 직급별 수당 기준(재고용수당 등)이 있으면 계약에 자동으로 붙여준다
+        if (newContract && a.on_rank_id) {
+          const { data: rates } = await supabase
+            .from('allowance_rank_rates')
+            .select('allowance_type_id, amount, currency, default_payment_basis, default_payment_method')
+            .eq('rank_id', a.on_rank_id);
+          if (rates && rates.length > 0) {
+            await supabase.from('crew_contract_allowances').insert(rates.map(r => ({
+              contract_id: newContract.id,
+              allowance_type_id: r.allowance_type_id,
+              amount: r.amount,
+              currency: r.currency,
+              payment_basis: r.default_payment_basis,
+              payment_method: r.default_payment_method,
+            })));
+          }
+        }
       }
     }
 
