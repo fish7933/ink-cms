@@ -192,37 +192,42 @@ export default function RotationPlanFormPage() {
       }));
     }
 
-    // 하선 선원 미리 지정된 경우 → 선주/플릿/선박 자동 선택 + 승선자 계약개월 재계산
-    if (preDisembark.length > 0) {
-      const ref = allCrew.find(c => c.id === preDisembark[0] && getCrewStatus(c) === 'onboard');
-      if (ref?.current_ship_id && ref?.owner_id) {
-        const autoOwnerId = ref.owner_id;
-        const autoFleetId = ref.fleet_id || '';
-        const autoShipId = ref.current_ship_id;
+    // 선주/플릿/선박 자동 선택 대상 결정:
+    // 1) 하선 선원이 지정된 경우 → 그 선원이 현재 승선 중인 선박 기준
+    // 2) 승선 선원만 지정된 경우 → 등록 시 추천받은 선박(current_ship_id)이 있으면 그 선박 기준
+    const autoShipRef = preDisembark.length > 0
+      ? allCrew.find(c => c.id === preDisembark[0] && getCrewStatus(c) === 'onboard')
+      : preBoarding.length > 0
+        ? allCrew.find(c => c.id === preBoarding[0] && BOARDING_CANDIDATE_STATUSES.includes(getCrewStatus(c)))
+        : undefined;
 
-        const [fleetsRes, shipsRes] = await Promise.all([
-          supabase.from('fleets').select('*').eq('owner_id', autoOwnerId).order('name'),
-          supabase.from('ships').select('*').eq('owner_id', autoOwnerId).order('name'),
-        ]);
-        const loadedFleets: Fleet[] = fleetsRes.data || [];
-        const loadedShips: ShipType[] = shipsRes.data || [];
-        const ownerObj = ownersData.find(o => o.id === autoOwnerId);
-        const shipObj = loadedShips.find(s => s.id === autoShipId);
-        const fleetObj = loadedFleets.find(f => f.id === autoFleetId);
+    if (autoShipRef?.current_ship_id && autoShipRef?.owner_id) {
+      const autoOwnerId = autoShipRef.owner_id;
+      const autoFleetId = autoShipRef.fleet_id || '';
+      const autoShipId = autoShipRef.current_ship_id;
 
-        setFleets(loadedFleets);
-        setShips(loadedShips);
-        setOwnerId(autoOwnerId);
-        setFleetId(autoFleetId);
-        setShipId(autoShipId);
+      const [fleetsRes, shipsRes] = await Promise.all([
+        supabase.from('fleets').select('*').eq('owner_id', autoOwnerId).order('name'),
+        supabase.from('ships').select('*').eq('owner_id', autoOwnerId).order('name'),
+      ]);
+      const loadedFleets: Fleet[] = fleetsRes.data || [];
+      const loadedShips: ShipType[] = shipsRes.data || [];
+      const ownerObj = ownersData.find(o => o.id === autoOwnerId);
+      const shipObj = loadedShips.find(s => s.id === autoShipId);
+      const fleetObj = loadedFleets.find(f => f.id === autoFleetId);
 
-        // 승선자 있으면 계약개월 재계산 (이제 owner/ship 정보 있음)
-        if (preBoarding.length > 0 && ownerObj) {
-          for (const row of initRows) {
-            if (row.boardingCrewId) {
-              const fields = initBoardingFields(row.boardingCrewId, ownerObj, shipObj, fleetObj);
-              Object.assign(row, fields);
-            }
+      setFleets(loadedFleets);
+      setShips(loadedShips);
+      setOwnerId(autoOwnerId);
+      setFleetId(autoFleetId);
+      setShipId(autoShipId);
+
+      // 승선자 있으면 계약개월 재계산 (이제 owner/ship 정보 있음)
+      if (preBoarding.length > 0 && ownerObj) {
+        for (const row of initRows) {
+          if (row.boardingCrewId) {
+            const fields = initBoardingFields(row.boardingCrewId, ownerObj, shipObj, fleetObj);
+            Object.assign(row, fields);
           }
         }
       }
