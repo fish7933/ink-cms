@@ -29,11 +29,19 @@ export interface ApprovalDocumentStep {
   created_at: string;
 }
 
+export interface ApprovalDocumentAttachment {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 export interface ApprovalDocument {
   id: string;
   document_type_id: string;
   title: string;
   content: string | null;
+  attachments: ApprovalDocumentAttachment[];
   reference_type: string | null;
   reference_id: string | null;
   org_unit_id: string | null;

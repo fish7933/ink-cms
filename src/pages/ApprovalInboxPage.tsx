@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle, XCircle, Clock, User, Ship, Calendar, ArrowLeft, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, User, Ship, Calendar, ArrowLeft, FileText, Paperclip } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
@@ -357,6 +357,26 @@ export default function ApprovalInboxPage() {
     }
   };
 
+  const openAttachment = (path: string) => {
+    const { data } = supabase.storage.from('documents').getPublicUrl(path);
+    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+  };
+
+  const renderAttachments = (doc: ApprovalDocumentWithDetails) => doc.attachments.length > 0 && (
+    <div className="bg-gray-50 p-3 rounded">
+      <p className="text-sm font-semibold mb-1.5 flex items-center gap-1"><Paperclip className="w-3.5 h-3.5" />첨부 문서</p>
+      <div className="space-y-1">
+        {doc.attachments.map((f, idx) => (
+          <button key={idx} type="button" onClick={() => openAttachment(f.path)} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+            <FileText className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{f.name}</span>
+            <span className="text-xs text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   const isMyDocTurn = (doc: ApprovalDocumentWithDetails) => {
     if (doc.status !== 'pending') return false;
     if (isAdmin) return true;
@@ -506,6 +526,7 @@ export default function ApprovalInboxPage() {
             {selectedDocument.content && (
               <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{selectedDocument.content}</div>
             )}
+            {renderAttachments(selectedDocument)}
 
             {selectedDocument.requester_comment && (
               <div className="bg-gray-50 p-3 rounded">
@@ -680,6 +701,7 @@ export default function ApprovalInboxPage() {
                         {doc.content && (
                           <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{doc.content}</div>
                         )}
+                        {renderAttachments(doc)}
                         {doc.requester_comment && (
                           <div className="bg-gray-50 p-3 rounded">
                             <p className="text-sm font-semibold mb-1">요청 사유:</p>

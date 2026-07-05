@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText } from 'lucide-react';
+import { FileText, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,11 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { useToast } from '@/hooks/use-toast';
+import { msg } from '@/lib/messages';
 import type { OrgUnit } from '@/types/org-chart';
-import type { ApprovalDocumentType } from '@/types/approval-document';
+import type { ApprovalDocumentType, ApprovalDocumentAttachment } from '@/types/approval-document';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type { User } from '@/types/models';
 
@@ -30,6 +32,7 @@ export default function DocumentDraftPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [requesterComment, setRequesterComment] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
   const [previewChain, setPreviewChain] = useState<ApprovalChainStep[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -70,6 +73,29 @@ export default function DocumentDraftPage() {
     [previewChain, currentUser],
   );
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files).filter(f => {
+      if (f.size > 10 * 1024 * 1024) { toast({ title: `${f.name}은 10MB를 초과합니다.`, variant: 'destructive' }); return false; }
+      return true;
+    });
+    setUploadedFiles(prev => [...prev, ...files]);
+  };
+
+  const removeFile = (idx: number) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
+
+  const uploadAttachments = async (files: File[]): Promise<ApprovalDocumentAttachment[]> => {
+    const attachments: ApprovalDocumentAttachment[] = [];
+    for (const file of files) {
+      const ext = file.name.split('.').pop();
+      const path = `approval-documents/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const { error } = await supabase.storage.from('documents').upload(path, file);
+      if (error) throw new Error(msg.file.uploadFailed(file.name));
+      attachments.push({ name: file.name, path, size: file.size, type: file.type });
+    }
+    return attachments;
+  };
+
   const handleSubmit = async () => {
     if (!currentUser) return;
     if (!documentTypeId) { toast({ title: '문서유형을 선택해주세요.', variant: 'destructive' }); return; }
@@ -79,10 +105,12 @@ export default function DocumentDraftPage() {
 
     try {
       setSubmitting(true);
+      const attachments = await uploadAttachments(uploadedFiles);
       await approvalDocumentService.createDocument({
         document_type_id: documentTypeId,
         title: title.trim(),
         content: content.trim() || undefined,
+        attachments,
         org_unit_id: orgUnitId,
         created_by: currentUser.id,
         requester_comment: requesterComment.trim() || undefined,
@@ -154,6 +182,33 @@ export default function DocumentDraftPage() {
           <div className="space-y-1.5">
             <Label className="text-xs">요청 사유 <span className="text-gray-400 font-normal">(선택)</span></Label>
             <Textarea value={requesterComment} onChange={e => setRequesterComment(e.target.value)} placeholder="결재자에게 전달할 메모" rows={2} disabled={submitting} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">결재할 문서(양식) 첨부 <span className="text-gray-400 font-normal">(선택)</span></Label>
+            <div className="border-2 border-dashed rounded-md p-4 text-center">
+              <input type="file" id="doc-upload" multiple onChange={handleFileChange} className="hidden" disabled={submitting} />
+              <label htmlFor="doc-upload" className={`cursor-pointer flex flex-col items-center gap-2 ${submitting ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Upload className="w-8 h-8 text-gray-400" />
+                <div className="text-sm text-gray-600"><span className="text-blue-600 font-medium">파일 선택</span> 또는 드래그 앤 드롭</div>
+                <div className="text-xs text-gray-500">문서 양식, 참고자료 등 (최대 10MB)</div>
+              </label>
+            </div>
+            {uploadedFiles.length > 0 && (
+              <div className="space-y-2">
+                {uploadedFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-sm truncate">{file.name}</span>
+                      <span className="text-xs text-gray-500 shrink-0">({(file.size / 1024).toFixed(1)} KB)</span>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeFile(idx)} className="h-7 w-7 p-0 shrink-0" disabled={submitting}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-md border bg-gray-50 p-3">

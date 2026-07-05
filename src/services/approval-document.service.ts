@@ -5,6 +5,7 @@ import type {
   ApprovalDocumentType,
   ApprovalAuthorityLimit,
   ApprovalDocument,
+  ApprovalDocumentAttachment,
   ApprovalDocumentStep,
   ApprovalDocumentWithDetails,
 } from '@/types/approval-document';
@@ -120,6 +121,7 @@ export const approvalDocumentService = {
     document_type_id: string;
     title: string;
     content?: string;
+    attachments?: ApprovalDocumentAttachment[];
     org_unit_id: string;
     created_by: string;
     requester_comment?: string;
@@ -153,6 +155,7 @@ export const approvalDocumentService = {
         document_type_id: input.document_type_id,
         title: input.title,
         content: input.content || null,
+        attachments: input.attachments || [],
         org_unit_id: input.org_unit_id,
         created_by: input.created_by,
         requester_comment: input.requester_comment || null,

@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { FileText, Plus, ArrowLeft, CheckCircle, XCircle, Clock, Ban } from 'lucide-react';
+import { FileText, Plus, ArrowLeft, CheckCircle, XCircle, Clock, Ban, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { useToast } from '@/hooks/use-toast';
 import type { ApprovalDocumentWithDetails } from '@/types/approval-document';
@@ -54,6 +55,11 @@ export default function MyDocumentsPage() {
 
   const openDetail = (doc: ApprovalDocumentWithDetails) => setSelected(doc);
   const backToList = () => setSelected(null);
+
+  const openAttachment = (path: string) => {
+    const { data } = supabase.storage.from('documents').getPublicUrl(path);
+    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+  };
 
   const canCancel = (doc: ApprovalDocumentWithDetails) =>
     doc.status === 'pending' && (doc.created_by === currentUser?.id || isAdmin);
@@ -137,6 +143,20 @@ export default function MyDocumentsPage() {
             )}
             {selected.content && (
               <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{selected.content}</div>
+            )}
+            {selected.attachments.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold mb-1.5 flex items-center gap-1"><Paperclip className="w-3.5 h-3.5" />첨부 문서</p>
+                <div className="space-y-1.5">
+                  {selected.attachments.map((f, idx) => (
+                    <button key={idx} type="button" onClick={() => openAttachment(f.path)} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                      <FileText className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{f.name}</span>
+                      <span className="text-xs text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
             {selected.final_comment && (
               <div className="bg-red-50 p-3 rounded text-sm">
