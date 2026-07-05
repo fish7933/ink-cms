@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Coins } from 'lucide-react';
+import { Plus, Trash2, Coins, Pencil, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,14 +31,15 @@ export default function AllowanceTypesManagementPage() {
   const [rates, setRates] = useState<AllowanceRankRateWithDetails[]>([]);
   const [drafts, setDrafts] = useState<Record<string, RateDraft>>({});
   const [loading, setLoading] = useState(true);
-  const [newTypeOpen, setNewTypeOpen] = useState(false);
-  const [newType, setNewType] = useState({ code: '', name: '', description: '' });
+
+  const [typeFormOpen, setTypeFormOpen] = useState(false);
+  const [editingType, setEditingType] = useState<AllowanceType | null>(null);
+  const [typeForm, setTypeForm] = useState({ code: '', name: '', description: '' });
 
   const loadTypes = useCallback(async () => {
     const data = await allowanceService.getTypes(true);
     setTypes(data);
-    if (!selectedTypeId && data.length > 0) setSelectedTypeId(data[0].id);
-  }, [selectedTypeId]);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -69,19 +70,43 @@ export default function AllowanceTypesManagementPage() {
   useEffect(() => { loadRates(); }, [loadRates]);
 
   const selectedType = types.find(t => t.id === selectedTypeId);
+  const rateCountByType = (typeId: string) => rates.length > 0 && selectedTypeId === typeId ? rates.length : undefined;
 
-  const handleCreateType = async () => {
-    if (!newType.code.trim() || !newType.name.trim()) {
+  const openNewTypeForm = () => {
+    setEditingType(null);
+    setTypeForm({ code: '', name: '', description: '' });
+    setTypeFormOpen(true);
+  };
+
+  const openEditTypeForm = (t: AllowanceType) => {
+    setEditingType(t);
+    setTypeForm({ code: t.code, name: t.name, description: t.description || '' });
+    setTypeFormOpen(true);
+  };
+
+  const handleSaveType = async () => {
+    if (!typeForm.code.trim() || !typeForm.name.trim()) {
       toast({ title: '코드와 이름은 필수입니다', variant: 'destructive' });
       return;
     }
-    const created = await allowanceService.createType(newType);
-    if (!created) { toast({ title: '생성 실패', variant: 'destructive' }); return; }
-    toast({ title: '수당 유형이 추가되었습니다' });
-    setNewType({ code: '', name: '', description: '' });
-    setNewTypeOpen(false);
+    if (editingType) {
+      await allowanceService.updateType(editingType.id, { name: typeForm.name, description: typeForm.description || undefined });
+      toast({ title: '수정되었습니다' });
+      await loadTypes();
+      setTypeFormOpen(false);
+    } else {
+      const created = await allowanceService.createType(typeForm);
+      if (!created) { toast({ title: '생성 실패', variant: 'destructive' }); return; }
+      toast({ title: '수당 유형이 추가되었습니다' });
+      setTypeFormOpen(false);
+      await loadTypes();
+      setSelectedTypeId(created.id);
+    }
+  };
+
+  const handleToggleActive = async (t: AllowanceType) => {
+    await allowanceService.updateType(t.id, { is_active: !t.is_active });
     await loadTypes();
-    setSelectedTypeId(created.id);
   };
 
   const handleDeleteType = async (id: string) => {
@@ -133,53 +158,90 @@ export default function AllowanceTypesManagementPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Coins className="w-5 h-5 text-muted-foreground" />수당 기준 관리</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          급여표와 별개로 계약에 붙는 수당(재고용수당 등)의 직급별 기준 금액과 지급방식을 관리합니다.
+          급여표와 별개로 계약에 붙는 수당(재고용수당 등)의 유형과 직급별 기준 금액/지급방식을 관리합니다.
         </p>
       </div>
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
-                <SelectTrigger className="h-9 text-sm w-56"><SelectValue placeholder="수당 유형 선택" /></SelectTrigger>
-                <SelectContent>
-                  {types.map(t => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}{!t.is_active && ' (비활성)'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedType && (
-                <Button variant="ghost" size="sm" className="h-8 text-red-500" onClick={() => handleDeleteType(selectedType.id)}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              )}
-            </div>
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => setNewTypeOpen(v => !v)}>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-sm">수당 유형 목록</CardTitle>
+            <Button size="sm" className="h-8 gap-1.5" onClick={openNewTypeForm}>
               <Plus className="w-4 h-4" />새 수당 유형
             </Button>
           </div>
-          {selectedType?.description && (
-            <CardDescription className="text-xs pt-1">{selectedType.description}</CardDescription>
-          )}
         </CardHeader>
-        {newTypeOpen && (
-          <CardContent className="border-t pt-4 grid grid-cols-3 gap-3 items-end">
-            <div className="space-y-1.5"><Label className="text-xs">코드 *</Label><Input value={newType.code} onChange={e => setNewType(p => ({ ...p, code: e.target.value }))} placeholder="예: overtime_fixed" className="h-9 text-sm" /></div>
-            <div className="space-y-1.5"><Label className="text-xs">이름 *</Label><Input value={newType.name} onChange={e => setNewType(p => ({ ...p, name: e.target.value }))} placeholder="예: 고정 초과근무수당" className="h-9 text-sm" /></div>
-            <div className="space-y-1.5"><Label className="text-xs">설명</Label><Input value={newType.description} onChange={e => setNewType(p => ({ ...p, description: e.target.value }))} className="h-9 text-sm" /></div>
-            <div className="col-span-3"><Button size="sm" onClick={handleCreateType}>추가</Button></div>
+        {typeFormOpen && (
+          <CardContent className="border-b pb-4 grid grid-cols-3 gap-3 items-end">
+            <div className="space-y-1.5"><Label className="text-xs">코드 *</Label><Input value={typeForm.code} disabled={!!editingType} onChange={e => setTypeForm(p => ({ ...p, code: e.target.value }))} placeholder="예: overtime_fixed" className="h-9 text-sm" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">이름 *</Label><Input value={typeForm.name} onChange={e => setTypeForm(p => ({ ...p, name: e.target.value }))} placeholder="예: 고정 초과근무수당" className="h-9 text-sm" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">설명</Label><Input value={typeForm.description} onChange={e => setTypeForm(p => ({ ...p, description: e.target.value }))} className="h-9 text-sm" /></div>
+            <div className="col-span-3 flex gap-2">
+              <Button size="sm" onClick={handleSaveType}>{editingType ? '수정 저장' : '추가'}</Button>
+              <Button size="sm" variant="outline" onClick={() => setTypeFormOpen(false)}>취소</Button>
+            </div>
           </CardContent>
         )}
+        <CardContent className="p-0">
+          {types.length === 0 ? (
+            <div className="text-center py-10 text-sm text-muted-foreground">
+              <Badge variant="outline" className="mb-2">수당 유형 없음</Badge>
+              <p>새 수당 유형을 추가해 직급별 기준을 설정하세요.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs w-8"></TableHead>
+                  <TableHead className="text-xs">코드</TableHead>
+                  <TableHead className="text-xs">이름</TableHead>
+                  <TableHead className="text-xs">설명</TableHead>
+                  <TableHead className="text-xs w-24 text-center">직급기준</TableHead>
+                  <TableHead className="text-xs w-20 text-center">상태</TableHead>
+                  <TableHead className="text-right text-xs w-28">작업</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {types.map(t => (
+                  <TableRow
+                    key={t.id}
+                    className={`cursor-pointer ${selectedTypeId === t.id ? 'bg-blue-50/60' : 'hover:bg-gray-50'}`}
+                    onClick={() => setSelectedTypeId(t.id)}
+                  >
+                    <TableCell>{selectedTypeId === t.id && <ChevronRight className="w-3.5 h-3.5 text-blue-600" />}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">{t.code}</TableCell>
+                    <TableCell className="text-xs font-medium">{t.name}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground truncate max-w-[240px]">{t.description || '-'}</TableCell>
+                    <TableCell className="text-xs text-center">{rateCountByType(t.id) ?? '-'}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className={`text-xs ${t.is_active ? 'text-green-700 border-green-300' : 'text-gray-400'}`}>
+                        {t.is_active ? '활성' : '비활성'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditTypeForm(t)}><Pencil className="w-3.5 h-3.5" /></Button>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => handleToggleActive(t)}>{t.is_active ? '비활성화' : '활성화'}</Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteType(t.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
       </Card>
 
-      {selectedTypeId && (
+      {selectedTypeId && selectedType && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">직급별 기준</CardTitle>
-            <CardDescription className="text-xs">직급마다 기준 금액과 기본 지급방식/지급주체를 설정합니다. 계약에 부여할 때 이 값이 기본으로 채워지며, 계약별로 재정의할 수 있습니다.</CardDescription>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <CardTitle className="text-sm">직급별 기준 — {selectedType.name}</CardTitle>
+                <CardDescription className="text-xs mt-0.5">직급마다 기준 금액과 기본 지급방식/지급주체를 설정합니다. 계약에 부여할 때 이 값이 기본으로 채워지며, 계약별로 재정의할 수 있습니다.</CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -245,13 +307,6 @@ export default function AllowanceTypesManagementPage() {
             </Table>
           </CardContent>
         </Card>
-      )}
-
-      {types.length === 0 && (
-        <div className="text-center py-12 text-sm text-muted-foreground">
-          <Badge variant="outline" className="mb-2">수당 유형 없음</Badge>
-          <p>새 수당 유형을 추가해 직급별 기준을 설정하세요.</p>
-        </div>
       )}
     </div>
   );
