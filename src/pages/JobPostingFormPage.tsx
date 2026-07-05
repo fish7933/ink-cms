@@ -59,7 +59,7 @@ export default function JobPostingFormPage() {
     loadFleets,
     loadShips,
     checkShipTemplate,
-  } = useJobPostingData(!loadingPosting, posting);
+  } = useJobPostingData(true, posting);
 
   const [crewRecommendationOpen, setCrewRecommendationOpen] = useState(false);
   const [selectedRankForRecommendation, setSelectedRankForRecommendation] = useState<SelectedRankDetail | null>(null);

@@ -130,7 +130,8 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
       embarkation_date: getDefaultEmbarkationDate(),
       application_deadline: getDefaultApplicationDeadline(),
       remarks: '',
-      visible_to_agencies: [],
+      // 새 공고는 기본적으로 전체 매닝사에 공개되도록 시작한다 (필요하면 해제).
+      visible_to_agencies: manningAgencies.map(a => String(a.id)),
       status: 'active',
       urgency: 'normal',
     });
@@ -168,9 +169,12 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
       const company = companies.find(c => String(c.id) === companyId);
       setSelectedCompany(company || null);
 
+      // 기존 공고를 불러올 때는 플릿으로 필터링하지 않고 선주사의 전체 선박을 불러온다 —
+      // 공고 등록 이후 선박의 플릿이 재배정된 경우에도 이미 배정된 선박이 선택창에서
+      // 안 보여서(=해제된 것처럼 보여서) 실수로 다른 선박으로 덮어써지는 걸 방지한다.
       await Promise.all([
         loadFleets(companyId),
-        loadShips(companyId, fleetId),
+        loadShips(companyId),
       ]);
 
       await loadShipDetails(shipId);
