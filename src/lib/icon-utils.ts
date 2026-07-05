@@ -32,6 +32,7 @@ import {
   FileSignature,
   RefreshCw,
   Star,
+  LogOut,
   LucideIcon,
 } from 'lucide-react';
 
@@ -69,6 +70,7 @@ const iconMap: Record<string, LucideIcon> = {
   FileSignature,
   RefreshCw,
   Star,
+  LogOut,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {

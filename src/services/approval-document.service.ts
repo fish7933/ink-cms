@@ -28,6 +28,16 @@ async function applyReferenceSideEffect(
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', referenceId);
   }
+  if (referenceType === 'crew_dispatch_order') {
+    await supabase
+      .from('crew_dispatch_orders')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', referenceId);
+    // 승진/강등 발령은 승인 즉시 발효 — 계약 생성 + 승선경력 교체까지 한 번에 처리
+    if (newStatus === 'approved') {
+      await supabase.rpc('execute_dispatch_order', { order_id: referenceId });
+    }
+  }
 }
 
 // 전결규정에 지정된 직급의 position_order(선임도 기준값)를 조회

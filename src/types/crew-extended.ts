@@ -64,9 +64,12 @@ export interface SeaServiceRecord {
   gross_tonnage?: number;
   engine_power?: number;
   rank: string;
+  rank_grade?: string | null;
   sign_on_date: string;
   sign_off_date?: string;
   sign_off_reason?: string;
+  sign_off_reason_id?: string | null;
+  sign_off_reason_name?: string;
   port_of_sign_on?: string;
   port_of_sign_off?: string;
   // 입사 전 경력(pre_company)인 경우의 선주사/선박관리사/매닝사 (외부 회사일 수 있어 자유 텍스트)

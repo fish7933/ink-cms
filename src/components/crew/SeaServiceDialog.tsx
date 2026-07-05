@@ -21,12 +21,15 @@ import {
 import { addSeaServiceRecord, updateSeaServiceRecord } from '@/services/crew-extended.service';
 import { getShipTypes } from '@/services/ship-classification.service';
 import { getActiveShipFlags } from '@/services/ship-flag.service';
+import { getSignOffReasons } from '@/services/sign-off-reason.service';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
+import { RANK_GRADE_LABELS } from '@/types/dispatch';
 import type { SeaServiceRecord } from '@/types/crew-extended';
 import type { ShipType } from '@/types/ship-classification';
 import type { ShipFlag } from '@/types/ship-flag';
 import type { Rank } from '@/types/models';
+import type { SignOffReason } from '@/types/sign-off-reason';
 import { useToast } from '@/hooks/use-toast';
 
 interface SeaServiceDialogProps {
@@ -49,6 +52,7 @@ export default function SeaServiceDialog({
   const [shipTypes, setShipTypes] = useState<ShipType[]>([]);
   const [shipFlags, setShipFlags] = useState<ShipFlag[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [signOffReasons, setSignOffReasons] = useState<SignOffReason[]>([]);
 
   const [formData, setFormData] = useState({
     record_type: 'pre_company' as 'pre_company' | 'company_assignment',
@@ -58,9 +62,10 @@ export default function SeaServiceDialog({
     gross_tonnage: '',
     engine_power: '',
     rank: '',
+    rank_grade: '',
     sign_on_date: '',
     sign_off_date: '',
-    sign_off_reason: '',
+    sign_off_reason_id: '',
     owner_company_name: '',
     ship_manager_name: '',
     manning_agency_name: '',
@@ -73,10 +78,12 @@ export default function SeaServiceDialog({
       getShipTypes(),
       getActiveShipFlags(),
       supabase.from('ranks').select('*'),
-    ]).then(([types, flags, ranksRes]) => {
+      getSignOffReasons(),
+    ]).then(([types, flags, ranksRes, reasons]) => {
       setShipTypes(types);
       setShipFlags(flags);
       setRanks(sortRanksByDisplayOrder(ranksRes.data || []));
+      setSignOffReasons(reasons);
     }).catch(console.error);
   }, [open]);
 
@@ -90,9 +97,10 @@ export default function SeaServiceDialog({
         gross_tonnage: record.gross_tonnage?.toString() || '',
         engine_power: record.engine_power?.toString() || '',
         rank: record.rank,
+        rank_grade: record.rank_grade || '',
         sign_on_date: record.sign_on_date,
         sign_off_date: record.sign_off_date || '',
-        sign_off_reason: record.sign_off_reason || '',
+        sign_off_reason_id: record.sign_off_reason_id || '',
         owner_company_name: record.owner_company_name || '',
         ship_manager_name: record.ship_manager_name || '',
         manning_agency_name: record.manning_agency_name || '',
@@ -107,9 +115,10 @@ export default function SeaServiceDialog({
         gross_tonnage: '',
         engine_power: '',
         rank: '',
+        rank_grade: '',
         sign_on_date: '',
         sign_off_date: '',
-        sign_off_reason: '',
+        sign_off_reason_id: '',
         owner_company_name: '',
         ship_manager_name: '',
         manning_agency_name: '',
@@ -132,9 +141,10 @@ export default function SeaServiceDialog({
         gross_tonnage: formData.gross_tonnage ? parseFloat(formData.gross_tonnage) : undefined,
         engine_power: formData.engine_power ? parseFloat(formData.engine_power) : undefined,
         rank: formData.rank,
+        rank_grade: formData.rank_grade || undefined,
         sign_on_date: formData.sign_on_date,
         sign_off_date: formData.sign_off_date || undefined,
-        sign_off_reason: formData.sign_off_reason || undefined,
+        sign_off_reason_id: formData.sign_off_reason_id || undefined,
         owner_company_name: formData.owner_company_name || undefined,
         ship_manager_name: formData.ship_manager_name || undefined,
         manning_agency_name: formData.manning_agency_name || undefined,
@@ -291,6 +301,21 @@ export default function SeaServiceDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label htmlFor="rank_grade" className="text-xs">등급 (Grade)</Label>
+                <Select value={formData.rank_grade || '_none'} onValueChange={v => setFormData({ ...formData, rank_grade: v === '_none' ? '' : v })}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Grade 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none" className="text-sm">Grade 없음</SelectItem>
+                    {(Object.entries(RANK_GRADE_LABELS) as [string, string][]).map(([g, label]) => (
+                      <SelectItem key={g} value={g} className="text-sm">{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
                 <Label htmlFor="gross_tonnage" className="text-xs">총톤수 (GT)</Label>
                 <Input
                   id="gross_tonnage"
@@ -342,13 +367,15 @@ export default function SeaServiceDialog({
 
             <div className="space-y-1.5">
               <Label htmlFor="sign_off_reason" className="text-xs">하선 사유</Label>
-              <Input
-                id="sign_off_reason"
-                value={formData.sign_off_reason}
-                onChange={(e) => setFormData({ ...formData, sign_off_reason: e.target.value })}
-                placeholder="예: 계약 만료, 개인 사정"
-                className="h-9 text-sm"
-              />
+              <Select value={formData.sign_off_reason_id || '_none'} onValueChange={v => setFormData({ ...formData, sign_off_reason_id: v === '_none' ? '' : v })}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="하선 사유 선택" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
+                  {signOffReasons.map(r => (
+                    <SelectItem key={r.id} value={r.id} className="text-sm">{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

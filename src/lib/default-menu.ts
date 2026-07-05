@@ -98,6 +98,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 11,
         is_active: true,
       },
+      {
+        id: 'sign-off-reasons',
+        label: '하선 사유 관리',
+        path: '/sign-off-reasons',
+        icon: 'LogOut',
+        roles: ['ship_manager'],
+        order: 12,
+        is_active: true,
+      },
     ],
   },
   {

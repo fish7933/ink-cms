@@ -43,7 +43,9 @@ export interface CrewDispatchOrder {
   new_grade: RankGrade | null;
 
   effective_date: string;
+  expiry_date: string | null;
   approval_request_id: string | null;
+  approval_document_id: string | null;
   status: DispatchStatus;
 
   notes: string | null;
@@ -72,6 +74,7 @@ export interface CrewDispatchOrderInput {
   new_rank_id: string | null;
   new_grade: RankGrade | null;
   effective_date: string;
+  expiry_date: string | null;
   notes: string | null;
 }
 

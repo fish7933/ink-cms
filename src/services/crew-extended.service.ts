@@ -85,7 +85,7 @@ export async function deleteCrewCertificate(id: string): Promise<void> {
 export async function getSeaServiceRecords(crewMemberId: string): Promise<SeaServiceRecord[]> {
   const { data, error } = await supabase
     .from('sea_service_records')
-    .select('*')
+    .select('*, sign_off_reasons(name)')
     .eq('crew_member_id', crewMemberId)
     .order('sign_on_date', { ascending: false });
 
@@ -94,7 +94,10 @@ export async function getSeaServiceRecords(crewMemberId: string): Promise<SeaSer
     throw error;
   }
 
-  return data || [];
+  return (data || []).map((r: Record<string, unknown>) => {
+    const reason = r.sign_off_reasons as { name: string } | null;
+    return { ...r, sign_off_reason_name: reason?.name };
+  }) as SeaServiceRecord[];
 }
 
 export async function addSeaServiceRecord(record: Omit<SeaServiceRecord, 'id' | 'created_at' | 'updated_at'>): Promise<SeaServiceRecord> {

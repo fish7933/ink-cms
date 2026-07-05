@@ -908,15 +908,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">유형</th><th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-center p-2">고과</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">하선사유</th><th className="text-left p-2">유형</th><th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-center p-2">고과</th><th className="text-center p-2">작업</th>
                     </tr></thead>
                     <tbody>
                       {seaServiceRecords.map(r => (
                         <tr key={r.id} className="border-b hover:bg-gray-50">
                           <td className="p-2 font-medium">{r.ship_name}</td>
-                          <td className="p-2">{r.rank}</td>
+                          <td className="p-2">{r.rank}{r.rank_grade ? `(${r.rank_grade})` : ''}</td>
                           <td className="p-2">{r.sign_on_date}</td>
                           <td className="p-2">{r.sign_off_date || '-'}</td>
+                          <td className="p-2">{r.sign_off_reason_name || r.sign_off_reason || '-'}</td>
                           <td className="p-2"><Badge variant="outline" className="text-xs">{r.record_type === 'pre_company' ? '입사 전' : '회사 배치'}</Badge></td>
                           <td className="p-2 text-gray-600">{r.owner_company_name || '-'}</td>
                           <td className="p-2 text-gray-600">{r.ship_manager_name || '-'}</td>

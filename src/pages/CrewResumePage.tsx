@@ -19,9 +19,11 @@ interface SeaServiceRecord {
   gross_tonnage?: number;
   engine_power?: number;
   rank: string;
+  rank_grade?: string | null;
   sign_on_date: string;
   sign_off_date?: string;
   sign_off_reason?: string;
+  sign_off_reason_name?: string;
   port_of_sign_on?: string;
   port_of_sign_off?: string;
   notes?: string;
@@ -117,7 +119,7 @@ export default function CrewResumePage() {
 
     Promise.all([
       supabase.from('crew_members').select('*').eq('id', id).single(),
-      supabase.from('sea_service_records').select('*').eq('crew_member_id', id).order('sign_on_date', { ascending: false }),
+      supabase.from('sea_service_records').select('*, sign_off_reasons(name)').eq('crew_member_id', id).order('sign_on_date', { ascending: false }),
     ]).then(([{ data: crewData, error: crewErr }, { data: serviceData }]) => {
       if (crewErr || !crewData) { setError('선원 정보를 불러올 수 없습니다.'); setLoading(false); return; }
 
@@ -134,7 +136,10 @@ export default function CrewResumePage() {
       } catch { contacts = []; }
 
       setCrew({ ...crewData, certificates: certs, emergency_contacts: contacts });
-      setSeaService(serviceData || []);
+      setSeaService((serviceData || []).map((r: SeaServiceRecord & { sign_off_reasons?: { name: string } | null }) => ({
+        ...r,
+        sign_off_reason_name: r.sign_off_reasons?.name,
+      })));
 
       if (crewData.rank_id) {
         supabase.from('ranks').select('name, rank_code').eq('id', crewData.rank_id).single()
@@ -419,11 +424,11 @@ export default function CrewResumePage() {
                       <td style={{ textAlign: 'center' }}>{rec.ship_type || '-'}</td>
                       <td style={{ textAlign: 'center' }}>{rec.flag || '-'}</td>
                       <td style={{ textAlign: 'center' }}>{rec.gross_tonnage?.toLocaleString() || '-'}</td>
-                      <td style={{ textAlign: 'center' }}>{rec.rank}</td>
+                      <td style={{ textAlign: 'center' }}>{rec.rank}{rec.rank_grade ? `(${rec.rank_grade})` : ''}</td>
                       <td style={{ textAlign: 'center' }}>{fmt(rec.sign_on_date)}</td>
                       <td style={{ textAlign: 'center' }}>{rec.sign_off_date ? fmt(rec.sign_off_date) : '현재'}</td>
                       <td style={{ textAlign: 'center' }}>{months != null ? `${months}개월` : '-'}</td>
-                      <td>{rec.sign_off_reason || '-'}</td>
+                      <td>{rec.sign_off_reason_name || rec.sign_off_reason || '-'}</td>
                     </tr>
                   );
                 })}
