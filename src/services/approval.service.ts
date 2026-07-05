@@ -212,7 +212,7 @@ class ApprovalService {
     const { data: actions, error: actionsError } = await supabase
       .from('approval_actions')
       .select('*')
-      .in('crew_recommendation_approval_id', approvalIds)
+      .in('approval_request_id', approvalIds)
       .order('created_at');
 
     if (actionsError) throw actionsError;
@@ -228,9 +228,10 @@ class ApprovalService {
 
     const actionApproversMap = new Map((actionApprovers || []).map(u => [u.id, u]));
 
-    // Enrich actions with approver details
+    // Enrich actions with approver details (DB 컬럼명은 comments지만 앱 전체 컨벤션에 맞춰 comment로 노출)
     const enrichedActions = (actions || []).map(action => ({
       ...action,
+      comment: action.comments as string | undefined,
       approver_name: actionApproversMap.get(action.approver_id)?.name || 'Unknown',
     }));
 
@@ -254,10 +255,10 @@ class ApprovalService {
     });
     const actionsMap = new Map<string, ApprovalAction[]>();
     enrichedActions.forEach(a => {
-      if (!actionsMap.has(a.crew_recommendation_approval_id)) {
-        actionsMap.set(a.crew_recommendation_approval_id, []);
+      if (!actionsMap.has(a.approval_request_id)) {
+        actionsMap.set(a.approval_request_id, []);
       }
-      actionsMap.get(a.crew_recommendation_approval_id)!.push(a);
+      actionsMap.get(a.approval_request_id)!.push(a);
     });
     const requestersMap = new Map((requesters || []).map(u => [u.id, { name: u.name, role: u.role }]));
 
@@ -392,7 +393,7 @@ class ApprovalService {
     const { data: actions, error: actionsError } = await supabase
       .from('approval_actions')
       .select('*')
-      .in('crew_recommendation_approval_id', approvalIds)
+      .in('approval_request_id', approvalIds)
       .order('created_at');
 
     if (actionsError) throw actionsError;
@@ -408,9 +409,10 @@ class ApprovalService {
 
     const actionApproversMap = new Map((actionApprovers || []).map(u => [u.id, u]));
 
-    // Enrich actions with approver details
+    // Enrich actions with approver details (DB 컬럼명은 comments지만 앱 전체 컨벤션에 맞춰 comment로 노출)
     const enrichedActions = (actions || []).map(action => ({
       ...action,
+      comment: action.comments as string | undefined,
       approver_name: actionApproversMap.get(action.approver_id)?.name || 'Unknown',
     }));
 
@@ -434,10 +436,10 @@ class ApprovalService {
     });
     const actionsMap = new Map<string, ApprovalAction[]>();
     enrichedActions.forEach(a => {
-      if (!actionsMap.has(a.crew_recommendation_approval_id)) {
-        actionsMap.set(a.crew_recommendation_approval_id, []);
+      if (!actionsMap.has(a.approval_request_id)) {
+        actionsMap.set(a.approval_request_id, []);
       }
-      actionsMap.get(a.crew_recommendation_approval_id)!.push(a);
+      actionsMap.get(a.approval_request_id)!.push(a);
     });
     const requestersMap = new Map((requesters || []).map(u => [u.id, { name: u.name, role: u.role }]));
 
@@ -489,11 +491,11 @@ class ApprovalService {
     const { error: actionError } = await supabase
       .from('approval_actions')
       .insert({
-        crew_recommendation_approval_id: approvalId,
+        approval_request_id: approvalId,
         step_order: approval.current_step,
         approver_id: approverId,
         action: 'approved',
-        comment,
+        comments: comment,
       });
 
     if (actionError) throw actionError;
@@ -551,11 +553,11 @@ class ApprovalService {
     const { error: actionError } = await supabase
       .from('approval_actions')
       .insert({
-        crew_recommendation_approval_id: approvalId,
+        approval_request_id: approvalId,
         step_order: approval.current_step,
         approver_id: approverId,
         action: 'rejected',
-        comment,
+        comments: comment,
       });
 
     if (actionError) throw actionError;
@@ -618,11 +620,11 @@ class ApprovalService {
     if (approvalError) throw approvalError;
 
     await supabase.from('approval_actions').insert({
-      crew_recommendation_approval_id: approvalId,
+      approval_request_id: approvalId,
       step_order: approval.current_step,
       approver_id: adminId,
       action: 'approved',
-      comment: comment || '관리자 즉시 승인',
+      comments: comment || '관리자 즉시 승인',
     });
 
     const { error: updateError } = await supabase
@@ -651,11 +653,11 @@ class ApprovalService {
     if (approvalError) throw approvalError;
 
     await supabase.from('approval_actions').insert({
-      crew_recommendation_approval_id: approvalId,
+      approval_request_id: approvalId,
       step_order: approval.current_step,
       approver_id: adminId,
       action: 'rejected',
-      comment,
+      comments: comment,
     });
 
     const { error: updateError } = await supabase

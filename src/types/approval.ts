@@ -34,7 +34,7 @@ export interface CrewRecommendationApproval {
 
 export interface ApprovalAction {
   id: string;
-  crew_recommendation_approval_id: string;
+  approval_request_id: string;
   step_order: number;
   approver_id: string;
   approver_name?: string;
