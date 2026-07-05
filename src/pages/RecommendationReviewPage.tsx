@@ -62,9 +62,11 @@ export default function RecommendationReviewPage() {
   const [shipF, setShipF] = useState('all');
   const [rankF, setRankF] = useState('all');
   const [agencyF, setAgencyF] = useState('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { applyFilters(); }, [recommendations, search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF]);
+  useEffect(() => { setSelectedIds([]); }, [search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF, page]);
   useEffect(() => {
     if (ownerF !== 'all') getFleets(ownerF).then(setFleets).catch(console.error);
     else getFleets().then(setFleets).catch(console.error);
@@ -257,6 +259,24 @@ export default function RecommendationReviewPage() {
       alert('삭제 중 오류가 발생했습니다.');
     }
   };
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSelectAll = (ids: string[], checked: boolean) =>
+    setSelectedIds(checked ? ids : []);
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`선택한 ${selectedIds.length}건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    try {
+      await Promise.all(selectedIds.map(id => crewRecommendationService.delete(id)));
+      setSelectedIds([]);
+      await loadAll();
+    } catch (e) {
+      console.error(e);
+      alert('삭제 중 오류가 발생했습니다.');
+    }
+  };
   const openApproval = (r: CrewRecommendationWithDetails, action: 'accept' | 'reject') => {
     setSelectedRec(r); setApprovalAction(action); setApprovalComment('');
     setSaveLineDefault(false);
@@ -349,6 +369,7 @@ export default function RecommendationReviewPage() {
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const pageRecs = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const pageDeletableIds = pageRecs.filter(r => r.status !== 'pending').map(r => r.id);
 
   if (loading) return <><div className="p-8 text-sm text-gray-500">로딩 중...</div></>;
 
@@ -382,11 +403,27 @@ export default function RecommendationReviewPage() {
               </div>
             </div>
 
+            {selectedIds.length > 0 && (
+              <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-3">
+                <span className="text-xs text-blue-800">{selectedIds.length}건 선택됨</span>
+                <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-7 text-xs gap-1">
+                  <Trash2 className="w-3.5 h-3.5" />선택 삭제
+                </Button>
+              </div>
+            )}
+
             {/* 테이블 */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
+                    <TableHead className="w-8 py-2">
+                      <Checkbox
+                        checked={pageDeletableIds.length > 0 && pageDeletableIds.every(id => selectedIds.includes(id))}
+                        onCheckedChange={checked => toggleSelectAll(pageDeletableIds, !!checked)}
+                        disabled={pageDeletableIds.length === 0}
+                      />
+                    </TableHead>
                     <TableHead className="text-xs py-2 w-20">상태</TableHead>
                     <TableHead className="text-xs py-2 w-32">선박</TableHead>
                     <TableHead className="text-xs py-2 w-20">직급</TableHead>
@@ -403,6 +440,11 @@ export default function RecommendationReviewPage() {
                 <TableBody>
                   {pageRecs.map(rec => (
                     <TableRow key={rec.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openDetail(rec)}>
+                      <TableCell className="py-2" onClick={e => e.stopPropagation()}>
+                        {rec.status !== 'pending' && (
+                          <Checkbox checked={selectedIds.includes(rec.id)} onCheckedChange={() => toggleSelect(rec.id)} />
+                        )}
+                      </TableCell>
                       <TableCell className="py-2">{sBadge(rec.status)}</TableCell>
                       <TableCell className="py-2">
                         <div className="text-sm font-medium truncate max-w-[120px]">{rec.ship_name}</div>
