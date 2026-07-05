@@ -10,13 +10,17 @@ import type {
 
 class ApprovalService {
   // Approval Lines Management
-  async getApprovalLines(companyId: string): Promise<ApprovalLineWithSteps[]> {
-    const { data: lines, error: linesError } = await supabase
+  // companyId가 없으면(admin 등) 전체 공통(company_id 없음) 결재선만 조회
+  async getApprovalLines(companyId: string | null): Promise<ApprovalLineWithSteps[]> {
+    let query = supabase
       .from('approval_lines')
       .select('*')
-      .eq('company_id', companyId)
       .eq('is_active', true)
       .order('name');
+    query = companyId
+      ? query.or(`company_id.eq.${companyId},company_id.is.null`)
+      : query.is('company_id', null);
+    const { data: lines, error: linesError } = await query;
 
     if (linesError) throw linesError;
     if (!lines) return [];

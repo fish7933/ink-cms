@@ -83,13 +83,14 @@ export default function ApprovalLineManagementPage() {
 
       if (!userData) return;
 
-      // Load approval lines — company_id가 없는 관리자 계정은 전체 회사의 결재선을 조회
+      // Load approval lines — 내 회사 결재선 + 전체 공통(company_id 없음) 결재선을 함께 조회.
+      // company_id가 없는 관리자 계정은 전체 회사의 결재선을 조회.
       let linesQuery = supabase
         .from('approval_lines')
         .select('*')
         .order('created_at', { ascending: false });
       if (userData.company_id) {
-        linesQuery = linesQuery.eq('company_id', userData.company_id);
+        linesQuery = linesQuery.or(`company_id.eq.${userData.company_id},company_id.is.null`);
       }
       const { data: lines, error: linesError } = await linesQuery;
 

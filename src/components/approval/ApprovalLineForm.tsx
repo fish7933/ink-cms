@@ -214,10 +214,6 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
         throw new Error('User not authenticated');
       }
 
-      if (!currentUser.company_id) {
-        throw new Error('Company not found');
-      }
-
       if (approvalLine?.id) {
         // Update existing approval line
         const { error: updateError } = await supabase

@@ -109,10 +109,8 @@ export default function RecommendationReviewPage() {
         setDefaultLineId(pref.default_approval_line_id);
         setSelectedLine(pref.default_approval_line_id);
       }
-      if (fetchedUser.company_id) {
-        const lines = await approvalService.getApprovalLines(fetchedUser.company_id);
-        setApprovalLines(lines);
-      }
+      const lines = await approvalService.getApprovalLines(fetchedUser.company_id ?? null);
+      setApprovalLines(lines);
 
       const { data: recs, error } = await supabase
         .from('crew_recommendations').select('*').order('created_at', { ascending: false });

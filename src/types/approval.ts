@@ -1,6 +1,6 @@
 export interface ApprovalLine {
   id: string;
-  company_id: string;
+  company_id: string | null; // null = 전체 회사 공통(내부) 결재선
   name: string;
   description?: string;
   is_active: boolean;
