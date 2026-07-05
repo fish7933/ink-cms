@@ -38,6 +38,8 @@ export interface CrewRotationPlan {
   notes: string | null;
   base_departure_date: string | null;
   port_id: string | null;
+  deleted_by: string | null;
+  deleted_at: string | null;
 }
 
 export interface CrewRotationAssignment {

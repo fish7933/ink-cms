@@ -35,6 +35,7 @@ export const rotationService = {
         fleet:fleets!crew_rotation_plans_fleet_id_fkey(id, name),
         creator:users!crew_rotation_plans_created_by_fkey(id, name)
       `)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     // Apply filters
@@ -285,10 +286,14 @@ export const rotationService = {
   },
 
   /**
-   * Delete rotation plan
+   * Delete rotation plan (soft delete — 삭제자/삭제일시를 남기고 목록에서만 제외.
+   * 실행완료된 발령의 실제 선원 상태/계약/승선경력 등은 별도 데이터라 되돌리지 않음)
    */
-  async deleteRotationPlan(id: string): Promise<boolean> {
-    const { error } = await supabase.from('crew_rotation_plans').delete().eq('id', id);
+  async deleteRotationPlan(id: string, deletedBy: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('crew_rotation_plans')
+      .update({ deleted_by: deletedBy, deleted_at: new Date().toISOString() })
+      .eq('id', id);
 
     if (error) {
       console.error('Error deleting rotation plan:', error);

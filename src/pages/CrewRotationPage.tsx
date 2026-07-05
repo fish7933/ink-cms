@@ -11,10 +11,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { supabase } from '@/lib/supabase';
+import { getCurrentUser } from '@/lib/store';
 import { rotationService } from '@/services/rotation.service';
 import type { ContractExpiryInfo } from '@/services/rotation.service';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
-import type { Company, Fleet, Ship as ShipType } from '@/types/models';
+import type { Company, Fleet, Ship as ShipType, User } from '@/types/models';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useTabContext } from '@/contexts/TabContext';
@@ -38,6 +39,8 @@ export function CrewRotationPage() {
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'system_admin';
 
   // 필터
   const [owners, setOwners] = useState<Company[]>([]);
@@ -54,7 +57,7 @@ export function CrewRotationPage() {
   const [expiryLoading, setExpiryLoading] = useState(false);
   const [autoGenLoading, setAutoGenLoading] = useState(false);
 
-  useEffect(() => { loadPlans(); loadOwners(); }, []);
+  useEffect(() => { loadPlans(); loadOwners(); getCurrentUser().then(setCurrentUser); }, []);
 
   useEffect(() => {
     const activeTab = tabs.find(t => t.id === activeTabId);
@@ -113,9 +116,9 @@ export function CrewRotationPage() {
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
-  // 결재 상신 전(임시저장) 계획만 삭제 가능 — 발령 없이 계획 단계에서 빠지는 것이므로
-  // 삭제되면 그만큼 해당 월/선박의 계획 개수에서도 빠져 번호가 다시 채워진다.
-  const deletableIds = useMemo(() => filteredPlans.filter(p => p.status === 'draft').map(p => p.id), [filteredPlans]);
+  // 삭제(발령 완료 포함 전 상태)는 시스템관리자 이상만 가능. 삭제해도 실제 선원 상태/계약/
+  // 승선경력 등은 되돌리지 않고, 목록에서만 빠지며 삭제자/삭제일시가 기록된다.
+  const deletableIds = useMemo(() => isAdmin ? filteredPlans.map(p => p.id) : [], [filteredPlans, isAdmin]);
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -123,14 +126,15 @@ export function CrewRotationPage() {
     setSelectedIds(checked ? deletableIds : []);
 
   const handleDelete = async (planId: string) => {
-    if (!confirm('이 교대 계획서를 삭제하시겠습니까?')) return;
-    if (await rotationService.deleteRotationPlan(planId)) loadPlans();
+    if (!currentUser) return;
+    if (!confirm('이 교대 계획서를 삭제하시겠습니까? 삭제 이력이 기록됩니다.')) return;
+    if (await rotationService.deleteRotationPlan(planId, currentUser.id)) loadPlans();
   };
 
   const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    if (!confirm(`선택한 ${selectedIds.length}개의 교대 계획서를 삭제하시겠습니까?`)) return;
-    await Promise.all(selectedIds.map(id => rotationService.deleteRotationPlan(id)));
+    if (!currentUser || selectedIds.length === 0) return;
+    if (!confirm(`선택한 ${selectedIds.length}개의 교대 계획서를 삭제하시겠습니까? 삭제 이력이 기록됩니다.`)) return;
+    await Promise.all(selectedIds.map(id => rotationService.deleteRotationPlan(id, currentUser.id)));
     setSelectedIds([]);
     loadPlans();
   };
@@ -374,7 +378,7 @@ export function CrewRotationPage() {
                     {group.plans.map(plan => (
                       <TableRow key={plan.id} className="cursor-pointer" onClick={() => openNewTab(`/crew-rotation/${plan.id}`, plan.plan_name || '교대계획')}>
                         <TableCell onClick={e => e.stopPropagation()}>
-                          {plan.status === 'draft' && (
+                          {isAdmin && (
                             <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
                           )}
                         </TableCell>
@@ -399,10 +403,10 @@ export function CrewRotationPage() {
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
                             {plan.status === 'draft' && (
-                              <>
-                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleDelete(plan.id)}>삭제</Button>
-                                <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => handleSubmitApproval(plan.id)}>결재 상신</Button>
-                              </>
+                              <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => handleSubmitApproval(plan.id)}>결재 상신</Button>
+                            )}
+                            {isAdmin && (
+                              <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
                             )}
                             {plan.status === 'pending_approval' && (
                               <Button variant="default" size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => handleApprove(plan.id)}>승인</Button>
