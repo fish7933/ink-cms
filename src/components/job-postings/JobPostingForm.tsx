@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, X, AlertTriangle } from 'lucide-react';
+import { AlertCircle, X, AlertTriangle, Search, Check, CheckCheck, CircleSlash } from 'lucide-react';
 import type { Company, Fleet, Ship, JobPostingGroupWithDetails } from '@/types/models';
 import type { RankWithSalary, SelectedRankDetail, DuplicateWarning } from './types';
 import { departmentLabels, departmentColors } from './utils';
@@ -49,6 +50,8 @@ interface JobPostingFormProps {
   onFleetChange: (fleetId: string) => void;
   onShipChange: (shipId: string) => void;
   onRankToggle: (rank: RankWithSalary) => void;
+  onSelectAllRanks: (ranks: RankWithSalary[]) => void;
+  onClearRanks: (rankIds: string[]) => void;
   onUpdateRankDetail: (rankId: string, field: keyof SelectedRankDetail, value: number) => void;
   onUpdateRankNationalities: (rankId: string, nationalities: string[]) => void;
   onRemoveRank: (rankId: string) => void;
@@ -75,6 +78,8 @@ export function JobPostingForm({
   onFleetChange,
   onShipChange,
   onRankToggle,
+  onSelectAllRanks,
+  onClearRanks,
   onUpdateRankDetail,
   onUpdateRankNationalities,
   onRemoveRank,
@@ -83,11 +88,23 @@ export function JobPostingForm({
   onSubmit,
   onCancel,
 }: JobPostingFormProps) {
-  const groupedRanks = availableRanks.reduce((acc, rank) => {
+  const [rankSearch, setRankSearch] = useState('');
+
+  const filteredRanks = useMemo(() => {
+    const q = rankSearch.trim().toLowerCase();
+    if (!q) return availableRanks;
+    return availableRanks.filter(r =>
+      r.rank_code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)
+    );
+  }, [availableRanks, rankSearch]);
+
+  const groupedRanks = useMemo(() => filteredRanks.reduce((acc, rank) => {
     if (!acc[rank.department]) acc[rank.department] = [];
     acc[rank.department].push(rank);
     return acc;
-  }, {} as Record<string, RankWithSalary[]>);
+  }, {} as Record<string, RankWithSalary[]>), [filteredRanks]);
+
+  const selectedRankIds = useMemo(() => new Set(selectedRankDetails.map(r => r.rank_id)), [selectedRankDetails]);
 
   const companyValue = formData.company_id ? String(formData.company_id) : '';
   const fleetValue = formData.fleet_id ? String(formData.fleet_id) : 'none';
@@ -144,7 +161,7 @@ export function JobPostingForm({
       {hasTemplate === false && formData.ship_id && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>선택한 선박에 할당된 급여 템플릿이 없습니다.</AlertDescription>
+          <AlertDescription>선택한 선박에 할당된 급여 템플릿이 없습니다. 직급별 급여는 직접 입력해주세요.</AlertDescription>
         </Alert>
       )}
 
@@ -172,36 +189,96 @@ export function JobPostingForm({
         </Alert>
       )}
 
-      {hasTemplate === true && availableRanks.length > 0 && (
+      {availableRanks.length > 0 && (
         <div>
-          <Label>구인 직급 선택 * (여러 직급 선택 가능)</Label>
-          <div className="border rounded-md p-3 space-y-3">
-            {Object.entries(groupedRanks).map(([department, departmentRanks]) => (
-              <div key={department}>
-                <h4 className="text-xs font-semibold mb-2 text-gray-600">
-                  {departmentLabels[department as keyof typeof departmentLabels]}
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {departmentRanks.map(rank => (
-                    <Badge
-                      key={rank.id}
-                      variant={selectedRankDetails.some(r => r.rank_id === rank.id) ? "default" : "outline"}
-                      className={`cursor-pointer px-3 py-1.5 text-sm ${
-                        selectedRankDetails.some(r => r.rank_id === rank.id)
-                          ? ''
-                          : departmentColors[department as keyof typeof departmentColors]
-                      }`}
-                      onClick={() => onRankToggle(rank)}
-                    >
-                      {rank.rank_code}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-1.5">
+            <Label className="mb-0">
+              구인 직급 선택 * <span className="text-xs font-normal text-muted-foreground">(여러 직급 선택 가능)</span>
+            </Label>
+            <div className="flex items-center gap-1.5">
+              {selectedRankDetails.length > 0 && (
+                <Badge variant="secondary" className="text-xs font-medium">{selectedRankDetails.length}개 선택됨</Badge>
+              )}
+              <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => onSelectAllRanks(filteredRanks)}>
+                <CheckCheck className="h-3.5 w-3.5" />전체 선택
+              </Button>
+              <Button
+                type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-muted-foreground"
+                onClick={() => onClearRanks(filteredRanks.map(r => r.id))}
+                disabled={selectedRankDetails.length === 0}
+              >
+                <CircleSlash className="h-3.5 w-3.5" />전체 해제
+              </Button>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            여러 직급을 선택하여 하나의 공고로 등록할 수 있습니다.
+
+          <div className="border rounded-md p-2.5 space-y-2.5">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={rankSearch}
+                onChange={(e) => setRankSearch(e.target.value)}
+                placeholder="직급 코드/이름 검색..."
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
+
+            {Object.keys(groupedRanks).length === 0 ? (
+              <p className="text-xs text-center text-muted-foreground py-3">검색 결과가 없습니다.</p>
+            ) : (
+              Object.entries(groupedRanks).map(([department, departmentRanks]) => {
+                const deptSelectedCount = departmentRanks.filter(r => selectedRankIds.has(r.id)).length;
+                return (
+                  <div key={department}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <h4 className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+                        {departmentLabels[department as keyof typeof departmentLabels]}
+                        <span className="text-gray-400 font-normal">{deptSelectedCount}/{departmentRanks.length}</span>
+                      </h4>
+                      <button
+                        type="button"
+                        className="text-xs text-blue-600 hover:underline"
+                        onClick={() => deptSelectedCount === departmentRanks.length
+                          ? onClearRanks(departmentRanks.map(r => r.id))
+                          : onSelectAllRanks(departmentRanks)}
+                      >
+                        {deptSelectedCount === departmentRanks.length ? '부서 해제' : '부서 전체'}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {departmentRanks.map(rank => {
+                        const isSelected = selectedRankIds.has(rank.id);
+                        return (
+                          <button
+                            type="button"
+                            key={rank.id}
+                            onClick={() => onRankToggle(rank)}
+                            title={rank.has_salary ? `${rank.name} · 템플릿 급여 적용됨` : `${rank.name} · 급여 직접 입력 필요`}
+                            className={`group relative flex items-center gap-1 pl-2.5 pr-2 py-1 rounded-full text-xs font-medium border transition-all ${
+                              isSelected
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : `${departmentColors[department as keyof typeof departmentColors]} hover:brightness-95`
+                            }`}
+                          >
+                            {isSelected && <Check className="h-3 w-3" />}
+                            {rank.rank_code}
+                            <span
+                              className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                rank.has_salary ? (isSelected ? 'bg-white' : 'bg-green-500') : (isSelected ? 'bg-white/50' : 'bg-gray-300')
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />급여 템플릿 적용됨
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-300 ml-2" />직접 입력 필요
           </p>
         </div>
       )}
@@ -332,18 +409,40 @@ export function JobPostingForm({
       </div>
 
       <div>
-        <Label>공개 대상 매닝사 * (필수)</Label>
+        <div className="flex items-center justify-between mb-1.5">
+          <Label className="mb-0">공개 대상 매닝사 * (필수)</Label>
+          {manningAgencies.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Badge variant="secondary" className="text-xs font-medium">{formData.visible_to_agencies.length}개 선택됨</Badge>
+              <Button
+                type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1"
+                onClick={() => onFormDataChange('visible_to_agencies', manningAgencies.map(a => String(a.id)))}
+              >
+                <CheckCheck className="h-3.5 w-3.5" />전체 선택
+              </Button>
+              <Button
+                type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-muted-foreground"
+                onClick={() => onFormDataChange('visible_to_agencies', [])}
+                disabled={formData.visible_to_agencies.length === 0}
+              >
+                <CircleSlash className="h-3.5 w-3.5" />전체 해제
+              </Button>
+            </div>
+          )}
+        </div>
         <div className="border rounded-md p-3">
           <div className="flex flex-wrap gap-2">
             {manningAgencies.map(agency => {
               const aid = String(agency.id);
+              const isSelected = formData.visible_to_agencies.map(String).includes(aid);
               return (
                 <Badge
                   key={aid}
-                  variant={formData.visible_to_agencies.map(String).includes(aid) ? "default" : "outline"}
-                  className="cursor-pointer px-3 py-1.5"
+                  variant={isSelected ? "default" : "outline"}
+                  className="cursor-pointer px-3 py-1.5 gap-1"
                   onClick={() => onAgencyToggle(aid)}
                 >
+                  {isSelected && <Check className="h-3 w-3" />}
                   {agency.name}
                 </Badge>
               );

@@ -348,8 +348,15 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
     }
   };
 
+  // 급여 템플릿에 값이 없는 직급도 공고 등록 시 선택할 수 있어야 하므로, 여기서는
+  // "선원 직급 관리"에 등록된 전체 직급을 기준으로 목록을 만들고, 템플릿에 해당
+  // 직급의 급여 항목이 있으면 그 금액을 미리 채워주기만 한다 (없으면 0으로 두고
+  // has_salary=false로 표시해서 직접 입력하도록 안내).
   const checkShipTemplate = async (shipId: string) => {
     try {
+      const { data: allRanks } = await supabase.from('ranks').select('*').order('display_order');
+      const rankList = allRanks || [];
+
       const { data: ship } = await supabase
         .from('ships')
         .select('fleet_id, owner_id')
@@ -358,7 +365,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
 
       if (!ship) {
         setHasTemplate(false);
-        setAvailableRanks([]);
+        setAvailableRanks(rankList.map(rank => ({ ...rank, base_salary: 0, currency: 'USD', template_id: '', has_salary: false })));
         return;
       }
 
@@ -403,8 +410,8 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
 
       if (!foundTemplateId) {
         setHasTemplate(false);
-        setAvailableRanks([]);
         setTemplateId(null);
+        setAvailableRanks(rankList.map(rank => ({ ...rank, base_salary: 0, currency: 'USD', template_id: '', has_salary: false })));
         return;
       }
 
@@ -416,12 +423,6 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
         .eq('id', foundTemplateId)
         .single();
 
-      if (!template) {
-        setHasTemplate(false);
-        setAvailableRanks([]);
-        return;
-      }
-
       const { data: templateItems } = await supabase
         .from('salary_template_items')
         .select(`
@@ -430,50 +431,30 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
         `)
         .eq('template_id', foundTemplateId);
 
-      if (!templateItems || templateItems.length === 0) {
-        setHasTemplate(false);
-        setAvailableRanks([]);
-        return;
+      const currency = template?.currency || 'USD';
+      const itemsByRank = new Map<string, SalaryTemplateItem[]>();
+      for (const item of (templateItems || []) as SalaryTemplateItem[]) {
+        if (!itemsByRank.has(item.rank || '')) itemsByRank.set(item.rank || '', []);
+        itemsByRank.get(item.rank || '')!.push(item);
       }
 
-      const rankNames = [...new Set(templateItems.map((item: SalaryTemplateItem) => item.rank))];
-
-      if (rankNames.length === 0) {
-        setHasTemplate(false);
-        setAvailableRanks([]);
-        return;
-      }
-
-      const { data: rankDetails } = await supabase
-        .from('ranks')
-        .select('*')
-        .in('name', rankNames)
-        .order('display_order');
-
-      if (!rankDetails || rankDetails.length === 0) {
-        setHasTemplate(false);
-        setAvailableRanks([]);
-        return;
-      }
-
-      const ranksWithSalary: RankWithSalary[] = rankDetails.map(rank => {
-        const rankItems = (templateItems || []).filter(
-          (item: SalaryTemplateItem) => item.rank === rank.name
-        );
-        const baseSalary = rankItems.reduce(
-          (sum: number, item: SalaryTemplateItem) => sum + item.amount,
-          0
-        );
+      const ranksWithSalary: RankWithSalary[] = rankList.map(rank => {
+        const rankItems = itemsByRank.get(rank.name) || [];
+        // 등급(rank_grade) 구분 없이 공통으로 적용되는 금액만 합산 — 등급별 금액까지
+        // 합치면(A/B/C 등) 말이 안 되는 총액이 나오므로 공통 항목만 기본값으로 사용
+        const commonItems = rankItems.filter(item => !item.rank_grade);
+        const baseSalary = commonItems.reduce((sum, item) => sum + item.amount, 0);
 
         return {
           ...rank,
           base_salary: baseSalary,
-          currency: template.currency,
-          template_id: foundTemplateId,
+          currency,
+          template_id: foundTemplateId as string,
+          has_salary: rankItems.length > 0,
         };
       });
 
-      setHasTemplate(true);
+      setHasTemplate((templateItems?.length || 0) > 0);
       setAvailableRanks(ranksWithSalary);
     } catch (error) {
       console.error('Failed to check ship template:', error);

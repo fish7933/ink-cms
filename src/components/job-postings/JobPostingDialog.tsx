@@ -115,6 +115,39 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
     setSelectedRankDetails(prev => prev.filter(r => r.rank_id !== rankId));
   };
 
+  const buildRankDetail = (rank: RankWithSalary): SelectedRankDetail => {
+    let contractMonths = 0;
+    if (selectedCompany) {
+      contractMonths = rank.rank_category === 'officer'
+        ? (selectedCompany.default_officer_contract_months || 0)
+        : (selectedCompany.default_rating_contract_months || 0);
+    }
+    return {
+      rank_id: rank.id,
+      rank_name: rank.name,
+      rank_code: rank.rank_code,
+      department: rank.department,
+      base_salary: rank.base_salary,
+      currency: rank.currency,
+      contract_months: contractMonths,
+      positions_available: 1,
+      preferred_nationalities: [],
+    };
+  };
+
+  const handleSelectAllRanks = (ranks: RankWithSalary[]) => {
+    setSelectedRankDetails(prev => {
+      const existingIds = new Set(prev.map(r => r.rank_id));
+      const additions = ranks.filter(r => !existingIds.has(r.id)).map(buildRankDetail);
+      return [...prev, ...additions];
+    });
+  };
+
+  const handleClearRanks = (rankIds: string[]) => {
+    const idsToClear = new Set(rankIds);
+    setSelectedRankDetails(prev => prev.filter(r => !idsToClear.has(r.rank_id)));
+  };
+
   const handleFormDataChange = (field: string, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -148,7 +181,7 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
       return;
     }
 
-    if (hasTemplate && selectedRankDetails.length === 0) {
+    if (selectedRankDetails.length === 0) {
       alert('구인할 직급을 최소 1개 이상 선택해주세요.');
       return;
     }
@@ -273,6 +306,8 @@ export function JobPostingDialog({ open, posting, onClose }: JobPostingDialogPro
           onFleetChange={handleFleetChange}
           onShipChange={handleShipChange}
           onRankToggle={handleRankToggle}
+          onSelectAllRanks={handleSelectAllRanks}
+          onClearRanks={handleClearRanks}
           onUpdateRankDetail={handleUpdateRankDetail}
           onUpdateRankNationalities={handleUpdateRankNationalities}
           onRemoveRank={handleRemoveRank}
