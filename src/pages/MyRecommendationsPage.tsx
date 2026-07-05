@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Eye, ExternalLink, UserPlus, Award, ArrowLeft } from 'lucide-react';
+import { Search, Filter, Eye, ExternalLink, UserPlus, Award, ArrowLeft, Undo2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -119,6 +119,24 @@ export default function MyRecommendationsPage() {
   };
 
   const openDetail = (r: CrewRecommendationWithDetails) => { setSelectedRec(r); setViewMode('detail'); };
+
+  const removeRecommendation = async (r: CrewRecommendationWithDetails, confirmMsg: string) => {
+    if (!confirm(confirmMsg)) return;
+    try {
+      await crewRecommendationService.delete(r.id);
+      if (selectedRec?.id === r.id) { setViewMode('list'); setSelectedRec(null); }
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      alert('처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleWithdraw = (r: CrewRecommendationWithDetails) =>
+    removeRecommendation(r, `${r.crew_name}님의 추천을 철회하시겠습니까? 아직 검토 전이라 되돌릴 수 없이 삭제됩니다.`);
+
+  const handleDelete = (r: CrewRecommendationWithDetails) =>
+    removeRecommendation(r, `${r.crew_name}님의 추천 건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`);
 
   const openResume = async (r: CrewRecommendationWithDetails) => {
     if (!r.resume_files?.length) { alert('첨부된 이력서가 없습니다.'); return; }
@@ -258,6 +276,16 @@ export default function MyRecommendationsPage() {
                               <ExternalLink className="w-3.5 h-3.5 mr-1.5" />이력서
                             </Button>
                           )}
+                          {rec.status === 'pending' && (
+                            <Button variant="outline" size="sm" onClick={() => handleWithdraw(rec)} className="h-8 px-3 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
+                              <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
+                            </Button>
+                          )}
+                          {(rec.status === 'accepted' || rec.status === 'rejected') && (
+                            <Button variant="outline" size="sm" onClick={() => handleDelete(rec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
+                              <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -375,6 +403,16 @@ export default function MyRecommendationsPage() {
                           <Award className="w-3.5 h-3.5 mr-1.5" />증서 등록
                         </Button>
                       </>
+                    )}
+                    {selectedRec.status === 'pending' && (
+                      <Button variant="outline" size="sm" onClick={() => handleWithdraw(selectedRec)} className="h-8 px-3 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
+                        <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
+                      </Button>
+                    )}
+                    {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected') && (
+                      <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
+                      </Button>
                     )}
                   </div>
                 </div>
