@@ -189,7 +189,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
         department: r.department,
         base_salary: r.salary_amount || 0,
         currency: r.salary_currency,
-        contract_months: r.contract_months,
+        contract_months: r.contract_months || 0,
         positions_available: r.positions_available,
       }));
 
@@ -247,14 +247,21 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
         if (isShipManager && supervisedOwnerIds.length > 0) {
           console.log('🔍 [loadInitialData] Filtering companies for ship_manager...');
           console.log('📋 [loadInitialData] Supervised owner IDs:', supervisedOwnerIds);
-          
+
           const filtered = companiesRes.data.filter(c => {
             const cid = String(c.id);
             const isSupervised = supervisedOwnerIds.includes(cid);
             console.log(`  - Company ${c.name} (${cid}): ${isSupervised ? '✅ INCLUDED' : '❌ EXCLUDED'}`);
             return isSupervised;
           });
-          
+
+          // 기존 공고를 수정하는 경우, 감독 대상이 아니어도 이미 등록된 선주사는
+          // 목록에서 빠지면 선택창이 빈 값으로 보이므로 항상 포함시킨다.
+          if (posting?.company_id && !filtered.some(c => String(c.id) === String(posting.company_id))) {
+            const current = companiesRes.data.find(c => String(c.id) === String(posting.company_id));
+            if (current) filtered.push(current);
+          }
+
           console.log('✅ [loadInitialData] Filtered companies:', filtered.length);
           setFilteredCompanies(filtered);
         } else {
@@ -294,14 +301,20 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
       if (isShipManager && supervisedFleetIds.length > 0) {
         console.log('🔍 [loadFleets] Filtering fleets for ship_manager...');
         console.log('📋 [loadFleets] Supervised fleet IDs:', supervisedFleetIds);
-        
+
         const filtered = (data || []).filter(f => {
           const fid = String(f.id);
           const isSupervised = supervisedFleetIds.includes(fid);
           console.log(`  - Fleet ${f.name} (${fid}): ${isSupervised ? '✅ INCLUDED' : '❌ EXCLUDED'}`);
           return isSupervised;
         });
-        
+
+        // 기존 공고를 수정하는 경우, 감독 대상이 아니어도 이미 등록된 선대는 항상 포함
+        if (posting?.fleet_id && !filtered.some(f => String(f.id) === String(posting.fleet_id))) {
+          const current = (data || []).find(f => String(f.id) === String(posting.fleet_id));
+          if (current) filtered.push(current);
+        }
+
         console.log('✅ [loadFleets] Filtered fleets:', filtered.length);
         setFilteredFleets(filtered);
       } else {
@@ -334,14 +347,20 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
       if (isShipManager && supervisedShipIds.length > 0) {
         console.log('🔍 [loadShips] Filtering ships for ship_manager...');
         console.log('📋 [loadShips] Supervised ship IDs:', supervisedShipIds);
-        
+
         const filtered = (data || []).filter(s => {
           const sid = String(s.id);
           const isSupervised = supervisedShipIds.includes(sid);
           console.log(`  - Ship ${s.name} (${sid}): ${isSupervised ? '✅ INCLUDED' : '❌ EXCLUDED'}`);
           return isSupervised;
         });
-        
+
+        // 기존 공고를 수정하는 경우, 감독 대상이 아니어도 이미 등록된 선박은 항상 포함
+        if (posting?.ship_id && !filtered.some(s => String(s.id) === String(posting.ship_id))) {
+          const current = (data || []).find(s => String(s.id) === String(posting.ship_id));
+          if (current) filtered.push(current);
+        }
+
         console.log('✅ [loadShips] Filtered ships:', filtered.length);
         setFilteredShips(filtered);
       } else {

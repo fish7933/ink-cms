@@ -42,10 +42,14 @@ export function JobPostingReadOnlyView({
         <CardContent>
           <div className="space-y-4">
             {/* Company and Ship Basic Info */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs text-gray-500">선주사</Label>
                 <p className="text-sm font-medium mt-0.5">{posting.company_name}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-500">선대</Label>
+                <p className="text-sm font-medium mt-0.5">{posting.fleet_name || '-'}</p>
               </div>
               <div>
                 <Label className="text-xs text-gray-500">선박명</Label>
