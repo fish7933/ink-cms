@@ -55,10 +55,16 @@ export function getRankOptionsForShip(maps: ShipSalaryRankMaps, shipId: string |
   return sortRanksByDisplayOrder(opts.map(o => o.rank));
 }
 
-// 변경/배치 후 Grade 선택지 — 선택한 직급이 속한 템플릿에 등록된 Grade만 (등록된 Grade가 없으면 선택 불가)
+// 변경/배치 후 Grade 선택지 — 선택한 직급이 속한 템플릿(들)에 등록된 Grade만 (등록된 Grade가 없으면 선택 불가).
+// 한 선박에 같은 직급을 포함하는 템플릿이 여러 개 배정된 경우를 대비해 전부 합산한다.
 export function getGradeOptionsForShipRank(maps: ShipSalaryRankMaps, shipId: string | null, rankId: string): string[] {
   const opts = shipId ? maps.rankOptionsByShip.get(shipId) : undefined;
-  const match = opts?.find(o => o.rank.id === rankId);
-  if (!match) return [];
-  return maps.gradesByTemplate.get(match.templateId) || [];
+  if (!opts) return [];
+  const matchingTemplateIds = opts.filter(o => o.rank.id === rankId).map(o => o.templateId);
+  if (matchingTemplateIds.length === 0) return [];
+  const merged = new Set<string>();
+  for (const templateId of matchingTemplateIds) {
+    for (const grade of (maps.gradesByTemplate.get(templateId) || [])) merged.add(grade);
+  }
+  return [...merged].sort();
 }

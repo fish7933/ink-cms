@@ -912,7 +912,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     </tr></thead>
                     <tbody>
                       {seaServiceRecords.map(r => (
-                        <tr key={r.id} className="border-b hover:bg-gray-50">
+                        <tr key={r.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingSeaService(r); setSeaServiceDialogOpen(true); }}>
                           <td className="p-2 text-gray-600">{r.owner_company_name || '-'}</td>
                           <td className="p-2 text-gray-600">{r.ship_manager_name || '-'}</td>
                           <td className="p-2 text-gray-600">{r.manning_agency_name || '-'}</td>
@@ -922,7 +922,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                           <td className="p-2">{r.sign_off_date || '-'}</td>
                           <td className="p-2">{r.sign_off_reason_name || r.sign_off_reason || '-'}</td>
                           <td className="p-2"><Badge variant="outline" className="text-xs">{r.record_type === 'pre_company' ? '입사 전' : '회사 배치'}</Badge></td>
-                          <td className="p-2 text-center">
+                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             {evaluationCounts[r.id] ? (
                               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-yellow-700 bg-yellow-50 hover:bg-yellow-100" onClick={() => { setEvaluationDialogRecord(r); setEvaluationDialogOpen(true); }}>
                                 <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />고과 {evaluationCounts[r.id]}건
@@ -933,11 +933,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                               </Button>
                             )}
                           </td>
-                          <td className="p-2 text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingSeaService(r); setSeaServiceDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteSeaService(r.id)}><Trash2 className="h-3 w-3" /></Button>
-                            </div>
+                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteSeaService(r.id)}><Trash2 className="h-3 w-3" /></Button>
                           </td>
                         </tr>
                       ))}

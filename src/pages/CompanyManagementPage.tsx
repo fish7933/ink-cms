@@ -17,6 +17,7 @@ interface Company {
   id: string;
   name: string;
   type: string;
+  company_type: string | null;
   country: string | null;
   email: string | null;
   phone: string | null;
@@ -30,9 +31,10 @@ interface FormState {
   email: string; phone: string;
   officer_contract_months: number | null; rating_contract_months: number | null;
   month_days_basis: '30' | 'actual';
+  is_ship_manager: boolean;
 }
 
-const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null, month_days_basis: '30' };
+const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null, month_days_basis: '30', is_ship_manager: false };
 
 const MONTH_BASIS_LABELS: Record<string, string> = { '30': '30일 고정', 'actual': '실제 일수' };
 
@@ -74,7 +76,7 @@ export default function CompanyManagementPage() {
   useEffect(() => {
     if (editId && companies.length > 0) {
       const c = companies.find(c => c.id === editId);
-      if (c) setForm({ name: c.name, country: c.country || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months, month_days_basis: c.month_days_basis || '30' });
+      if (c) setForm({ name: c.name, country: c.country || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months, month_days_basis: c.month_days_basis || '30', is_ship_manager: c.company_type === '선박관리사' });
     }
     if (isNew) setForm(EMPTY_FORM);
   }, [editId, isNew, companies]);
@@ -83,7 +85,7 @@ export default function CompanyManagementPage() {
     setLoading(true);
     try {
       const [{ data: cd, error }, natData] = await Promise.all([
-        supabase.from('companies').select('id,name,type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
+        supabase.from('companies').select('id,name,type,company_type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
         getNationalities(),
       ]);
       if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
@@ -100,7 +102,7 @@ export default function CompanyManagementPage() {
   async function handleSave() {
     if (!form.name.trim()) { toast({ title: '회사명을 입력하세요', variant: 'destructive' }); return; }
     setSaving(true);
-    const payload = { name: form.name.trim(), type: companyType, country: form.country || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, updated_at: new Date().toISOString() };
+    const payload = { name: form.name.trim(), type: companyType, company_type: form.is_ship_manager ? '선박관리사' : '일반', country: form.country || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, updated_at: new Date().toISOString() };
     let error;
     if (editId) {
       ({ error } = await supabase.from('companies').update(payload).eq('id', editId));
@@ -194,6 +196,10 @@ export default function CompanyManagementPage() {
                     </div>
                   )}
                 </div>
+                <label className="flex items-center gap-2 text-xs pt-1 cursor-pointer">
+                  <input type="checkbox" checked={form.is_ship_manager} onChange={e => setForm(f => ({ ...f, is_ship_manager: e.target.checked }))} className="h-3.5 w-3.5" />
+                  <span>우리 회사(선박관리사)로 지정 <span className="text-gray-400">— 승선경력 회사배치 시 선박관리사 정보로 자동 사용됩니다</span></span>
+                </label>
               </div>
             ) : (
               <>
@@ -228,7 +234,10 @@ export default function CompanyManagementPage() {
                         ) : filtered.map((c, i) => (
                           <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
                             <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
-                            <td className="px-3 py-2 font-medium">{c.name}</td>
+                            <td className="px-3 py-2 font-medium">
+                              {c.name}
+                              {c.company_type === '선박관리사' && <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">선박관리사</span>}
+                            </td>
                             <td className="px-3 py-2 text-gray-600">{c.country ? (natByCode.get(c.country)?.country_name_ko ?? c.country) : '-'}</td>
                             <td className="px-3 py-2 text-gray-600 text-xs">{c.email || '-'}</td>
                             <td className="px-3 py-2 text-gray-600 text-xs">{c.phone || '-'}</td>

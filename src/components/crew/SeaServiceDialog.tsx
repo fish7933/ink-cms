@@ -379,7 +379,7 @@ export default function SeaServiceDialog({
                   <SelectContent>
                     <SelectItem value="_none" className="text-sm">Grade 없음</SelectItem>
                     {gradeOptions.map(g => (
-                      <SelectItem key={g} value={g} className="text-sm">{RANK_GRADE_LABELS[g] || `${g}급`}</SelectItem>
+                      <SelectItem key={g} value={g} className="text-sm">{g}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

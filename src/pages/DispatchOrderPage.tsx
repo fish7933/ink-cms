@@ -13,7 +13,6 @@ import { dispatchService } from '@/services/dispatch.service';
 import { loadShipSalaryRankMaps, getRankOptionsForShip, getGradeOptionsForShipRank, type ShipSalaryRankMaps } from '@/services/ship-salary-rank.service';
 import type { CrewMember, Rank } from '@/types/models';
 import type { RankGrade, DispatchType } from '@/types/dispatch';
-import { RANK_GRADE_LABELS } from '@/types/dispatch';
 import { useToast } from '@/hooks/use-toast';
 import { useTabContext } from '@/contexts/TabContext';
 
@@ -323,7 +322,7 @@ export default function DispatchOrderPage() {
                         <SelectContent>
                           <SelectItem value="_none">Grade 없음</SelectItem>
                           {gradeOptions.map(g => (
-                            <SelectItem key={g} value={g}>{RANK_GRADE_LABELS[g] || `${g}급`}</SelectItem>
+                            <SelectItem key={g} value={g}>{g}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
