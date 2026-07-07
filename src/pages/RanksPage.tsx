@@ -17,7 +17,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 const EMPTY_FORM = { name: '', rank_code: '', department: 'deck' as 'deck'|'engine'|'catering', rank_category: 'officer' as 'officer'|'rating', stcw_requirement: '', display_order: 0 };
-const DEPT_LABELS = { deck: '갑판부', engine: '기관부', catering: '사무부' };
+const DEPT_LABELS = { deck: '갑판부', engine: '기관부', catering: '사주부' };
 const DEPT_COLORS = { deck: 'bg-blue-50 border-blue-200', engine: 'bg-gray-50 border-gray-200', catering: 'bg-green-50 border-green-200' };
 
 export default function RanksPage() {
@@ -174,7 +174,7 @@ export default function RanksPage() {
                 <div className="space-y-1.5">
                   <Label className="text-sm">부서 *</Label>
                   <select value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value as 'deck'|'engine'|'catering' })} className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="deck">갑판부</option><option value="engine">기관부</option><option value="catering">사무부</option>
+                    <option value="deck">갑판부</option><option value="engine">기관부</option><option value="catering">사주부</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">

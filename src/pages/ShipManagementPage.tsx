@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, X, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, X, Trash2, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import ShipTree from '@/components/ship/ShipTree';
 import ShipDialog from '@/components/ship/ShipDialog';
@@ -426,6 +426,10 @@ export default function ShipManagementPage() {
                   <>
                     <CardTitle className="text-base">선박 목록</CardTitle>
                     <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={loadData} disabled={loading}>
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        새로고침
+                      </Button>
                       {permissions.canDelete && selectedShipIds.length > 0 && (
                         <Button
                           size="sm"

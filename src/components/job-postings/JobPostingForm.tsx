@@ -9,20 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, X, AlertTriangle, Search, Check, CheckCheck, CircleSlash } from 'lucide-react';
 import type { Company, Fleet, Ship, JobPostingGroupWithDetails } from '@/types/models';
+import type { Nationality } from '@/types/nationality';
 import type { RankWithSalary, SelectedRankDetail, DuplicateWarning } from './types';
 import { departmentLabels, departmentColors } from './utils';
-
-const NATIONALITIES = [
-  { code: 'ID', label: 'Indonesia' },
-  { code: 'MM', label: 'Myanmar' },
-  { code: 'PH', label: 'Philippines' },
-  { code: 'IN', label: 'India' },
-  { code: 'KR', label: 'Korea' },
-  { code: 'CN', label: 'China' },
-  { code: 'VN', label: 'Vietnam' },
-  { code: 'UA', label: 'Ukraine' },
-  { code: 'RU', label: 'Russia' },
-];
 
 interface JobPostingFormProps {
   formData: {
@@ -39,6 +28,7 @@ interface JobPostingFormProps {
   filteredFleets: Fleet[];
   filteredShips: Ship[];
   manningAgencies: Company[];
+  nationalities: Nationality[];
   availableRanks: RankWithSalary[];
   selectedRankDetails: SelectedRankDetail[];
   hasTemplate: boolean | null;
@@ -53,6 +43,7 @@ interface JobPostingFormProps {
   onSelectAllRanks: (ranks: RankWithSalary[]) => void;
   onClearRanks: (rankIds: string[]) => void;
   onUpdateRankDetail: (rankId: string, field: keyof SelectedRankDetail, value: number) => void;
+  onUpdateRankGrade: (rankId: string, grade: string) => void;
   onUpdateRankNationalities: (rankId: string, nationalities: string[]) => void;
   onRemoveRank: (rankId: string) => void;
   onFormDataChange: (field: string, value: string | string[]) => void;
@@ -67,6 +58,7 @@ export function JobPostingForm({
   filteredFleets,
   filteredShips,
   manningAgencies,
+  nationalities,
   availableRanks,
   selectedRankDetails,
   hasTemplate,
@@ -81,6 +73,7 @@ export function JobPostingForm({
   onSelectAllRanks,
   onClearRanks,
   onUpdateRankDetail,
+  onUpdateRankGrade,
   onUpdateRankNationalities,
   onRemoveRank,
   onFormDataChange,
@@ -105,6 +98,16 @@ export function JobPostingForm({
   }, {} as Record<string, RankWithSalary[]>), [filteredRanks]);
 
   const selectedRankIds = useMemo(() => new Set(selectedRankDetails.map(r => r.rank_id)), [selectedRankDetails]);
+  const rankById = useMemo(() => new Map(availableRanks.map(r => [r.id, r])), [availableRanks]);
+
+  // "선원 직급 관리" 순서(availableRanks가 이미 이 순서)와 항상 같게 보이도록,
+  // 선택 순서와 무관하게 렌더링 직전에 다시 정렬한다.
+  const sortedRankDetails = useMemo(() => {
+    const orderIndex = new Map(availableRanks.map((r, i) => [r.id, i]));
+    return [...selectedRankDetails].sort((a, b) =>
+      (orderIndex.get(a.rank_id) ?? 0) - (orderIndex.get(b.rank_id) ?? 0)
+    );
+  }, [selectedRankDetails, availableRanks]);
 
   const companyValue = formData.company_id ? String(formData.company_id) : '';
   const fleetValue = formData.fleet_id ? String(formData.fleet_id) : 'none';
@@ -287,13 +290,26 @@ export function JobPostingForm({
         <div>
           <Label>선택된 직급 상세 ({selectedRankDetails.length}개 직급)</Label>
           <div className="border rounded-md divide-y">
-            {selectedRankDetails.map((detail) => (
+            {sortedRankDetails.map((detail) => {
+              const grades = rankById.get(detail.rank_id)?.grades || [];
+              return (
               <div key={detail.rank_id} className="p-3">
                 <div className="flex items-center gap-3 mb-3">
                   <Badge className={`${departmentColors[detail.department as keyof typeof departmentColors]} shrink-0`}>
                     {detail.rank_code}
                   </Badge>
-                  <div className="flex-1 grid grid-cols-3 gap-2">
+                  <div className={`flex-1 grid gap-2 ${grades.length > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                    {grades.length > 0 && (
+                      <div>
+                        <Label className="text-xs">등급</Label>
+                        <Select value={detail.salary_grade || ''} onValueChange={(g) => onUpdateRankGrade(detail.rank_id, g)}>
+                          <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="등급" /></SelectTrigger>
+                          <SelectContent>
+                            {grades.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div>
                       <Label className="text-xs">급여</Label>
                       <Input
@@ -341,27 +357,31 @@ export function JobPostingForm({
                     선호 국적 <span className="text-gray-400 font-normal">(복수 선택 가능, 미선택 시 국적 무관)</span>
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
-                    {NATIONALITIES.map(nat => {
-                      const selected = (detail.preferred_nationalities || []).includes(nat.label);
+                    {nationalities.length === 0 && (
+                      <p className="text-xs text-muted-foreground">등록된 주요 송출국이 없습니다. "선원 국적 관리"에서 등록해주세요.</p>
+                    )}
+                    {nationalities.map(nat => {
+                      const selected = (detail.preferred_nationalities || []).includes(nat.country_name_ko);
                       return (
                         <button
-                          key={nat.code}
+                          key={nat.id}
                           type="button"
-                          onClick={() => toggleNationality(detail.rank_id, detail.preferred_nationalities || [], nat.label)}
+                          onClick={() => toggleNationality(detail.rank_id, detail.preferred_nationalities || [], nat.country_name_ko)}
                           className={`px-2.5 py-1 rounded-md text-xs border transition-colors font-medium ${
                             selected
                               ? 'bg-blue-600 text-white border-blue-600'
                               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                           }`}
                         >
-                          {nat.label}
+                          {nat.country_name_ko}
                         </button>
                       );
                     })}
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

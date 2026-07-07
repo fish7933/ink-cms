@@ -522,7 +522,7 @@ export default function SalaryTemplateForm({ template, onSuccess, onCancel }: Sa
           {/* Catering Department */}
           {ranksByDepartment.catering.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold mb-1.5 text-orange-700">사무부</h4>
+              <h4 className="text-xs font-semibold mb-1.5 text-orange-700">사주부</h4>
               <div className="flex flex-wrap gap-1.5">
                 {ranksByDepartment.catering.map((rank) => (
                   <Badge

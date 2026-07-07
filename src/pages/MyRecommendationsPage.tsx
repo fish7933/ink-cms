@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Eye, ExternalLink, UserPlus, Award, ArrowLeft, Undo2, Trash2 } from 'lucide-react';
+import { Search, Filter, Eye, ExternalLink, UserPlus, Award, ArrowLeft, Undo2, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -117,23 +117,36 @@ export default function MyRecommendationsPage() {
 
   const openDetail = (r: CrewRecommendationWithDetails) => { setSelectedRec(r); setViewMode('detail'); };
 
-  const removeRecommendation = async (r: CrewRecommendationWithDetails, confirmMsg: string) => {
-    if (!confirm(confirmMsg)) return;
+  const handleWithdraw = async (r: CrewRecommendationWithDetails) => {
+    if (!confirm(`${r.crew_name}님의 추천을 철회하시겠습니까? 철회 이력은 목록에 남고, 같은 직급에 언제든 다시 추천할 수 있습니다.`)) return;
+    try {
+      await crewRecommendationService.updateStatus(r.id, 'withdrawn');
+      if (selectedRec?.id === r.id) setSelectedRec({ ...selectedRec, status: 'withdrawn' });
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      alert('철회 처리 중 오류가 발생했습니다.');
+    }
+  };
+
+  const handleDelete = async (r: CrewRecommendationWithDetails) => {
+    if (!confirm(`${r.crew_name}님의 추천 건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
     try {
       await crewRecommendationService.delete(r.id);
       if (selectedRec?.id === r.id) { setViewMode('list'); setSelectedRec(null); }
       await loadData();
     } catch (e) {
       console.error(e);
-      alert('처리 중 오류가 발생했습니다.');
+      alert('삭제 중 오류가 발생했습니다.');
     }
   };
 
-  const handleWithdraw = (r: CrewRecommendationWithDetails) =>
-    removeRecommendation(r, `${r.crew_name}님의 추천을 철회하시겠습니까? 아직 검토 전이라 되돌릴 수 없이 삭제됩니다.`);
-
-  const handleDelete = (r: CrewRecommendationWithDetails) =>
-    removeRecommendation(r, `${r.crew_name}님의 추천 건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`);
+  const handleReRecommend = (r: CrewRecommendationWithDetails) => {
+    if (!r.job_posting_group_id) { alert('연결된 구인 공고를 찾을 수 없습니다.'); return; }
+    // 재추천은 새 추천과 달리 이전에 추천했던 선원의 정보를 그대로 이어받아야 하므로,
+    // 원본 추천 id를 넘겨 그 데이터를 불러와 채우게 한다.
+    openNewTab(`/job-postings/${r.job_posting_group_id}/recommend/${r.rank_id}?from=${r.id}`, `${r.rank_code || ''} 선원 재추천`.trim(), true);
+  };
 
   const openResume = async (r: CrewRecommendationWithDetails) => {
     if (!r.resume_files?.length) { alert('첨부된 이력서가 없습니다.'); return; }
@@ -148,6 +161,7 @@ export default function MyRecommendationsPage() {
     if (s === 'reviewed') return <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">결재중</Badge>;
     if (s === 'accepted') return <Badge variant="default" className="text-xs bg-green-600">수락</Badge>;
     if (s === 'rejected') return <Badge variant="destructive" className="text-xs">거절</Badge>;
+    if (s === 'withdrawn') return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-500 border-gray-300">철회됨</Badge>;
     return null;
   };
 
@@ -164,6 +178,7 @@ export default function MyRecommendationsPage() {
     reviewed: recommendations.filter(r => r.status === 'reviewed').length,
     accepted: recommendations.filter(r => r.status === 'accepted').length,
     rejected: recommendations.filter(r => r.status === 'rejected').length,
+    withdrawn: recommendations.filter(r => r.status === 'withdrawn').length,
   };
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -176,19 +191,26 @@ export default function MyRecommendationsPage() {
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         {viewMode === 'list' ? (
           <>
-            <div className="mb-4">
-              <h1 className="text-2xl font-bold">내 추천 선원 관리</h1>
-              <p className="text-sm text-muted-foreground mt-1">우리 회사가 추천한 선원 목록을 관리합니다</p>
+            <div className="mb-4 flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-bold">내 추천 선원 관리</h1>
+                <p className="text-sm text-muted-foreground mt-1">우리 회사가 추천한 선원 목록을 관리합니다</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                새로고침
+              </Button>
             </div>
 
             {/* 통계 */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
               {[
                 { label: '전체 추천', value: stats.total, color: 'border-blue-500', text: 'text-blue-600' },
                 { label: '검토 대기', value: stats.pending, color: 'border-gray-400', text: 'text-gray-600' },
                 { label: '결재중', value: stats.reviewed, color: 'border-blue-400', text: 'text-blue-500' },
                 { label: '수락', value: stats.accepted, color: 'border-green-500', text: 'text-green-600' },
                 { label: '거절', value: stats.rejected, color: 'border-red-500', text: 'text-red-600' },
+                { label: '철회됨', value: stats.withdrawn, color: 'border-gray-300', text: 'text-gray-500' },
               ].map(s => (
                 <div key={s.label} className={`bg-white rounded-lg shadow-sm p-3 border-l-4 ${s.color}`}>
                   <div className="text-xs text-gray-600">{s.label}</div>
@@ -211,7 +233,7 @@ export default function MyRecommendationsPage() {
                 <Select value={fleetF} onValueChange={setFleetF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="플릿" /></SelectTrigger><SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent></Select>
                 <Select value={shipF} onValueChange={setShipF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박" /></SelectTrigger><SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select>
                 <Select value={rankF} onValueChange={setRankF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급" /></SelectTrigger><SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code} - {r.name}</SelectItem>)}</SelectContent></Select>
-                <Select value={statusF} onValueChange={setStatusF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="상태" /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem><SelectItem value="pending">검토 대기</SelectItem><SelectItem value="reviewed">결재중</SelectItem><SelectItem value="accepted">수락</SelectItem><SelectItem value="rejected">거절</SelectItem></SelectContent></Select>
+                <Select value={statusF} onValueChange={setStatusF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="상태" /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem><SelectItem value="pending">검토 대기</SelectItem><SelectItem value="reviewed">결재중</SelectItem><SelectItem value="accepted">수락</SelectItem><SelectItem value="rejected">거절</SelectItem><SelectItem value="withdrawn">철회됨</SelectItem></SelectContent></Select>
                 <Select value={dateF} onValueChange={setDateF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="기간" /></SelectTrigger><SelectContent><SelectItem value="all">전체 기간</SelectItem><SelectItem value="week">최근 1주일</SelectItem><SelectItem value="month">최근 1개월</SelectItem><SelectItem value="quarter">최근 3개월</SelectItem></SelectContent></Select>
               </div>
             </div>
@@ -280,7 +302,12 @@ export default function MyRecommendationsPage() {
                               <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
                             </Button>
                           )}
-                          {(rec.status === 'accepted' || rec.status === 'rejected') && (
+                          {(rec.status === 'withdrawn' || rec.status === 'rejected') && (
+                            <Button variant="default" size="sm" onClick={() => handleReRecommend(rec)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
+                              <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
+                            </Button>
+                          )}
+                          {(rec.status === 'accepted' || rec.status === 'rejected' || rec.status === 'withdrawn') && (
                             <Button variant="outline" size="sm" onClick={() => handleDelete(rec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
                               <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
                             </Button>
@@ -408,7 +435,12 @@ export default function MyRecommendationsPage() {
                         <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
                       </Button>
                     )}
-                    {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected') && (
+                    {(selectedRec.status === 'withdrawn' || selectedRec.status === 'rejected') && (
+                      <Button variant="default" size="sm" onClick={() => handleReRecommend(selectedRec)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
+                        <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
+                      </Button>
+                    )}
+                    {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected' || selectedRec.status === 'withdrawn') && (
                       <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
                         <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
                       </Button>

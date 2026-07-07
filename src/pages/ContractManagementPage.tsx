@@ -33,7 +33,7 @@ export default function ContractManagementPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [formView, setFormView] = useState<{ record?: CrewContractWithDetails } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ crew_member_id: '', ship_id: '', contract_number: '', contract_type: 'initial', rank: '', start_date: '', end_date: '', duration_months: '', salary_amount: '', salary_currency: 'USD', overtime_rate: '', leave_pay: '', signing_port: '', repatriation_port: '', terms_and_conditions: '', notes: '' });
+  const [form, setForm] = useState({ crew_member_id: '', ship_id: '', contract_number: '', contract_type: 'initial', rank: '', start_date: '', end_date: '', duration_months: '', salary_amount: '', salary_currency: 'USD', overtime_rate: '', leave_pay: '', terms_and_conditions: '', notes: '' });
 
   const [allowanceTypes, setAllowanceTypes] = useState<AllowanceType[]>([]);
   const [contractAllowances, setContractAllowances] = useState<CrewContractAllowanceWithDetails[]>([]);
@@ -58,8 +58,8 @@ export default function ContractManagementPage() {
   const loadData = async () => { try { setLoading(true); setContracts(await getContracts()); } catch (e) { console.error(e); } finally { setLoading(false); } };
 
   const openForm = (c?: CrewContractWithDetails) => {
-    if (c) setForm({ crew_member_id: c.crew_member_id, ship_id: c.ship_id || '', contract_number: c.contract_number || '', contract_type: c.contract_type, rank: c.rank, start_date: c.start_date, end_date: c.end_date, duration_months: c.duration_months?.toString() || '', salary_amount: c.salary_amount?.toString() || '', salary_currency: c.salary_currency || 'USD', overtime_rate: c.overtime_rate?.toString() || '', leave_pay: c.leave_pay?.toString() || '', signing_port: c.signing_port || '', repatriation_port: c.repatriation_port || '', terms_and_conditions: c.terms_and_conditions || '', notes: c.notes || '' });
-    else setForm({ crew_member_id: '', ship_id: '', contract_number: '', contract_type: 'initial', rank: '', start_date: '', end_date: '', duration_months: '', salary_amount: '', salary_currency: 'USD', overtime_rate: '', leave_pay: '', signing_port: '', repatriation_port: '', terms_and_conditions: '', notes: '' });
+    if (c) setForm({ crew_member_id: c.crew_member_id, ship_id: c.ship_id || '', contract_number: c.contract_number || '', contract_type: c.contract_type, rank: c.rank, start_date: c.start_date, end_date: c.end_date, duration_months: c.duration_months?.toString() || '', salary_amount: c.salary_amount?.toString() || '', salary_currency: c.salary_currency || 'USD', overtime_rate: c.overtime_rate?.toString() || '', leave_pay: c.leave_pay?.toString() || '', terms_and_conditions: c.terms_and_conditions || '', notes: c.notes || '' });
+    else setForm({ crew_member_id: '', ship_id: '', contract_number: '', contract_type: 'initial', rank: '', start_date: '', end_date: '', duration_months: '', salary_amount: '', salary_currency: 'USD', overtime_rate: '', leave_pay: '', terms_and_conditions: '', notes: '' });
     setContractAllowances([]);
     setRenewContext(null);
     if (c) loadContractAllowances(c.id);
@@ -84,8 +84,6 @@ export default function ContractManagementPage() {
       salary_currency: prev.salary_currency || 'USD',
       overtime_rate: prev.overtime_rate?.toString() || '',
       leave_pay: prev.leave_pay?.toString() || '',
-      signing_port: prev.signing_port || '',
-      repatriation_port: prev.repatriation_port || '',
       terms_and_conditions: prev.terms_and_conditions || '',
       notes: '',
     });
@@ -107,7 +105,7 @@ export default function ContractManagementPage() {
     if (!form.crew_member_id || !form.rank || !form.start_date || !form.end_date) { toast({ title: '필수 항목을 입력하세요', variant: 'destructive' }); return; }
     try {
       setSaving(true);
-      const data = { crew_member_id: form.crew_member_id, ship_id: form.ship_id || undefined, contract_number: form.contract_number || undefined, contract_type: form.contract_type as CrewContractWithDetails['contract_type'], root_contract_id: renewContext?.rootId, rank: form.rank, start_date: form.start_date, end_date: form.end_date, duration_months: form.duration_months ? parseInt(form.duration_months) : undefined, salary_amount: form.salary_amount ? parseFloat(form.salary_amount) : undefined, salary_currency: form.salary_currency, overtime_rate: form.overtime_rate ? parseFloat(form.overtime_rate) : undefined, leave_pay: form.leave_pay ? parseFloat(form.leave_pay) : undefined, signing_port: form.signing_port || undefined, repatriation_port: form.repatriation_port || undefined, terms_and_conditions: form.terms_and_conditions || undefined, status: (formView?.record?.status || 'active') as CrewContractWithDetails['status'], notes: form.notes || undefined };
+      const data = { crew_member_id: form.crew_member_id, ship_id: form.ship_id || undefined, contract_number: form.contract_number || undefined, contract_type: form.contract_type as CrewContractWithDetails['contract_type'], root_contract_id: renewContext?.rootId, rank: form.rank, start_date: form.start_date, end_date: form.end_date, duration_months: form.duration_months ? parseInt(form.duration_months) : undefined, salary_amount: form.salary_amount ? parseFloat(form.salary_amount) : undefined, salary_currency: form.salary_currency, overtime_rate: form.overtime_rate ? parseFloat(form.overtime_rate) : undefined, leave_pay: form.leave_pay ? parseFloat(form.leave_pay) : undefined, terms_and_conditions: form.terms_and_conditions || undefined, status: (formView?.record?.status || 'active') as CrewContractWithDetails['status'], notes: form.notes || undefined };
       if (formView?.record) {
         await updateContract(formView.record.id, data);
         toast({ title: '수정 완료' });
@@ -202,7 +200,7 @@ export default function ContractManagementPage() {
                 <div className="space-y-1.5"><Label className="text-xs">선박</Label><Select value={form.ship_id} onValueChange={v => setForm({ ...form, ship_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger><SelectContent>{shipOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5"><Label className="text-xs">계약번호</Label><Input value={form.contract_number} onChange={e => setForm({ ...form, contract_number: e.target.value })} className="h-9 text-sm" /></div>
+                <div className="space-y-1.5"><Label className="text-xs">계약번호</Label><Input value={form.contract_number} placeholder="저장 시 자동 생성됩니다" className="h-9 text-sm bg-gray-50" disabled /></div>
                 <div className="space-y-1.5"><Label className="text-xs">계약 유형 *</Label><Select value={form.contract_type} onValueChange={v => setForm({ ...form, contract_type: v })}><SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-1.5"><Label className="text-xs">직급 *</Label><Input value={form.rank} onChange={e => setForm({ ...form, rank: e.target.value })} className="h-9 text-sm" /></div>
               </div>
@@ -218,10 +216,6 @@ export default function ContractManagementPage() {
                   <div className="space-y-1.5"><Label className="text-xs">초과근무율</Label><Input type="number" step="0.01" value={form.overtime_rate} onChange={e => setForm({ ...form, overtime_rate: e.target.value })} className="h-9 text-sm" /></div>
                   <div className="space-y-1.5"><Label className="text-xs">휴가급</Label><Input type="number" step="0.01" value={form.leave_pay} onChange={e => setForm({ ...form, leave_pay: e.target.value })} className="h-9 text-sm" /></div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="text-xs">계약 체결 항구</Label><Input value={form.signing_port} onChange={e => setForm({ ...form, signing_port: e.target.value })} className="h-9 text-sm" /></div>
-                <div className="space-y-1.5"><Label className="text-xs">송환 항구</Label><Input value={form.repatriation_port} onChange={e => setForm({ ...form, repatriation_port: e.target.value })} className="h-9 text-sm" /></div>
               </div>
               <div className="space-y-1.5"><Label className="text-xs">계약 조건</Label><Textarea value={form.terms_and_conditions} onChange={e => setForm({ ...form, terms_and_conditions: e.target.value })} rows={2} className="text-sm resize-none" /></div>
               <div className="space-y-1.5"><Label className="text-xs">비고</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className="text-sm resize-none" /></div>

@@ -17,8 +17,6 @@ export interface CrewContract {
   overtime_rate?: number;
   leave_pay?: number;
   terms_and_conditions?: string;
-  signing_port?: string;
-  repatriation_port?: string;
   status: 'draft' | 'active' | 'completed' | 'terminated' | 'renewed';
   terminated_reason?: string;
   terminated_date?: string;

@@ -41,6 +41,8 @@ export default function JobPostingFormPage() {
     manningAgencies,
     filteredFleets,
     filteredShips,
+    ships,
+    nationalities,
     availableRanks,
     selectedRankDetails,
     setSelectedRankDetails,
@@ -89,7 +91,14 @@ export default function JobPostingFormPage() {
 
   const handleShipChange = async (shipId: string) => {
     const sid = String(shipId);
-    setFormData(prev => ({ ...prev, ship_id: sid }));
+    // 선대를 고르지 않고 선박부터 지정해도, 그 선박에 이미 선대가 배정되어 있으면
+    // 항상 그 선대를 자동으로 선택해준다 (선박관리에서 관리하는 실제 배정을 우선).
+    const ship = [...ships, ...filteredShips].find(s => String(s.id) === sid);
+    setFormData(prev => ({
+      ...prev,
+      ship_id: sid,
+      fleet_id: ship?.fleet_id ? String(ship.fleet_id) : prev.fleet_id,
+    }));
     if (sid) {
       await checkShipTemplate(sid);
     }
@@ -155,7 +164,16 @@ export default function JobPostingFormPage() {
       contract_months: contractMonths,
       positions_available: 1,
       preferred_nationalities: [],
+      salary_grade: rank.default_grade,
     };
+  };
+
+  const handleUpdateRankGrade = (rankId: string, grade: string) => {
+    const rank = availableRanks.find(r => r.id === rankId);
+    const salary = rank?.salary_by_grade?.[grade];
+    setSelectedRankDetails(prev => prev.map(r =>
+      r.rank_id === rankId ? { ...r, salary_grade: grade, base_salary: salary ?? r.base_salary } : r
+    ));
   };
 
   const handleSelectAllRanks = (ranks: RankWithSalary[]) => {
@@ -227,11 +245,23 @@ export default function JobPostingFormPage() {
             .eq('template_id', templateId)
             .eq('rank', rankDetail.rank_name);
 
-          const components = (templateItems || []).map((item: SalaryTemplateItem) => ({
-            component_id: item.component_id,
-            component_name: item.component?.name || '',
-            amount: item.amount,
-          }));
+          // 등급별로 항목이 나뉘어 있는 급여 구성요소는 공고에 선택된 등급의 금액만
+          // 남기고(없으면 공통 항목), 등급별 금액이 뒤섞여 저장되지 않게 한다.
+          const itemsByComponent = new Map<string, SalaryTemplateItem[]>();
+          for (const item of (templateItems || []) as SalaryTemplateItem[]) {
+            if (!itemsByComponent.has(item.component_id)) itemsByComponent.set(item.component_id, []);
+            itemsByComponent.get(item.component_id)!.push(item);
+          }
+          const components = [...itemsByComponent.values()].map(items => {
+            const forGrade = rankDetail.salary_grade ? items.find(i => i.rank_grade === rankDetail.salary_grade) : undefined;
+            const common = items.find(i => !i.rank_grade);
+            const representative = forGrade || common || items[0];
+            return {
+              component_id: representative.component_id,
+              component_name: representative.component?.name || '',
+              amount: representative.amount,
+            };
+          });
 
           return {
             rank_id: rankDetail.rank_id,
@@ -240,6 +270,7 @@ export default function JobPostingFormPage() {
             salary_template_id: templateId,
             salary_amount: rankDetail.base_salary,
             salary_currency: rankDetail.currency,
+            salary_grade: rankDetail.salary_grade || null,
             salary_components: components,
             preferred_nationalities: rankDetail.preferred_nationalities || [],
           };
@@ -327,6 +358,7 @@ export default function JobPostingFormPage() {
             filteredFleets={filteredFleets}
             filteredShips={filteredShips}
             manningAgencies={manningAgencies}
+            nationalities={nationalities}
             availableRanks={availableRanks}
             selectedRankDetails={selectedRankDetails}
             hasTemplate={hasTemplate}
@@ -341,6 +373,7 @@ export default function JobPostingFormPage() {
             onSelectAllRanks={handleSelectAllRanks}
             onClearRanks={handleClearRanks}
             onUpdateRankDetail={handleUpdateRankDetail}
+            onUpdateRankGrade={handleUpdateRankGrade}
             onUpdateRankNationalities={handleUpdateRankNationalities}
             onRemoveRank={handleRemoveRank}
             onFormDataChange={handleFormDataChange}

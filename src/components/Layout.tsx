@@ -17,7 +17,7 @@ export default function Layout() {
   const [loading, setLoading] = useState(true);
   const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const { tabs, activeTabId } = useTabContext();
+  const { tabs, activeTabId, refreshNonces } = useTabContext();
 
   useEffect(() => {
     let isMounted = true;
@@ -80,7 +80,7 @@ export default function Layout() {
           <div className="flex-1 overflow-hidden relative">
             {tabs.map(tab => (
               <div
-                key={tab.id}
+                key={`${tab.id}:${refreshNonces[tab.id] || 0}`}
                 className="absolute inset-0 overflow-y-auto"
                 style={{ display: tab.id === activeTabId ? 'block' : 'none' }}
               >

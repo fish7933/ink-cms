@@ -3,7 +3,7 @@ import { msg } from '@/lib/messages';
 import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
   ArrowUpCircle, Ship, Users, UserCheck, UserMinus, LayoutList,
-  AlertTriangle, CheckCircle, XCircle,
+  AlertTriangle, CheckCircle, XCircle, RefreshCw,
 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
@@ -382,6 +382,9 @@ export function CrewManagementPage() {
                 )}
                 <Button onClick={() => openNewTab('/crew/new', '선원 등록', true)} size="sm" className="gap-1.5 h-8">
                   <Plus className="w-4 h-4" />선원 등록
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={loadData} disabled={loading}>
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />새로고침
                 </Button>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Eye, XCircle, Clock, ExternalLink, FileText, Send, CheckCircle2, ChevronRight, ArrowLeft, Trash2 } from 'lucide-react';
+import { Search, Filter, Eye, XCircle, Clock, ExternalLink, FileText, Send, CheckCircle2, ChevronRight, ArrowLeft, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -114,8 +114,9 @@ export default function RecommendationReviewPage() {
       const lines = await approvalService.getApprovalLines(fetchedUser.company_id ?? null);
       setApprovalLines(lines);
 
+      // 철회된 추천은 매닝사 쪽에서만 이력으로 남기고, 선박관리사 검토 목록에는 노출하지 않는다.
       const { data: recs, error } = await supabase
-        .from('crew_recommendations').select('*').order('created_at', { ascending: false });
+        .from('crew_recommendations').select('*').neq('status', 'withdrawn').order('created_at', { ascending: false });
       if (error) throw error;
       if (!recs || recs.length === 0) { setLoading(false); return; }
 
@@ -376,9 +377,15 @@ export default function RecommendationReviewPage() {
   return (
     <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">선원 추천 검토</h1>
-          <p className="text-sm text-muted-foreground mt-1">매닝사가 추천한 선원을 검토하고 채용 결재를 진행합니다</p>
+        <div className="mb-4 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">선원 추천 검토</h1>
+            <p className="text-sm text-muted-foreground mt-1">매닝사가 추천한 선원을 검토하고 채용 결재를 진행합니다</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            새로고침
+          </Button>
         </div>
 
         {viewMode === 'list' && (

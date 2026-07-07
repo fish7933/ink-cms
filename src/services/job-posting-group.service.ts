@@ -20,6 +20,7 @@ interface CreateJobPostingGroupData {
     salary_template_id?: string;
     salary_amount?: number;
     salary_currency: string;
+    salary_grade?: string | null;
     salary_components: Array<{
       component_id: string;
       component_name: string;
@@ -56,6 +57,7 @@ interface RankQueryResult {
   salary_template_id?: string;
   salary_amount?: number;
   salary_currency: string;
+  salary_grade?: string | null;
   salary_components: Array<{
     component_id: string;
     component_name: string;

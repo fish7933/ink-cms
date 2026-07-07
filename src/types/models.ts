@@ -132,6 +132,7 @@ export interface JobPostingGroupRank {
   salary_template_id?: string;
   salary_amount?: number;
   salary_currency: string;
+  salary_grade?: string | null;
   preferred_nationalities: string[];
   salary_components?: Array<{
     component_id: string;
@@ -306,7 +307,7 @@ export interface CrewRecommendation {
   resume_files: CrewRecommendationResumeFile[];
   certificates?: unknown;
   crew_member_id?: string | null;
-  status: 'pending' | 'reviewed' | 'accepted' | 'rejected';
+  status: 'pending' | 'reviewed' | 'accepted' | 'rejected' | 'withdrawn';
   created_by: string;
   created_at: string;
   updated_at?: string;

@@ -11,6 +11,7 @@ export interface Tab {
 interface TabContextValue {
   tabs: Tab[];
   activeTabId: string | null;
+  refreshNonces: Record<string, number>;
   openTab: (path: string, title: string) => void;
   openNewTab: (path: string, title: string, alwaysNew?: boolean) => void;
   closeTab: (id: string) => void;
@@ -30,7 +31,14 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   const { uiSettings } = useUISettings();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [refreshNonces, setRefreshNonces] = useState<Record<string, number>>({});
   const initialized = useRef(false);
+
+  // 이미 열려 있는 탭이라도 사이드바 메뉴를 다시 클릭하면 새로고침되도록,
+  // 탭 id별 카운터를 올려 그 탭의 페이지 컴포넌트를 강제로 다시 마운트한다.
+  const refreshTab = useCallback((id: string) => {
+    setRefreshNonces(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+  }, []);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -42,13 +50,14 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     }
   }, [location.pathname, location.search]);
 
-  // 메뉴 클릭 등 기존 탭 재사용 방식
+  // 메뉴 클릭 등 기존 탭 재사용 방식 — 이미 열려 있는 탭이면 새로고침도 함께 트리거한다.
   const openTab = useCallback((path: string, title: string) => {
     setTabs(prev => {
       const existing = prev.find(t => t.id === path);
       if (existing) {
         setActiveTabId(path);
         navigate(path);
+        refreshTab(path);
         return prev;
       }
       const limit = uiSettings.maxOpenTabs;
@@ -57,7 +66,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
       navigate(path);
       return [...prev, { id: path, title, path }];
     });
-  }, [navigate, uiSettings.maxOpenTabs]);
+  }, [navigate, uiSettings.maxOpenTabs, refreshTab]);
 
   // 액션(등록/열람) 전용: 항상 새 탭 또는 같은 경로 재사용
   const openNewTab = useCallback((path: string, title: string, alwaysNew = false) => {
@@ -142,7 +151,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   return (
-    <TabContext.Provider value={{ tabs, activeTabId, openTab, openNewTab, closeTab, closeLastTab, closeAllTabs, updateTab, activateTab }}>
+    <TabContext.Provider value={{ tabs, activeTabId, refreshNonces, openTab, openNewTab, closeTab, closeLastTab, closeAllTabs, updateTab, activateTab }}>
       {children}
     </TabContext.Provider>
   );
@@ -151,6 +160,7 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
 const noopTab: TabContextValue = {
   tabs: [],
   activeTabId: null,
+  refreshNonces: {},
   openTab: () => {},
   openNewTab: () => {},
   closeTab: () => {},

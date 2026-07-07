@@ -190,6 +190,9 @@ export function JobPostingReadOnlyView({
                       <Badge className={`${departmentColors[detail.department as keyof typeof departmentColors]} text-xs`}>
                         {detail.rank_code}
                       </Badge>
+                      {detail.salary_grade && (
+                        <Badge variant="outline" className="text-xs">{detail.salary_grade}</Badge>
+                      )}
                       <span className="text-xs text-gray-600">
                         {detail.currency} {detail.base_salary.toLocaleString()}
                       </span>

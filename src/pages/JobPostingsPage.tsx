@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { msg } from '@/lib/messages';
-import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, ArrowLeft } from 'lucide-react';
+import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -456,12 +456,18 @@ export default function JobPostingsPage() {
                   }
                 </p>
               </div>
-              {canEditPostings && (
-                <Button onClick={handleAdd} size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  다직급 공고 등록
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  새로고침
                 </Button>
-              )}
+                {canEditPostings && (
+                  <Button onClick={handleAdd} size="sm">
+                    <Plus className="w-4 h-4 mr-2" />
+                    다직급 공고 등록
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Duplicate Warnings - only for ship managers */}

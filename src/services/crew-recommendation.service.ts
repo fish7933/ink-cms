@@ -392,7 +392,8 @@ class CrewRecommendationService {
     const { count, error } = await supabase
       .from(TABLE_NAME)
       .select('*', { count: 'exact', head: true })
-      .eq('job_posting_group_id', groupId);
+      .eq('job_posting_group_id', groupId)
+      .neq('status', 'withdrawn');
 
     if (error) throw error;
     return count || 0;
@@ -440,7 +441,8 @@ class CrewRecommendationService {
       .from(TABLE_NAME)
       .select('*', { count: 'exact', head: true })
       .eq('job_posting_group_id', groupId)
-      .eq('manning_agency_id', agencyId);
+      .eq('manning_agency_id', agencyId)
+      .neq('status', 'withdrawn');
 
     if (error) throw error;
     return count || 0;

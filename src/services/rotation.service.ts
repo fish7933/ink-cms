@@ -544,7 +544,6 @@ export const rotationService = {
           duration_months: a.contract_months,
           salary_amount: a.salary_amount,
           salary_currency: a.salary_currency || 'USD',
-          signing_port: portLabel,
           status: 'active',
         }).select('id').single();
 

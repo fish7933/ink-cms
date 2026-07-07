@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,14 +8,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Upload, X } from 'lucide-react';
+import { ArrowLeft, Upload, X, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { getCurrentUser } from '@/lib/store';
 import { getNationalities } from '@/services/nationality.service';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
+import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { useTabContext } from '@/contexts/TabContext';
-import type { Rank, JobPostingGroupWithDetails } from '@/types/models';
+import type { Rank, JobPostingGroupWithDetails, CrewRecommendationResumeFile } from '@/types/models';
 import type { Nationality } from '@/types/nationality';
 
 const EDUCATION_OPTIONS = [
@@ -31,6 +32,8 @@ const DEPT_COLORS: Record<string, string> = {
 
 export default function CrewRecommendationPage() {
   const { groupId, rankId } = useParams<{ groupId: string; rankId: string }>();
+  const [searchParams] = useSearchParams();
+  const sourceRecommendationId = searchParams.get('from');
   const { activeTabId, closeTab } = useTabContext();
 
   const [posting, setPosting] = useState<JobPostingGroupWithDetails | null>(null);
@@ -38,6 +41,7 @@ export default function CrewRecommendationPage() {
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [carriedResumeFiles, setCarriedResumeFiles] = useState<CrewRecommendationResumeFile[]>([]);
   const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -63,6 +67,24 @@ export default function CrewRecommendationPage() {
     })();
   }, [groupId]);
 
+  // 재추천은 새로 추천하는 것과 달리 이전에 추천했던 선원의 정보를 그대로 이어받는다.
+  useEffect(() => {
+    if (!sourceRecommendationId) return;
+    (async () => {
+      const source = await crewRecommendationService.getById(sourceRecommendationId);
+      if (!source) return;
+      setFormData({
+        crew_name: source.crew_name,
+        crew_birth_date: source.crew_birth_date,
+        nationality_id: source.nationality || '',
+        available_date: source.available_date,
+        education: source.education || '',
+        remarks: source.remarks || '',
+      });
+      setCarriedResumeFiles(source.resume_files || []);
+    })();
+  }, [sourceRecommendationId]);
+
   useEffect(() => {
     (async () => {
       const { data: ranksData } = await supabase.from('ranks').select('*');
@@ -70,6 +92,9 @@ export default function CrewRecommendationPage() {
 
       const nationalitiesData = await getNationalities(true);
       setNationalities(nationalitiesData);
+
+      // 재추천은 이전 추천의 국적을 그대로 이어받으므로, 회사 기본 국적으로 덮어쓰지 않는다.
+      if (sourceRecommendationId) return;
 
       const currentUser = await getCurrentUser();
       if (currentUser?.company_id) {
@@ -84,7 +109,7 @@ export default function CrewRecommendationPage() {
         }
       }
     })();
-  }, []);
+  }, [sourceRecommendationId]);
 
   const rankDetail = posting?.ranks.find(r => r.rank_id === rankId);
   const selectedRank = ranks.find(r => r.id === rankId);
@@ -120,7 +145,7 @@ export default function CrewRecommendationPage() {
     if (!formData.crew_birth_date) { alert('생년월일을 입력해주세요.'); return; }
     if (!formData.nationality_id) { alert('국적을 선택해주세요.'); return; }
     if (!formData.available_date) { alert('출국 가능일을 입력해주세요.'); return; }
-    if (uploadedFiles.length === 0) { alert('선원 이력서를 첨부해주세요.'); return; }
+    if (uploadedFiles.length === 0 && carriedResumeFiles.length === 0) { alert('선원 이력서를 첨부해주세요.'); return; }
 
     try {
       setUploading(true);
@@ -128,7 +153,10 @@ export default function CrewRecommendationPage() {
       if (!currentUser?.company_id) throw new Error('사용자 정보를 찾을 수 없습니다.');
 
       const paths = await uploadFiles(uploadedFiles);
-      const resumeFilesData = uploadedFiles.map((f, i) => ({ name: f.name, path: paths[i], size: f.size, type: f.type }));
+      const resumeFilesData = [
+        ...carriedResumeFiles,
+        ...uploadedFiles.map((f, i) => ({ name: f.name, path: paths[i], size: f.size, type: f.type })),
+      ];
 
       const { error } = await supabase.from('crew_recommendations').insert({
         crew_name: formData.crew_name.trim(),
@@ -188,10 +216,15 @@ export default function CrewRecommendationPage() {
       </div>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">선원 추천</CardTitle>
+          <CardTitle className="text-base">{sourceRecommendationId ? '선원 재추천' : '선원 추천'}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
+            {sourceRecommendationId && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-800">
+                이전에 추천했던 선원의 정보를 그대로 불러왔습니다. 필요한 내용을 확인/수정한 뒤 다시 제출해주세요.
+              </div>
+            )}
             <div>
               <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">선원 기본 정보</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -258,6 +291,22 @@ export default function CrewRecommendationPage() {
                     <div className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (최대 10MB)</div>
                   </label>
                 </div>
+                {carriedResumeFiles.length > 0 && (
+                  <div className="space-y-2">
+                    {carriedResumeFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-blue-50 rounded-md">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                          <span className="text-sm truncate">{file.name}</span>
+                          <span className="text-xs text-gray-500 shrink-0">({(file.size / 1024).toFixed(1)} KB · 이전 첨부)</span>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setCarriedResumeFiles(prev => prev.filter((_, i) => i !== idx))} className="h-7 w-7 p-0 shrink-0" disabled={uploading}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {uploadedFiles.length > 0 && (
                   <div className="space-y-2">
                     {uploadedFiles.map((file, idx) => (

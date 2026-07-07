@@ -4,7 +4,9 @@ import { getCurrentUser } from '@/lib/store';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { supervisorService } from '@/services/supervisor.service';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
+import { getMajorSupplierNationalities } from '@/services/nationality.service';
 import type { Company, Fleet, Ship, Rank, User, JobPostingGroupWithDetails } from '@/types/models';
+import type { Nationality } from '@/types/nationality';
 import type { RankWithSalary, SelectedRankDetail, DuplicateWarning, SalaryTemplateItem } from './types';
 import { getDefaultEmbarkationDate, getDefaultApplicationDeadline } from './utils';
 
@@ -18,6 +20,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
   const [ships, setShips] = useState<Ship[]>([]);
   const [filteredShips, setFilteredShips] = useState<Ship[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [availableRanks, setAvailableRanks] = useState<RankWithSalary[]>([]);
   const [selectedRankDetails, setSelectedRankDetails] = useState<SelectedRankDetail[]>([]);
   const [hasTemplate, setHasTemplate] = useState<boolean | null>(null);
@@ -178,20 +181,42 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
         loadShips(companyId),
       ]);
 
+      // 공고 등록 이후 선박/선대의 소속 선주사가 바뀐 경우, owner_id로 스코프된
+      // 위 조회 결과에는 더 이상 나타나지 않아 선택창이 빈 값으로 보인다.
+      // 공고에 저장된 값은 소속 변경 여부와 무관하게 id로 직접 조회해 강제로 포함시킨다.
+      if (fleetId !== 'none') {
+        const { data: fleetById } = await supabase.from('fleets').select('*').eq('id', fleetId).maybeSingle();
+        if (fleetById) {
+          setFleets(prev => prev.some(f => String(f.id) === fleetId) ? prev : [...prev, fleetById]);
+          setFilteredFleets(prev => prev.some(f => String(f.id) === fleetId) ? prev : [...prev, fleetById]);
+        }
+      }
+      const { data: shipById } = await supabase.from('ships').select('*').eq('id', shipId).maybeSingle();
+      if (shipById) {
+        setShips(prev => prev.some(s => String(s.id) === shipId) ? prev : [...prev, shipById]);
+        setFilteredShips(prev => prev.some(s => String(s.id) === shipId) ? prev : [...prev, shipById]);
+      }
+
       await loadShipDetails(shipId);
       await checkShipTemplate(shipId);
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      const rankDetails: SelectedRankDetail[] = posting.ranks.map(r => ({
-        rank_id: r.rank_id,
-        rank_name: r.rank_name,
-        rank_code: r.rank_code,
-        department: r.department,
-        base_salary: r.salary_amount || 0,
-        currency: r.salary_currency,
-        contract_months: r.contract_months || 0,
-        positions_available: r.positions_available,
-      }));
+      // "선원 직급 관리" 화면 순서(display_order)와 항상 같은 순서로 보여야 하므로,
+      // 이미 그 순서로 정렬돼 있는 ranks 목록에서 인덱스를 가져와 정렬한다.
+      const rankOrderIndex = new Map(ranks.map((r, i) => [r.id, i]));
+      const rankDetails: SelectedRankDetail[] = posting.ranks
+        .map(r => ({
+          rank_id: r.rank_id,
+          rank_name: r.rank_name,
+          rank_code: r.rank_code,
+          department: r.department,
+          base_salary: r.salary_amount || 0,
+          currency: r.salary_currency,
+          contract_months: r.contract_months || 0,
+          positions_available: r.positions_available,
+          salary_grade: r.salary_grade || null,
+        }))
+        .sort((a, b) => (rankOrderIndex.get(a.rank_id) ?? 0) - (rankOrderIndex.get(b.rank_id) ?? 0));
 
       setSelectedRankDetails(rankDetails);
     } catch (error) {
@@ -233,11 +258,13 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
     try {
       console.log('🔍 [loadInitialData] Starting to load data...');
       
-      const [companiesRes, manningRes, ranksRes] = await Promise.all([
+      const [companiesRes, manningRes, ranksRes, nationalitiesData] = await Promise.all([
         supabase.from('companies').select('*').eq('type', 'owner').order('name'),
         supabase.from('companies').select('*').eq('type', 'manning').order('name'),
         supabase.from('ranks').select('*'),
+        getMajorSupplierNationalities(),
       ]);
+      setNationalities(nationalitiesData);
 
       if (companiesRes.data) {
         console.log('📋 [loadInitialData] All companies loaded:', companiesRes.data.length);
@@ -389,7 +416,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
 
       if (!ship) {
         setHasTemplate(false);
-        setAvailableRanks(rankList.map(rank => ({ ...rank, base_salary: 0, currency: 'USD', template_id: '', has_salary: false })));
+        setAvailableRanks(rankList.map(rank => ({ ...rank, base_salary: 0, currency: 'USD', template_id: '', has_salary: false, grades: [], default_grade: null, salary_by_grade: {} })));
         return;
       }
 
@@ -435,7 +462,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
       if (!foundTemplateId) {
         setHasTemplate(false);
         setTemplateId(null);
-        setAvailableRanks(rankList.map(rank => ({ ...rank, base_salary: 0, currency: 'USD', template_id: '', has_salary: false })));
+        setAvailableRanks(rankList.map(rank => ({ ...rank, base_salary: 0, currency: 'USD', template_id: '', has_salary: false, grades: [], default_grade: null, salary_by_grade: {} })));
         return;
       }
 
@@ -462,23 +489,41 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
         itemsByRank.get(item.rank || '')!.push(item);
       }
 
-      const ranksWithSalary: RankWithSalary[] = rankList.map(rank => {
-        const rankItems = itemsByRank.get(rank.name) || [];
-
-        // 등급(A/B/C 등)별 금액까지 전부 더하면 말이 안 되는 총액이 나오므로,
-        // 급여 구성 항목(component)마다 대표값 하나만 골라 합산한다 — 공통(등급 없음)
-        // 항목이 있으면 그것을, 없으면(전부 등급별로만 존재하는 직급) 등급 중 가장
-        // 앞선 것을 대표값으로 사용한다.
+      // 등급(A/B/C 등)별 금액까지 전부 더하면 말이 안 되는 총액이 나오므로, 급여
+      // 구성 항목(component)마다 대표값 하나만 골라 특정 등급 기준 총액을 계산한다 —
+      // 그 등급에 해당하는 항목이 있으면 그것을, 없으면 공통(등급 없음) 항목을 사용한다.
+      const totalForGrade = (rankItems: SalaryTemplateItem[], grade: string | null): number => {
         const itemsByComponent = new Map<string, SalaryTemplateItem[]>();
         for (const item of rankItems) {
           if (!itemsByComponent.has(item.component_id)) itemsByComponent.set(item.component_id, []);
           itemsByComponent.get(item.component_id)!.push(item);
         }
-        let baseSalary = 0;
+        let total = 0;
         for (const componentItems of itemsByComponent.values()) {
+          const forGrade = grade ? componentItems.find(item => item.rank_grade === grade) : undefined;
           const common = componentItems.find(item => !item.rank_grade);
-          const representative = common || [...componentItems].sort((a, b) => (a.rank_grade || '').localeCompare(b.rank_grade || ''))[0];
-          baseSalary += representative?.amount || 0;
+          const representative = forGrade || common || componentItems[0];
+          total += representative?.amount || 0;
+        }
+        return total;
+      };
+
+      const ranksWithSalary: RankWithSalary[] = rankList.map(rank => {
+        const rankItems = itemsByRank.get(rank.name) || [];
+        const grades = [...new Set(rankItems.map(item => item.rank_grade).filter((g): g is string => !!g))].sort();
+
+        let baseSalary = 0;
+        let defaultGrade: string | null = null;
+        const salaryByGrade: Record<string, number> = {};
+
+        if (grades.length > 0) {
+          for (const grade of grades) salaryByGrade[grade] = totalForGrade(rankItems, grade);
+          // 공고 등록 시 기본값은 가장 낮은(하위) 등급의 급여로 제시하고, 등록 화면에서
+          // 실제 채용 조건에 맞는 등급으로 바꿀 수 있게 한다.
+          defaultGrade = grades.reduce((lowest, g) => salaryByGrade[g] < salaryByGrade[lowest] ? g : lowest, grades[0]);
+          baseSalary = salaryByGrade[defaultGrade];
+        } else {
+          baseSalary = totalForGrade(rankItems, null);
         }
 
         return {
@@ -487,6 +532,9 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
           currency,
           template_id: foundTemplateId as string,
           has_salary: rankItems.length > 0,
+          grades,
+          default_grade: defaultGrade,
+          salary_by_grade: salaryByGrade,
         };
       });
 
@@ -509,6 +557,7 @@ export function useJobPostingData(open: boolean, posting: JobPostingGroupWithDet
     ships,
     filteredShips,
     ranks,
+    nationalities,
     availableRanks,
     selectedRankDetails,
     setSelectedRankDetails,

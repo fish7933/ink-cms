@@ -23,7 +23,7 @@ export const getDefaultApplicationDeadline = (): string => {
 export const departmentLabels = {
   deck: '갑판부',
   engine: '기관부',
-  catering: '사무부',
+  catering: '사주부',
 };
 
 export const departmentColors = {
