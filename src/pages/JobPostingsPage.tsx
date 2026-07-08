@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { msg } from '@/lib/messages';
-import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, ArrowLeft, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -332,6 +332,34 @@ export default function JobPostingsPage() {
     setViewMode('list');
     setSelectedPosting(null);
     setSelectedPostingRecommendations([]);
+  };
+
+  // 선원 추천 현황: 헤더 클릭으로 직급/출국가능일/매닝사 정렬 (기본은 직급순 — 정렬만으로 직급별로 묶여 보임)
+  type RecommendationSortField = 'rank' | 'available_date' | 'manning_agency';
+  const [recSortField, setRecSortField] = useState<RecommendationSortField>('rank');
+  const [recSortDirection, setRecSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleRecommendationSort = (field: RecommendationSortField) => {
+    if (recSortField === field) {
+      setRecSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setRecSortField(field);
+      setRecSortDirection('asc');
+    }
+  };
+
+  const sortedRecommendations = useMemo(() => {
+    const dir = recSortDirection === 'asc' ? 1 : -1;
+    return [...selectedPostingRecommendations].sort((a, b) => {
+      if (recSortField === 'available_date') return dir * a.available_date.localeCompare(b.available_date);
+      if (recSortField === 'manning_agency') return dir * a.manning_agency_name.localeCompare(b.manning_agency_name, 'ko');
+      return dir * a.rank_code.localeCompare(b.rank_code);
+    });
+  }, [selectedPostingRecommendations, recSortField, recSortDirection]);
+
+  const RecommendationSortIcon = ({ field }: { field: RecommendationSortField }) => {
+    if (recSortField !== field) return <ArrowUpDown className="w-3 h-3 opacity-30" />;
+    return recSortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
   };
 
   const handleDelete = async (id: string) => {
@@ -805,21 +833,27 @@ export default function JobPostingsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gray-50">
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">직급</TableHead>
+                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap cursor-pointer select-none" onClick={() => handleRecommendationSort('rank')}>
+                          <span className="flex items-center gap-1">직급<RecommendationSortIcon field="rank" /></span>
+                        </TableHead>
                         <TableHead className="text-xs py-1 px-2 whitespace-nowrap">이름</TableHead>
                         <TableHead className="text-xs py-1 px-2 whitespace-nowrap">생년월일</TableHead>
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">출국가능일</TableHead>
+                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap cursor-pointer select-none" onClick={() => handleRecommendationSort('available_date')}>
+                          <span className="flex items-center gap-1">출국가능일<RecommendationSortIcon field="available_date" /></span>
+                        </TableHead>
                         <TableHead className="text-xs py-1 px-2 whitespace-nowrap">희망급여</TableHead>
                         <TableHead className="text-xs py-1 px-2 whitespace-nowrap">계약기간</TableHead>
                         {!isManningOrCrew && (
-                          <TableHead className="text-xs py-1 px-2 whitespace-nowrap">매닝사</TableHead>
+                          <TableHead className="text-xs py-1 px-2 whitespace-nowrap cursor-pointer select-none" onClick={() => handleRecommendationSort('manning_agency')}>
+                            <span className="flex items-center gap-1">매닝사<RecommendationSortIcon field="manning_agency" /></span>
+                          </TableHead>
                         )}
                         <TableHead className="text-xs py-1 px-2 whitespace-nowrap">추천일</TableHead>
                         <TableHead className="text-xs py-1 px-2 whitespace-nowrap">상태</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedPostingRecommendations.map((rec) => (
+                      {sortedRecommendations.map((rec) => (
                         <TableRow key={rec.id} className="hover:bg-muted/50">
                           <TableCell className="py-1 px-2">
                             <Badge

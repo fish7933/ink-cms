@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,7 @@ import type { RankWithSalary, SelectedRankDetail, SalaryTemplateItem } from '@/c
 
 export default function JobPostingFormPage() {
   const { id } = useParams<{ id?: string }>();
-  const navigate = useNavigate();
-  const { closeTab, activeTabId, updateTab, openNewTab } = useTabContext();
+  const { closeTab, activeTabId, updateTab, openTab, openNewTab } = useTabContext();
 
   const [posting, setPosting] = useState<JobPostingGroupWithDetails | null>(null);
   const [loadingPosting, setLoadingPosting] = useState(Boolean(id));
@@ -67,8 +66,11 @@ export default function JobPostingFormPage() {
     if (saved) {
       window.dispatchEvent(new CustomEvent('job-posting-data-changed'));
     }
+    // 탭 배열상 "바로 앞" 탭으로 돌아가는 closeTab의 위치 기반 로직에 기대지 않고,
+    // 항상 구인 공고 목록 탭으로 명시적으로 돌아가면서 새로고침한다(이전에 열려있던 목록의
+    // 인라인 추천 현황 등 잔여 상태가 남아있는 것처럼 보이는 문제를 방지).
     if (activeTabId) closeTab(activeTabId);
-    else navigate('/job-postings');
+    openTab('/job-postings', '구인 공고');
   };
 
   const handleCompanyChange = async (companyId: string) => {

@@ -1,16 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { msg } from '@/lib/messages';
 import { getCurrentUser, getShips, getCompanies, getFleets, addShip, updateShip, deleteShip } from '@/lib/store';
 import { supervisorService } from '@/services/supervisor.service';
+import { getOnboardCountsByShip, type OnboardCount } from '@/services/ship-onboard-count.service';
+import { useTabContext } from '@/contexts/TabContext';
 import type { User, Ship, Company, Fleet } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, X, Trash2, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, X, Trash2, ArrowLeft, RefreshCw, LayoutGrid, ListTree } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import ShipTree from '@/components/ship/ShipTree';
+import ShipListGridView from '@/components/ship/ShipListGridView';
+import ShipListTreeView from '@/components/ship/ShipListTreeView';
 import ShipDialog from '@/components/ship/ShipDialog';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -18,6 +22,8 @@ import { getEffectiveTemplateMapForShips, type SalaryTemplate } from '@/lib/sala
 
 export default function ShipManagementPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { openNewTab, closeTab, activeTabId } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [ships, setShips] = useState<Ship[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -25,11 +31,15 @@ export default function ShipManagementPage() {
   const [shipTemplateMap, setShipTemplateMap] = useState<Record<string, SalaryTemplate | null>>({});
   const [loading, setLoading] = useState(true);
   const [supervisedShipIds, setSupervisedShipIds] = useState<Set<string> | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'tree'>('grid');
+  const [onboardCounts, setOnboardCounts] = useState<Map<string, OnboardCount>>(new Map());
 
   const permissions = usePermissions('ships');
 
-  const [formView, setFormView] = useState<{ ship?: Ship } | null>(null);
-  const [editingShip, setEditingShip] = useState<string | null>(null);
+  // 선박 상세(수정/등록)는 목록과 별개의 탭으로 열린다 — /ships?id=... 또는 /ships?mode=new
+  const editId = searchParams.get('id');
+  const isNew = searchParams.get('mode') === 'new';
+  const isFormMode = isNew || !!editId;
   const [searchTerm, setSearchTerm] = useState('');
   
   // Filter states
@@ -118,12 +128,32 @@ export default function ShipManagementPage() {
       setCompanies(companiesData);
       setFleets(fleetsData);
       getEffectiveTemplateMapForShips(shipsData).then(setShipTemplateMap);
+      getOnboardCountsByShip().then(setOnboardCounts).catch(console.error);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // 선박 상세 탭에서 등록/수정/삭제가 일어나면 목록 탭에도 반영되도록 이벤트로 동기화한다
+  // (목록·상세가 서로 다른 탭 인스턴스라 상세 쪽 state 변경이 목록에 자동 반영되지 않음).
+  useEffect(() => {
+    if (isFormMode) return;
+    const handler = () => loadData();
+    window.addEventListener('ship-data-changed', handler);
+    return () => window.removeEventListener('ship-data-changed', handler);
+  }, [isFormMode]);
+
+  // 상세 탭: URL의 id/mode에 맞춰 폼 데이터를 동기화한다
+  useEffect(() => {
+    if (editId && ships.length > 0) {
+      const ship = ships.find(s => s.id === editId);
+      if (ship) populateFormFromShip(ship);
+    } else if (isNew) {
+      resetForm();
+    }
+  }, [editId, isNew, ships]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 선박관리사(ship_manager)는 본인이 담당하는 선박으로만 범위를 제한 (관리자/시스템관리자는 제한 없음)
   const scopedShips = useMemo(() => {
@@ -173,19 +203,27 @@ export default function ShipManagementPage() {
     }
   }, [selectedOwner]);
 
+  const ownerNameById = useMemo(() => new Map(companies.map(c => [c.id, c.name])), [companies]);
+  const fleetNameById = useMemo(() => new Map(fleets.map(f => [f.id, f.name])), [fleets]);
+
   // Use useMemo to prevent infinite loop
   const filteredShips = useMemo(() => {
+    const term = searchTerm.toLowerCase();
     return scopedShips.filter(ship => {
       // Role-based filtering
       if (currentUser && currentUser.role === 'ship_owner' && ship.owner_id !== currentUser.company_id) {
         return false;
       }
 
-      // Search term filtering
-      const matchesSearch = ship.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             (ship.imo_number && ship.imo_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
-             (ship.imo && ship.imo.toLowerCase().includes(searchTerm.toLowerCase()));
-      
+      // Search term filtering — 선박명/IMO 외에 선주사·플릿 이름으로도 검색 가능
+      const ownerName = ship.owner_id ? (ownerNameById.get(ship.owner_id) || '') : '';
+      const fleetName = ship.fleet_id ? (fleetNameById.get(ship.fleet_id) || '') : '';
+      const matchesSearch = ship.name.toLowerCase().includes(term) ||
+             (ship.imo_number && ship.imo_number.toLowerCase().includes(term)) ||
+             (ship.imo && ship.imo.toLowerCase().includes(term)) ||
+             ownerName.toLowerCase().includes(term) ||
+             fleetName.toLowerCase().includes(term);
+
       if (!matchesSearch) return false;
       
       // Owner filter
@@ -215,7 +253,7 @@ export default function ShipManagementPage() {
 
       return true;
     });
-  }, [scopedShips, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus]);
+  }, [scopedShips, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus, ownerNameById, fleetNameById]);
 
   // Clear selection when filters change
   useEffect(() => {
@@ -267,15 +305,14 @@ export default function ShipManagementPage() {
     };
 
     try {
-      if (editingShip) {
-        await updateShip(editingShip, shipData);
+      if (editId) {
+        await updateShip(editId, shipData);
       } else {
         await addShip(shipData as Omit<Ship, 'id'>);
       }
 
-      await loadData();
-      setFormView(null);
-      resetForm();
+      window.dispatchEvent(new CustomEvent('ship-data-changed'));
+      closeTab(activeTabId!);
     } catch (error) {
       console.error('Error saving ship:', error);
       alert('선박 저장 중 오류가 발생했습니다. IMO 번호가 중복되었는지 확인해주세요.');
@@ -314,10 +351,9 @@ export default function ShipManagementPage() {
       draft: '',
       is_bbchp: false,
     });
-    setEditingShip(null);
   };
 
-  const handleEdit = (ship: Ship) => {
+  const populateFormFromShip = (ship: Ship) => {
     setFormData({
       name: ship.name,
       owner_id: ship.owner_id || '',
@@ -349,8 +385,10 @@ export default function ShipManagementPage() {
       draft: ship.draft?.toString() || '',
       is_bbchp: ship.is_bbchp || false,
     });
-    setEditingShip(ship.id);
-    setFormView({ ship });
+  };
+
+  const handleEdit = (ship: Ship) => {
+    openNewTab(`/ships?id=${ship.id}`, `${ship.name} 수정`);
   };
 
   const handleDelete = async (id: string) => {
@@ -358,27 +396,30 @@ export default function ShipManagementPage() {
       await deleteShip(id);
       await loadData();
       setSelectedShipIds(prev => prev.filter(shipId => shipId !== id));
+      window.dispatchEvent(new CustomEvent('ship-data-changed'));
     }
   };
 
   const handleToggleActive = async (ship: Ship) => {
     await updateShip(ship.id, { is_active: !(ship.is_active !== false) });
     await loadData();
+    window.dispatchEvent(new CustomEvent('ship-data-changed'));
   };
 
   const handleBulkDelete = async () => {
     if (selectedShipIds.length === 0) return;
-    
+
     const shipNames = ships
       .filter(ship => selectedShipIds.includes(ship.id))
       .map(ship => ship.name)
       .join(', ');
-    
+
     if (confirm(msg.ship.deleteConfirm(selectedShipIds.length, shipNames))) {
       try {
         await Promise.all(selectedShipIds.map(id => deleteShip(id)));
         await loadData();
         setSelectedShipIds([]);
+        window.dispatchEvent(new CustomEvent('ship-data-changed'));
       } catch (error) {
         console.error('Error deleting ships:', error);
         alert('선박 삭제 중 오류가 발생했습니다.');
@@ -429,13 +470,13 @@ export default function ShipManagementPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-center">
-                {formView !== null ? (
+                {isFormMode ? (
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setFormView(null); resetForm(); }}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => closeTab(activeTabId!)}>
                       <ArrowLeft className="w-4 h-4" />
                     </Button>
                     <div>
-                      <CardTitle className="text-base">{editingShip ? '선박 정보 수정' : '선박 등록'}</CardTitle>
+                      <CardTitle className="text-base">{editId ? '선박 정보 수정' : '선박 등록'}</CardTitle>
                       <p className="text-xs text-gray-500 mt-0.5">선박의 상세 정보를 입력하세요</p>
                     </div>
                   </div>
@@ -462,7 +503,7 @@ export default function ShipManagementPage() {
                         <Button
                           size="sm"
                           className="gap-1.5 h-8"
-                          onClick={() => { resetForm(); setFormView({}); }}
+                          onClick={() => openNewTab('/ships?mode=new', '선박 등록', true)}
                         >
                           <Plus className="w-4 h-4" />
                           선박 등록
@@ -474,28 +515,21 @@ export default function ShipManagementPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
-              {formView !== null ? (
+              {isFormMode ? (
                 <ShipDialog
                   formData={formData}
                   onFormDataChange={setFormData}
                   onSubmit={handleSubmit}
-                  isEditing={!!editingShip}
+                  isEditing={!!editId}
                   companies={companies}
-                  shipId={editingShip || undefined}
-                  salaryTemplate={editingShip ? shipTemplateMap[editingShip] ?? null : null}
-                  onClose={() => { setFormView(null); resetForm(); }}
+                  shipId={editId || undefined}
+                  salaryTemplate={editId ? shipTemplateMap[editId] ?? null : null}
+                  onClose={() => closeTab(activeTabId!)}
                 />
               ) : (
               <>{/* Search and Filters */}
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  <Input
-                    placeholder="선명 또는 IMO로 검색..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="max-w-xs h-9 text-sm"
-                  />
-                  
                   {currentUser.role === 'ship_manager' && (
                     <Select 
                       value={selectedOwner} 
@@ -613,19 +647,53 @@ export default function ShipManagementPage() {
                 </div>
               </div>
 
-              <ShipTree
-                ships={filteredShips}
-                companies={companies}
-                fleets={fleets}
-                shipTemplateMap={shipTemplateMap}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onToggleActive={permissions.canEdit ? handleToggleActive : undefined}
-                canEdit={permissions.canEdit}
-                canDelete={permissions.canDelete}
-                selectedShips={selectedShipIds}
-                onSelectionChange={setSelectedShipIds}
-              />
+              <Tabs value={viewMode} onValueChange={v => setViewMode(v as 'grid' | 'tree')}>
+                <TabsList className="h-9 gap-1">
+                  <TabsTrigger value="grid" className="text-xs h-8 gap-1.5">
+                    <LayoutGrid className="w-3.5 h-3.5" />그리드
+                  </TabsTrigger>
+                  <TabsTrigger value="tree" className="text-xs h-8 gap-1.5">
+                    <ListTree className="w-3.5 h-3.5" />트리구조
+                  </TabsTrigger>
+                </TabsList>
+
+                <Input
+                  placeholder={viewMode === 'grid' ? '선명, IMO, 선주사, 플릿으로 검색...' : '선명, 선주사로 검색...'}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="max-w-xs h-9 text-sm mt-2"
+                />
+
+                <TabsContent value="grid" className="mt-3">
+                  <ShipListGridView
+                    ships={filteredShips}
+                    companies={companies}
+                    fleets={fleets}
+                    shipTemplateMap={shipTemplateMap}
+                    onboardCounts={onboardCounts}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onToggleActive={permissions.canEdit ? handleToggleActive : undefined}
+                    canEdit={permissions.canEdit}
+                    canDelete={permissions.canDelete}
+                    selectedShips={selectedShipIds}
+                    onSelectionChange={setSelectedShipIds}
+                  />
+                </TabsContent>
+                <TabsContent value="tree" className="mt-3">
+                  <ShipListTreeView
+                    ships={filteredShips}
+                    companies={companies}
+                    fleets={fleets}
+                    onboardCounts={onboardCounts}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onToggleActive={permissions.canEdit ? handleToggleActive : undefined}
+                    canEdit={permissions.canEdit}
+                    canDelete={permissions.canDelete}
+                  />
+                </TabsContent>
+              </Tabs>
               </>
               )}
             </CardContent>

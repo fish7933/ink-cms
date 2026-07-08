@@ -18,6 +18,7 @@ import type { ShipFlag } from '@/types/ship-flag';
 import type { SalaryTemplate } from '@/lib/salary-store';
 import SalaryTemplateViewDialog from '@/components/salary/SalaryTemplateViewDialog';
 import { ShipPersonnelTab } from './ShipPersonnelTab';
+import ShipCrewRosterTab from './ShipCrewRosterTab';
 
 interface ShipFormData {
   name: string;
@@ -263,11 +264,12 @@ export default function ShipDialog({
   return (
     <form onSubmit={handleSubmit}>
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 h-9">
+            <TabsList className="grid w-full grid-cols-5 h-9">
               <TabsTrigger value="basic" className="text-xs">기본 정보</TabsTrigger>
               <TabsTrigger value="technical" className="text-xs">기술 정보</TabsTrigger>
               <TabsTrigger value="capacity" className="text-xs">용량</TabsTrigger>
               <TabsTrigger value="personnel" className="text-xs">담당자</TabsTrigger>
+              <TabsTrigger value="roster" className="text-xs">승선 현황</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-3 mt-3">
@@ -739,6 +741,10 @@ export default function ShipDialog({
                 ownerId={formData.owner_id}
                 fleetId={formData.fleet_id}
               />
+            </TabsContent>
+
+            <TabsContent value="roster" className="mt-3">
+              <ShipCrewRosterTab shipId={shipId} shipName={formData.name} imoNumber={formData.imo_number} callSign={formData.call_sign} flag={formData.flag} />
             </TabsContent>
           </Tabs>
 
