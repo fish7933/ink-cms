@@ -23,6 +23,7 @@ import { getShipTypes } from '@/services/ship-classification.service';
 import { getActiveShipFlags } from '@/services/ship-flag.service';
 import { getSignOffReasons } from '@/services/sign-off-reason.service';
 import { loadShipSalaryRankMaps, getRankOptionsForShip, getGradeOptionsForShipRank, type ShipSalaryRankMaps } from '@/services/ship-salary-rank.service';
+import { getCompanyInfo } from '@/services/company-info.service';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { RANK_GRADE_LABELS } from '@/types/dispatch';
@@ -97,7 +98,8 @@ export default function SeaServiceDialog({
       supabase.from('companies').select('id, name, company_type'),
       supabase.from('crew_members').select('manning_agency_id').eq('id', crewId).single(),
       loadShipSalaryRankMaps(),
-    ]).then(([types, flags, ranksRes, reasons, shipsRes, companiesRes, crewRes, salaryMaps]) => {
+      getCompanyInfo(),
+    ]).then(([types, flags, ranksRes, reasons, shipsRes, companiesRes, crewRes, salaryMaps, companyInfo]) => {
       setShipTypes(types);
       setShipFlags(flags);
       setRanks(sortRanksByDisplayOrder(ranksRes.data || []));
@@ -105,8 +107,7 @@ export default function SeaServiceDialog({
       setRegisteredShips(shipsRes.data || []);
       const cMap = new Map((companiesRes.data || []).map((c: { id: string; name: string }) => [c.id, c.name]));
       setCompaniesMap(cMap);
-      const mgmtCompany = (companiesRes.data || []).find((c: { company_type?: string }) => c.company_type === '선박관리사');
-      setShipManagerCompanyName(mgmtCompany?.name || '');
+      setShipManagerCompanyName(companyInfo?.name || '');
       const manningId = (crewRes.data as { manning_agency_id?: string } | null)?.manning_agency_id;
       setCrewManningAgencyName(manningId ? (cMap.get(manningId) || '') : '');
       setSalaryRankMaps(salaryMaps);
@@ -248,7 +249,11 @@ export default function SeaServiceDialog({
               <Select
                 value={formData.record_type}
                 onValueChange={(value: 'pre_company' | 'company_assignment') =>
-                  setFormData({ ...formData, record_type: value })
+                  setFormData(prev => ({
+                    ...prev,
+                    record_type: value,
+                    ship_manager_name: value === 'company_assignment' ? (shipManagerCompanyName || prev.ship_manager_name) : prev.ship_manager_name,
+                  }))
                 }
                 required
               >
@@ -281,7 +286,8 @@ export default function SeaServiceDialog({
                   value={formData.ship_manager_name}
                   onChange={(e) => setFormData({ ...formData, ship_manager_name: e.target.value })}
                   placeholder="선박관리사명"
-                  className="h-9 text-sm"
+                  readOnly={isCompanyAssignment}
+                  className={`h-9 text-sm ${isCompanyAssignment ? 'bg-gray-100' : ''}`}
                 />
               </div>
               <div className="space-y-1.5">

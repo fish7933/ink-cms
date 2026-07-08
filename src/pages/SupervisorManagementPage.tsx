@@ -207,7 +207,8 @@ export default function SupervisorManagementPage() {
           <Card><CardContent className="py-12 text-center text-sm text-gray-400">등록된 선주사가 없습니다</CardContent></Card>
         ) : owners.map(owner => {
           const ownerFleets = fleets.filter(f => f.owner_id === owner.id);
-          const ownerShips = ships.filter(s => s.owner_id === owner.id && !s.fleet_id);
+          // fleet_id가 존재하지 않는(삭제된) 플릿을 가리키는 고아 참조인 경우도 선주 직속 선박으로 취급
+          const ownerShips = ships.filter(s => s.owner_id === owner.id && (!s.fleet_id || !fleets.some(f => f.id === s.fleet_id)));
           return (
             <Card key={owner.id}>
               <CardHeader className="pb-2">

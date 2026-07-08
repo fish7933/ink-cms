@@ -9,13 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import type { Company } from '@/types/models';
+import { getCurrentUser } from '@/lib/store';
+import { supervisorService } from '@/services/supervisor.service';
+import type { Company, User } from '@/types/models';
 
 interface Fleet { id: string; owner_id: string; name: string; description?: string; created_at: string; }
 interface FleetWithOwner extends Fleet { owner_name: string; ship_count: number; }
 
 export default function FleetManagementPage() {
   const { toast } = useToast();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [owners, setOwners] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<FleetWithOwner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,20 +27,42 @@ export default function FleetManagementPage() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ owner_id: '', name: '', description: '' });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    (async () => {
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      await loadData(user);
+    })();
+  }, []);
 
-  const loadData = async () => {
+  const loadData = async (user?: User | null) => {
     try {
       setLoading(true);
+      const u = user ?? currentUser;
       const [ownersRes, fleetsRes, shipsRes] = await Promise.all([
         supabase.from('companies').select('*').eq('type', 'owner').order('name'),
         supabase.from('fleets').select('*, companies:owner_id(name)').order('name'),
         supabase.from('ships').select('id, fleet_id').not('fleet_id', 'is', null),
       ]);
-      if (ownersRes.data) setOwners(ownersRes.data);
+      let ownersData = ownersRes.data || [];
+      let fleetsData = fleetsRes.data || [];
+
+      // 선박관리사(ship_manager)는 본인이 담당하는 선주사/플릿만 보이도록 제한 (관리자/시스템관리자는 전체 노출)
+      if (u?.role === 'ship_manager') {
+        const [supervisedOwnerIds, supervisedFleetIds] = await Promise.all([
+          supervisorService.getSupervisedOwners(u.id),
+          supervisorService.getSupervisedFleets(u.id),
+        ]);
+        const ownerIdSet = new Set(supervisedOwnerIds);
+        const fleetIdSet = new Set(supervisedFleetIds);
+        ownersData = ownersData.filter(o => ownerIdSet.has(o.id));
+        fleetsData = fleetsData.filter(f => fleetIdSet.has(f.id));
+      }
+
+      setOwners(ownersData);
       const shipCounts: Record<string, number> = {};
       (shipsRes.data || []).forEach((s: { fleet_id?: string }) => { if (s.fleet_id) shipCounts[s.fleet_id] = (shipCounts[s.fleet_id] || 0) + 1; });
-      setFleets((fleetsRes.data || []).map((f: Record<string, unknown>) => {
+      setFleets(fleetsData.map((f: Record<string, unknown>) => {
         const company = f.companies as Record<string, unknown> | null;
         return { ...f, owner_name: (company?.name as string) || '', ship_count: shipCounts[f.id as string] || 0 } as FleetWithOwner;
       }));

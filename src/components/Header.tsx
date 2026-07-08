@@ -17,6 +17,7 @@ import { defaultMenuStructure } from '@/lib/default-menu';
 import { getIconComponent } from '@/lib/icon-utils';
 import type { MenuCategory } from '@/types/menu';
 import { useTabContext } from '@/contexts/TabContext';
+import { getCompanyInfo } from '@/services/company-info.service';
 
 interface HeaderProps {
   selectedCategoryId?: string | null;
@@ -29,6 +30,7 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
+  const [logoUrl, setLogoUrl] = useState('');
 
   useEffect(() => {
     const loadUser = async () => {
@@ -37,7 +39,21 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
       setLoading(false);
     };
     loadUser();
+
+    const loadLogo = async () => {
+      try {
+        const info = await getCompanyInfo();
+        setLogoUrl(info?.logo_url || '');
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    loadLogo();
+    window.addEventListener('company-info-changed', loadLogo);
+    return () => window.removeEventListener('company-info-changed', loadLogo);
   }, []);
+
+  const goHome = () => openTab('/dashboard', '대시보드');
 
   const handleLogout = async () => {
     try {
@@ -79,7 +95,11 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
     return (
       <header className="bg-white border-b h-14 flex items-center px-6 shadow-sm shrink-0">
         <div className="flex items-center gap-2">
-          <Ship className="h-5 w-5 text-blue-600" />
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="h-6 w-6 object-contain rounded" />
+          ) : (
+            <Ship className="h-5 w-5 text-blue-600" />
+          )}
           <span className="text-lg font-bold text-gray-900">선원 관리 시스템</span>
         </div>
       </header>
@@ -89,10 +109,18 @@ export default function Header({ selectedCategoryId, onCategorySelect }: HeaderP
   return (
     <header className="bg-white border-b h-14 flex items-center px-4 shadow-sm shrink-0 gap-2">
       {/* 로고 */}
-      <div className="flex items-center gap-2 mr-4 shrink-0">
-        <Ship className="h-5 w-5 text-blue-600" />
+      <button
+        type="button"
+        onClick={goHome}
+        className="flex items-center gap-2 mr-4 shrink-0 hover:opacity-75 transition-opacity"
+      >
+        {logoUrl ? (
+          <img src={logoUrl} alt="" className="h-6 w-6 object-contain rounded" />
+        ) : (
+          <Ship className="h-5 w-5 text-blue-600" />
+        )}
         <span className="text-base font-bold text-gray-900 whitespace-nowrap">선원 관리 시스템</span>
-      </div>
+      </button>
 
       {/* 카테고리 버튼들 - 클릭 시 좌측 사이드바 즉시 변경 */}
       <nav className="flex items-center gap-1 flex-1 overflow-x-auto">

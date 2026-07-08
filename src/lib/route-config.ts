@@ -40,6 +40,7 @@ const MyDocumentsPage = lazy(() => import('@/pages/MyDocumentsPage'));
 const PortManagementPage = lazy(() => import('@/pages/PortManagementPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const CompanyManagementPage = lazy(() => import('@/pages/CompanyManagementPage'));
+const CompanyInfoPage = lazy(() => import('@/pages/CompanyInfoPage'));
 const UserGroupManagementPage = lazy(() => import('@/pages/UserGroupManagementPage'));
 const ManagerAssignmentPage = lazy(() => import('@/pages/ManagerAssignmentPage'));
 const NationalityManagementPage = lazy(() => import('@/pages/NationalityManagementPage'));
@@ -104,6 +105,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/ports', component: PortManagementPage },
   { path: '/profile', component: ProfilePage },
   { path: '/companies', component: CompanyManagementPage },
+  { path: '/company-info', component: CompanyInfoPage },
   { path: '/user-groups', component: UserGroupManagementPage },
   { path: '/manager-assignments', component: ManagerAssignmentPage },
   { path: '/nationalities', component: NationalityManagementPage },

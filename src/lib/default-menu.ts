@@ -315,12 +315,21 @@ export const defaultMenuStructure: MenuCategory[] = [
     is_active: true,
     items: [
       {
+        id: 'company-info',
+        label: '회사 정보 관리',
+        path: '/company-info',
+        icon: 'Building',
+        roles: ['ship_manager'],
+        order: 1,
+        is_active: true,
+      },
+      {
         id: 'companies-owner',
         label: '선주사 관리',
         path: '/companies?type=owner',
         icon: 'Building2',
         roles: ['ship_manager'],
-        order: 1,
+        order: 2,
         is_active: true,
       },
       {
@@ -329,7 +338,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/companies?type=manning',
         icon: 'Users',
         roles: ['ship_manager'],
-        order: 2,
+        order: 3,
         is_active: true,
       },
       {
@@ -338,7 +347,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/user-groups',
         icon: 'UserCog',
         roles: ['ship_manager'],
-        order: 3,
+        order: 4,
         is_active: true,
       },
       {
@@ -347,7 +356,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/manager-assignments',
         icon: 'UserCheck',
         roles: ['ship_manager'],
-        order: 4,
+        order: 5,
         is_active: true,
       },
       {
@@ -356,7 +365,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/supervisor-management',
         icon: 'UserCheck',
         roles: ['ship_manager'],
-        order: 5,
+        order: 6,
         is_active: true,
       },
       {
@@ -365,7 +374,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/shore-positions',
         icon: 'Briefcase',
         roles: ['ship_manager'],
-        order: 6,
+        order: 7,
         is_active: true,
       },
       {
@@ -374,7 +383,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/org-chart',
         icon: 'Network',
         roles: ['ship_manager'],
-        order: 7,
+        order: 8,
         is_active: true,
       },
       {
@@ -383,7 +392,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/approval-lines',
         icon: 'CheckSquare',
         roles: ['ship_manager'],
-        order: 8,
+        order: 9,
         is_active: true,
       },
       {
@@ -392,7 +401,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/document-types',
         icon: 'ClipboardList',
         roles: ['ship_manager'],
-        order: 9,
+        order: 10,
         is_active: true,
       },
       {
@@ -401,7 +410,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/permissions',
         icon: 'Shield',
         roles: ['ship_manager'],
-        order: 10,
+        order: 11,
         is_active: true,
       },
       {
@@ -410,7 +419,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/menu-configuration',
         icon: 'Layout',
         roles: ['ship_manager'],
-        order: 11,
+        order: 12,
         is_active: true,
       },
     ],

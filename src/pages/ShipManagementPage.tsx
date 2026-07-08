@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { msg } from '@/lib/messages';
 import { getCurrentUser, getShips, getCompanies, getFleets, addShip, updateShip, deleteShip } from '@/lib/store';
+import { supervisorService } from '@/services/supervisor.service';
 import type { User, Ship, Company, Fleet } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ export default function ShipManagementPage() {
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [shipTemplateMap, setShipTemplateMap] = useState<Record<string, SalaryTemplate | null>>({});
   const [loading, setLoading] = useState(true);
+  const [supervisedShipIds, setSupervisedShipIds] = useState<Set<string> | null>(null);
 
   const permissions = usePermissions('ships');
 
@@ -87,7 +89,13 @@ export default function ShipManagementPage() {
         if (user.role === 'ship_owner' && user.company_id) {
           setSelectedOwner(user.company_id);
         }
-        
+
+        // 선박관리사(ship_manager)는 본인이 담당하는 선박만 보이도록 제한 (관리자/시스템관리자는 전체 노출)
+        if (user.role === 'ship_manager') {
+          const shipIds = await supervisorService.getSupervisedShips(user.id);
+          setSupervisedShipIds(new Set(shipIds));
+        }
+
         await loadData();
       } catch (error) {
         console.error('Error loading user:', error);
@@ -117,26 +125,35 @@ export default function ShipManagementPage() {
     }
   };
 
+  // 선박관리사(ship_manager)는 본인이 담당하는 선박으로만 범위를 제한 (관리자/시스템관리자는 제한 없음)
+  const scopedShips = useMemo(() => {
+    if (currentUser?.role === 'ship_manager' && supervisedShipIds) {
+      return ships.filter(ship => supervisedShipIds.has(ship.id));
+    }
+    return ships;
+  }, [ships, currentUser, supervisedShipIds]);
+
   // Get owner companies that actually have ships, plus "no owner" option if applicable
   const availableOwnerCompanies = useMemo(() => {
-    const ownerIds = new Set(ships.map(ship => ship.owner_id).filter(Boolean));
-    const hasShipsWithoutOwner = ships.some(ship => !ship.owner_id);
-    
+    const ownerIds = new Set(scopedShips.map(ship => ship.owner_id).filter(Boolean));
+    const hasShipsWithoutOwner = scopedShips.some(ship => !ship.owner_id);
+
     const ownersWithShips = companies.filter(c => c.type === 'owner' && ownerIds.has(c.id));
-    
+
     return {
       companies: ownersWithShips,
       hasNoOwner: hasShipsWithoutOwner
     };
-  }, [companies, ships]);
-  
+  }, [companies, scopedShips]);
+
   // Get fleets for selected owner - only show when specific owner is selected
   const availableFleets = useMemo(() => {
     if (selectedOwner === 'all' || selectedOwner === 'none') {
       return [];
     }
-    return fleets.filter(f => f.owner_id === selectedOwner);
-  }, [fleets, selectedOwner]);
+    const fleetIdsInScope = new Set(scopedShips.map(s => s.fleet_id).filter(Boolean));
+    return fleets.filter(f => f.owner_id === selectedOwner && (currentUser?.role !== 'ship_manager' || fleetIdsInScope.has(f.id)));
+  }, [fleets, selectedOwner, scopedShips, currentUser]);
 
   // Get unique ship types from ALL ships (not filtered) - this keeps all types visible
   const availableShipTypes = useMemo(() => {
@@ -158,12 +175,12 @@ export default function ShipManagementPage() {
 
   // Use useMemo to prevent infinite loop
   const filteredShips = useMemo(() => {
-    return ships.filter(ship => {
+    return scopedShips.filter(ship => {
       // Role-based filtering
       if (currentUser && currentUser.role === 'ship_owner' && ship.owner_id !== currentUser.company_id) {
         return false;
       }
-      
+
       // Search term filtering
       const matchesSearch = ship.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
              (ship.imo_number && ship.imo_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -198,7 +215,7 @@ export default function ShipManagementPage() {
 
       return true;
     });
-  }, [ships, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus]);
+  }, [scopedShips, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus]);
 
   // Clear selection when filters change
   useEffect(() => {
