@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { msg } from '@/lib/messages';
-import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, ArrowLeft, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,7 @@ import { useTabContext } from '@/contexts/TabContext';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { getCompanies, getFleets, getShips, getCurrentUser } from '@/lib/store';
-import type { JobPostingGroupWithDetails, Company, Fleet, Ship, User, CrewRecommendationWithDetails } from '@/types/models';
+import type { JobPostingGroupWithDetails, Company, Fleet, Ship, User } from '@/types/models';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -44,15 +44,7 @@ export default function JobPostingsPage() {
   const [ships, setShips] = useState<Ship[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedPosting, setSelectedPosting] = useState<JobPostingGroupWithDetails | null>(null);
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
-
-  // View mode: 'list' shows the table, 'recommendations' shows inline recommendations panel
-  const [viewMode, setViewMode] = useState<'list' | 'recommendations'>('list');
-
-  // Crew recommendations (inline panel)
-  const [selectedPostingRecommendations, setSelectedPostingRecommendations] = useState<CrewRecommendationWithDetails[]>([]);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -301,65 +293,8 @@ export default function JobPostingsPage() {
     openNewTab(`/job-postings/${posting.id}/edit`, `공고 수정: ${posting.ship_name}`);
   };
 
-  const handleViewRecommendations = async (posting: JobPostingGroupWithDetails) => {
-    try {
-      setSelectedPosting(posting);
-      setLoadingRecommendations(true);
-      setViewMode('recommendations');
-
-      let recommendations: CrewRecommendationWithDetails[];
-      if (currentUser?.role === 'manning_agency' && currentUser.company_id) {
-        // For manning agencies, show only their own recommendations
-        recommendations = await crewRecommendationService.getByJobPostingGroupAndAgency(
-          posting.id,
-          currentUser.company_id
-        );
-      } else {
-        // For ship managers/owners, show all recommendations
-        recommendations = await crewRecommendationService.getByJobPostingGroup(posting.id);
-      }
-
-      setSelectedPostingRecommendations(recommendations);
-    } catch (error) {
-      console.error('Failed to load recommendations:', error);
-      alert('선원 추천 목록을 불러오는데 실패했습니다.');
-    } finally {
-      setLoadingRecommendations(false);
-    }
-  };
-
-  const handleBackToList = () => {
-    setViewMode('list');
-    setSelectedPosting(null);
-    setSelectedPostingRecommendations([]);
-  };
-
-  // 선원 추천 현황: 헤더 클릭으로 직급/출국가능일/매닝사 정렬 (기본은 직급순 — 정렬만으로 직급별로 묶여 보임)
-  type RecommendationSortField = 'rank' | 'available_date' | 'manning_agency';
-  const [recSortField, setRecSortField] = useState<RecommendationSortField>('rank');
-  const [recSortDirection, setRecSortDirection] = useState<'asc' | 'desc'>('asc');
-
-  const handleRecommendationSort = (field: RecommendationSortField) => {
-    if (recSortField === field) {
-      setRecSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setRecSortField(field);
-      setRecSortDirection('asc');
-    }
-  };
-
-  const sortedRecommendations = useMemo(() => {
-    const dir = recSortDirection === 'asc' ? 1 : -1;
-    return [...selectedPostingRecommendations].sort((a, b) => {
-      if (recSortField === 'available_date') return dir * a.available_date.localeCompare(b.available_date);
-      if (recSortField === 'manning_agency') return dir * a.manning_agency_name.localeCompare(b.manning_agency_name, 'ko');
-      return dir * a.rank_code.localeCompare(b.rank_code);
-    });
-  }, [selectedPostingRecommendations, recSortField, recSortDirection]);
-
-  const RecommendationSortIcon = ({ field }: { field: RecommendationSortField }) => {
-    if (recSortField !== field) return <ArrowUpDown className="w-3 h-3 opacity-30" />;
-    return recSortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+  const handleViewRecommendations = (posting: JobPostingGroupWithDetails) => {
+    openNewTab(`/job-postings/${posting.id}/recommendations`, `선원 추천 현황: ${posting.ship_name}`);
   };
 
   const handleDelete = async (id: string) => {
@@ -418,21 +353,6 @@ export default function JobPostingsPage() {
     return msg.jobPosting.multipleAgencies(manningCompanies[0].name, manningCompanies.length - 1);
   };
 
-  const getRecommendationStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="secondary" className="text-xs">검토대기</Badge>;
-      case 'reviewed':
-        return <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">검토완료</Badge>;
-      case 'accepted':
-        return <Badge variant="default" className="text-xs bg-green-600">수락</Badge>;
-      case 'rejected':
-        return <Badge variant="destructive" className="text-xs">거절</Badge>;
-      default:
-        return null;
-    }
-  };
-
   const departmentColors = {
     deck: 'bg-blue-100 text-blue-700 border-blue-300',
     engine: 'bg-green-100 text-green-700 border-green-300',
@@ -470,8 +390,6 @@ export default function JobPostingsPage() {
   return (
     <>
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        {viewMode === 'list' && (
-          <>
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h1 className="text-2xl font-bold">
@@ -802,114 +720,6 @@ export default function JobPostingsPage() {
                 </Pagination>
               </div>
             )}
-          </>
-        )}
-
-        {viewMode === 'recommendations' && (
-          <>
-            {/* Recommendations inline header */}
-            <div className="flex items-center gap-3 mb-4">
-              <Button variant="ghost" size="sm" onClick={handleBackToList} className="h-8 px-2">
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                목록
-              </Button>
-              <h1 className="text-2xl font-bold">
-                {isManningOrCrew ? '내 회사 선원 추천 현황' : '선원 추천 현황'} - {selectedPosting?.ship_name}
-              </h1>
-            </div>
-
-            {/* Recommendations inline panel */}
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              {loadingRecommendations ? (
-                <div className="py-12 text-center text-muted-foreground">
-                  로딩 중...
-                </div>
-              ) : selectedPostingRecommendations.length === 0 ? (
-                <div className="py-12 text-center text-muted-foreground">
-                  {isManningOrCrew ? '아직 추천한 선원이 없습니다.' : '아직 받은 선원 추천이 없습니다.'}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap cursor-pointer select-none" onClick={() => handleRecommendationSort('rank')}>
-                          <span className="flex items-center gap-1">직급<RecommendationSortIcon field="rank" /></span>
-                        </TableHead>
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">이름</TableHead>
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">생년월일</TableHead>
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap cursor-pointer select-none" onClick={() => handleRecommendationSort('available_date')}>
-                          <span className="flex items-center gap-1">출국가능일<RecommendationSortIcon field="available_date" /></span>
-                        </TableHead>
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">희망급여</TableHead>
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">계약기간</TableHead>
-                        {!isManningOrCrew && (
-                          <TableHead className="text-xs py-1 px-2 whitespace-nowrap cursor-pointer select-none" onClick={() => handleRecommendationSort('manning_agency')}>
-                            <span className="flex items-center gap-1">매닝사<RecommendationSortIcon field="manning_agency" /></span>
-                          </TableHead>
-                        )}
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">추천일</TableHead>
-                        <TableHead className="text-xs py-1 px-2 whitespace-nowrap">상태</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sortedRecommendations.map((rec) => (
-                        <TableRow key={rec.id} className="hover:bg-muted/50">
-                          <TableCell className="py-1 px-2">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs ${getDepartmentColor(rec.department)}`}
-                            >
-                              {rec.rank_code}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs py-1 px-2 whitespace-nowrap font-medium">
-                            {rec.crew_name}
-                          </TableCell>
-                          <TableCell className="text-xs py-1 px-2 whitespace-nowrap">
-                            {new Date(rec.crew_birth_date).toLocaleDateString('ko-KR', {
-                              year: '2-digit',
-                              month: '2-digit',
-                              day: '2-digit',
-                            })}
-                          </TableCell>
-                          <TableCell className="text-xs py-1 px-2 whitespace-nowrap">
-                            {new Date(rec.available_date).toLocaleDateString('ko-KR', {
-                              year: '2-digit',
-                              month: '2-digit',
-                              day: '2-digit',
-                            })}
-                          </TableCell>
-                          <TableCell className="text-xs py-1 px-2 whitespace-nowrap">
-                            {rec.desired_currency} {rec.desired_salary.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-xs py-1 px-2 whitespace-nowrap">
-                            {rec.desired_contract_months}개월
-                          </TableCell>
-                          {!isManningOrCrew && (
-                            <TableCell className="text-xs py-1 px-2 whitespace-nowrap">
-                              {rec.manning_agency_name}
-                            </TableCell>
-                          )}
-                          <TableCell className="text-xs py-1 px-2 whitespace-nowrap">
-                            {new Date(rec.created_at).toLocaleDateString('ko-KR', {
-                              year: '2-digit',
-                              month: '2-digit',
-                              day: '2-digit',
-                            })}
-                          </TableCell>
-                          <TableCell className="py-1 px-2">
-                            {getRecommendationStatusBadge(rec.status)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </div>
-          </>
-        )}
       </div>
     </>
   );
