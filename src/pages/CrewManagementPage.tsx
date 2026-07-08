@@ -92,7 +92,7 @@ export function CrewManagementPage() {
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // 헤더 클릭 정렬
-  type SortField = 'owner' | 'fleet' | 'ship' | 'manning' | 'rank' | 'name' | 'nationality' | 'birth';
+  type SortField = 'owner' | 'fleet' | 'ship' | 'manning' | 'rank' | 'name' | 'nationality' | 'birth' | 'date1' | 'date2';
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -272,6 +272,21 @@ export function CrewManagementPage() {
 
   const rankOrderIndex = useMemo(() => new Map(ranks.map((r, i) => [r.id, i])), [ranks]);
 
+  // 탭(category)별로 실제 화면에 표시되는 승선/하선(예정)일 컬럼 값과 동일한 값을 정렬 기준으로 사용
+  const getDateCol1 = (c: CrewWithDetails) => {
+    if (category === 'registered') return c.recommended_available_date || '';
+    if (category === 'standby') return c.pending_embark_date || '';
+    if (category === 'onboard') return c.latest_embark_date || '';
+    if (category === 'disembarked') return c.latest_disembark_date || '';
+    return c.is_active_onboard ? (c.latest_embark_date || '') : (c.pending_embark_date || c.latest_embark_date || '');
+  };
+  const getDateCol2 = (c: CrewWithDetails) => {
+    if (category === 'standby' || category === 'onboard') return c.disembark_forecast_date || '';
+    if (category === 'disembarked') return c.recommended_available_date || '';
+    if (category === 'all') return c.is_active_onboard ? (c.disembark_forecast_date || '') : (c.latest_disembark_date || '');
+    return '';
+  };
+
   const getSortValue = (c: CrewWithDetails, field: SortField): string | number => {
     switch (field) {
       case 'owner': return effOwnerName(c) || '';
@@ -282,6 +297,8 @@ export function CrewManagementPage() {
       case 'name': return c.name || '';
       case 'nationality': return c.nationality || '';
       case 'birth': return c.date_of_birth || '';
+      case 'date1': return getDateCol1(c);
+      case 'date2': return getDateCol2(c);
     }
   };
 
@@ -592,9 +609,13 @@ export function CrewManagementPage() {
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('birth')}>
                             <span className="flex items-center gap-1">생년월일(나이)<SortIcon field="birth" /></span>
                           </th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">{DATE_COLUMN_LABELS[cat].col1}</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('date1')}>
+                            <span className="flex items-center gap-1">{DATE_COLUMN_LABELS[cat].col1}<SortIcon field="date1" /></span>
+                          </th>
                           {DATE_COLUMN_LABELS[cat].col2 && (
-                            <th className="px-2 py-2 text-left font-medium text-gray-600">{DATE_COLUMN_LABELS[cat].col2}</th>
+                            <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('date2')}>
+                              <span className="flex items-center gap-1">{DATE_COLUMN_LABELS[cat].col2}<SortIcon field="date2" /></span>
+                            </th>
                           )}
                           {cat === 'registered' ? (
                             <>
