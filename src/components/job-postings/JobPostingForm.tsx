@@ -351,14 +351,12 @@ export function JobPostingForm({
                   </Button>
                 </div>
 
-                {/* 선호 국적 선택 */}
-                <div>
-                  <Label className="text-xs text-gray-500 mb-1 block">
-                    선호 국적 <span className="text-gray-400 font-normal">(복수 선택 가능, 미선택 시 국적 무관)</span>
-                  </Label>
-                  <div className="flex flex-wrap gap-1.5">
+                {/* 선호 국적 선택 — 한 줄에 다 들어가도록 세로로 안 늘어나고 가로 스크롤 */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <Label className="text-xs text-gray-500 shrink-0 whitespace-nowrap">선호 국적</Label>
+                  <div className="flex items-center gap-1.5 overflow-x-auto flex-nowrap py-0.5 min-w-0">
                     {nationalities.length === 0 && (
-                      <p className="text-xs text-muted-foreground">등록된 주요 송출국이 없습니다. "선원 국적 관리"에서 등록해주세요.</p>
+                      <p className="text-xs text-muted-foreground whitespace-nowrap">등록된 주요 송출국이 없습니다. "선원 국적 관리"에서 등록해주세요.</p>
                     )}
                     {nationalities.map(nat => {
                       const selected = (detail.preferred_nationalities || []).includes(nat.country_name_ko);
@@ -367,7 +365,7 @@ export function JobPostingForm({
                           key={nat.id}
                           type="button"
                           onClick={() => toggleNationality(detail.rank_id, detail.preferred_nationalities || [], nat.country_name_ko)}
-                          className={`px-2.5 py-1 rounded-md text-xs border transition-colors font-medium ${
+                          className={`shrink-0 px-2.5 py-1 rounded-md text-xs border transition-colors font-medium whitespace-nowrap ${
                             selected
                               ? 'bg-blue-600 text-white border-blue-600'
                               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
