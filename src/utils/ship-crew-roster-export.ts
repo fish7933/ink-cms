@@ -17,37 +17,36 @@ export interface ShipIdentity {
   flag?: string;
 }
 
-// IMO FAL Form 5 (Crew List) 표준 서식에 맞춘 엑셀 내보내기
+// 승선 현황 엑셀 내보내기: 직급/이름/국적/생년월일/선원수첩번호/여권번호/여권 발급일/여권 만료일/승선일/하선(예정)일
 export async function exportShipCrewRosterToExcel(
   ship: ShipIdentity,
   date: string,
   roster: ShipCrewRosterEntry[],
   nationalityLabel?: (code: string) => string
 ): Promise<void> {
-  const header = ['No.', 'Family', 'Given', 'Rank', "Nat'lty", 'DOB', 'POB', 'ID Type', 'ID No.', 'ID Expiry', 'Sign-on', 'Exp. Sign-off'];
+  const header = ['No.', '직급', '이름', '국적', '생년월일', '선원수첩번호', '여권번호', '여권 발급일', '여권 만료일', '승선일', '하선(예정)일'];
   const rows = roster.map((r, i) => [
     i + 1,
-    r.family_name,
-    r.given_names,
     r.rank_grade ? `${r.rank}(${r.rank_grade})` : r.rank,
+    r.crew_name,
     r.nationality ? (nationalityLabel?.(r.nationality) || r.nationality) : '',
     r.date_of_birth || '',
-    r.place_of_birth || '',
-    r.id_document_nature || '',
-    r.id_document_number || '',
-    r.id_document_expiry || '',
+    r.seaman_book_number || '',
+    r.passport_number || '',
+    r.passport_issue_date || '',
+    r.passport_expiry || '',
     r.sign_on_date,
     r.sign_off_date || '',
   ]);
 
   const worksheet = XLSX.utils.aoa_to_sheet([
-    ['CREW LIST (IMO FAL Form 5)'],
-    [`1.1 Name of ship: ${ship.shipName}    1.2 IMO number: ${ship.imoNumber || '-'}    1.3 Call sign: ${ship.callSign || '-'}    4. Flag State: ${ship.flag || '-'}    3. Date: ${date}`],
+    [`${ship.shipName} 승선 현황`],
+    [`IMO: ${ship.imoNumber || '-'}    Call Sign: ${ship.callSign || '-'}    선적: ${ship.flag || '-'}    기준일: ${date}`],
     [],
     header,
     ...rows,
   ]);
-  worksheet['!cols'] = [{ wch: 5 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 12 }];
+  worksheet['!cols'] = [{ wch: 5 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
   worksheet['!merges'] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: header.length - 1 } },
     { s: { r: 1, c: 0 }, e: { r: 1, c: header.length - 1 } },

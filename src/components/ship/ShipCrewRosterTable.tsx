@@ -27,7 +27,7 @@ export default function ShipCrewRosterTable({ roster, nationalityLabel }: ShipCr
           {roster.map((entry, i) => (
             <tr key={entry.record_id} className="border-b">
               <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
-              <td className="px-3 py-2 font-medium">{`${entry.family_name} ${entry.given_names}`.trim()}</td>
+              <td className="px-3 py-2 font-medium">{entry.crew_name}</td>
               <td className="px-3 py-2 text-gray-600">{entry.nationality ? (nationalityLabel?.(entry.nationality) || entry.nationality) : '-'}</td>
               <td className="px-3 py-2 text-gray-600">{entry.rank}{entry.rank_grade ? `(${entry.rank_grade})` : ''}</td>
               <td className="px-3 py-2 text-gray-600">{entry.sign_on_date}</td>

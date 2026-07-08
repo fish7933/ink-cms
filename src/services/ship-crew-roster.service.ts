@@ -1,20 +1,18 @@
 import { supabase } from '@/lib/supabase';
 import { isContractActiveOnDate } from '@/lib/crew-contract-coverage';
 
-// IMO FAL Form 5 (Crew List) 표준 서식에 맞춘 승선 인원 항목
 export interface ShipCrewRosterEntry {
   record_id: string;
   crew_member_id: string;
-  family_name: string;
-  given_names: string;
+  crew_name: string;
   rank: string;
   rank_grade: string | null;
   nationality: string | null;
   date_of_birth: string | null;
-  place_of_birth: string | null;
-  id_document_nature: string | null; // Passport / Seaman's Book
-  id_document_number: string | null;
-  id_document_expiry: string | null;
+  seaman_book_number: string | null;
+  passport_number: string | null;
+  passport_issue_date: string | null;
+  passport_expiry: string | null;
   sign_on_date: string;
   sign_off_date: string | null;
 }
@@ -34,40 +32,14 @@ interface CrewContractRosterRow extends CrewContractRange {
     name: string;
     nationality: string | null;
     date_of_birth: string | null;
-    place_of_birth: string | null;
     passport_number: string | null;
     passport_expiry: string | null;
     seaman_book_flag_number: string | null;
-    seaman_book_flag_expiry: string | null;
     seaman_book_number: string | null;
-    seaman_book_expiry: string | null;
   } | null;
 }
 
-const CREW_ROSTER_SELECT = 'id, crew_member_id, rank, start_date, end_date, terminated_date, status, crew_members(name, nationality, date_of_birth, place_of_birth, passport_number, passport_expiry, seaman_book_flag_number, seaman_book_flag_expiry, seaman_book_number, seaman_book_expiry)';
-
-// 이름을 "성 이름" 두 단어로 단순 분리 (family name / given names 컬럼이 없어 근사치로 사용)
-function splitName(fullName: string): { family: string; given: string } {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length <= 1) return { family: fullName, given: '' };
-  return { family: parts[0], given: parts.slice(1).join(' ') };
-}
-
-// 신분증(여권/선원수첩) 중 국제 항해에 쓰이는 것을 우선해서 하나만 선택
-function pickIdDocument(crew: NonNullable<CrewContractRosterRow['crew_members']>): {
-  nature: string | null; number: string | null; expiry: string | null;
-} {
-  if (crew.seaman_book_flag_number) {
-    return { nature: "Seaman's Book", number: crew.seaman_book_flag_number, expiry: crew.seaman_book_flag_expiry };
-  }
-  if (crew.seaman_book_number) {
-    return { nature: "Seaman's Book", number: crew.seaman_book_number, expiry: crew.seaman_book_expiry };
-  }
-  if (crew.passport_number) {
-    return { nature: 'Passport', number: crew.passport_number, expiry: crew.passport_expiry };
-  }
-  return { nature: null, number: null, expiry: null };
-}
+const CREW_ROSTER_SELECT = 'id, crew_member_id, rank, start_date, end_date, terminated_date, status, crew_members(name, nationality, date_of_birth, passport_number, passport_expiry, seaman_book_flag_number, seaman_book_number)';
 
 // 선박의 전체 승선 계약 기간(날짜 범위)만 가져온다 — 달력에서 어느 날짜에 승선 인원이 있었는지
 // 표시하기 위해 매번 날짜별로 쿼리하지 않고 한 번에 불러와 클라이언트에서 판정한다.
@@ -102,22 +74,18 @@ export async function getShipCrewRoster(shipId: string, date: string): Promise<S
     seenCrew.add(r.crew_member_id);
 
     const crew = r.crew_members;
-    const { family, given } = splitName(crew?.name || '알 수 없음');
-    const idDoc = crew ? pickIdDocument(crew) : { nature: null, number: null, expiry: null };
-
     roster.push({
       record_id: r.id,
       crew_member_id: r.crew_member_id,
-      family_name: family,
-      given_names: given,
+      crew_name: crew?.name || '알 수 없음',
       rank: r.rank,
       rank_grade: null,
       nationality: crew?.nationality || null,
       date_of_birth: crew?.date_of_birth || null,
-      place_of_birth: crew?.place_of_birth || null,
-      id_document_nature: idDoc.nature,
-      id_document_number: idDoc.number,
-      id_document_expiry: idDoc.expiry,
+      seaman_book_number: crew?.seaman_book_flag_number || crew?.seaman_book_number || null,
+      passport_number: crew?.passport_number || null,
+      passport_issue_date: null, // crew_members에 여권 발급일 컬럼이 없어 값 없음
+      passport_expiry: crew?.passport_expiry || null,
       sign_on_date: r.start_date,
       sign_off_date: r.terminated_date || r.end_date,
     });

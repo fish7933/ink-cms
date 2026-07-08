@@ -37,7 +37,7 @@ export default function ShipCrewRosterPrintDialog({ open, onOpenChange, shipName
             print:overflow-visible print:rounded-none print:border-none print:shadow-none"
         >
           <div className="print:hidden sticky top-0 z-10 flex items-center justify-between border-b bg-white px-4 py-3">
-            <DialogPrimitive.Title className="text-sm font-semibold">CREW LIST 인쇄 — {shipName}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="text-sm font-semibold">승선 현황 인쇄 — {shipName}</DialogPrimitive.Title>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -54,18 +54,17 @@ export default function ShipCrewRosterPrintDialog({ open, onOpenChange, shipName
           </div>
           <div className="p-6 print:p-4 space-y-3">
             <div className="text-center">
-              <h2 className="text-lg font-bold tracking-wide">CREW LIST</h2>
-              <p className="text-xs text-gray-500">(IMO FAL Form 5)</p>
+              <h2 className="text-lg font-bold tracking-wide">승선 현황</h2>
             </div>
             <div className="grid grid-cols-4 gap-x-4 gap-y-1 text-xs border rounded-md p-3">
-              <div><span className="text-gray-400">1.1 Name of ship</span><div className="font-medium">{shipName}</div></div>
-              <div><span className="text-gray-400">1.2 IMO number</span><div className="font-medium">{imoNumber || '-'}</div></div>
-              <div><span className="text-gray-400">1.3 Call sign</span><div className="font-medium">{callSign || '-'}</div></div>
-              <div><span className="text-gray-400">4. Flag State of ship</span><div className="font-medium">{flag || '-'}</div></div>
-              <div className="col-span-4"><span className="text-gray-400">3. Date (기준일)</span><div className="font-medium">{date}</div></div>
+              <div><span className="text-gray-400">선박명</span><div className="font-medium">{shipName}</div></div>
+              <div><span className="text-gray-400">IMO 번호</span><div className="font-medium">{imoNumber || '-'}</div></div>
+              <div><span className="text-gray-400">콜사인</span><div className="font-medium">{callSign || '-'}</div></div>
+              <div><span className="text-gray-400">선적</span><div className="font-medium">{flag || '-'}</div></div>
+              <div className="col-span-4"><span className="text-gray-400">기준일</span><div className="font-medium">{date}</div></div>
             </div>
             <ShipCrewListTable roster={roster} nationalityLabel={nationalityLabel} />
-            <div className="pt-6 text-xs text-gray-500">18. Date and signature by master, authorized agent or officer</div>
+            <div className="pt-6 text-xs text-gray-500">작성일 및 서명 (선장/대리인)</div>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
