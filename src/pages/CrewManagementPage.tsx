@@ -4,6 +4,7 @@ import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
   ArrowUpCircle, Ship, Users, UserCheck, UserMinus, LayoutList,
   AlertTriangle, CheckCircle, XCircle, RefreshCw,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
@@ -90,8 +91,13 @@ export function CrewManagementPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
+  // 헤더 클릭 정렬
+  type SortField = 'owner' | 'fleet' | 'ship' | 'manning' | 'rank' | 'name' | 'nationality' | 'birth';
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
   useEffect(() => { loadData(); }, []);
-  useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality]);
+  useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality, sortField, sortDirection]); // eslint-disable-line react-hooks/exhaustive-deps
   // 선주사가 바뀌면 하위(플릿/선박) 선택은 더 이상 유효하지 않을 수 있어 초기화
   useEffect(() => { if (filterOwner === 'all') setFilterFleet('all'); }, [filterOwner]);
   useEffect(() => { if (filterFleet === 'all' && filterOwner === 'all') setFilterShip('all'); }, [filterFleet, filterOwner]);
@@ -255,8 +261,48 @@ export function CrewManagementPage() {
     return crew.filter(c => matchesCategory(c, cat)).length;
   };
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const rankOrderIndex = useMemo(() => new Map(ranks.map((r, i) => [r.id, i])), [ranks]);
+
+  const getSortValue = (c: CrewWithDetails, field: SortField): string | number => {
+    switch (field) {
+      case 'owner': return effOwnerName(c) || '';
+      case 'fleet': return effFleetName(c) || '';
+      case 'ship': return effShipName(c) || '';
+      case 'manning': return (c as CrewWithDetails & { manning_agency_name?: string }).manning_agency_name || '';
+      case 'rank': return rankOrderIndex.get(effRankId(c) || '') ?? 999;
+      case 'name': return c.name || '';
+      case 'nationality': return c.nationality || '';
+      case 'birth': return c.date_of_birth || '';
+    }
+  };
+
+  const sorted = useMemo(() => {
+    if (!sortField) return filtered;
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const va = getSortValue(a, sortField);
+      const vb = getSortValue(b, sortField);
+      if (typeof va === 'number' && typeof vb === 'number') return dir * (va - vb);
+      return dir * String(va).localeCompare(String(vb), 'ko');
+    });
+  }, [filtered, sortField, sortDirection, rankOrderIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="w-3 h-3 opacity-30" />;
+    return sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
+  };
+
+  const totalPages = Math.ceil(sorted.length / itemsPerPage);
+  const paginated = sorted.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const goToPage = (p: number) => setCurrentPage(Math.max(1, Math.min(p, totalPages)));
 
   const toggleSelect = (id: string) =>
@@ -522,14 +568,30 @@ export function CrewManagementPage() {
                             />
                           </th>
                           <th className="w-8 px-2 py-2 text-center font-medium text-gray-400">#</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">선주사</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">플릿</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">선박</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">매닝사</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">직급(등급)</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">이름</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">국적</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">생년월일(나이)</th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('owner')}>
+                            <span className="flex items-center gap-1">선주사<SortIcon field="owner" /></span>
+                          </th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('fleet')}>
+                            <span className="flex items-center gap-1">플릿<SortIcon field="fleet" /></span>
+                          </th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('ship')}>
+                            <span className="flex items-center gap-1">선박<SortIcon field="ship" /></span>
+                          </th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('manning')}>
+                            <span className="flex items-center gap-1">매닝사<SortIcon field="manning" /></span>
+                          </th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('rank')}>
+                            <span className="flex items-center gap-1">직급(등급)<SortIcon field="rank" /></span>
+                          </th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('name')}>
+                            <span className="flex items-center gap-1">이름<SortIcon field="name" /></span>
+                          </th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('nationality')}>
+                            <span className="flex items-center gap-1">국적<SortIcon field="nationality" /></span>
+                          </th>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('birth')}>
+                            <span className="flex items-center gap-1">생년월일(나이)<SortIcon field="birth" /></span>
+                          </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600">{DATE_COLUMN_LABELS[cat].col1}</th>
                           {DATE_COLUMN_LABELS[cat].col2 && (
                             <th className="px-2 py-2 text-left font-medium text-gray-600">{DATE_COLUMN_LABELS[cat].col2}</th>
@@ -552,8 +614,9 @@ export function CrewManagementPage() {
                           <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 16 : 15) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
-                          const natEntry = nationalities.find(n => n.country_code === c.nationality);
-                          const nationalityDisplay = natEntry ? natEntry.country_name_ko : (c.nationality || '-');
+                          // 국적은 코드로 표기 (레거시로 한글 국가명이 그대로 저장된 데이터는 코드로 정규화)
+                          const natEntry = nationalities.find(n => n.country_code === c.nationality || n.country_name_ko === c.nationality);
+                          const nationalityDisplay = natEntry ? natEntry.country_code : (c.nationality || '-');
                           const statusKey = crewExt.status || '';
                           const badge = (cat === 'disembarked' && statusKey === 'standby')
                             ? { label: '휴가중', color: 'bg-sky-100 text-sky-700' }
