@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
@@ -109,6 +110,15 @@ const EMPTY_FORM = {
   sid: '',
 };
 
+function calculateAge(dateOfBirth: string): number {
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+}
+
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
   const { toast } = useToast();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -135,6 +145,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
@@ -451,7 +462,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         <div className="relative">
           {previewUrl ? (
             <div className="relative">
-              <img src={previewUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" />
+              <img
+                src={previewUrl}
+                alt=""
+                className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 cursor-pointer hover:opacity-80"
+                onClick={() => setPhotoModalOpen(true)}
+              />
               <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5">
                 <X className="w-3 h-3" />
               </button>
@@ -472,6 +488,13 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <p className="text-xs text-gray-400 mt-1">JPG, PNG, WEBP · 최대 5MB</p>
         </div>
       </div>
+
+      <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
+        <DialogContent className="max-w-2xl p-2 bg-transparent border-none shadow-none">
+          <DialogTitle className="sr-only">선원 사진</DialogTitle>
+          <img src={previewUrl} alt="" className="w-full h-auto rounded-lg" />
+        </DialogContent>
+      </Dialog>
 
       {/* 탭 */}
       <Tabs defaultValue="basic" onValueChange={scrollToTop}>
@@ -523,7 +546,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label className="text-xs">생년월일</Label><Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1 h-9" /></div>
+            <div>
+              <Label className="text-xs">생년월일{formData.date_of_birth && <span className="text-gray-400 font-normal"> (만 {calculateAge(formData.date_of_birth)}세)</span>}</Label>
+              <Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1 h-9" />
+            </div>
             <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
             <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
           </div>
