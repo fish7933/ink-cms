@@ -75,7 +75,7 @@ export function CrewManagementPage() {
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [category, setCategory] = useState<CategoryTab>('registered');
+  const [category, setCategory] = useState<CategoryTab>('onboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOwner, setFilterOwner] = useState('all');
   const [filterFleet, setFilterFleet] = useState('all');
