@@ -26,8 +26,8 @@ export default function ShipCrewRosterTable({ roster, nationalityLabel }: ShipCr
             <th className="px-2 py-1.5 text-left font-medium text-gray-500">Nature of ID document</th>
             <th className="px-2 py-1.5 text-left font-medium text-gray-500">No. of ID document</th>
             <th className="px-2 py-1.5 text-left font-medium text-gray-500">Expiry of ID document</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">승선일</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">하선일</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Sign-on date</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Expected sign-off date</th>
           </tr>
         </thead>
         <tbody>
@@ -45,7 +45,7 @@ export default function ShipCrewRosterTable({ roster, nationalityLabel }: ShipCr
               <td className="px-2 py-1.5">{entry.id_document_expiry || '-'}</td>
               <td className="px-2 py-1.5">{entry.sign_on_date}</td>
               <td className="px-2 py-1.5">
-                {entry.sign_off_date || <span className="text-blue-600">승선 중</span>}
+                {entry.sign_off_date || <span className="text-blue-600">On board</span>}
               </td>
             </tr>
           ))}
