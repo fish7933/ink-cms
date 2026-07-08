@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek, subMonths } from 'date-fns';
+import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isAfter, isSameDay, isSameMonth, startOfDay, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { getShipContractRanges, type CrewContractRange } from '@/services/ship-crew-roster.service';
 import { isContractActiveOnDate } from '@/lib/crew-contract-coverage';
 
@@ -16,6 +17,7 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate }: ShipRosterCalendarProps) {
   const [ranges, setRanges] = useState<CrewContractRange[]>([]);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date(selectedDate)));
+  const [monthInputOpen, setMonthInputOpen] = useState(false);
 
   useEffect(() => {
     getShipContractRanges(shipId).then(setRanges).catch(console.error);
@@ -27,12 +29,15 @@ export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate 
     return eachDayOfInterval({ start, end });
   }, [viewMonth]);
 
+  const today = startOfDay(new Date());
+
+  // 미래 날짜는 실제로 누가 승선해 있을지 알 수 없으므로(예정 계약일 뿐) 선택도, 표시도 하지 않는다
   const hasOnboard = (day: Date) => {
+    if (isAfter(day, today)) return false;
     const iso = format(day, 'yyyy-MM-dd');
     return ranges.some(r => isContractActiveOnDate(r, iso));
   };
 
-  const today = new Date();
   const selected = new Date(selectedDate);
 
   return (
@@ -41,7 +46,20 @@ export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate 
         <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewMonth(m => subMonths(m, 1))}>
           <ChevronLeft className="w-4 h-4" />
         </Button>
-        <span className="text-sm font-medium">{format(viewMonth, 'yyyy년 M월')}</span>
+        {monthInputOpen ? (
+          <Input
+            type="month"
+            autoFocus
+            value={format(viewMonth, 'yyyy-MM')}
+            onChange={e => { if (e.target.value) setViewMonth(startOfMonth(new Date(`${e.target.value}-01`))); }}
+            onBlur={() => setMonthInputOpen(false)}
+            className="h-7 w-36 text-sm text-center"
+          />
+        ) : (
+          <button type="button" onClick={() => setMonthInputOpen(true)} className="text-sm font-medium hover:bg-gray-100 rounded px-2 py-0.5">
+            {format(viewMonth, 'yyyy년 M월')}
+          </button>
+        )}
         <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewMonth(m => addMonths(m, 1))}>
           <ChevronRight className="w-4 h-4" />
         </Button>
@@ -53,6 +71,7 @@ export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate 
         {days.map(day => {
           const iso = format(day, 'yyyy-MM-dd');
           const inMonth = isSameMonth(day, viewMonth);
+          const isFuture = isAfter(day, today);
           const onboard = hasOnboard(day);
           const isSelected = isSameDay(day, selected);
           const isToday = isSameDay(day, today);
@@ -60,11 +79,12 @@ export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate 
             <button
               type="button"
               key={iso}
+              disabled={isFuture}
               onClick={() => onSelectDate(iso)}
               className={[
                 'h-8 w-8 mx-auto rounded-md text-xs flex items-center justify-center relative',
-                !inMonth ? 'text-gray-300' : 'text-gray-700',
-                isSelected ? 'bg-blue-600 text-white font-semibold' : onboard ? 'bg-blue-100 text-blue-800 font-medium hover:bg-blue-200' : 'hover:bg-gray-100',
+                isFuture ? 'text-gray-200 cursor-not-allowed' : !inMonth ? 'text-gray-300' : 'text-gray-700',
+                !isFuture && isSelected ? 'bg-blue-600 text-white font-semibold' : !isFuture && onboard ? 'bg-blue-100 text-blue-800 font-medium hover:bg-blue-200' : !isFuture ? 'hover:bg-gray-100' : '',
                 isToday && !isSelected ? 'ring-1 ring-blue-400' : '',
               ].join(' ')}
             >
