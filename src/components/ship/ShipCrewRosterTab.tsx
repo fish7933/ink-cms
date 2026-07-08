@@ -47,6 +47,14 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
     return (code: string) => map.get(code) || code;
   }, [nationalities]);
 
+  // Crew List(인쇄/엑셀)는 국적을 한글이 아닌 국가 코드로 표기한다 — 저장값이 코드가 아니라
+  // (구 데이터 등으로) 한글 국가명 그대로인 경우까지 코드로 정규화해준다.
+  const nationalityCode = useMemo(() => {
+    const codes = new Set(nationalities.map(n => n.country_code));
+    const byKoName = new Map(nationalities.map(n => [n.country_name_ko, n.country_code]));
+    return (value: string) => (codes.has(value) ? value : byKoName.get(value) || value);
+  }, [nationalities]);
+
   if (!shipId) {
     return <p className="text-sm text-gray-400 py-8 text-center">선박을 먼저 저장한 후 승선 현황을 확인할 수 있습니다.</p>;
   }
@@ -59,7 +67,7 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
           <ShipRosterCalendar shipId={shipId} selectedDate={date} onSelectDate={setDate} />
         </div>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => exportShipCrewRosterToExcel({ shipName, imoNumber, callSign, flag }, date, roster, nationalityLabel)} disabled={roster.length === 0}>
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => exportShipCrewRosterToExcel({ shipName, imoNumber, callSign, flag }, date, roster, nationalityCode)} disabled={roster.length === 0}>
             <FileSpreadsheet className="w-3.5 h-3.5" />엑셀 저장
           </Button>
           <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setPrintOpen(true)} disabled={roster.length === 0}>
@@ -83,7 +91,7 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
         flag={flag}
         date={date}
         roster={roster}
-        nationalityLabel={nationalityLabel}
+        nationalityLabel={nationalityCode}
       />
     </div>
   );
