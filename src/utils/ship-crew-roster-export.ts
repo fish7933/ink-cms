@@ -24,7 +24,7 @@ export async function exportShipCrewRosterToExcel(
   roster: ShipCrewRosterEntry[],
   nationalityLabel?: (code: string) => string
 ): Promise<void> {
-  const header = ['No.', 'Family name', 'Given names', 'Rank or rating', 'Nationality', 'Date of birth', 'Place of birth', 'Nature of ID document', 'No. of ID document', 'Expiry of ID document', 'Sign-on date', 'Expected sign-off date'];
+  const header = ['No.', 'Family', 'Given', 'Rank', "Nat'lty", 'DOB', 'POB', 'ID Type', 'ID No.', 'ID Expiry', 'Sign-on', 'Exp. Sign-off'];
   const rows = roster.map((r, i) => [
     i + 1,
     r.family_name,

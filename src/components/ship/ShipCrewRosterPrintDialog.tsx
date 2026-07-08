@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X, Printer } from 'lucide-react';
 import type { ShipCrewRosterEntry } from '@/services/ship-crew-roster.service';
-import ShipCrewRosterTable from './ShipCrewRosterTable';
+import ShipCrewListTable from './ShipCrewListTable';
 
 const BODY_PRINT_CLASS = 'ship-roster-print-open';
 
@@ -64,7 +64,7 @@ export default function ShipCrewRosterPrintDialog({ open, onOpenChange, shipName
               <div><span className="text-gray-400">4. Flag State of ship</span><div className="font-medium">{flag || '-'}</div></div>
               <div className="col-span-4"><span className="text-gray-400">3. Date (기준일)</span><div className="font-medium">{date}</div></div>
             </div>
-            <ShipCrewRosterTable roster={roster} nationalityLabel={nationalityLabel} />
+            <ShipCrewListTable roster={roster} nationalityLabel={nationalityLabel} />
             <div className="pt-6 text-xs text-gray-500">18. Date and signature by master, authorized agent or officer</div>
           </div>
         </DialogPrimitive.Content>
