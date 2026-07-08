@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, X, Trash2, ArrowLeft, RefreshCw, LayoutGrid, ListTree } from 'lucide-react';
+import { Plus, X, Trash2, RefreshCw, LayoutGrid, ListTree } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import ShipListGridView from '@/components/ship/ShipListGridView';
 import ShipListTreeView from '@/components/ship/ShipListTreeView';
@@ -472,8 +472,8 @@ export default function ShipManagementPage() {
               <div className="flex justify-between items-center">
                 {isFormMode ? (
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => closeTab(activeTabId!)}>
-                      <ArrowLeft className="w-4 h-4" />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => closeTab(activeTabId!)} title="닫기">
+                      <X className="w-4 h-4" />
                     </Button>
                     <div>
                       <CardTitle className="text-base">{editId ? '선박 정보 수정' : '선박 등록'}</CardTitle>
