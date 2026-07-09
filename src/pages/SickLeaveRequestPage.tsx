@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import LeaveRangeCalendar from '@/components/leave/LeaveRangeCalendar';
 import { getCurrentUser } from '@/lib/store';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
@@ -13,7 +14,8 @@ import {
   getMySickLeaveRequests, addSickLeaveRequest, cancelSickLeaveRequest,
   deleteSickLeaveRequest, linkSickLeaveRequestDocument, getUsedSickLeaveHours,
 } from '@/services/sick-leave.service';
-import { HOURS_PER_DAY, formatLeaveHours } from '@/lib/leave-calc';
+import { formatLeaveHours } from '@/lib/leave-calc';
+import { calculateLeaveHours } from '@/lib/leave-duration';
 import type { OrgUnit } from '@/types/org-chart';
 import type { SickLeaveRequest } from '@/types/sick-leave';
 import type { User } from '@/types/models';
@@ -26,14 +28,6 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: '취소', color: 'bg-gray-100 text-gray-500' },
 };
 
-function daysBetweenInclusive(start: string, end: string): number {
-  if (!start || !end) return 0;
-  const s = new Date(start);
-  const e = new Date(end);
-  const diff = Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
-  return diff > 0 ? diff : 0;
-}
-
 export default function SickLeaveRequestPage() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -44,7 +38,7 @@ export default function SickLeaveRequestPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [form, setForm] = useState({ start_date: '', end_date: '', days: '', hoursExtra: '0', reason: '', ccOrgUnitIds: [] as string[] });
+  const [form, setForm] = useState({ start_date: '', start_time: '09:00', end_date: '', end_time: '18:00', reason: '', ccOrgUnitIds: [] as string[] });
 
   useEffect(() => { loadData(); }, []);
 
@@ -74,16 +68,7 @@ export default function SickLeaveRequestPage() {
     }
   };
 
-  useEffect(() => {
-    const computed = daysBetweenInclusive(form.start_date, form.end_date);
-    if (computed > 0) setForm(prev => ({ ...prev, days: String(computed), hoursExtra: '0' }));
-  }, [form.start_date, form.end_date]);
-
-  const totalHours = (parseFloat(form.days) || 0) * HOURS_PER_DAY + (parseFloat(form.hoursExtra) || 0);
-
-  const handleStartDateChange = (value: string) => {
-    setForm(prev => ({ ...prev, start_date: value, end_date: (!prev.end_date || prev.end_date < value) ? value : prev.end_date }));
-  };
+  const totalHours = calculateLeaveHours(form.start_date, form.start_time, form.end_date, form.end_time);
 
   const toggleCcUnit = (unitId: string) => {
     setForm(prev => ({
@@ -95,8 +80,8 @@ export default function SickLeaveRequestPage() {
   const handleSubmit = async () => {
     if (!currentUser) return;
     if (!myOrgUnitId) { toast({ title: '소속 부서가 조직도에 등록되어 있지 않습니다. 관리자에게 문의하세요.', variant: 'destructive' }); return; }
-    if (!form.start_date || !form.end_date) { toast({ title: '휴가 기간을 입력하세요.', variant: 'destructive' }); return; }
-    if (totalHours <= 0) { toast({ title: '휴가 일수/시간을 확인하세요.', variant: 'destructive' }); return; }
+    if (!form.start_date || !form.end_date) { toast({ title: '달력에서 휴가 기간을 선택하세요.', variant: 'destructive' }); return; }
+    if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
 
     let sickReq: SickLeaveRequest | null = null;
     try {
@@ -127,7 +112,7 @@ export default function SickLeaveRequestPage() {
       await linkSickLeaveRequestDocument(sickReq.id, doc.id);
 
       toast({ title: '질병휴가 신청이 제출되었습니다.' });
-      setForm({ start_date: '', end_date: '', days: '', hoursExtra: '0', reason: '', ccOrgUnitIds: [] });
+      setForm({ start_date: '', start_time: '09:00', end_date: '', end_time: '18:00', reason: '', ccOrgUnitIds: [] });
       await loadData();
     } catch (e) {
       if (sickReq) await deleteSickLeaveRequest(sickReq.id).catch(() => {});
@@ -172,14 +157,31 @@ export default function SickLeaveRequestPage() {
 
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">신청서 작성</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-4 gap-3">
-            <div className="space-y-1.5"><Label className="text-xs">시작일 *</Label><Input type="date" value={form.start_date} onChange={e => handleStartDateChange(e.target.value)} className="h-9 text-sm" disabled={submitting} /></div>
-            <div className="space-y-1.5"><Label className="text-xs">종료일 *</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
-            <div className="space-y-1.5"><Label className="text-xs">일수 *</Label><Input type="number" step="0.5" min="0" value={form.days} onChange={e => setForm({ ...form, days: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
-            <div className="space-y-1.5"><Label className="text-xs">시간</Label><Input type="number" step="0.5" min="0" max="23.5" value={form.hoursExtra} onChange={e => setForm({ ...form, hoursExtra: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <LeaveRangeCalendar
+              startDate={form.start_date}
+              endDate={form.end_date}
+              onChange={(start_date, end_date) => setForm(prev => ({ ...prev, start_date, end_date }))}
+            />
+            <div className="flex-1 space-y-3">
+              <div className="p-3 bg-gray-50 rounded-md text-sm">
+                <p className="text-xs text-gray-500 mb-1">선택된 기간</p>
+                <p className="font-medium">
+                  {form.start_date && form.end_date ? `${form.start_date} ~ ${form.end_date}` : '달력에서 시작일과 종료일을 클릭하세요'}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label className="text-xs">시작 시각</Label><Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
+                <div className="space-y-1.5"><Label className="text-xs">종료 시각</Label><Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-md text-center">
+                <p className="text-xs text-blue-600">자동 계산된 신청 시간</p>
+                <p className="text-xl font-bold text-blue-700">{formatLeaveHours(totalHours)}</p>
+              </div>
+              <p className="text-[11px] text-gray-400">기준 근무시간 09:00~18:00 (점심시간 12:00~13:00 제외, 1일 = 8시간)</p>
+            </div>
           </div>
-          <p className="text-xs text-gray-500">신청 합계: <span className="font-medium text-gray-700">{formatLeaveHours(totalHours)}</span></p>
           <div className="space-y-1.5">
             <Label className="text-xs">사유 (진단명 등)</Label>
             <Textarea value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} rows={2} className="text-sm resize-none" disabled={submitting} />
