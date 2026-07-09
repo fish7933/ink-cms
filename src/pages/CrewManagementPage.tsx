@@ -3,8 +3,8 @@ import { msg } from '@/lib/messages';
 import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
   ArrowUpCircle, Ship, Users, UserCheck, UserMinus, LayoutList,
-  AlertTriangle, CheckCircle, XCircle, RefreshCw,
-  ArrowUp, ArrowDown, ArrowUpDown, Eye,
+  CheckCircle, XCircle, RefreshCw,
+  ArrowUp, ArrowDown, ArrowUpDown, Eye, Star,
 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import type { RegistrationSource } from '@/types/dispatch';
 import { REGISTRATION_SOURCE_LABELS, CREW_CATEGORY_LABELS } from '@/types/dispatch';
 import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
+import { getEvaluations } from '@/services/evaluation.service';
 import { useToast } from '@/hooks/use-toast';
 
 type CategoryTab = 'all' | 'registered' | 'standby' | 'onboard' | 'disembarked';
@@ -56,17 +57,6 @@ const matchesCategory = (c: CrewWithDetails & { status?: string }, cat: Category
   return CATEGORY_STATUS_MAP[cat].includes(st);
 };
 
-const STATUS_BADGE: Record<string, { label: string; color: string }> = {
-  registered:        { label: '등록',      color: 'bg-gray-100 text-gray-700' },
-  under_review:      { label: '검토중',    color: 'bg-blue-100 text-blue-700' },
-  sent_to_owner:     { label: '선주송부',  color: 'bg-purple-100 text-purple-700' },
-  owner_approved:    { label: '선주승인',  color: 'bg-green-100 text-green-700' },
-  owner_rejected:    { label: '선주거절',  color: 'bg-red-100 text-red-700' },
-  deployment_decided:{ label: '승선결정',  color: 'bg-emerald-100 text-emerald-700' },
-  onboard:           { label: '승선중',    color: 'bg-cyan-100 text-cyan-700' },
-  standby:           { label: '대기',      color: 'bg-yellow-100 text-yellow-700' },
-};
-
 export function CrewManagementPage() {
   const { toast } = useToast();
   const { openNewTab } = useTabContext();
@@ -74,6 +64,7 @@ export function CrewManagementPage() {
   const [crew, setCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
+  const [evaluationScores, setEvaluationScores] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [category, setCategory] = useState<CategoryTab>('onboard');
@@ -105,14 +96,23 @@ export function CrewManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [crewData, ranksRes, natData] = await Promise.all([
+      const [crewData, ranksRes, natData, evaluations] = await Promise.all([
         crewService.getAllWithDetails(),
         supabase.from('ranks').select('*'),
         getNationalities(),
+        getEvaluations(),
       ]);
       setCrew(crewData);
       if (ranksRes.data) setRanks(sortRanksByDisplayOrder(ranksRes.data));
       setNationalities(natData);
+
+      // 선원별 최신 고과(overall_rating)만 사용 — getEvaluations()는 최신순 정렬이라 첫 값만 취함
+      const scoreMap = new Map<string, number>();
+      for (const ev of evaluations) {
+        if (ev.overall_rating == null) continue;
+        if (!scoreMap.has(ev.crew_member_id)) scoreMap.set(ev.crew_member_id, ev.overall_rating);
+      }
+      setEvaluationScores(scoreMap);
     } finally { setLoading(false); }
   };
 
@@ -625,23 +625,18 @@ export function CrewManagementPage() {
                           ) : (
                             <th className="px-2 py-2 text-center font-medium text-gray-600">급여표</th>
                           )}
-                          <th className="px-2 py-2 text-center font-medium text-gray-600">증서</th>
-                          <th className="px-2 py-2 text-left font-medium text-gray-600">상태</th>
+                          <th className="px-2 py-2 text-center font-medium text-gray-600">고과</th>
                           <th className="px-2 py-2"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {paginated.length === 0 ? (
-                          <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 16 : 15) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                          <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 15 : 14) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           // 국적은 코드로 표기 (레거시로 한글 국가명이 그대로 저장된 데이터는 코드로 정규화)
                           const natEntry = nationalities.find(n => n.country_code === c.nationality || n.country_name_ko === c.nationality);
                           const nationalityDisplay = natEntry ? natEntry.country_code : (c.nationality || '-');
-                          const statusKey = crewExt.status || '';
-                          const badge = (cat === 'disembarked' && statusKey === 'standby')
-                            ? { label: '휴가중', color: 'bg-sky-100 text-sky-700' }
-                            : STATUS_BADGE[statusKey];
                           return (
                             <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => toggleSelect(c.id)}>
                               <td className="px-2 py-1.5" onClick={e => e.stopPropagation()}>
@@ -754,13 +749,13 @@ export function CrewManagementPage() {
                                 </td>
                               )}
                               <td className="px-2 py-1.5 text-center">
-                                {c.has_expired_certificate
-                                  ? <AlertTriangle className="w-4 h-4 text-red-500 mx-auto" title="만료된 증서 있음" />
-                                  : <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />}
-                              </td>
-                              <td className="px-2 py-1.5">
-                                {badge && (
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${badge.color}`}>{badge.label}</span>
+                                {evaluationScores.has(c.id) ? (
+                                  <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium" title={`최근 고과 ${evaluationScores.get(c.id)!.toFixed(1)}점`}>
+                                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    {evaluationScores.get(c.id)!.toFixed(1)}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300">-</span>
                                 )}
                               </td>
                               <td className="px-2 py-1.5 text-right" onClick={e => e.stopPropagation()}>
