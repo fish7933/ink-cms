@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, Eye, XCircle, Clock, ExternalLink, FileText, Send, CheckCircle2, ChevronRight, ArrowLeft, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { approvalService } from '@/services/approval.service';
 import { supervisorService } from '@/services/supervisor.service';
+import { useTabContext } from '@/contexts/TabContext';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
 import type { CrewRecommendationWithDetails, CrewRecommendationResumeFile, User, Company, Fleet, Ship, Rank } from '@/types/models';
@@ -28,12 +30,18 @@ const calcAge = (birthDate: string): number => {
 };
 
 export default function RecommendationReviewPage() {
+  const [searchParams] = useSearchParams();
+  const { openTab, openNewTab, closeTab, activeTabId } = useTabContext();
+  // 목록에서 상세 보기는 별도 탭(/recommendation-review?id=...)으로 열린다
+  const detailId = searchParams.get('id');
+  const isDetailMode = !!detailId;
+
   const [loggedUser, setLoggedUser] = useState<User | null>(null);
   const [recommendations, setRecommendations] = useState<CrewRecommendationWithDetails[]>([]);
   const [filtered, setFiltered] = useState<CrewRecommendationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRec, setSelectedRec] = useState<CrewRecommendationWithDetails | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'detail' | 'approval'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'detail' | 'approval'>(isDetailMode ? 'detail' : 'list');
   const [approvalAction, setApprovalAction] = useState<'accept' | 'reject' | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -65,6 +73,19 @@ export default function RecommendationReviewPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => { loadAll(); }, []);
+  // 상세 탭: recommendations가 (재)로딩될 때마다 URL의 id에 해당하는 건을 최신 상태로 동기화
+  useEffect(() => {
+    if (!detailId) return;
+    const rec = recommendations.find(r => r.id === detailId);
+    if (rec) { setSelectedRec(rec); setViewMode('detail'); }
+  }, [detailId, recommendations]);
+  // 목록 탭: 상세 탭에서 승인/거절/삭제가 일어나면 목록을 새로고침
+  useEffect(() => {
+    if (isDetailMode) return;
+    const handler = () => loadAll();
+    window.addEventListener('recommendation-data-changed', handler);
+    return () => window.removeEventListener('recommendation-data-changed', handler);
+  }, [isDetailMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { applyFilters(); }, [recommendations, search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF]);
   useEffect(() => { setSelectedIds([]); }, [search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF, page]);
   useEffect(() => {
@@ -248,11 +269,16 @@ export default function RecommendationReviewPage() {
     setPage(1);
   };
 
-  const openDetail = (r: CrewRecommendationWithDetails) => { setSelectedRec(r); setViewMode('detail'); };
+  const openDetail = (r: CrewRecommendationWithDetails) => {
+    openNewTab(`/recommendation-review?id=${r.id}`, `${r.crew_name} 추천 상세`);
+  };
+  const backToList = () => { closeTab(activeTabId!); openTab('/recommendation-review', '추천 검토'); };
   const handleDelete = async (r: CrewRecommendationWithDetails) => {
     if (!confirm(`${r.crew_name}님의 추천 건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
     try {
       await crewRecommendationService.delete(r.id);
+      window.dispatchEvent(new CustomEvent('recommendation-data-changed'));
+      if (isDetailMode) { backToList(); return; }
       if (selectedRec?.id === r.id) { setViewMode('list'); setSelectedRec(null); }
       await loadAll();
     } catch (e) {
@@ -303,6 +329,8 @@ export default function RecommendationReviewPage() {
         await crewRecommendationService.updateStatus(selectedRec.id, 'reviewed');
         alert('채용 결재가 요청되었습니다.');
       }
+      window.dispatchEvent(new CustomEvent('recommendation-data-changed'));
+      if (isDetailMode) { backToList(); return; }
       await loadAll();
       setViewMode('list'); setSelectedRec(null); setApprovalAction(null); setApprovalComment(''); setSaveLineDefault(false);
     } catch (e) { console.error(e); alert('결재 처리에 실패했습니다.'); }
@@ -373,6 +401,9 @@ export default function RecommendationReviewPage() {
   const pageDeletableIds = pageRecs.filter(r => r.status !== 'pending').map(r => r.id);
 
   if (loading) return <><div className="p-8 text-sm text-gray-500">로딩 중...</div></>;
+  if (isDetailMode && !selectedRec) {
+    return <div className="p-8 text-sm text-gray-500">{recommendations.length > 0 ? '해당 추천 건을 찾을 수 없습니다.' : '로딩 중...'}</div>;
+  }
 
   return (
     <>
@@ -554,7 +585,7 @@ export default function RecommendationReviewPage() {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center gap-3 mb-6 justify-between">
                 <div className="flex items-center gap-3">
-                  <Button variant="ghost" size="sm" onClick={() => { setViewMode('list'); setSelectedRec(null); }} className="h-8 px-2">
+                  <Button variant="ghost" size="sm" onClick={backToList} className="h-8 px-2">
                     <ArrowLeft className="w-4 h-4 mr-1" />목록
                   </Button>
                   <h2 className="text-lg font-semibold">추천 선원 상세 정보</h2>
