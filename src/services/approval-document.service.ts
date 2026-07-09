@@ -46,6 +46,13 @@ async function applyReferenceSideEffect(
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', referenceId);
   }
+  if (referenceType === 'sick_leave_request') {
+    // 질병휴가는 연차와 별도 집계이며 잔여 한도가 없으므로 상태만 동기화한다.
+    await supabase
+      .from('sick_leave_requests')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', referenceId);
+  }
 }
 
 // 전결규정에 지정된 직급의 position_order(선임도 기준값)를 조회

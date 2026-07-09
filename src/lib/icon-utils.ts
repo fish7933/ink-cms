@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Star,
   LogOut,
+  Stethoscope,
   LucideIcon,
 } from 'lucide-react';
 
@@ -73,6 +74,7 @@ const iconMap: Record<string, LucideIcon> = {
   RefreshCw,
   Star,
   LogOut,
+  Stethoscope,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {

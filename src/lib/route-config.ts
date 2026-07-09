@@ -58,6 +58,7 @@ const CrewManagementSettingsPage = lazy(() => import('@/pages/CrewManagementSett
 const ShipManagementSettingsPage = lazy(() => import('@/pages/ShipManagementSettingsPage'));
 const ShoreLeaveRequestPage = lazy(() => import('@/pages/ShoreLeaveRequestPage'));
 const ShoreLeaveManagementPage = lazy(() => import('@/pages/ShoreLeaveManagementPage'));
+const SickLeaveRequestPage = lazy(() => import('@/pages/SickLeaveRequestPage'));
 const ReferencedDocumentsPage = lazy(() => import('@/pages/ReferencedDocumentsPage'));
 
 export interface RouteEntry {
@@ -130,5 +131,6 @@ export const routeConfig: RouteEntry[] = [
   { path: '/ship-management-settings', component: ShipManagementSettingsPage },
   { path: '/shore-leave-request', component: ShoreLeaveRequestPage },
   { path: '/shore-leave-management', component: ShoreLeaveManagementPage },
+  { path: '/sick-leave-request', component: SickLeaveRequestPage },
   { path: '/referenced-documents', component: ReferencedDocumentsPage },
 ];

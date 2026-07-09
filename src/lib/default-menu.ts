@@ -206,6 +206,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 7,
         is_active: true,
       },
+      {
+        id: 'sick-leave-request',
+        label: '질병휴가 신청',
+        path: '/sick-leave-request',
+        icon: 'Stethoscope',
+        roles: ['ship_manager', 'admin', 'system_admin'],
+        order: 8,
+        is_active: true,
+      },
     ],
   },
   {
