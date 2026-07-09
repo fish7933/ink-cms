@@ -54,6 +54,8 @@ const CrewEvaluationPage = lazy(() => import('@/pages/CrewEvaluationPage'));
 const AllotmentManagementPage = lazy(() => import('@/pages/AllotmentManagementPage'));
 const ContractManagementPage = lazy(() => import('@/pages/ContractManagementPage'));
 const SignOffReasonsPage = lazy(() => import('@/pages/SignOffReasonsPage'));
+const CrewManagementSettingsPage = lazy(() => import('@/pages/CrewManagementSettingsPage'));
+const ShipManagementSettingsPage = lazy(() => import('@/pages/ShipManagementSettingsPage'));
 
 export interface RouteEntry {
   path: string;
@@ -121,4 +123,6 @@ export const routeConfig: RouteEntry[] = [
   { path: '/contract-management', component: ContractManagementPage },
   { path: '/allowance-types', component: AllowanceTypesManagementPage },
   { path: '/sign-off-reasons', component: SignOffReasonsPage },
+  { path: '/crew-management-settings', component: CrewManagementSettingsPage },
+  { path: '/ship-management-settings', component: ShipManagementSettingsPage },
 ];
