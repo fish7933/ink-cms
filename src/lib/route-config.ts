@@ -56,6 +56,9 @@ const ContractManagementPage = lazy(() => import('@/pages/ContractManagementPage
 const SignOffReasonsPage = lazy(() => import('@/pages/SignOffReasonsPage'));
 const CrewManagementSettingsPage = lazy(() => import('@/pages/CrewManagementSettingsPage'));
 const ShipManagementSettingsPage = lazy(() => import('@/pages/ShipManagementSettingsPage'));
+const ShoreLeaveRequestPage = lazy(() => import('@/pages/ShoreLeaveRequestPage'));
+const ShoreLeaveManagementPage = lazy(() => import('@/pages/ShoreLeaveManagementPage'));
+const ReferencedDocumentsPage = lazy(() => import('@/pages/ReferencedDocumentsPage'));
 
 export interface RouteEntry {
   path: string;
@@ -125,4 +128,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/sign-off-reasons', component: SignOffReasonsPage },
   { path: '/crew-management-settings', component: CrewManagementSettingsPage },
   { path: '/ship-management-settings', component: ShipManagementSettingsPage },
+  { path: '/shore-leave-request', component: ShoreLeaveRequestPage },
+  { path: '/shore-leave-management', component: ShoreLeaveManagementPage },
+  { path: '/referenced-documents', component: ReferencedDocumentsPage },
 ];

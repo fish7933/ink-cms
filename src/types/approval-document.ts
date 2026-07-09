@@ -55,6 +55,14 @@ export interface ApprovalDocument {
   completed_at: string | null;
 }
 
+export interface ApprovalDocumentReference {
+  id: string;
+  document_id: string;
+  user_id: string | null;
+  org_unit_id: string | null;
+  created_at: string;
+}
+
 export interface ApprovalDocumentWithDetails extends ApprovalDocument {
   document_type_name: string;
   creator_name: string;

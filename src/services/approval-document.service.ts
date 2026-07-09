@@ -38,6 +38,14 @@ async function applyReferenceSideEffect(
       await supabase.rpc('execute_dispatch_order', { order_id: referenceId });
     }
   }
+  if (referenceType === 'shore_leave_request') {
+    // 잔여 연차는 승인된 신청 건들의 합으로 그때그때 계산하므로(shore-leave.service.ts),
+    // 여기서는 신청 상태만 동기화하면 된다 — 승인되는 순간 자동으로 잔여 연차에 반영됨.
+    await supabase
+      .from('shore_leave_requests')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', referenceId);
+  }
 }
 
 // 전결규정에 지정된 직급의 position_order(선임도 기준값)를 조회
@@ -154,6 +162,9 @@ export const approvalDocumentService = {
     requester_comment?: string;
     reference_type?: string;
     reference_id?: string;
+    // 결재선과 별개로 통보만 받을 참조자(개인) / 참조 부서
+    ccUserIds?: string[];
+    ccOrgUnitIds?: string[];
   }): Promise<ApprovalDocumentWithDetails> {
     const chain = await this.previewChain(input.org_unit_id, input.document_type_id);
     if (chain.length === 0) {
@@ -200,6 +211,15 @@ export const approvalDocumentService = {
 
     if (allApproved && doc.reference_type) {
       await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
+    }
+
+    const refRows = [
+      ...(input.ccUserIds || []).map(user_id => ({ document_id: doc.id, user_id, org_unit_id: null })),
+      ...(input.ccOrgUnitIds || []).map(org_unit_id => ({ document_id: doc.id, user_id: null, org_unit_id })),
+    ];
+    if (refRows.length > 0) {
+      const { error: refError } = await supabase.from('approval_document_references').insert(refRows);
+      if (refError) throw refError;
     }
 
     const { data: steps, error: stepsError } = await supabase
@@ -400,5 +420,27 @@ export const approvalDocumentService = {
   async deleteDocument(documentId: string): Promise<void> {
     const { error } = await supabase.from('approval_documents').delete().eq('id', documentId);
     if (error) throw error;
+  },
+
+  // "참조함": 결재선에는 없지만 개인 또는 소속 부서로 참조 지정된 문서 목록
+  async getReferencedDocuments(userId: string, myOrgUnitIds: string[]): Promise<ApprovalDocumentWithDetails[]> {
+    const orFilter = myOrgUnitIds.length > 0
+      ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
+      : `user_id.eq.${userId}`;
+    const { data: refs, error: refError } = await supabase
+      .from('approval_document_references')
+      .select('document_id')
+      .or(orFilter);
+    if (refError) throw refError;
+    const docIds = [...new Set((refs || []).map(r => r.document_id))];
+    if (docIds.length === 0) return [];
+
+    const { data: docs, error: docsError } = await supabase
+      .from('approval_documents')
+      .select('*')
+      .in('id', docIds)
+      .order('created_at', { ascending: false });
+    if (docsError) throw docsError;
+    return enrichDocuments(docs || []);
   },
 };

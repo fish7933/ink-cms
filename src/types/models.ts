@@ -6,6 +6,7 @@ export interface User {
   role: 'admin' | 'system_admin' | 'ship_owner' | 'ship_manager' | 'manning_agency' | 'crew';
   company_id?: string;
   position_id?: string | null; // shore_positions.id (육상 직원 직급)
+  hire_date?: string | null; // 육상 직원 입사일 (연차 산정 기준)
   created_at: string;
 }
 

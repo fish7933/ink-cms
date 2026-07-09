@@ -26,7 +26,7 @@ const SHIP_MANAGER_TAB_ROLES = ['ship_manager', 'admin', 'system_admin'];
 type CompanyExt = Company & { company_type?: string };
 interface CrewOption { id: string; name: string; }
 
-const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'crew', company_id: '', position_id: '', crew_member_id: '' };
+const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'crew', company_id: '', position_id: '', crew_member_id: '', hire_date: '' };
 
 export default function UserGroupManagementPage() {
   const navigate = useNavigate();
@@ -91,6 +91,7 @@ export default function UserGroupManagementPage() {
       company_id: u.company_id || '',
       position_id: eu.position_id || '',
       crew_member_id: eu.crew_member_id || '',
+      hire_date: u.hire_date || '',
     });
     setModalOpen(true);
   };
@@ -119,6 +120,7 @@ export default function UserGroupManagementPage() {
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
           crew_member_id: formData.crew_member_id || null,
+          hire_date: formData.hire_date || null,
           ...(formData.password ? { password: formData.password } : {}),
         });
       } else {
@@ -129,6 +131,7 @@ export default function UserGroupManagementPage() {
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
           crew_member_id: formData.crew_member_id || null,
+          hire_date: formData.hire_date || null,
         });
       }
       toast({ title: editId ? '수정 완료' : '등록 완료' });
@@ -303,6 +306,13 @@ export default function UserGroupManagementPage() {
                     </Select>
                   </div>
                 )}
+              </div>
+            )}
+
+            {(formData.role === 'ship_manager' || formData.role === 'admin' || formData.role === 'system_admin') && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">입사일 <span className="text-gray-400 font-normal">(연차 산정 기준)</span></Label>
+                <Input type="date" value={formData.hire_date} onChange={e => setFormData({ ...formData, hire_date: e.target.value })} className="h-8 text-sm" />
               </div>
             )}
 
