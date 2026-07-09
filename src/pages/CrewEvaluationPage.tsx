@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Star, Trash2, Edit2, ArrowLeft, Save, Upload, X, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getEvaluations, addEvaluation, updateEvaluation, deleteEvaluation } from '@/services/evaluation.service';
 import type { CrewEvaluationWithDetails, EvaluationAttachment } from '@/types/evaluation';
 import type { Rank } from '@/types/models';
@@ -40,6 +42,8 @@ export default function CrewEvaluationPage() {
   const [form, setForm] = useState({ crew_member_id: '', ship_id: '', evaluation_period_start: '', evaluation_period_end: '', evaluator_name: '', evaluator_rank: '', scores: {} as Record<string, number>, overallOverride: '', strengths: '', areas_for_improvement: '', recommendation: '', comments: '' });
   const [attachments, setAttachments] = useState<EvaluationAttachment[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -111,7 +115,43 @@ export default function CrewEvaluationPage() {
 
   const handleDelete = async (id: string) => { if (!confirm('삭제하시겠습니까?')) return; try { await deleteEvaluation(id); toast({ title: '삭제 완료' }); loadData(); } catch { toast({ title: '실패', variant: 'destructive' }); } };
 
-  const filtered = evaluations.filter(e => { if (!searchTerm) return true; const t = searchTerm.toLowerCase(); return e.crew_name.toLowerCase().includes(t) || e.rank_name.toLowerCase().includes(t); });
+  const confirmBulkDelete = async () => {
+    try {
+      await Promise.all(selectedIds.map(id => deleteEvaluation(id)));
+      toast({ title: `${selectedIds.length}건 삭제 완료` });
+      setSelectedIds([]);
+      setShowDeleteDialog(false);
+      loadData();
+    } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+  };
+
+  const toggleSelect = (id: string) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSelectAll = (checked: boolean) => setSelectedIds(checked ? filtered.map(e => e.id) : []);
+
+  // 검색: 선원명/직급/선주사/플릿/선박 대상
+  const searched = useMemo(() => {
+    if (!searchTerm) return evaluations;
+    const t = searchTerm.toLowerCase();
+    return evaluations.filter(e =>
+      e.crew_name.toLowerCase().includes(t) ||
+      e.rank_name.toLowerCase().includes(t) ||
+      (e.rank_code || '').toLowerCase().includes(t) ||
+      (e.owner_name || '').toLowerCase().includes(t) ||
+      (e.fleet_name || '').toLowerCase().includes(t) ||
+      (e.ship_name || '').toLowerCase().includes(t)
+    );
+  }, [evaluations, searchTerm]);
+
+  // 정렬: 선주사 > 플릿 > 선박 > 직급 > 이름
+  const filtered = useMemo(() => {
+    return [...searched].sort((a, b) =>
+      (a.owner_name || '').localeCompare(b.owner_name || '', 'ko') ||
+      (a.fleet_name || '').localeCompare(b.fleet_name || '', 'ko') ||
+      (a.ship_name || '').localeCompare(b.ship_name || '', 'ko') ||
+      (a.rank_code || a.rank_name).localeCompare(b.rank_code || b.rank_name, 'ko') ||
+      a.crew_name.localeCompare(b.crew_name, 'ko')
+    );
+  }, [searched]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
@@ -130,7 +170,12 @@ export default function CrewEvaluationPage() {
             {formView !== null ? (
               <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{uploading ? '업로드 중...' : saving ? '저장 중...' : '저장'}</Button>
             ) : (
-              <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />평가 작성</Button>
+              <div className="flex gap-2">
+                {selectedIds.length > 0 && (
+                  <Button size="sm" variant="destructive" className="gap-1.5 h-8" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4" />선택 삭제 ({selectedIds.length})</Button>
+                )}
+                <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />평가 작성</Button>
+              </div>
             )}
           </div>
         </CardHeader>
@@ -219,15 +264,21 @@ export default function CrewEvaluationPage() {
             </div>
           ) : (
             <>
-              <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 직급으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
+              <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 직급, 선주사, 플릿, 선박으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
               <table className="w-full text-xs">
                 <thead><tr className="border-b bg-gray-50">
-                  <th className="text-left p-2">선원명</th><th className="text-left p-2">직급</th><th className="text-left p-2">선박</th><th className="text-left p-2">평가 기간</th><th className="text-center p-2">평균점수</th><th className="text-center p-2">추천</th><th className="text-center p-2">작업</th>
+                  <th className="w-8 p-2"><Checkbox checked={filtered.length > 0 && filtered.every(e => selectedIds.includes(e.id))} onCheckedChange={checked => toggleSelectAll(!!checked)} /></th>
+                  <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">평가 기간</th><th className="text-center p-2">평균점수</th><th className="text-center p-2">추천</th><th className="text-center p-2">작업</th>
                 </tr></thead>
                 <tbody>
-                  {filtered.length === 0 ? <tr><td colSpan={7} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(e => (
+                  {filtered.length === 0 ? <tr><td colSpan={10} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(e => (
                     <tr key={e.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(e)}>
-                      <td className="p-2 font-medium">{e.crew_name}</td><td className="p-2">{e.rank_code || e.rank_name}</td><td className="p-2">{e.ship_name || '-'}</td>
+                      <td className="p-2" onClick={ev => ev.stopPropagation()}><Checkbox checked={selectedIds.includes(e.id)} onCheckedChange={() => toggleSelect(e.id)} /></td>
+                      <td className="p-2 text-gray-600">{e.owner_name || '-'}</td>
+                      <td className="p-2 text-gray-500">{e.fleet_name || '-'}</td>
+                      <td className="p-2">{e.ship_name || '-'}</td>
+                      <td className="p-2">{(e.rank_code || e.rank_name)}{e.rank_grade ? `(${e.rank_grade})` : ''}</td>
+                      <td className="p-2 font-medium">{e.crew_name}</td>
                       <td className="p-2">{e.evaluation_period_start} ~ {e.evaluation_period_end}</td>
                       <td className="p-2 text-center">{e.overall_rating ? <span className="inline-flex items-center gap-0.5 font-semibold"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{e.overall_rating}</span> : '-'}</td>
                       <td className="p-2 text-center">{e.recommendation ? <Badge className={`text-xs ${REC_LABELS[e.recommendation]?.color}`}>{REC_LABELS[e.recommendation]?.label}</Badge> : '-'}</td>
@@ -241,6 +292,19 @@ export default function CrewEvaluationPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>평가 삭제 확인</AlertDialogTitle>
+            <AlertDialogDescription>선택한 {selectedIds.length}건의 평가를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDelete} className="bg-red-600 hover:bg-red-700">삭제</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

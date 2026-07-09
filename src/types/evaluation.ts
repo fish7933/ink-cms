@@ -39,5 +39,8 @@ export interface CrewEvaluationWithDetails extends CrewEvaluation {
   crew_name: string;
   rank_name: string;
   rank_code: string;
+  rank_grade?: string;
   ship_name?: string;
+  owner_name?: string;
+  fleet_name?: string;
 }

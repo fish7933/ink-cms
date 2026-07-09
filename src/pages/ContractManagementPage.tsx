@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Trash2, ArrowLeft, Save, Coins, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getContracts, addContract, updateContract, deleteContract } from '@/services/contract.service';
 import { allowanceService } from '@/services/allowance.service';
 import type { CrewContractWithDetails } from '@/types/contract';
@@ -41,6 +43,9 @@ export default function ContractManagementPage() {
 
   // 갱신 진행 중이면 저장 시 root_contract_id를 넣고, 저장 성공 후 이전 계약을 renewed로 표시
   const [renewContext, setRenewContext] = useState<{ rootId: string; previousId: string } | null>(null);
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
     Promise.all([supabase.from('crew_members').select('id, name, rank, rank_id'), supabase.from('ships').select('id, name')]).then(([crew, ships]) => {
@@ -129,6 +134,19 @@ export default function ContractManagementPage() {
 
   const handleDelete = async (id: string) => { if (!confirm('삭제하시겠습니까?')) return; try { await deleteContract(id); toast({ title: '삭제 완료' }); loadData(); } catch { toast({ title: '실패', variant: 'destructive' }); } };
 
+  const confirmBulkDelete = async () => {
+    try {
+      await Promise.all(selectedIds.map(id => deleteContract(id)));
+      toast({ title: `${selectedIds.length}건 삭제 완료` });
+      setSelectedIds([]);
+      setShowDeleteDialog(false);
+      loadData();
+    } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+  };
+
+  const toggleSelect = (id: string) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSelectAll = (checked: boolean, rows: ContractChain[]) => setSelectedIds(checked ? rows.map(c => c.latest.id) : []);
+
   const handleAllowanceTypeSelect = async (typeId: string) => {
     const crew = crewOptions.find(c => c.id === form.crew_member_id);
     const rate = crew?.rank_id ? await allowanceService.getRankRateFor(typeId, crew.rank_id) : null;
@@ -166,17 +184,37 @@ export default function ContractManagementPage() {
     await allowanceService.deleteContractAllowance(id);
     await loadContractAllowances(formView.record.id);
   };
-  const chains = buildContractChains(contracts);
+  const chains = useMemo(() => buildContractChains(contracts), [contracts]);
   const chainStatus = (chain: ContractChain): EffectiveStatus => getEffectiveStatus(chain.latest);
   const getCount = (s: string) => s === 'all' ? chains.length : chains.filter(c => chainStatus(c) === s).length;
-  const filteredChains = chains.filter(c => {
-    if (activeTab !== 'all' && chainStatus(c) !== activeTab) return false;
-    if (searchTerm) {
-      const t = searchTerm.toLowerCase();
-      return c.latest.crew_name.toLowerCase().includes(t) || (c.latest.ship_name || '').toLowerCase().includes(t);
-    }
-    return true;
-  });
+
+  // 검색: 선원명/선박명/선주사/플릿/직급 대상
+  const filteredChains = useMemo(() => {
+    let list = chains.filter(c => {
+      if (activeTab !== 'all' && chainStatus(c) !== activeTab) return false;
+      if (searchTerm) {
+        const t = searchTerm.toLowerCase();
+        const c2 = c.latest;
+        return c2.crew_name.toLowerCase().includes(t) ||
+          (c2.ship_name || '').toLowerCase().includes(t) ||
+          (c2.owner_name || '').toLowerCase().includes(t) ||
+          (c2.fleet_name || '').toLowerCase().includes(t) ||
+          (c2.rank_code || '').toLowerCase().includes(t) ||
+          (c2.rank_name || '').toLowerCase().includes(t) ||
+          c2.rank.toLowerCase().includes(t);
+      }
+      return true;
+    });
+    // 정렬: 선주사 > 플릿 > 선박 > 직급 > 이름
+    list = [...list].sort((a, b) =>
+      (a.latest.owner_name || '').localeCompare(b.latest.owner_name || '', 'ko') ||
+      (a.latest.fleet_name || '').localeCompare(b.latest.fleet_name || '', 'ko') ||
+      (a.latest.ship_name || '').localeCompare(b.latest.ship_name || '', 'ko') ||
+      a.latest.rank.localeCompare(b.latest.rank, 'ko') ||
+      a.latest.crew_name.localeCompare(b.latest.crew_name, 'ko')
+    );
+    return list;
+  }, [chains, activeTab, searchTerm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
@@ -274,7 +312,12 @@ export default function ContractManagementPage() {
             </div>
           ) : (
             <>
-              <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 선박명으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 선주사, 플릿, 선박, 직급으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
+                {selectedIds.length > 0 && (
+                  <Button size="sm" variant="destructive" className="gap-1.5 h-9" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4" />선택 삭제 ({selectedIds.length})</Button>
+                )}
+              </div>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="h-8">
                   <TabsTrigger value="all" className="text-xs h-7">전체 ({getCount('all')})</TabsTrigger>
@@ -285,13 +328,20 @@ export default function ContractManagementPage() {
                 </TabsList>
                 {['all','valid','expired','completed','terminated'].map(tab => (
                   <TabsContent key={tab} value={tab} className="mt-2">
-                    <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50"><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">직급</th><th className="text-left p-2">선주사/플릿/선박</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">갱신일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-center p-2">작업</th></tr></thead>
-                      <tbody>{filteredChains.length === 0 ? <tr><td colSpan={10} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filteredChains.map(chain => {
+                    <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50">
+                      <th className="w-8 p-2"><Checkbox checked={filteredChains.length > 0 && filteredChains.every(c => selectedIds.includes(c.latest.id))} onCheckedChange={checked => toggleSelectAll(!!checked, filteredChains)} /></th>
+                      <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">갱신일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-center p-2">작업</th></tr></thead>
+                      <tbody>{filteredChains.length === 0 ? <tr><td colSpan={13} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filteredChains.map(chain => {
                         const c = chain.latest;
                         const status = chainStatus(chain);
                         const needsDisembark = chain.totalMonths >= DISEMBARK_NEEDED_THRESHOLD_MONTHS && (status === 'valid' || status === 'expired');
                         return (
                         <tr key={chain.rootId} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(c)}>
+                          <td className="p-2" onClick={e => e.stopPropagation()}><Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} /></td>
+                          <td className="p-2 text-gray-600">{c.owner_name || '-'}</td>
+                          <td className="p-2 text-gray-500">{c.fleet_name || '-'}</td>
+                          <td className="p-2">{c.ship_name || '-'}</td>
+                          <td className="p-2">{(c.rank_code || c.rank)}{c.rank_grade ? `(${c.rank_grade})` : ''}</td>
                           <td className="p-2 font-medium">
                             {c.crew_name}
                             {needsDisembark && (
@@ -301,13 +351,6 @@ export default function ContractManagementPage() {
                             )}
                           </td>
                           <td className="p-2 text-muted-foreground">{c.nationality || '-'}</td>
-                          <td className="p-2">{c.rank}</td>
-                          <td className="p-2">
-                            <div>{c.ship_name || '-'}</div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {c.owner_name}{c.fleet_name ? ` · ${c.fleet_name}` : ''}
-                            </div>
-                          </td>
                           <td className="p-2">{chain.root.start_date}</td>
                           <td className="p-2">{c.end_date}</td>
                           <td className="p-2 text-muted-foreground">{c.contract_type === 'renewal' ? c.created_at.slice(0, 10) : '-'}</td>
@@ -331,6 +374,19 @@ export default function ContractManagementPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>계약 삭제 확인</AlertDialogTitle>
+            <AlertDialogDescription>선택한 {selectedIds.length}건의 계약을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDelete} className="bg-red-600 hover:bg-red-700">삭제</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import type { CrewContract, CrewContractWithDetails } from '@/types/contract';
 export async function getContracts(crewId?: string, status?: string): Promise<CrewContractWithDetails[]> {
   let query = supabase
     .from('crew_contracts')
-    .select(`*, crew_members!crew_member_id(name, rank_id, ranks:rank_id(name, rank_code)), ships!ship_id(name), owner:companies!owner_id(name), fleet:fleets!fleet_id(name)`)
+    .select(`*, crew_members!crew_member_id(name, rank_id, current_grade, ranks:rank_id(name, rank_code)), ships!ship_id(name), owner:companies!owner_id(name), fleet:fleets!fleet_id(name)`)
     .order('start_date', { ascending: false });
   if (crewId) query = query.eq('crew_member_id', crewId);
   if (status && status !== 'all') query = query.eq('status', status);
@@ -21,6 +21,7 @@ export async function getContracts(crewId?: string, status?: string): Promise<Cr
       crew_name: (crew?.name as string) || '',
       rank_name: (ranks?.name as string) || '',
       rank_code: (ranks?.rank_code as string) || '',
+      rank_grade: (crew?.current_grade as string) || undefined,
       ship_name: (ship?.name as string) || undefined,
       owner_name: (owner?.name as string) || undefined,
       fleet_name: (fleet?.name as string) || undefined,
