@@ -12,7 +12,7 @@ import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, getLeaveBalance } from '@/services/shore-leave.service';
 import { formatLeaveHours, type LeaveBalance } from '@/lib/leave-calc';
-import { calculateLeaveHours } from '@/lib/leave-duration';
+import { calculateLeaveHours, rangesOverlap } from '@/lib/leave-duration';
 import type { OrgUnit } from '@/types/org-chart';
 import type { ShoreLeaveRequest } from '@/types/shore-leave';
 import type { User } from '@/types/models';
@@ -82,6 +82,16 @@ export default function ShoreLeaveRequestPage() {
     if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
     if (totalHours > balance.remainingHours) { toast({ title: `잔여 연차(${formatLeaveHours(balance.remainingHours)})를 초과했습니다.`, variant: 'destructive' }); return; }
 
+    // 이미 결재중이거나 승인된 신청과 날짜/시간대가 겹치면 중복 신청을 막는다.
+    const newRange = { start_date: form.start_date, start_time: form.start_time, end_date: form.end_date, end_time: form.end_time };
+    const conflict = (await getMyLeaveRequests(currentUser.id)).find(r =>
+      (r.status === 'pending' || r.status === 'approved') && rangesOverlap(newRange, r)
+    );
+    if (conflict) {
+      toast({ title: '이미 같은 기간에 신청된 연차가 있습니다.', description: `${conflict.start_date} ${conflict.start_time} ~ ${conflict.end_date} ${conflict.end_time} (${STATUS_LABELS[conflict.status]?.label})`, variant: 'destructive' });
+      return;
+    }
+
     let leaveReq: ShoreLeaveRequest | null = null;
     try {
       setSubmitting(true);
@@ -94,7 +104,9 @@ export default function ShoreLeaveRequestPage() {
       leaveReq = await addLeaveRequest({
         user_id: currentUser.id,
         start_date: form.start_date,
+        start_time: form.start_time,
         end_date: form.end_date,
+        end_time: form.end_time,
         hours: totalHours,
         reason: form.reason || undefined,
       });

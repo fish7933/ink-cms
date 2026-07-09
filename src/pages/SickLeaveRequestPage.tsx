@@ -1,25 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Stethoscope, Send, X } from 'lucide-react';
+import { Stethoscope, Send, X, Paperclip, Upload, Trash2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import LeaveRangeCalendar from '@/components/leave/LeaveRangeCalendar';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import {
   getMySickLeaveRequests, addSickLeaveRequest, cancelSickLeaveRequest,
-  deleteSickLeaveRequest, linkSickLeaveRequestDocument, getUsedSickLeaveHours,
+  deleteSickLeaveRequest, linkSickLeaveRequestDocument, getUsedSickLeaveHours, updateSickLeaveAttachments,
 } from '@/services/sick-leave.service';
 import { formatLeaveHours } from '@/lib/leave-calc';
-import { calculateLeaveHours } from '@/lib/leave-duration';
-import type { OrgUnit } from '@/types/org-chart';
-import type { SickLeaveRequest } from '@/types/sick-leave';
-import type { User } from '@/types/models';
+import { calculateLeaveHours, rangesOverlap } from '@/lib/leave-duration';
 import { useToast } from '@/hooks/use-toast';
+import type { OrgUnit } from '@/types/org-chart';
+import type { SickLeaveRequest, SickLeaveAttachment } from '@/types/sick-leave';
+import type { User } from '@/types/models';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: '결재중', color: 'bg-yellow-100 text-yellow-700' },
@@ -39,6 +41,11 @@ export default function SickLeaveRequestPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({ start_date: '', start_time: '09:00', end_date: '', end_time: '18:00', reason: '', ccOrgUnitIds: [] as string[] });
+
+  const [evidenceRequest, setEvidenceRequest] = useState<SickLeaveRequest | null>(null);
+  const [evidenceAttachments, setEvidenceAttachments] = useState<SickLeaveAttachment[]>([]);
+  const [evidenceNewFiles, setEvidenceNewFiles] = useState<File[]>([]);
+  const [evidenceSaving, setEvidenceSaving] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -83,6 +90,16 @@ export default function SickLeaveRequestPage() {
     if (!form.start_date || !form.end_date) { toast({ title: '달력에서 휴가 기간을 선택하세요.', variant: 'destructive' }); return; }
     if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
 
+    // 이미 결재중이거나 승인된 신청과 날짜/시간대가 겹치면 중복 신청을 막는다.
+    const newRange = { start_date: form.start_date, start_time: form.start_time, end_date: form.end_date, end_time: form.end_time };
+    const conflict = (await getMySickLeaveRequests(currentUser.id)).find(r =>
+      (r.status === 'pending' || r.status === 'approved') && rangesOverlap(newRange, r)
+    );
+    if (conflict) {
+      toast({ title: '이미 같은 기간에 신청된 질병휴가가 있습니다.', description: `${conflict.start_date} ${conflict.start_time} ~ ${conflict.end_date} ${conflict.end_time} (${STATUS_LABELS[conflict.status]?.label})`, variant: 'destructive' });
+      return;
+    }
+
     let sickReq: SickLeaveRequest | null = null;
     try {
       setSubmitting(true);
@@ -93,7 +110,9 @@ export default function SickLeaveRequestPage() {
       sickReq = await addSickLeaveRequest({
         user_id: currentUser.id,
         start_date: form.start_date,
+        start_time: form.start_time,
         end_date: form.end_date,
+        end_time: form.end_time,
         hours: totalHours,
         reason: form.reason || undefined,
       });
@@ -119,6 +138,49 @@ export default function SickLeaveRequestPage() {
       toast({ title: '제출 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEvidence = (r: SickLeaveRequest) => {
+    setEvidenceRequest(r);
+    setEvidenceAttachments(r.attachments || []);
+    setEvidenceNewFiles([]);
+  };
+
+  const handleEvidenceFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files).filter(f => {
+      if (f.size > 10 * 1024 * 1024) { toast({ title: `${f.name}은 10MB를 초과합니다.`, variant: 'destructive' }); return false; }
+      return true;
+    });
+    setEvidenceNewFiles(prev => [...prev, ...files]);
+    e.target.value = '';
+  };
+  const removeNewEvidenceFile = (idx: number) => setEvidenceNewFiles(prev => prev.filter((_, i) => i !== idx));
+  const removeExistingEvidenceAttachment = (idx: number) => setEvidenceAttachments(prev => prev.filter((_, i) => i !== idx));
+  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+
+  const saveEvidence = async () => {
+    if (!evidenceRequest) return;
+    try {
+      setEvidenceSaving(true);
+      const uploaded: SickLeaveAttachment[] = [];
+      for (const file of evidenceNewFiles) {
+        const ext = file.name.split('.').pop();
+        const path = `sick-leave-evidence/${evidenceRequest.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { error } = await supabase.storage.from('documents').upload(path, file);
+        if (error) throw new Error(`${file.name} 업로드 실패`);
+        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+      }
+      const merged = [...evidenceAttachments, ...uploaded];
+      await updateSickLeaveAttachments(evidenceRequest.id, merged);
+      toast({ title: '증빙 서류가 저장되었습니다.' });
+      setEvidenceRequest(null);
+      await loadData();
+    } catch (e) {
+      toast({ title: '증빙 서류 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setEvidenceSaving(false);
     }
   };
 
@@ -216,7 +278,7 @@ export default function SickLeaveRequestPage() {
             <div className="border rounded-md overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
-                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수/시간</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="p-2 w-16"></th></tr>
+                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수/시간</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="text-center p-2">증빙</th><th className="p-2 w-16"></th></tr>
                 </thead>
                 <tbody>
                   {myRequests.map(r => (
@@ -225,6 +287,11 @@ export default function SickLeaveRequestPage() {
                       <td className="p-2 text-center">{formatLeaveHours(r.hours)}</td>
                       <td className="p-2 text-gray-500">{r.reason || '-'}</td>
                       <td className="p-2 text-center"><Badge className={`text-xs ${STATUS_LABELS[r.status]?.color}`}>{STATUS_LABELS[r.status]?.label}</Badge></td>
+                      <td className="p-2 text-center">
+                        <Button variant="outline" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => openEvidence(r)}>
+                          <Paperclip className="w-3 h-3" />{r.attachments?.length || 0}
+                        </Button>
+                      </td>
                       <td className="p-2 text-center">
                         {r.status === 'pending' && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleCancel(r.id, r.approval_document_id)}><X className="h-3 w-3" /></Button>
@@ -238,6 +305,52 @@ export default function SickLeaveRequestPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!evidenceRequest} onOpenChange={open => !open && !evidenceSaving && setEvidenceRequest(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>증빙 서류 {evidenceRequest && `(${evidenceRequest.start_date} ~ ${evidenceRequest.end_date})`}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">진단서 등 증빙 서류는 신청 후에도 언제든 첨부할 수 있습니다.</p>
+            {evidenceAttachments.length === 0 && evidenceNewFiles.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">첨부된 서류가 없습니다</p>
+            ) : (
+              <div className="space-y-1.5">
+                {evidenceAttachments.map((a, idx) => (
+                  <div key={a.path} className="flex items-center justify-between p-2 bg-gray-50 rounded-md text-sm">
+                    <a href={getAttachmentUrl(a.path)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{a.name}</span>
+                    </a>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeExistingEvidenceAttachment(idx)} disabled={evidenceSaving}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                {evidenceNewFiles.map((f, idx) => (
+                  <div key={`${f.name}-${idx}`} className="flex items-center justify-between p-2 bg-blue-50 rounded-md text-sm">
+                    <span className="flex items-center gap-2 text-blue-700 truncate">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
+                      <span className="text-xs text-blue-400 shrink-0">(신규)</span>
+                    </span>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeNewEvidenceFile(idx)} disabled={evidenceSaving}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label className="flex items-center justify-center gap-1.5 h-9 border border-dashed rounded-md text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
+              <Upload className="w-3.5 h-3.5" />파일 추가 (최대 10MB)
+              <input type="file" multiple className="hidden" onChange={handleEvidenceFileChange} disabled={evidenceSaving} />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEvidenceRequest(null)} disabled={evidenceSaving}>취소</Button>
+            <Button onClick={saveEvidence} disabled={evidenceSaving}>{evidenceSaving ? '저장 중...' : '저장'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

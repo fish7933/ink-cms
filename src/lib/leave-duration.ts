@@ -38,3 +38,19 @@ export function calculateLeaveHours(startDate: string, startTime: string, endDat
   const total = firstDayHours + middleDays * HOURS_PER_DAY + lastDayHours;
   return Math.round(total * 2) / 2;
 }
+
+export interface DateTimeRange {
+  start_date: string;
+  start_time: string;
+  end_date: string;
+  end_time: string;
+}
+
+// 두 일시 구간이 겹치는지 (경계가 정확히 맞닿는 경우는 겹침으로 보지 않음 — 예: 종료 13:00 / 시작 13:00)
+export function rangesOverlap(a: DateTimeRange, b: DateTimeRange): boolean {
+  const aStart = new Date(`${a.start_date}T${a.start_time}`).getTime();
+  const aEnd = new Date(`${a.end_date}T${a.end_time}`).getTime();
+  const bStart = new Date(`${b.start_date}T${b.start_time}`).getTime();
+  const bEnd = new Date(`${b.end_date}T${b.end_time}`).getTime();
+  return aStart < bEnd && bStart < aEnd;
+}

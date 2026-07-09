@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { SickLeaveRequest, SickLeaveRequestWithDetails } from '@/types/sick-leave';
+import type { SickLeaveRequest, SickLeaveRequestWithDetails, SickLeaveAttachment } from '@/types/sick-leave';
 
 export async function getMySickLeaveRequests(userId: string): Promise<SickLeaveRequest[]> {
   const { data, error } = await supabase
@@ -37,7 +37,9 @@ export async function getUsedSickLeaveHours(userId: string): Promise<number> {
 export async function addSickLeaveRequest(input: {
   user_id: string;
   start_date: string;
+  start_time: string;
   end_date: string;
+  end_time: string;
   hours: number;
   reason?: string;
   approval_document_id?: string;
@@ -48,7 +50,9 @@ export async function addSickLeaveRequest(input: {
     .insert({
       user_id: input.user_id,
       start_date: input.start_date,
+      start_time: input.start_time,
       end_date: input.end_date,
+      end_time: input.end_time,
       hours: input.hours,
       reason: input.reason || null,
       approval_document_id: input.approval_document_id || null,
@@ -80,5 +84,15 @@ export async function linkSickLeaveRequestDocument(sickLeaveRequestId: string, d
     .from('sick_leave_requests')
     .update({ approval_document_id: documentId, updated_at: new Date().toISOString() })
     .eq('id', sickLeaveRequestId);
+  if (error) throw error;
+}
+
+// 질병휴가는 신청 시점이 아니라 사후에 증빙(진단서 등)을 첨부할 수 있어야 하므로,
+// 상태와 무관하게 언제든 첨부파일 목록을 갱신할 수 있게 별도 함수로 둔다.
+export async function updateSickLeaveAttachments(id: string, attachments: SickLeaveAttachment[]): Promise<void> {
+  const { error } = await supabase
+    .from('sick_leave_requests')
+    .update({ attachments, updated_at: new Date().toISOString() })
+    .eq('id', id);
   if (error) throw error;
 }

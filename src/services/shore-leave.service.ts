@@ -105,7 +105,9 @@ export async function getLeaveBalance(userId: string, hireDate: string | null): 
 export async function addLeaveRequest(input: {
   user_id: string;
   start_date: string;
+  start_time: string;
   end_date: string;
+  end_time: string;
   hours: number;
   reason?: string;
   approval_document_id?: string;
@@ -116,7 +118,9 @@ export async function addLeaveRequest(input: {
     .insert({
       user_id: input.user_id,
       start_date: input.start_date,
+      start_time: input.start_time,
       end_date: input.end_date,
+      end_time: input.end_time,
       hours: input.hours,
       reason: input.reason || null,
       approval_document_id: input.approval_document_id || null,

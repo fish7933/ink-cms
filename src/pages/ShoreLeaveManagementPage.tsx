@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import {
@@ -259,11 +260,12 @@ export default function ShoreLeaveManagementPage() {
                       <th className="text-center p-2">일수/시간</th>
                       <th className="text-left p-2">사유</th>
                       <th className="text-center p-2">상태</th>
+                      <th className="text-center p-2">증빙</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sickRequests.length === 0 ? (
-                      <tr><td colSpan={5} className="text-center py-8 text-gray-400">신청 내역이 없습니다</td></tr>
+                      <tr><td colSpan={6} className="text-center py-8 text-gray-400">신청 내역이 없습니다</td></tr>
                     ) : sickRequests.map(r => (
                       <tr key={r.id} className="border-b">
                         <td className="p-2 font-medium">{positionByUser.get(r.user_id) ? `${positionByUser.get(r.user_id)} ` : ''}{r.user_name}</td>
@@ -271,6 +273,18 @@ export default function ShoreLeaveManagementPage() {
                         <td className="p-2 text-center">{formatLeaveHours(r.hours)}</td>
                         <td className="p-2 text-gray-500">{r.reason || '-'}</td>
                         <td className="p-2 text-center"><Badge className={`text-xs ${STATUS_LABELS[r.status]?.color}`}>{STATUS_LABELS[r.status]?.label}</Badge></td>
+                        <td className="p-2 text-center">
+                          {r.attachments && r.attachments.length > 0 ? (
+                            <details className="inline-block text-left">
+                              <summary className="cursor-pointer text-blue-600 inline-flex items-center gap-1 list-none"><Paperclip className="w-3 h-3" />{r.attachments.length}</summary>
+                              <div className="mt-1 space-y-0.5">
+                                {r.attachments.map(a => (
+                                  <a key={a.path} href={supabase.storage.from('documents').getPublicUrl(a.path).data.publicUrl} target="_blank" rel="noreferrer" className="block text-blue-600 hover:underline truncate max-w-[160px]">{a.name}</a>
+                                ))}
+                              </div>
+                            </details>
+                          ) : <span className="text-gray-300">-</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

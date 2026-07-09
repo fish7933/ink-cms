@@ -2,7 +2,9 @@ export interface ShoreLeaveRequest {
   id: string;
   user_id: string;
   start_date: string;
+  start_time: string;
   end_date: string;
+  end_time: string;
   hours: number;
   reason: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
