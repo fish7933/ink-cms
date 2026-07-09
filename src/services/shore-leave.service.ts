@@ -76,3 +76,16 @@ export async function cancelLeaveRequest(id: string): Promise<void> {
     .eq('id', id);
   if (error) throw error;
 }
+
+export async function deleteLeaveRequest(id: string): Promise<void> {
+  const { error } = await supabase.from('shore_leave_requests').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function linkLeaveRequestDocument(leaveRequestId: string, documentId: string): Promise<void> {
+  const { error } = await supabase
+    .from('shore_leave_requests')
+    .update({ approval_document_id: documentId, updated_at: new Date().toISOString() })
+    .eq('id', leaveRequestId);
+  if (error) throw error;
+}

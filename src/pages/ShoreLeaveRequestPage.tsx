@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { getCurrentUser } from '@/lib/store';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
-import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, getLeaveBalance } from '@/services/shore-leave.service';
+import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, getLeaveBalance } from '@/services/shore-leave.service';
 import type { LeaveBalance } from '@/lib/leave-calc';
 import type { OrgUnit } from '@/types/org-chart';
 import type { ShoreLeaveRequest } from '@/types/shore-leave';
@@ -92,11 +92,22 @@ export default function ShoreLeaveRequestPage() {
     if (days <= 0) { toast({ title: '휴가 일수를 확인하세요.', variant: 'destructive' }); return; }
     if (days > balance.remaining) { toast({ title: `잔여 연차(${balance.remaining}일)를 초과했습니다.`, variant: 'destructive' }); return; }
 
+    let leaveReq: ShoreLeaveRequest | null = null;
     try {
       setSubmitting(true);
       const documentTypes = await approvalDocumentService.getDocumentTypes();
       const leaveType = documentTypes.find(t => t.code === 'LEAVE_REQUEST');
       if (!leaveType) throw new Error('연차 신청 문서유형이 등록되어 있지 않습니다.');
+
+      // 결재문서가 최종 승인되는 순간(applyReferenceSideEffect)에 이 신청 건을 찾아 상태를
+      // 동기화하므로, 문서를 만들기 전에 신청 건부터 만들어 reference_id로 넘겨줘야 한다.
+      leaveReq = await addLeaveRequest({
+        user_id: currentUser.id,
+        start_date: form.start_date,
+        end_date: form.end_date,
+        days,
+        reason: form.reason || undefined,
+      });
 
       const doc = await approvalDocumentService.createDocument({
         document_type_id: leaveType.id,
@@ -105,21 +116,17 @@ export default function ShoreLeaveRequestPage() {
         org_unit_id: myOrgUnitId,
         created_by: currentUser.id,
         ccOrgUnitIds: form.ccOrgUnitIds,
+        reference_type: 'shore_leave_request',
+        reference_id: leaveReq.id,
       });
 
-      await addLeaveRequest({
-        user_id: currentUser.id,
-        start_date: form.start_date,
-        end_date: form.end_date,
-        days,
-        reason: form.reason || undefined,
-        approval_document_id: doc.id,
-      });
+      await linkLeaveRequestDocument(leaveReq.id, doc.id);
 
       toast({ title: '연차 신청이 제출되었습니다.' });
       setForm({ start_date: '', end_date: '', days: '', reason: '', ccOrgUnitIds: [] });
       await loadData();
     } catch (e) {
+      if (leaveReq) await deleteLeaveRequest(leaveReq.id).catch(() => {});
       toast({ title: '제출 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSubmitting(false);
