@@ -81,6 +81,10 @@ export default function SickLeaveRequestPage() {
 
   const totalHours = (parseFloat(form.days) || 0) * HOURS_PER_DAY + (parseFloat(form.hoursExtra) || 0);
 
+  const handleStartDateChange = (value: string) => {
+    setForm(prev => ({ ...prev, start_date: value, end_date: (!prev.end_date || prev.end_date < value) ? value : prev.end_date }));
+  };
+
   const toggleCcUnit = (unitId: string) => {
     setForm(prev => ({
       ...prev,
@@ -170,9 +174,9 @@ export default function SickLeaveRequestPage() {
         <CardHeader className="pb-3"><CardTitle className="text-base">신청서 작성</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-4 gap-3">
-            <div className="space-y-1.5"><Label className="text-xs">시작일 *</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
+            <div className="space-y-1.5"><Label className="text-xs">시작일 *</Label><Input type="date" value={form.start_date} onChange={e => handleStartDateChange(e.target.value)} className="h-9 text-sm" disabled={submitting} /></div>
             <div className="space-y-1.5"><Label className="text-xs">종료일 *</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
-            <div className="space-y-1.5"><Label className="text-xs">일수 *</Label><Input type="number" step="1" min="0" value={form.days} onChange={e => setForm({ ...form, days: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
+            <div className="space-y-1.5"><Label className="text-xs">일수 *</Label><Input type="number" step="0.5" min="0" value={form.days} onChange={e => setForm({ ...form, days: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
             <div className="space-y-1.5"><Label className="text-xs">시간</Label><Input type="number" step="0.5" min="0" max="23.5" value={form.hoursExtra} onChange={e => setForm({ ...form, hoursExtra: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
           </div>
           <p className="text-xs text-gray-500">신청 합계: <span className="font-medium text-gray-700">{formatLeaveHours(totalHours)}</span></p>

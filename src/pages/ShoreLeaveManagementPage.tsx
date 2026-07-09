@@ -338,7 +338,7 @@ export default function ShoreLeaveManagementPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label className="text-xs">일수</Label><Input type="number" step="1" min="0" value={adjustForm.days} onChange={e => setAdjustForm({ ...adjustForm, days: e.target.value })} className="h-9 text-sm" disabled={adjustSubmitting} /></div>
+              <div className="space-y-1.5"><Label className="text-xs">일수</Label><Input type="number" step="0.5" min="0" value={adjustForm.days} onChange={e => setAdjustForm({ ...adjustForm, days: e.target.value })} className="h-9 text-sm" disabled={adjustSubmitting} /></div>
               <div className="space-y-1.5"><Label className="text-xs">시간</Label><Input type="number" step="0.5" min="0" max="23.5" value={adjustForm.hoursExtra} onChange={e => setAdjustForm({ ...adjustForm, hoursExtra: e.target.value })} className="h-9 text-sm" disabled={adjustSubmitting} /></div>
             </div>
             <p className="text-xs text-gray-500">합계: <span className="font-medium text-gray-700">{formatLeaveHours(adjustTotalHours)}</span></p>
