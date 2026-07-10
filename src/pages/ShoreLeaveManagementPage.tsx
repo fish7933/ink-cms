@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History, Paperclip, RotateCcw } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage,
+  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
 import { formatLeaveHours, HOURS_PER_DAY } from '@/lib/leave-calc';
@@ -49,9 +49,11 @@ export default function ShoreLeaveManagementPage() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
+  const [exemptRows, setExemptRows] = useState<Row[]>([]);
   const [sickRequests, setSickRequests] = useState<SickLeaveRequestWithDetails[]>([]);
   const [positionByUser, setPositionByUser] = useState<Map<string, string | null>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [exemptSubmittingId, setExemptSubmittingId] = useState<string | null>(null);
 
   const [adjustDialog, setAdjustDialog] = useState<{ user: User; type: 'grant' | 'manual_use' } | null>(null);
   const [adjustForm, setAdjustForm] = useState({ days: '0', hoursExtra: '0', reason: '' });
@@ -88,7 +90,8 @@ export default function ShoreLeaveManagementPage() {
         const balance = await getLeaveBalance(u.id, u.hire_date || null);
         return { user: u, positionName: posMap.get(u.id) || null, ...balance };
       }));
-      setRows(computed);
+      setRows(computed.filter(r => !r.user.is_leave_exempt));
+      setExemptRows(computed.filter(r => r.user.is_leave_exempt));
     } catch (e) {
       console.error(e);
     } finally {
@@ -159,6 +162,21 @@ export default function ShoreLeaveManagementPage() {
     }
   };
 
+  const toggleExempt = async (row: Row, exempt: boolean) => {
+    if (exempt && !confirm(`${row.user.name}님을 연차 적용 제외자로 지정하시겠습니까? 연차 현황/관리 대상에서 제외됩니다.`)) return;
+    try {
+      setExemptSubmittingId(row.user.id);
+      await setLeaveExempt(row.user.id, exempt);
+      toast({ title: exempt ? '연차 적용 제외자로 지정되었습니다.' : '연차 적용 대상으로 다시 포함되었습니다.' });
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      toast({ title: '처리 실패', variant: 'destructive' });
+    } finally {
+      setExemptSubmittingId(null);
+    }
+  };
+
   const sickTotalsByUser = new Map<string, number>();
   for (const r of sickRequests) {
     if (r.status !== 'approved') continue;
@@ -173,13 +191,14 @@ export default function ShoreLeaveManagementPage() {
         <Users className="w-6 h-6" />
         <div>
           <h1 className="text-xl font-bold text-gray-900">육상 직원 연차 관리</h1>
-          <p className="text-sm text-gray-500">근로기준법에 따라 자동 발생하는 법정 연차와 회사가 재량으로 부여한 연차를 구분해서 관리하며, 승인된 신청 내역/수동 사용 입력을 반영해 잔여 연차를 계산합니다.</p>
+          <p className="text-sm text-gray-500">근로기준법에 따라 자동 발생하는 법정 연차와 회사가 재량으로 부여한 연차를 구분해서 관리하며, 승인된 신청 내역/수동 사용 입력을 반영해 잔여 연차를 계산합니다. 연차 적용 제외자(임원 등)는 현황·관리 대상에서 제외됩니다.</p>
         </div>
       </div>
 
       <Tabs defaultValue="annual">
         <TabsList>
           <TabsTrigger value="annual">연차 관리</TabsTrigger>
+          <TabsTrigger value="overview" className="gap-1"><BarChart3 className="w-3.5 h-3.5" />전체 현황 한눈에</TabsTrigger>
           <TabsTrigger value="sick">질병휴가 현황</TabsTrigger>
         </TabsList>
 
@@ -197,7 +216,7 @@ export default function ShoreLeaveManagementPage() {
                       <th className="text-center p-2 text-xs font-medium text-gray-600">회사 부여</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">사용</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">잔여</th>
-                      <th className="text-center p-2 text-xs font-medium text-gray-600 w-64">작업</th>
+                      <th className="text-center p-2 text-xs font-medium text-gray-600 w-80">작업</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -229,6 +248,11 @@ export default function ShoreLeaveManagementPage() {
                                 <RotateCcw className="w-3 h-3" />초기화
                               </Button>
                             )}
+                            {currentUser && RESET_ROLES.includes(currentUser.role) && (
+                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1 text-gray-500" disabled={exemptSubmittingId === r.user.id} onClick={() => toggleExempt(r, true)}>
+                                <UserX className="w-3 h-3" />제외
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -238,6 +262,32 @@ export default function ShoreLeaveManagementPage() {
               </div>
             </CardContent>
           </Card>
+
+          {exemptRows.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-1.5"><UserX className="w-4 h-4 text-gray-400" />연차 적용 제외자 ({exemptRows.length}명)</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="flex flex-wrap gap-2">
+                  {exemptRows.map(r => (
+                    <div key={r.user.id} className="flex items-center gap-2 pl-3 pr-1.5 py-1 bg-gray-50 border rounded-full text-sm">
+                      <span className="text-gray-600">{r.positionName ? `${r.positionName} ` : ''}{r.user.name}</span>
+                      {currentUser && RESET_ROLES.includes(currentUser.role) && (
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-blue-600" disabled={exemptSubmittingId === r.user.id} onClick={() => toggleExempt(r, false)}>
+                          <Undo2 className="w-3 h-3" />포함
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="overview" className="space-y-4 mt-3">
+          <LeaveUsageOverview rows={rows} />
         </TabsContent>
 
         <TabsContent value="sick" className="space-y-4 mt-3">
@@ -371,6 +421,59 @@ export default function ShoreLeaveManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// 전체 인원의 연차 사용 현황을 한눈에 보는 요약 뷰. 사용률(사용/발생) 기준 내림차순 막대 목록.
+function LeaveUsageOverview({ rows }: { rows: Row[] }) {
+  if (rows.length === 0) {
+    return <Card><CardContent className="py-12 text-center text-gray-400">표시할 인원이 없습니다</CardContent></Card>;
+  }
+
+  const withRate = rows.map(r => ({ ...r, rate: r.accruedHours > 0 ? Math.min(100, (r.usedHours / r.accruedHours) * 100) : 0 }));
+  const sorted = [...withRate].sort((a, b) => b.rate - a.rate);
+
+  const totalAccrued = rows.reduce((s, r) => s + r.accruedHours, 0);
+  const totalUsed = rows.reduce((s, r) => s + r.usedHours, 0);
+  const avgRate = totalAccrued > 0 ? Math.round((totalUsed / totalAccrued) * 1000) / 10 : 0;
+  const zeroUsageCount = rows.filter(r => r.usedHours === 0).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <Card><CardContent className="pt-4 pb-3 text-center">
+          <p className="text-xs text-gray-500">전체 인원</p>
+          <p className="text-xl font-bold">{rows.length}명</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3 text-center">
+          <p className="text-xs text-gray-500">평균 사용률</p>
+          <p className="text-xl font-bold text-blue-700">{avgRate}%</p>
+        </CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3 text-center">
+          <p className="text-xs text-gray-500">연차 미사용자</p>
+          <p className="text-xl font-bold text-orange-600">{zeroUsageCount}명</p>
+        </CardContent></Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">인원별 사용률 (사용 / 발생, 높은 순)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {sorted.map(r => (
+            <div key={r.user.id}>
+              <div className="flex items-center justify-between text-sm mb-1">
+                <span className="font-medium text-gray-800">{r.positionName ? `${r.positionName} ` : ''}{r.user.name}</span>
+                <span className="text-xs text-gray-500 tabular-nums">
+                  {formatLeaveHours(r.usedHours)} / {formatLeaveHours(r.accruedHours)} <span className="font-medium text-gray-700">({Math.round(r.rate)}%)</span>
+                </span>
+              </div>
+              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 rounded-full" style={{ width: `${r.rate}%` }} />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -7,6 +7,7 @@ export interface User {
   company_id?: string;
   position_id?: string | null; // shore_positions.id (육상 직원 직급)
   hire_date?: string | null; // 육상 직원 입사일 (연차 산정 기준)
+  is_leave_exempt?: boolean; // 연차 적용 제외자 (임원 등) — true면 연차 현황/관리 대상에서 제외
   created_at: string;
 }
 

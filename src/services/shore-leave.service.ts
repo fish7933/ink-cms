@@ -28,6 +28,15 @@ export async function getLeaveRequestsByUser(userId: string): Promise<ShoreLeave
   return getMyLeaveRequests(userId);
 }
 
+// 연차 적용 제외자(임원 등) 지정/해제. 직급이 아니라 사람 단위 예외라 users.is_leave_exempt를 직접 갱신한다.
+export async function setLeaveExempt(userId: string, exempt: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ is_leave_exempt: exempt, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
 // 가장 최근 초기화 시점 (없으면 null) — 이 시점 이전에 생성된 신청/수동사용 조정은 잔여 계산에서 제외한다.
 // shore_leave_resets 테이블은 마이그레이션(20260709000007_shore_leave_reset.sql) 적용 전에는 존재하지 않을 수 있으므로,
 // 조회 실패 시 "초기화 이력 없음"으로 취급해 연차 잔여 계산 전체가 깨지지 않도록 한다.

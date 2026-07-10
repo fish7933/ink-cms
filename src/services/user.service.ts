@@ -7,7 +7,7 @@ const SALT_ROUNDS = 10;
 export async function getUsers(): Promise<User[]> {
   const { data, error } = await supabase
     .from('users')
-    .select('id,username,name,email,role,company_id,position_id,user_group_id,hire_date,is_active,created_at,updated_at')
+    .select('id,username,name,email,role,company_id,position_id,user_group_id,hire_date,is_active,is_leave_exempt,created_at,updated_at')
     .order('created_at', { ascending: false });
   if (error) { console.error('Error fetching users:', error); return []; }
   return (data || []) as User[];
