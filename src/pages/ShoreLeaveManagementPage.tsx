@@ -161,8 +161,9 @@ export default function ShoreLeaveManagementPage() {
 
   const submitReset = async () => {
     if (!resetDialog || !currentUser) return;
-    const hasNothingToReset = resetDialog.usedHours <= 0 && !(resetForm.resetGrants && resetDialog.companyGrantedHours > 0);
-    if (hasNothingToReset) { toast({ title: '초기화할 내역이 없습니다.', variant: 'destructive' }); return; }
+    // 계산상 사용/부여가 0이어도, "내역까지 삭제"를 선택했다면 남아있는 이력만 정리하려는 것일 수 있으므로 허용한다.
+    const willResetSomething = resetDialog.usedHours > 0 || (resetForm.resetGrants && resetDialog.companyGrantedHours > 0) || resetForm.deleteHistory;
+    if (!willResetSomething) { toast({ title: '초기화할 내역이 없습니다.', variant: 'destructive' }); return; }
     if (!resetForm.reason.trim()) { toast({ title: '사유를 입력하세요.', variant: 'destructive' }); return; }
     try {
       setResetSubmitting(true);
