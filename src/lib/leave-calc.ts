@@ -25,6 +25,16 @@ export function calculateAccruedLeaveHours(hireDate: string, asOfDate?: string):
   return calculateAccruedLeaveDays(hireDate, asOfDate) * HOURS_PER_DAY;
 }
 
+// 연차는 입사일 기준으로 매년 갱신되므로(회계연도 구분 없음), "올해"의 발생일은
+// 입사일의 월/일을 기준연도로 옮긴 날짜다 (예: 입사일 2019-03-15 -> 2026년 발생일 2026-03-15).
+export function getThisYearLeaveGrantDate(hireDate: string, referenceYear: number = new Date().getFullYear()): string {
+  const hire = new Date(hireDate);
+  const date = new Date(referenceYear, hire.getMonth(), hire.getDate());
+  // 2/29생 입사일이 평년과 만나는 경우 등 날짜가 다음 달로 넘어가면 그 달의 마지막 날로 보정
+  if (date.getMonth() !== hire.getMonth()) date.setDate(0);
+  return date.toISOString().slice(0, 10);
+}
+
 export interface LeaveBalance {
   legalAccruedHours: number; // 근로기준법상 자동 발생분
   companyGrantedHours: number; // 회사가 재량으로 수동 부여한 분 (포상휴가 등)

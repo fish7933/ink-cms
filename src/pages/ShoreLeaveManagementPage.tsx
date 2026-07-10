@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, CalendarRange } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ import {
   getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
-import { formatLeaveHours, HOURS_PER_DAY } from '@/lib/leave-calc';
+import { formatLeaveHours, getThisYearLeaveGrantDate, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
 import LeaveUsageCalendar from '@/components/leave/LeaveUsageCalendar';
 import type { User } from '@/types/models';
@@ -204,8 +204,7 @@ export default function ShoreLeaveManagementPage() {
       <Tabs defaultValue="annual">
         <TabsList>
           <TabsTrigger value="annual">연차 관리</TabsTrigger>
-          <TabsTrigger value="overview" className="gap-1"><BarChart3 className="w-3.5 h-3.5" />전체 현황 한눈에</TabsTrigger>
-          <TabsTrigger value="calendar" className="gap-1"><CalendarRange className="w-3.5 h-3.5" />월별 캘린더</TabsTrigger>
+          <TabsTrigger value="usage" className="gap-1"><BarChart3 className="w-3.5 h-3.5" />연차 사용 현황</TabsTrigger>
           <TabsTrigger value="sick">질병휴가 현황</TabsTrigger>
         </TabsList>
 
@@ -219,44 +218,50 @@ export default function ShoreLeaveManagementPage() {
                     <tr>
                       <th className="text-left p-2 text-xs font-medium text-gray-600">이름</th>
                       <th className="text-left p-2 text-xs font-medium text-gray-600">입사일</th>
+                      <th className="text-left p-2 text-xs font-medium text-gray-600">연차 발생일(올해)</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">법정 발생</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">회사 부여</th>
+                      <th className="text-center p-2 text-xs font-medium text-gray-600">총 발생 연차</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">사용</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">잔여</th>
-                      <th className="text-center p-2 text-xs font-medium text-gray-600 w-80">작업</th>
+                      <th className="text-center p-2 text-xs font-medium text-gray-600">작업</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-8 text-gray-400">등록된 육상 직원이 없습니다</td></tr>
+                      <tr><td colSpan={9} className="text-center py-8 text-gray-400">등록된 육상 직원이 없습니다</td></tr>
                     ) : rows.map(r => (
                       <tr key={r.user.id} className="border-b hover:bg-gray-50">
                         <td className="p-2 font-medium">{r.positionName ? `${r.positionName} ` : ''}{r.user.name}</td>
                         <td className="p-2 text-gray-500">
                           {r.user.hire_date || <span className="text-red-500">미등록</span>}
                         </td>
+                        <td className="p-2 text-gray-500">
+                          {r.user.hire_date ? getThisYearLeaveGrantDate(r.user.hire_date) : '-'}
+                        </td>
                         <td className="p-2 text-center">{formatLeaveHours(r.legalAccruedHours)}</td>
                         <td className="p-2 text-center text-blue-600">{r.companyGrantedHours > 0 ? formatLeaveHours(r.companyGrantedHours) : '-'}</td>
+                        <td className="p-2 text-center font-medium">{formatLeaveHours(r.accruedHours)}</td>
                         <td className="p-2 text-center text-gray-500">{formatLeaveHours(r.usedHours)}</td>
                         <td className="p-2 text-center font-semibold text-blue-700">{formatLeaveHours(r.remainingHours)}</td>
                         <td className="p-2">
-                          <div className="flex items-center justify-center gap-1 flex-wrap">
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => openDetail(r.user)}>
+                          <div className="flex items-center justify-center gap-0.5 whitespace-nowrap">
+                            <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5" onClick={() => openDetail(r.user)} title="연차 내역">
                               <History className="w-3 h-3" />내역
                             </Button>
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1 text-blue-600" onClick={() => openAdjust(r.user, 'grant')}>
-                              <Plus className="w-3 h-3" />회사 부여
+                            <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-blue-600" onClick={() => openAdjust(r.user, 'grant')} title="회사 부여">
+                              <Plus className="w-3 h-3" />부여
                             </Button>
-                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1 text-orange-600" onClick={() => openAdjust(r.user, 'manual_use')}>
-                              <Minus className="w-3 h-3" />사용 입력
+                            <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-orange-600" onClick={() => openAdjust(r.user, 'manual_use')} title="수동 사용 입력">
+                              <Minus className="w-3 h-3" />차감
                             </Button>
                             {currentUser && RESET_ROLES.includes(currentUser.role) && (
-                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1 text-red-600" onClick={() => openReset(r)}>
+                              <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-red-600" onClick={() => openReset(r)} title="사용/잔여 초기화">
                                 <RotateCcw className="w-3 h-3" />초기화
                               </Button>
                             )}
                             {currentUser && RESET_ROLES.includes(currentUser.role) && (
-                              <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1 text-gray-500" disabled={exemptSubmittingId === r.user.id} onClick={() => toggleExempt(r, true)}>
+                              <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-gray-500" disabled={exemptSubmittingId === r.user.id} onClick={() => toggleExempt(r, true)} title="연차 적용 제외">
                                 <UserX className="w-3 h-3" />제외
                               </Button>
                             )}
@@ -293,11 +298,8 @@ export default function ShoreLeaveManagementPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="overview" className="space-y-4 mt-3">
+        <TabsContent value="usage" className="space-y-4 mt-3">
           <LeaveUsageOverview rows={rows} />
-        </TabsContent>
-
-        <TabsContent value="calendar" className="space-y-4 mt-3">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">월별 연차 사용 캘린더</CardTitle>
