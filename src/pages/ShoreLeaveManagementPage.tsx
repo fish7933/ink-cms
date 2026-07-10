@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3 } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, CalendarRange } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,13 +16,15 @@ import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt,
+  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
 import { formatLeaveHours, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
+import LeaveUsageCalendar from '@/components/leave/LeaveUsageCalendar';
 import type { User } from '@/types/models';
 import type { SickLeaveRequestWithDetails } from '@/types/sick-leave';
+import type { ShoreLeaveRequestWithDetails } from '@/types/shore-leave';
 
 const SHORE_ROLES = ['ship_manager', 'admin', 'system_admin'];
 const RESET_ROLES = ['admin', 'system_admin'];
@@ -50,6 +52,7 @@ export default function ShoreLeaveManagementPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [exemptRows, setExemptRows] = useState<Row[]>([]);
+  const [approvedLeaveRequests, setApprovedLeaveRequests] = useState<ShoreLeaveRequestWithDetails[]>([]);
   const [sickRequests, setSickRequests] = useState<SickLeaveRequestWithDetails[]>([]);
   const [positionByUser, setPositionByUser] = useState<Map<string, string | null>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -76,14 +79,17 @@ export default function ShoreLeaveManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allUsers, members, sick] = await Promise.all([
+      const [allUsers, members, sick, leaveRequests] = await Promise.all([
         getUsers(),
         orgChartService.getOrgMembers(),
         getAllSickLeaveRequests(),
+        getAllLeaveRequests(),
       ]);
       const posMap = new Map(members.map(m => [m.id, m.position_name]));
       setPositionByUser(posMap);
       setSickRequests(sick);
+      const exemptUserIds = new Set(allUsers.filter(u => u.is_leave_exempt).map(u => u.id));
+      setApprovedLeaveRequests(leaveRequests.filter(r => r.status === 'approved' && !exemptUserIds.has(r.user_id)));
 
       const shoreUsers = allUsers.filter(u => SHORE_ROLES.includes(u.role));
       const computed = await Promise.all(shoreUsers.map(async u => {
@@ -199,6 +205,7 @@ export default function ShoreLeaveManagementPage() {
         <TabsList>
           <TabsTrigger value="annual">연차 관리</TabsTrigger>
           <TabsTrigger value="overview" className="gap-1"><BarChart3 className="w-3.5 h-3.5" />전체 현황 한눈에</TabsTrigger>
+          <TabsTrigger value="calendar" className="gap-1"><CalendarRange className="w-3.5 h-3.5" />월별 캘린더</TabsTrigger>
           <TabsTrigger value="sick">질병휴가 현황</TabsTrigger>
         </TabsList>
 
@@ -288,6 +295,18 @@ export default function ShoreLeaveManagementPage() {
 
         <TabsContent value="overview" className="space-y-4 mt-3">
           <LeaveUsageOverview rows={rows} />
+        </TabsContent>
+
+        <TabsContent value="calendar" className="space-y-4 mt-3">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">월별 연차 사용 캘린더</CardTitle>
+              <p className="text-xs text-gray-500">승인된 연차만 표시됩니다 (이미 사용한 연차 + 앞으로 사용 예정인 승인 건 모두 포함).</p>
+            </CardHeader>
+            <CardContent>
+              <LeaveUsageCalendar requests={approvedLeaveRequests} positionByUser={positionByUser} />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="sick" className="space-y-4 mt-3">
