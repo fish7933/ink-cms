@@ -78,6 +78,17 @@ export function getThisYearLeaveGrantDate(hireDate: string, referenceYear: numbe
   return date.toISOString().slice(0, 10);
 }
 
+// 현재 "연차 사용연도"의 시작일 — 입사일 기준으로 가장 최근에 지난(또는 오늘인) 발생일.
+// 아직 첫 발생일(=입사 1주년)이 지나지 않았다면 입사일 자체가 시작일이다.
+// 이 날짜 이전의 사용/부여 내역은 지난 연차년도 것으로 보고 잔여 계산에서 제외한다
+// (근로기준법상 미사용 연차는 원칙적으로 다음 해로 이월되지 않음).
+export function getCurrentLeaveYearStart(hireDate: string, asOfDate: string = new Date().toISOString().slice(0, 10)): string {
+  const thisYear = getThisYearLeaveGrantDate(hireDate, new Date(asOfDate).getFullYear());
+  if (thisYear <= asOfDate) return thisYear > hireDate ? thisYear : hireDate;
+  const lastYear = getThisYearLeaveGrantDate(hireDate, new Date(asOfDate).getFullYear() - 1);
+  return lastYear > hireDate ? lastYear : hireDate;
+}
+
 export interface LeaveBalance {
   legalAccruedHours: number; // 근로기준법상 자동 발생분
   companyGrantedHours: number; // 회사가 재량으로 수동 부여한 분 (포상휴가 등)

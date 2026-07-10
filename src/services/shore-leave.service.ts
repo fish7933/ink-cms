@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { calculateAccruedLeaveHours, type LeaveBalance } from '@/lib/leave-calc';
+import { calculateAccruedLeaveHours, getCurrentLeaveYearStart, type LeaveBalance } from '@/lib/leave-calc';
 import type { ShoreLeaveRequest, ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment, ShoreLeaveReset } from '@/types/shore-leave';
 
 export async function getMyLeaveRequests(userId: string): Promise<ShoreLeaveRequest[]> {
@@ -76,14 +76,15 @@ async function getLatestGrantResetAt(userId: string): Promise<string | null> {
   return data?.reset_at || null;
 }
 
-// 승인된 연차 신청 시간의 합 (해당 사용자 기준, 전체 기간 — 연도 구분 없이 입사일 기준 누적, 초기화 이후분만)
-export async function getUsedLeaveHours(userId: string, resetAt?: string | null): Promise<number> {
+// 승인된 연차 신청 시간의 합. 수동 초기화 이후분(resetAt) + 이번 연차년도(leaveYearStart, 휴가 실사용일 기준) 것만 카운트한다.
+export async function getUsedLeaveHours(userId: string, resetAt?: string | null, leaveYearStart?: string | null): Promise<number> {
   let query = supabase
     .from('shore_leave_requests')
     .select('hours')
     .eq('user_id', userId)
     .eq('status', 'approved');
   if (resetAt) query = query.gt('created_at', resetAt);
+  if (leaveYearStart) query = query.gte('start_date', leaveYearStart);
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).reduce((sum, r) => sum + Number(r.hours), 0);
@@ -127,7 +128,13 @@ export async function deleteLeaveAdjustment(id: string): Promise<void> {
 }
 
 // 수동 사용 입력(manual_use)은 usageResetAt 이후분만, 회사 부여(grant)는 grantResetAt이 지정된 경우에만 그 이후분으로 제한한다.
-async function getAdjustmentTotals(userId: string, usageResetAt?: string | null, grantResetAt?: string | null): Promise<{ grantHours: number; manualUseHours: number }> {
+// leaveYearStart가 있으면 두 종류 모두 이번 연차년도(가장 최근 발생일 이후) 것만 추가로 걸러낸다.
+async function getAdjustmentTotals(
+  userId: string,
+  usageResetAt?: string | null,
+  grantResetAt?: string | null,
+  leaveYearStart?: string | null,
+): Promise<{ grantHours: number; manualUseHours: number }> {
   const { data, error } = await supabase
     .from('shore_leave_adjustments')
     .select('adjustment_type, hours, created_at')
@@ -136,6 +143,8 @@ async function getAdjustmentTotals(userId: string, usageResetAt?: string | null,
   let grantHours = 0;
   let manualUseHours = 0;
   for (const r of data || []) {
+    const withinLeaveYear = !leaveYearStart || r.created_at.slice(0, 10) >= leaveYearStart;
+    if (!withinLeaveYear) continue;
     if (r.adjustment_type === 'grant') {
       if (!grantResetAt || r.created_at > grantResetAt) grantHours += Number(r.hours);
     } else if (!usageResetAt || r.created_at > usageResetAt) {
@@ -145,12 +154,15 @@ async function getAdjustmentTotals(userId: string, usageResetAt?: string | null,
   return { grantHours, manualUseHours };
 }
 
-// 잔여 연차 = (법정 발생시간 + 회사 부여시간, 초기화 이후분만) - (승인된 신청시간 + 수동 사용 입력시간, 초기화 이후분만)
+// 잔여 연차 = (법정 발생시간 + 회사 부여시간) - (승인된 신청시간 + 수동 사용 입력시간).
+// 수동 초기화 이후분 + 이번 연차년도(입사일 기준 가장 최근 발생일 이후) 것만 반영한다 — 지난 연차년도에
+// 사용했거나 부여받은 것은 새 발생일이 지나면 자동으로 잔여 계산에서 빠진다(이월 없음).
 export async function getLeaveBalance(userId: string, hireDate: string | null): Promise<LeaveBalance> {
+  const leaveYearStart = hireDate ? getCurrentLeaveYearStart(hireDate) : null;
   const [resetAt, grantResetAt] = await Promise.all([getLatestResetAt(userId), getLatestGrantResetAt(userId)]);
   const [requestUsedHours, { grantHours, manualUseHours }] = await Promise.all([
-    getUsedLeaveHours(userId, resetAt),
-    getAdjustmentTotals(userId, resetAt, grantResetAt),
+    getUsedLeaveHours(userId, resetAt, leaveYearStart),
+    getAdjustmentTotals(userId, resetAt, grantResetAt, leaveYearStart),
   ]);
   const legalAccruedHours = hireDate ? calculateAccruedLeaveHours(hireDate) : 0;
   const companyGrantedHours = grantHours;

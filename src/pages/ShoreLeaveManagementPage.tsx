@@ -228,7 +228,7 @@ export default function ShoreLeaveManagementPage() {
         <Users className="w-6 h-6" />
         <div>
           <h1 className="text-xl font-bold text-gray-900">육상 직원 연차 관리</h1>
-          <p className="text-sm text-gray-500">근로기준법에 따라 자동 발생하는 법정 연차와 회사가 재량으로 부여한 연차를 구분해서 관리하며, 승인된 신청 내역/수동 사용 입력을 반영해 잔여 연차를 계산합니다. 연차 적용 제외자(임원 등)는 현황·관리 대상에서 제외됩니다.</p>
+          <p className="text-sm text-gray-500">근로기준법에 따라 자동 발생하는 법정 연차와 회사가 재량으로 부여한 연차를 구분해서 관리하며, 승인된 신청 내역/수동 사용 입력을 반영해 잔여 연차를 계산합니다. 사용/부여 내역은 각자의 다음 연차 발생일이 지나면 자동으로 새로 초기화됩니다(이월 없음). 연차 적용 제외자(임원 등)는 현황·관리 대상에서 제외됩니다.</p>
         </div>
       </div>
 
