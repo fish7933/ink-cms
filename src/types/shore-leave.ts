@@ -37,3 +37,18 @@ export interface ShoreLeaveReset {
   created_by: string;
   created_at: string;
 }
+
+export interface ShoreLeaveAdminLog {
+  id: string;
+  user_id: string;
+  action_type: 'grant' | 'manual_use' | 'reset' | 'exempt_on' | 'exempt_off';
+  hours: number | null;
+  reason: string | null;
+  performed_by: string;
+  created_at: string;
+}
+
+export interface ShoreLeaveAdminLogWithNames extends ShoreLeaveAdminLog {
+  user_name: string;
+  performed_by_name: string;
+}

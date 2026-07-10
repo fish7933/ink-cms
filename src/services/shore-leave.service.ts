@@ -1,6 +1,47 @@
 import { supabase } from '@/lib/supabase';
 import { calculateAccruedLeaveHours, getCurrentLeaveYearStart, type LeaveBalance } from '@/lib/leave-calc';
-import type { ShoreLeaveRequest, ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment, ShoreLeaveReset } from '@/types/shore-leave';
+import type { ShoreLeaveRequest, ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment, ShoreLeaveReset, ShoreLeaveAdminLogWithNames } from '@/types/shore-leave';
+
+// 관리자 전용 메뉴(육상 직원 연차 관리)에서 발생하는 부여/차감/초기화/제외 지정-해제를 감사 로그로 남긴다.
+// UI에서 삭제 기능을 제공하지 않는 append-only 로그다.
+async function logAdminAction(input: {
+  user_id: string;
+  action_type: 'grant' | 'manual_use' | 'reset' | 'exempt_on' | 'exempt_off';
+  hours?: number | null;
+  reason?: string | null;
+  performed_by: string;
+}): Promise<void> {
+  const { error } = await supabase.from('shore_leave_admin_log').insert({
+    user_id: input.user_id,
+    action_type: input.action_type,
+    hours: input.hours ?? null,
+    reason: input.reason || null,
+    performed_by: input.performed_by,
+  });
+  if (error) console.error('shore_leave_admin_log 기록 실패 (마이그레이션 미적용 가능성)', error);
+}
+
+// 관리자 작업 로그 전체 조회 (전 직원 대상, 최신순) — 육상 직원 연차 관리 화면에 표시한다.
+export async function getAdminActionLog(): Promise<ShoreLeaveAdminLogWithNames[]> {
+  const { data, error } = await supabase
+    .from('shore_leave_admin_log')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) { console.error('shore_leave_admin_log 조회 실패 (마이그레이션 미적용 가능성)', error); return []; }
+  const rows = data || [];
+  if (rows.length === 0) return [];
+
+  const userIds = [...new Set([...rows.map(r => r.user_id), ...rows.map(r => r.performed_by)])];
+  const { data: users, error: userError } = await supabase.from('users').select('id, name').in('id', userIds);
+  if (userError) throw userError;
+  const nameMap = new Map((users || []).map(u => [u.id, u.name]));
+
+  return rows.map(r => ({
+    ...r,
+    user_name: nameMap.get(r.user_id) || '알 수 없음',
+    performed_by_name: nameMap.get(r.performed_by) || '알 수 없음',
+  }));
+}
 
 export async function getMyLeaveRequests(userId: string): Promise<ShoreLeaveRequest[]> {
   const { data, error } = await supabase
@@ -29,12 +70,14 @@ export async function getLeaveRequestsByUser(userId: string): Promise<ShoreLeave
 }
 
 // 연차 적용 제외자(임원 등) 지정/해제. 직급이 아니라 사람 단위 예외라 users.is_leave_exempt를 직접 갱신한다.
-export async function setLeaveExempt(userId: string, exempt: boolean): Promise<void> {
+// 누가 지정/해제했는지 관리자 작업 로그에 남긴다.
+export async function setLeaveExempt(userId: string, exempt: boolean, performedBy: string): Promise<void> {
   const { error } = await supabase
     .from('users')
     .update({ is_leave_exempt: exempt, updated_at: new Date().toISOString() })
     .eq('id', userId);
   if (error) throw error;
+  await logAdminAction({ user_id: userId, action_type: exempt ? 'exempt_on' : 'exempt_off', performed_by: performedBy });
 }
 
 // 가장 최근 초기화 시점 (없으면 null) — 이 시점 이전에 생성된 신청/수동사용 조정은 잔여 계산에서 제외한다.
@@ -119,6 +162,7 @@ export async function addLeaveAdjustment(input: {
     .select()
     .single();
   if (error) throw error;
+  await logAdminAction({ user_id: input.user_id, action_type: input.adjustment_type, hours: input.hours, reason: input.reason, performed_by: input.created_by });
   return data;
 }
 
@@ -208,6 +252,14 @@ export async function resetLeaveUsage(input: {
       if (delError) throw delError;
     }
   }
+
+  const detail = [input.reset_grants ? '회사부여 포함' : null, input.delete_history ? '내역삭제' : null].filter(Boolean).join(', ');
+  await logAdminAction({
+    user_id: input.user_id,
+    action_type: 'reset',
+    reason: detail ? `${input.reason || ''} (${detail})`.trim() : input.reason,
+    performed_by: input.created_by,
+  });
 
   return data;
 }

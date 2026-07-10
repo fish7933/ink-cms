@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3 } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments,
+  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments, getAdminActionLog,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
 import { formatLeaveHours, getThisYearLeaveGrantDate, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
@@ -24,7 +24,15 @@ import { useToast } from '@/hooks/use-toast';
 import LeaveUsageCalendar from '@/components/leave/LeaveUsageCalendar';
 import type { User } from '@/types/models';
 import type { SickLeaveRequestWithDetails } from '@/types/sick-leave';
-import type { ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment } from '@/types/shore-leave';
+import type { ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment, ShoreLeaveAdminLogWithNames } from '@/types/shore-leave';
+
+const ACTION_LABELS: Record<ShoreLeaveAdminLogWithNames['action_type'], { label: string; color: string }> = {
+  grant: { label: '회사 부여', color: 'bg-blue-100 text-blue-700' },
+  manual_use: { label: '사용 차감', color: 'bg-orange-100 text-orange-700' },
+  reset: { label: '초기화', color: 'bg-red-100 text-red-700' },
+  exempt_on: { label: '제외 지정', color: 'bg-gray-200 text-gray-700' },
+  exempt_off: { label: '제외 해제', color: 'bg-gray-100 text-gray-600' },
+};
 
 const SHORE_ROLES = ['ship_manager', 'admin', 'system_admin'];
 const RESET_ROLES = ['admin', 'system_admin'];
@@ -52,6 +60,7 @@ export default function ShoreLeaveManagementPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [exemptRows, setExemptRows] = useState<Row[]>([]);
+  const [adminLog, setAdminLog] = useState<ShoreLeaveAdminLogWithNames[]>([]);
   const [approvedLeaveRequests, setApprovedLeaveRequests] = useState<ShoreLeaveRequestWithDetails[]>([]);
   const [sickRequests, setSickRequests] = useState<SickLeaveRequestWithDetails[]>([]);
   const [positionByUser, setPositionByUser] = useState<Map<string, string | null>>(new Map());
@@ -85,16 +94,18 @@ export default function ShoreLeaveManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allUsers, members, sick, leaveRequests] = await Promise.all([
+      const [allUsers, members, sick, leaveRequests, log] = await Promise.all([
         getUsers(),
         orgChartService.getOrgMembers(),
         getAllSickLeaveRequests(),
         getAllLeaveRequests(),
+        getAdminActionLog(),
       ]);
       const posMap = new Map(members.map(m => [m.id, m.position_name]));
       const posOrderMap = new Map(members.map(m => [m.id, m.position_order]));
       setPositionByUser(posMap);
       setSickRequests(sick);
+      setAdminLog(log);
       const exemptUserIds = new Set(allUsers.filter(u => u.is_leave_exempt).map(u => u.id));
       setApprovedLeaveRequests(leaveRequests.filter(r => r.status === 'approved' && !exemptUserIds.has(r.user_id)));
 
@@ -186,10 +197,11 @@ export default function ShoreLeaveManagementPage() {
   };
 
   const toggleExempt = async (row: Row, exempt: boolean) => {
+    if (!currentUser) return;
     if (exempt && !confirm(`${row.user.name}님을 연차 적용 제외자로 지정하시겠습니까? 연차 현황/관리 대상에서 제외됩니다.`)) return;
     try {
       setExemptSubmittingId(row.user.id);
-      await setLeaveExempt(row.user.id, exempt);
+      await setLeaveExempt(row.user.id, exempt, currentUser.id);
       toast({ title: exempt ? '연차 적용 제외자로 지정되었습니다.' : '연차 적용 대상으로 다시 포함되었습니다.' });
       await loadData();
     } catch (e) {
@@ -337,6 +349,45 @@ export default function ShoreLeaveManagementPage() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-1.5"><ScrollText className="w-4 h-4 text-gray-400" />관리자 작업 로그</CardTitle>
+              <p className="text-xs text-gray-500">부여/차감/초기화/제외 지정·해제 등 관리자가 수행한 작업을 담당자와 함께 기록합니다. 이 로그는 삭제할 수 없습니다.</p>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {adminLog.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">작업 로그가 없습니다</p>
+              ) : (
+                <div className="border rounded-md overflow-hidden overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left p-2">일시</th>
+                        <th className="text-left p-2">대상 직원</th>
+                        <th className="text-center p-2">작업</th>
+                        <th className="text-center p-2">시간</th>
+                        <th className="text-left p-2">사유</th>
+                        <th className="text-left p-2">담당자</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminLog.map(l => (
+                        <tr key={l.id} className="border-b">
+                          <td className="p-2 text-gray-500 whitespace-nowrap">{new Date(l.created_at).toLocaleString('ko-KR')}</td>
+                          <td className="p-2 font-medium">{l.user_name}</td>
+                          <td className="p-2 text-center"><Badge className={`text-xs ${ACTION_LABELS[l.action_type]?.color}`}>{ACTION_LABELS[l.action_type]?.label}</Badge></td>
+                          <td className="p-2 text-center">{l.hours != null ? formatLeaveHours(l.hours) : '-'}</td>
+                          <td className="p-2 text-gray-500">{l.reason || '-'}</td>
+                          <td className="p-2 text-blue-700 font-medium whitespace-nowrap">{l.performed_by_name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="usage" className="space-y-4 mt-3">
