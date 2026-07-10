@@ -23,8 +23,6 @@ const MyRecommendationsPage = lazy(() => import('@/pages/MyRecommendationsPage')
 const RecommendationReviewPage = lazy(() => import('@/pages/RecommendationReviewPage'));
 const ApprovalLineManagementPage = lazy(() => import('@/pages/ApprovalLineManagementPage'));
 const ApprovalInboxPage = lazy(() => import('@/pages/ApprovalInboxPage'));
-const ApprovalArchivePage = lazy(() => import('@/pages/ApprovalArchivePage'));
-const ApprovalManagementPage = lazy(() => import('@/pages/ApprovalManagementPage'));
 const SupervisorManagementPage = lazy(() => import('@/pages/SupervisorManagementPage'));
 const RanksPage = lazy(() => import('@/pages/RanksPage'));
 const PermissionsPage = lazy(() => import('@/pages/PermissionsPage'));
@@ -37,7 +35,6 @@ const AllowanceTypesManagementPage = lazy(() => import('@/pages/AllowanceTypesMa
 const OrgChartManagementPage = lazy(() => import('@/pages/OrgChartManagementPage'));
 const DocumentTypesManagementPage = lazy(() => import('@/pages/DocumentTypesManagementPage'));
 const DocumentDraftPage = lazy(() => import('@/pages/DocumentDraftPage'));
-const MyDocumentsPage = lazy(() => import('@/pages/MyDocumentsPage'));
 const PortManagementPage = lazy(() => import('@/pages/PortManagementPage'));
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const CompanyManagementPage = lazy(() => import('@/pages/CompanyManagementPage'));
@@ -58,8 +55,9 @@ const CrewManagementSettingsPage = lazy(() => import('@/pages/CrewManagementSett
 const ShipManagementSettingsPage = lazy(() => import('@/pages/ShipManagementSettingsPage'));
 const ShoreLeaveRequestPage = lazy(() => import('@/pages/ShoreLeaveRequestPage'));
 const ShoreLeaveManagementPage = lazy(() => import('@/pages/ShoreLeaveManagementPage'));
+const ShoreLeaveDetailPage = lazy(() => import('@/pages/ShoreLeaveDetailPage'));
 const SickLeaveRequestPage = lazy(() => import('@/pages/SickLeaveRequestPage'));
-const ReferencedDocumentsPage = lazy(() => import('@/pages/ReferencedDocumentsPage'));
+const HomepagePostsPage = lazy(() => import('@/pages/HomepagePostsPage'));
 
 export interface RouteEntry {
   path: string;
@@ -95,8 +93,10 @@ export const routeConfig: RouteEntry[] = [
   { path: '/recommendation-review', component: RecommendationReviewPage },
   { path: '/approval-lines', component: ApprovalLineManagementPage },
   { path: '/approval-inbox', component: ApprovalInboxPage },
-  { path: '/approval-archive', component: ApprovalArchivePage },
-  { path: '/approval-management', component: ApprovalManagementPage },
+  // 결재함/기안함/참조함/완료문서함/결재캐비닛을 결재함(ApprovalInboxPage) 하나로 통합 —
+  // 기존 북마크·열린 탭이 깨지지 않도록 옛 경로도 같은 컴포넌트로 연결해둔다.
+  { path: '/approval-archive', component: ApprovalInboxPage },
+  { path: '/approval-management', component: ApprovalInboxPage },
   { path: '/supervisor-management', component: SupervisorManagementPage },
   { path: '/ranks', component: RanksPage },
   { path: '/permissions', component: PermissionsPage },
@@ -109,7 +109,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/org-chart', component: OrgChartManagementPage },
   { path: '/document-types', component: DocumentTypesManagementPage },
   { path: '/documents/new', component: DocumentDraftPage },
-  { path: '/documents', component: MyDocumentsPage },
+  { path: '/documents', component: ApprovalInboxPage },
   { path: '/ports', component: PortManagementPage },
   { path: '/profile', component: ProfilePage },
   { path: '/companies', component: CompanyManagementPage },
@@ -130,7 +130,9 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew-management-settings', component: CrewManagementSettingsPage },
   { path: '/ship-management-settings', component: ShipManagementSettingsPage },
   { path: '/shore-leave-request', component: ShoreLeaveRequestPage },
+  { path: '/shore-leave-management/:userId', component: ShoreLeaveDetailPage },
   { path: '/shore-leave-management', component: ShoreLeaveManagementPage },
   { path: '/sick-leave-request', component: SickLeaveRequestPage },
-  { path: '/referenced-documents', component: ReferencedDocumentsPage },
+  { path: '/referenced-documents', component: ApprovalInboxPage },
+  { path: '/homepage-posts', component: HomepagePostsPage },
 ];

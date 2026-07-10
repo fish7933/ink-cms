@@ -26,3 +26,13 @@ export interface ShoreLeaveAdjustment {
   created_by: string;
   created_at: string;
 }
+
+export interface ShoreLeaveReset {
+  id: string;
+  user_id: string;
+  reset_at: string;
+  deleted_history: boolean;
+  reason: string | null;
+  created_by: string;
+  created_at: string;
+}

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { CalendarDays, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,7 +12,7 @@ import { approvalDocumentService } from '@/services/approval-document.service';
 import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, getLeaveBalance } from '@/services/shore-leave.service';
 import { formatLeaveHours, type LeaveBalance } from '@/lib/leave-calc';
 import { calculateLeaveHours, rangesOverlap } from '@/lib/leave-duration';
-import type { OrgUnit } from '@/types/org-chart';
+import type { OrgUnit, ApprovalChainStep } from '@/types/org-chart';
 import type { ShoreLeaveRequest } from '@/types/shore-leave';
 import type { User } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
@@ -25,17 +24,33 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: '취소', color: 'bg-gray-100 text-gray-500' },
 };
 
+type LeaveType = 'full' | 'am' | 'pm';
+
+const LEAVE_TYPE_OPTIONS: { value: LeaveType; label: string; range: string }[] = [
+  { value: 'full', label: '종일', range: '09:00~18:00' },
+  { value: 'am', label: '오전반차', range: '09:00~14:00' },
+  { value: 'pm', label: '오후반차', range: '14:00~18:00' },
+];
+
+const LEAVE_TYPE_TIMES: Record<LeaveType, { start_time: string; end_time: string }> = {
+  full: { start_time: '09:00', end_time: '18:00' },
+  am: { start_time: '09:00', end_time: '14:00' },
+  pm: { start_time: '14:00', end_time: '18:00' },
+};
+
 export default function ShoreLeaveRequestPage() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [balance, setBalance] = useState<LeaveBalance>({ accruedHours: 0, usedHours: 0, remainingHours: 0 });
+  const [balance, setBalance] = useState<LeaveBalance>({ legalAccruedHours: 0, companyGrantedHours: 0, accruedHours: 0, usedHours: 0, remainingHours: 0 });
   const [myRequests, setMyRequests] = useState<ShoreLeaveRequest[]>([]);
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
   const [myOrgUnitId, setMyOrgUnitId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [approvalChain, setApprovalChain] = useState<ApprovalChainStep[]>([]);
+  const [chainLoading, setChainLoading] = useState(true);
 
-  const [form, setForm] = useState({ start_date: '', start_time: '09:00', end_date: '', end_time: '18:00', reason: '', ccOrgUnitIds: [] as string[] });
+  const [form, setForm] = useState({ start_date: '', end_date: '', leaveType: 'full' as LeaveType, reason: '', ccOrgUnitIds: [] as string[] });
 
   useEffect(() => { loadData(); }, []);
 
@@ -56,7 +71,9 @@ export default function ShoreLeaveRequestPage() {
       setMyRequests(requests);
       setBalance(bal);
       const me = members.find(m => m.id === user.id);
-      setMyOrgUnitId(me?.org_unit_ids[0] || null);
+      const orgUnitId = me?.org_unit_ids[0] || null;
+      setMyOrgUnitId(orgUnitId);
+      await loadApprovalChain(orgUnitId);
     } catch (e) {
       console.error(e);
       toast({ title: '데이터를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -65,7 +82,37 @@ export default function ShoreLeaveRequestPage() {
     }
   };
 
-  const totalHours = calculateLeaveHours(form.start_date, form.start_time, form.end_date, form.end_time);
+  const loadApprovalChain = async (orgUnitId: string | null) => {
+    setChainLoading(true);
+    try {
+      if (!orgUnitId) { setApprovalChain([]); return; }
+      const documentTypes = await approvalDocumentService.getDocumentTypes();
+      const leaveType = documentTypes.find(t => t.code === 'LEAVE_REQUEST');
+      if (!leaveType) { setApprovalChain([]); return; }
+      const chain = await approvalDocumentService.previewChain(orgUnitId, leaveType.id);
+      setApprovalChain(chain);
+    } catch (e) {
+      console.error(e);
+      setApprovalChain([]);
+    } finally {
+      setChainLoading(false);
+    }
+  };
+
+  const isSingleDay = !!form.start_date && form.start_date === form.end_date;
+  const effectiveLeaveType: LeaveType = isSingleDay ? form.leaveType : 'full';
+  const { start_time, end_time } = LEAVE_TYPE_TIMES[effectiveLeaveType];
+  const totalHours = calculateLeaveHours(form.start_date, start_time, form.end_date, end_time);
+  const dayCount = form.start_date && form.end_date
+    ? Math.round((new Date(form.end_date).getTime() - new Date(form.start_date).getTime()) / 86400000) + 1
+    : 0;
+  const isMultiDay = dayCount >= 2;
+  const isToday = (() => {
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return form.start_date === todayIso;
+  })();
+  const isSameDayRequestBlocked = isToday && new Date().getHours() >= 9;
 
   const toggleCcUnit = (unitId: string) => {
     setForm(prev => ({
@@ -79,11 +126,13 @@ export default function ShoreLeaveRequestPage() {
     if (!currentUser.hire_date) { toast({ title: '입사일이 등록되어 있지 않습니다. 관리자에게 문의하세요.', variant: 'destructive' }); return; }
     if (!myOrgUnitId) { toast({ title: '소속 부서가 조직도에 등록되어 있지 않습니다. 관리자에게 문의하세요.', variant: 'destructive' }); return; }
     if (!form.start_date || !form.end_date) { toast({ title: '달력에서 휴가 기간을 선택하세요.', variant: 'destructive' }); return; }
+    if (isSameDayRequestBlocked) { toast({ title: '당일 연차는 오전 9시 이전에만 신청할 수 있습니다.', variant: 'destructive' }); return; }
     if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
     if (totalHours > balance.remainingHours) { toast({ title: `잔여 연차(${formatLeaveHours(balance.remainingHours)})를 초과했습니다.`, variant: 'destructive' }); return; }
+    if (isMultiDay && !form.reason.trim()) { toast({ title: '2일 이상 신청 시 특별한 사유를 입력해야 합니다.', description: '예: 여름휴가 등', variant: 'destructive' }); return; }
 
     // 이미 결재중이거나 승인된 신청과 날짜/시간대가 겹치면 중복 신청을 막는다.
-    const newRange = { start_date: form.start_date, start_time: form.start_time, end_date: form.end_date, end_time: form.end_time };
+    const newRange = { start_date: form.start_date, start_time, end_date: form.end_date, end_time };
     const conflict = (await getMyLeaveRequests(currentUser.id)).find(r =>
       (r.status === 'pending' || r.status === 'approved') && rangesOverlap(newRange, r)
     );
@@ -104,9 +153,9 @@ export default function ShoreLeaveRequestPage() {
       leaveReq = await addLeaveRequest({
         user_id: currentUser.id,
         start_date: form.start_date,
-        start_time: form.start_time,
+        start_time,
         end_date: form.end_date,
-        end_time: form.end_time,
+        end_time,
         hours: totalHours,
         reason: form.reason || undefined,
       });
@@ -125,7 +174,7 @@ export default function ShoreLeaveRequestPage() {
       await linkLeaveRequestDocument(leaveReq.id, doc.id);
 
       toast({ title: '연차 신청이 제출되었습니다.' });
-      setForm({ start_date: '', start_time: '09:00', end_date: '', end_time: '18:00', reason: '', ccOrgUnitIds: [] });
+      setForm({ start_date: '', end_date: '', leaveType: 'full', reason: '', ccOrgUnitIds: [] });
       await loadData();
     } catch (e) {
       if (leaveReq) await deleteLeaveRequest(leaveReq.id).catch(() => {});
@@ -160,10 +209,14 @@ export default function ShoreLeaveRequestPage() {
       </div>
 
       <Card>
-        <CardContent className="pt-4 grid grid-cols-3 gap-3 text-center">
+        <CardContent className="pt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
           <div className="p-3 bg-gray-50 rounded-md">
-            <p className="text-xs text-gray-500">발생 연차</p>
-            <p className="text-xl font-bold">{formatLeaveHours(balance.accruedHours)}</p>
+            <p className="text-xs text-gray-500">법정 발생 연차</p>
+            <p className="text-xl font-bold">{formatLeaveHours(balance.legalAccruedHours)}</p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-md">
+            <p className="text-xs text-gray-500">회사 부여 연차</p>
+            <p className="text-xl font-bold">{formatLeaveHours(balance.companyGrantedHours)}</p>
           </div>
           <div className="p-3 bg-gray-50 rounded-md">
             <p className="text-xs text-gray-500">사용(승인) 연차</p>
@@ -183,7 +236,7 @@ export default function ShoreLeaveRequestPage() {
             <LeaveRangeCalendar
               startDate={form.start_date}
               endDate={form.end_date}
-              onChange={(start_date, end_date) => setForm(prev => ({ ...prev, start_date, end_date }))}
+              onChange={(start_date, end_date) => setForm(prev => ({ ...prev, start_date, end_date, leaveType: start_date === end_date ? prev.leaveType : 'full', reason: start_date === end_date ? '' : prev.reason }))}
             />
             <div className="flex-1 space-y-3">
               <div className="p-3 bg-gray-50 rounded-md text-sm">
@@ -192,20 +245,68 @@ export default function ShoreLeaveRequestPage() {
                   {form.start_date && form.end_date ? `${form.start_date} ~ ${form.end_date}` : '달력에서 시작일과 종료일을 클릭하세요'}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label className="text-xs">시작 시각</Label><Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
-                <div className="space-y-1.5"><Label className="text-xs">종료 시각</Label><Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
+              {isSameDayRequestBlocked && (
+                <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-md p-2">
+                  당일 연차는 오전 9시 이전에만 신청할 수 있습니다.
+                </p>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-xs">휴가 종류</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {LEAVE_TYPE_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value} type="button" disabled={submitting || (opt.value !== 'full' && !isSingleDay)}
+                      onClick={() => setForm(prev => ({ ...prev, leaveType: opt.value }))}
+                      className={`px-2 py-2 rounded-md text-xs border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${effectiveLeaveType === opt.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                      <p className="font-medium">{opt.label}</p>
+                      <p className={`text-[10px] ${effectiveLeaveType === opt.value ? 'text-blue-100' : 'text-gray-400'}`}>{opt.range}</p>
+                    </button>
+                  ))}
+                </div>
+                {!isSingleDay && <p className="text-[11px] text-gray-400">반차는 하루짜리 연차에만 선택할 수 있습니다.</p>}
               </div>
               <div className="p-3 bg-blue-50 rounded-md text-center">
                 <p className="text-xs text-blue-600">자동 계산된 신청 연차</p>
                 <p className="text-xl font-bold text-blue-700">{formatLeaveHours(totalHours)}</p>
               </div>
-              <p className="text-[11px] text-gray-400">기준 근무시간 09:00~18:00 (점심시간 12:00~13:00 제외, 1일 = 8시간)</p>
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">사유</Label>
-            <Textarea value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} rows={2} className="text-sm resize-none" disabled={submitting} />
+            <Label className="text-xs">사유 {isMultiDay && <span className="text-red-500">*</span>}</Label>
+            <Textarea
+              value={form.reason}
+              onChange={e => setForm({ ...form, reason: e.target.value })}
+              rows={2}
+              className="text-sm resize-none"
+              disabled={submitting || !isMultiDay}
+              placeholder={isMultiDay ? '특별한 사유를 입력하세요 (예: 여름휴가 등)' : '2일 이상 신청 시에만 입력할 수 있습니다'}
+            />
+            <p className="text-[11px] text-gray-400">연차는 특별한 사유(여름휴가 등)가 없으면 2일 이상 연속으로 신청할 수 없습니다.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">결재선</Label>
+            {chainLoading ? (
+              <p className="text-xs text-gray-400">결재선을 불러오는 중...</p>
+            ) : approvalChain.length === 0 ? (
+              <p className="text-xs text-red-500">결재라인을 구성할 수 없습니다. 부서장이 지정되어 있는지 관리자에게 문의하세요.</p>
+            ) : (
+              <div className="flex items-center gap-1.5 flex-wrap p-2.5 bg-gray-50 rounded-md">
+                <div className="px-2.5 py-1.5 rounded border bg-purple-50 border-purple-300 text-xs">
+                  <p className="font-medium">신청자</p>
+                  <p className="text-gray-500">{currentUser?.name}</p>
+                </div>
+                {approvalChain.map((step, idx) => (
+                  <div key={step.approver_id + idx} className="flex items-center gap-1.5">
+                    <span className="text-gray-300">→</span>
+                    <div className="px-2.5 py-1.5 rounded border bg-white border-gray-200 text-xs">
+                      <p className="font-medium">{idx + 1}. {step.approver_name}</p>
+                      <p className="text-gray-500">{step.approver_role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">참조 부서 <span className="text-gray-400 font-normal">(결재선과 별개로 통보, 예: 총무팀)</span></Label>
@@ -221,7 +322,7 @@ export default function ShoreLeaveRequestPage() {
             </div>
           </div>
           <div className="flex justify-end pt-1">
-            <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting}>
+            <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting || isSameDayRequestBlocked}>
               <Send className="w-4 h-4" />{submitting ? '제출 중...' : '결재 상신'}
             </Button>
           </div>

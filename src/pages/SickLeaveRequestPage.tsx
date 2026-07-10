@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Stethoscope, Send, X, Paperclip, Upload, Trash2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,8 +15,8 @@ import {
   getMySickLeaveRequests, addSickLeaveRequest, cancelSickLeaveRequest,
   deleteSickLeaveRequest, linkSickLeaveRequestDocument, getUsedSickLeaveHours, updateSickLeaveAttachments,
 } from '@/services/sick-leave.service';
-import { formatLeaveHours } from '@/lib/leave-calc';
-import { calculateLeaveHours, rangesOverlap } from '@/lib/leave-duration';
+import { formatLeaveHours, HOURS_PER_DAY } from '@/lib/leave-calc';
+import { rangesOverlap } from '@/lib/leave-duration';
 import { useToast } from '@/hooks/use-toast';
 import type { OrgUnit } from '@/types/org-chart';
 import type { SickLeaveRequest, SickLeaveAttachment } from '@/types/sick-leave';
@@ -30,6 +29,15 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: '취소', color: 'bg-gray-100 text-gray-500' },
 };
 
+// 질병휴가는 시간이 아닌 일수 단위로만 신청한다 — 매일 표준 근무시간(09:00~18:00)을 그대로 사용해 시간으로 환산해 저장한다.
+const SICK_START_TIME = '09:00';
+const SICK_END_TIME = '18:00';
+
+function countDays(startDate: string, endDate: string): number {
+  if (!startDate || !endDate || endDate < startDate) return 0;
+  return Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1;
+}
+
 export default function SickLeaveRequestPage() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -40,7 +48,7 @@ export default function SickLeaveRequestPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [form, setForm] = useState({ start_date: '', start_time: '09:00', end_date: '', end_time: '18:00', reason: '', ccOrgUnitIds: [] as string[] });
+  const [form, setForm] = useState({ start_date: '', end_date: '', reason: '', ccOrgUnitIds: [] as string[] });
 
   const [evidenceRequest, setEvidenceRequest] = useState<SickLeaveRequest | null>(null);
   const [evidenceAttachments, setEvidenceAttachments] = useState<SickLeaveAttachment[]>([]);
@@ -75,7 +83,8 @@ export default function SickLeaveRequestPage() {
     }
   };
 
-  const totalHours = calculateLeaveHours(form.start_date, form.start_time, form.end_date, form.end_time);
+  const totalDays = countDays(form.start_date, form.end_date);
+  const totalHours = totalDays * HOURS_PER_DAY;
 
   const toggleCcUnit = (unitId: string) => {
     setForm(prev => ({
@@ -88,15 +97,15 @@ export default function SickLeaveRequestPage() {
     if (!currentUser) return;
     if (!myOrgUnitId) { toast({ title: '소속 부서가 조직도에 등록되어 있지 않습니다. 관리자에게 문의하세요.', variant: 'destructive' }); return; }
     if (!form.start_date || !form.end_date) { toast({ title: '달력에서 휴가 기간을 선택하세요.', variant: 'destructive' }); return; }
-    if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
+    if (totalDays <= 0) { toast({ title: '휴가 기간을 확인하세요. (종료일이 시작일보다 늦어야 합니다)', variant: 'destructive' }); return; }
 
-    // 이미 결재중이거나 승인된 신청과 날짜/시간대가 겹치면 중복 신청을 막는다.
-    const newRange = { start_date: form.start_date, start_time: form.start_time, end_date: form.end_date, end_time: form.end_time };
+    // 이미 결재중이거나 승인된 신청과 날짜가 겹치면 중복 신청을 막는다.
+    const newRange = { start_date: form.start_date, start_time: SICK_START_TIME, end_date: form.end_date, end_time: SICK_END_TIME };
     const conflict = (await getMySickLeaveRequests(currentUser.id)).find(r =>
       (r.status === 'pending' || r.status === 'approved') && rangesOverlap(newRange, r)
     );
     if (conflict) {
-      toast({ title: '이미 같은 기간에 신청된 질병휴가가 있습니다.', description: `${conflict.start_date} ${conflict.start_time} ~ ${conflict.end_date} ${conflict.end_time} (${STATUS_LABELS[conflict.status]?.label})`, variant: 'destructive' });
+      toast({ title: '이미 같은 기간에 신청된 질병휴가가 있습니다.', description: `${conflict.start_date} ~ ${conflict.end_date} (${STATUS_LABELS[conflict.status]?.label})`, variant: 'destructive' });
       return;
     }
 
@@ -110,9 +119,9 @@ export default function SickLeaveRequestPage() {
       sickReq = await addSickLeaveRequest({
         user_id: currentUser.id,
         start_date: form.start_date,
-        start_time: form.start_time,
+        start_time: SICK_START_TIME,
         end_date: form.end_date,
-        end_time: form.end_time,
+        end_time: SICK_END_TIME,
         hours: totalHours,
         reason: form.reason || undefined,
       });
@@ -131,7 +140,7 @@ export default function SickLeaveRequestPage() {
       await linkSickLeaveRequestDocument(sickReq.id, doc.id);
 
       toast({ title: '질병휴가 신청이 제출되었습니다.' });
-      setForm({ start_date: '', start_time: '09:00', end_date: '', end_time: '18:00', reason: '', ccOrgUnitIds: [] });
+      setForm({ start_date: '', end_date: '', reason: '', ccOrgUnitIds: [] });
       await loadData();
     } catch (e) {
       if (sickReq) await deleteSickLeaveRequest(sickReq.id).catch(() => {});
@@ -233,15 +242,11 @@ export default function SickLeaveRequestPage() {
                   {form.start_date && form.end_date ? `${form.start_date} ~ ${form.end_date}` : '달력에서 시작일과 종료일을 클릭하세요'}
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label className="text-xs">시작 시각</Label><Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
-                <div className="space-y-1.5"><Label className="text-xs">종료 시각</Label><Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} className="h-9 text-sm" disabled={submitting} /></div>
-              </div>
               <div className="p-3 bg-blue-50 rounded-md text-center">
-                <p className="text-xs text-blue-600">자동 계산된 신청 시간</p>
-                <p className="text-xl font-bold text-blue-700">{formatLeaveHours(totalHours)}</p>
+                <p className="text-xs text-blue-600">신청 일수</p>
+                <p className="text-xl font-bold text-blue-700">{totalDays > 0 ? `${totalDays}일` : '-'}</p>
               </div>
-              <p className="text-[11px] text-gray-400">기준 근무시간 09:00~18:00 (점심시간 12:00~13:00 제외, 1일 = 8시간)</p>
+              <p className="text-[11px] text-gray-400">질병휴가는 시간 단위가 아닌 일 단위로만 신청할 수 있습니다.</p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -278,7 +283,7 @@ export default function SickLeaveRequestPage() {
             <div className="border rounded-md overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
-                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수/시간</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="text-center p-2">증빙</th><th className="p-2 w-16"></th></tr>
+                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="text-center p-2">증빙</th><th className="p-2 w-16"></th></tr>
                 </thead>
                 <tbody>
                   {myRequests.map(r => (

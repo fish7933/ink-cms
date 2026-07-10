@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Eye, ExternalLink, UserPlus, Award, ArrowLeft, Undo2, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,10 @@ const calcAge = (birthDate: string): number => {
   return age;
 };
 
+const ALLOWED_ROLES = ['manning_agency', 'admin', 'system_admin'];
+
 export default function MyRecommendationsPage() {
+  const navigate = useNavigate();
   const { openNewTab } = useTabContext();
   const [recommendations, setRecommendations] = useState<CrewRecommendationWithDetails[]>([]);
   const [filtered, setFiltered] = useState<CrewRecommendationWithDetails[]>([]);
@@ -71,6 +75,7 @@ export default function MyRecommendationsPage() {
       const [user, allCompanies, allFleets, allShips, allRanks] = await Promise.all([
         getCurrentUser(), getCompanies(), getFleets(), getShips(), getRanks(),
       ]);
+      if (!user || !ALLOWED_ROLES.includes(user.role ?? '')) { navigate('/dashboard'); return; }
       setCurrentUser(user);
       setCompanies(allCompanies.filter((c: Company) => c.type === 'owner'));
       setFleets(allFleets);

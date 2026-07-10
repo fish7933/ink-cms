@@ -613,6 +613,43 @@ class ApprovalService {
     return this.getApprovalDetails(approvals.map(a => a.id));
   }
 
+  // 관리자 전용: 상태 무관 전체 선원추천 결재 조회 ("결재함"에서 전체보기)
+  async getAllApprovals(): Promise<CrewRecommendationApprovalWithDetails[]> {
+    const { data: approvals, error } = await supabase
+      .from('crew_recommendation_approvals')
+      .select('id')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (!approvals || approvals.length === 0) return [];
+
+    return this.getApprovalDetails(approvals.map(a => a.id));
+  }
+
+  // 일반 사용자용: 나와 관계있는 선원추천 결재 전체 (요청자 본인 / 결재선에 포함된 결재자) — 상태 무관.
+  // "결재함"의 기본 노출 범위 — 시스템관리자 이상은 getAllApprovals()로 전체를 본다.
+  async getMyRelatedApprovals(userId: string): Promise<CrewRecommendationApprovalWithDetails[]> {
+    const [requestedRes, stepsRes] = await Promise.all([
+      supabase.from('crew_recommendation_approvals').select('id').eq('requester_id', userId),
+      supabase.from('approval_line_steps').select('approval_line_id').eq('approver_id', userId),
+    ]);
+    if (requestedRes.error) throw requestedRes.error;
+    if (stepsRes.error) throw stepsRes.error;
+
+    const approvalIds = new Set<string>((requestedRes.data || []).map(r => r.id));
+    const lineIds = [...new Set((stepsRes.data || []).map(s => s.approval_line_id))];
+    if (lineIds.length > 0) {
+      const { data: onMyLines, error } = await supabase
+        .from('crew_recommendation_approvals')
+        .select('id')
+        .in('approval_line_id', lineIds);
+      if (error) throw error;
+      for (const a of onMyLines || []) approvalIds.add(a.id);
+    }
+    if (approvalIds.size === 0) return [];
+    return this.getApprovalDetails([...approvalIds]);
+  }
+
   // 관리자 전용: 결재라인 무관하게 즉시 승인
   async adminForceApprove(approvalId: string, adminId: string, comment?: string): Promise<void> {
     const { data: approval, error: approvalError } = await supabase

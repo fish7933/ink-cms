@@ -70,11 +70,24 @@ export const MENU_STRUCTURE: MenuStructure[] = [
     id: 'approval',
     name: '결재',
     children: [
-      { id: 'approval-inbox', name: '내 결재함', resource: 'approval_inbox' },
-      { id: 'approval-archive', name: '완료 문서함', resource: 'approval_archive' },
-      { id: 'approval-management', name: '결재 캐비넷', resource: 'approval_management' },
+      { id: 'approval-inbox', name: '결재함', resource: 'approval_inbox' },
       { id: 'document-draft', name: '기안서 작성', resource: 'document_draft' },
-      { id: 'my-documents', name: '기안함', resource: 'my_documents' },
+    ],
+  },
+  {
+    id: 'shore-leave',
+    name: '육상 직원 연차',
+    children: [
+      { id: 'shore-leave-request', name: '연차 신청', resource: 'shore_leave_request' },
+      { id: 'sick-leave-request', name: '질병휴가 신청', resource: 'sick_leave_request' },
+      { id: 'shore-leave-management', name: '육상 직원 연차 관리', resource: 'shore_leave_management' },
+    ],
+  },
+  {
+    id: 'homepage-management',
+    name: '홈페이지 관리',
+    children: [
+      { id: 'homepage-posts', name: '게시판 관리', resource: 'homepage_posts' },
     ],
   },
   {

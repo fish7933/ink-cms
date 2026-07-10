@@ -26,14 +26,17 @@ export function calculateAccruedLeaveHours(hireDate: string, asOfDate?: string):
 }
 
 export interface LeaveBalance {
-  accruedHours: number;
+  legalAccruedHours: number; // 근로기준법상 자동 발생분
+  companyGrantedHours: number; // 회사가 재량으로 수동 부여한 분 (포상휴가 등)
+  accruedHours: number; // legalAccruedHours + companyGrantedHours
   usedHours: number;
   remainingHours: number;
 }
 
 export function calculateLeaveBalance(hireDate: string, usedHours: number, asOfDate?: string): LeaveBalance {
-  const accruedHours = calculateAccruedLeaveHours(hireDate, asOfDate);
-  return { accruedHours, usedHours, remainingHours: Math.round((accruedHours - usedHours) * 10) / 10 };
+  const legalAccruedHours = calculateAccruedLeaveHours(hireDate, asOfDate);
+  const accruedHours = legalAccruedHours;
+  return { legalAccruedHours, companyGrantedHours: 0, accruedHours, usedHours, remainingHours: Math.round((accruedHours - usedHours) * 10) / 10 };
 }
 
 // 시간 단위 값을 "N일 M시간" 형태로 표시 (예: 26 -> "3일 2시간")

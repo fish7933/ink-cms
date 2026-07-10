@@ -287,6 +287,46 @@ export const approvalDocumentService = {
     return enrichDocuments(data || []);
   },
 
+  // 시스템관리자 이상 전용: 상태 무관 전체 문서 조회 ("결재함"에서 전체보기)
+  async getAllDocuments(): Promise<ApprovalDocumentWithDetails[]> {
+    const { data, error } = await supabase
+      .from('approval_documents')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return enrichDocuments(data || []);
+  },
+
+  // 일반 사용자용: 나와 관계있는 문서 전체 (기안자 본인 / 결재선에 포함된 결재자 / 참조 대상) — 상태 무관.
+  // "결재함"의 기본 노출 범위 — 시스템관리자 이상은 getAllDocuments()로 전체를 본다.
+  async getMyRelatedDocuments(userId: string, myOrgUnitIds: string[] = []): Promise<ApprovalDocumentWithDetails[]> {
+    const orFilter = myOrgUnitIds.length > 0
+      ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
+      : `user_id.eq.${userId}`;
+    const [draftedRes, stepsRes, refsRes] = await Promise.all([
+      supabase.from('approval_documents').select('id').eq('created_by', userId),
+      supabase.from('approval_document_steps').select('document_id').eq('approver_id', userId),
+      supabase.from('approval_document_references').select('document_id').or(orFilter),
+    ]);
+    if (draftedRes.error) throw draftedRes.error;
+    if (stepsRes.error) throw stepsRes.error;
+    if (refsRes.error) throw refsRes.error;
+
+    const docIds = new Set<string>();
+    for (const d of draftedRes.data || []) docIds.add(d.id);
+    for (const s of stepsRes.data || []) docIds.add(s.document_id);
+    for (const r of refsRes.data || []) docIds.add(r.document_id);
+    if (docIds.size === 0) return [];
+
+    const { data: docs, error } = await supabase
+      .from('approval_documents')
+      .select('*')
+      .in('id', [...docIds])
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return enrichDocuments(docs || []);
+  },
+
   async getDocumentDetails(documentIds: string[]): Promise<ApprovalDocumentWithDetails[]> {
     if (documentIds.length === 0) return [];
     const { data, error } = await supabase.from('approval_documents').select('*').in('id', documentIds);

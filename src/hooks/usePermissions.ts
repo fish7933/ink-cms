@@ -43,7 +43,11 @@ export function usePermissions(resource: string): PermissionState {
       const userPermissions = await getPermissionsByUserId(user.id);
       const resourcePermission = userPermissions.find((p: Permission) => p.resource === resource);
 
-      if (resourcePermission) {
+      // admin/system_admin은 PermissionsPage에서 편집 대상이 아니라 항상 전체 권한을 가진다 (PermissionsPage.tsx의 isAdmin/isSystemAdmin 처리와 동일).
+      const isFullAccessRole = user.role === 'admin' || user.role === 'system_admin';
+      if (isFullAccessRole) {
+        setPermissions({ canView: true, canCreate: true, canEdit: true, canDelete: true, ...roleFlags });
+      } else if (resourcePermission) {
         setPermissions({
           canView: resourcePermission.can_view,
           canCreate: resourcePermission.can_create,
@@ -52,14 +56,9 @@ export function usePermissions(resource: string): PermissionState {
           ...roleFlags,
         });
       } else {
-        const isManager = user.role === 'ship_manager';
-        setPermissions({
-          canView: isManager,
-          canCreate: isManager,
-          canEdit: isManager,
-          canDelete: isManager,
-          ...roleFlags,
-        });
+        // 위임된 권한 레코드가 없으면 기본값은 전부 거부 — PermissionsPage의 체크박스도 레코드가 없으면
+        // 미체크(false)로 표시되므로, 실제 조회 시에도 동일하게 취급해야 한다.
+        setPermissions({ canView: false, canCreate: false, canEdit: false, canDelete: false, ...roleFlags });
       }
     };
 
