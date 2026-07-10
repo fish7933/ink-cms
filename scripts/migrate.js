@@ -13,7 +13,7 @@ const MIGRATIONS_DIR = join(__dirname, '..', 'supabase', 'migrations')
 // Extract project ref from VITE_SUPABASE_URL in .env
 async function getProjectRef() {
   const env = await readFile(join(__dirname, '..', '.env'), 'utf-8')
-  const match = env.match(/VITE_SUPABASE_URL=https:\/\/([^.]+)\.supabase\.co/)
+  const match = env.match(/VITE_SUPABASE_URL=["']?https:\/\/([^.]+)\.supabase\.co/)
   if (!match) throw new Error('VITE_SUPABASE_URL not found in .env')
   return match[1]
 }
@@ -24,7 +24,7 @@ async function getAccessToken() {
   try {
     const env = await readFile(join(__dirname, '..', '.env'), 'utf-8')
     const match = env.match(/SUPABASE_ACCESS_TOKEN=(.+)/)
-    if (match) return match[1].trim()
+    if (match) return match[1].trim().replace(/^["']|["']$/g, '')
   } catch { /* continue */ }
 
   // 2. supabase CLI 로그인 파일에서 읽기
