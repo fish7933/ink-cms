@@ -16,15 +16,15 @@ import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests,
+  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
-import { formatLeaveHours, getThisYearLeaveGrantDate, HOURS_PER_DAY } from '@/lib/leave-calc';
+import { formatLeaveHours, getThisYearLeaveGrantDate, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
 import LeaveUsageCalendar from '@/components/leave/LeaveUsageCalendar';
 import type { User } from '@/types/models';
 import type { SickLeaveRequestWithDetails } from '@/types/sick-leave';
-import type { ShoreLeaveRequestWithDetails } from '@/types/shore-leave';
+import type { ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment } from '@/types/shore-leave';
 
 const SHORE_ROLES = ['ship_manager', 'admin', 'system_admin'];
 const RESET_ROLES = ['admin', 'system_admin'];
@@ -63,8 +63,14 @@ export default function ShoreLeaveManagementPage() {
   const [adjustSubmitting, setAdjustSubmitting] = useState(false);
 
   const [resetDialog, setResetDialog] = useState<Row | null>(null);
-  const [resetForm, setResetForm] = useState({ reason: '', deleteHistory: false });
+  const [resetForm, setResetForm] = useState({ reason: '', deleteHistory: false, resetGrants: false });
   const [resetSubmitting, setResetSubmitting] = useState(false);
+
+  const [legalExplainRow, setLegalExplainRow] = useState<Row | null>(null);
+
+  const [grantExplainRow, setGrantExplainRow] = useState<Row | null>(null);
+  const [grantExplainList, setGrantExplainList] = useState<ShoreLeaveAdjustment[]>([]);
+  const [grantExplainLoading, setGrantExplainLoading] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -86,6 +92,7 @@ export default function ShoreLeaveManagementPage() {
         getAllLeaveRequests(),
       ]);
       const posMap = new Map(members.map(m => [m.id, m.position_name]));
+      const posOrderMap = new Map(members.map(m => [m.id, m.position_order]));
       setPositionByUser(posMap);
       setSickRequests(sick);
       const exemptUserIds = new Set(allUsers.filter(u => u.is_leave_exempt).map(u => u.id));
@@ -96,6 +103,13 @@ export default function ShoreLeaveManagementPage() {
         const balance = await getLeaveBalance(u.id, u.hire_date || null);
         return { user: u, positionName: posMap.get(u.id) || null, ...balance };
       }));
+      // 직급 순서(낮을수록 선임) → 같은 직급이면 입사일 빠른 순으로 정렬
+      computed.sort((a, b) => {
+        const aOrder = posOrderMap.get(a.user.id) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = posOrderMap.get(b.user.id) ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return (a.user.hire_date || '9999-99-99').localeCompare(b.user.hire_date || '9999-99-99');
+      });
       setRows(computed.filter(r => !r.user.is_leave_exempt));
       setExemptRows(computed.filter(r => r.user.is_leave_exempt));
     } catch (e) {
@@ -141,19 +155,21 @@ export default function ShoreLeaveManagementPage() {
   };
 
   const openReset = (row: Row) => {
-    setResetForm({ reason: '', deleteHistory: false });
+    setResetForm({ reason: '', deleteHistory: false, resetGrants: false });
     setResetDialog(row);
   };
 
   const submitReset = async () => {
     if (!resetDialog || !currentUser) return;
-    if (resetDialog.usedHours <= 0) { toast({ title: '초기화할 사용 내역이 없습니다.', variant: 'destructive' }); return; }
+    const hasNothingToReset = resetDialog.usedHours <= 0 && !(resetForm.resetGrants && resetDialog.companyGrantedHours > 0);
+    if (hasNothingToReset) { toast({ title: '초기화할 내역이 없습니다.', variant: 'destructive' }); return; }
     if (!resetForm.reason.trim()) { toast({ title: '사유를 입력하세요.', variant: 'destructive' }); return; }
     try {
       setResetSubmitting(true);
       await resetLeaveUsage({
         user_id: resetDialog.user.id,
         delete_history: resetForm.deleteHistory,
+        reset_grants: resetForm.resetGrants,
         reason: resetForm.reason,
         created_by: currentUser.id,
       });
@@ -180,6 +196,20 @@ export default function ShoreLeaveManagementPage() {
       toast({ title: '처리 실패', variant: 'destructive' });
     } finally {
       setExemptSubmittingId(null);
+    }
+  };
+
+  const openGrantExplain = async (row: Row) => {
+    setGrantExplainRow(row);
+    setGrantExplainLoading(true);
+    try {
+      const all = await getLeaveAdjustments(row.user.id);
+      setGrantExplainList(all.filter(a => a.adjustment_type === 'grant'));
+    } catch (e) {
+      console.error(e);
+      toast({ title: '부여 내역을 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+    } finally {
+      setGrantExplainLoading(false);
     }
   };
 
@@ -239,8 +269,18 @@ export default function ShoreLeaveManagementPage() {
                         <td className="p-2 text-gray-500">
                           {r.user.hire_date ? getThisYearLeaveGrantDate(r.user.hire_date) : '-'}
                         </td>
-                        <td className="p-2 text-center">{formatLeaveHours(r.legalAccruedHours)}</td>
-                        <td className="p-2 text-center text-blue-600">{r.companyGrantedHours > 0 ? formatLeaveHours(r.companyGrantedHours) : '-'}</td>
+                        <td className="p-2 text-center">
+                          <button type="button" className="underline decoration-dotted underline-offset-2 hover:text-blue-600" onClick={() => setLegalExplainRow(r)} title="계산 방법 보기">
+                            {formatLeaveHours(r.legalAccruedHours)}
+                          </button>
+                        </td>
+                        <td className="p-2 text-center text-blue-600">
+                          {r.companyGrantedHours > 0 ? (
+                            <button type="button" className="underline decoration-dotted underline-offset-2 hover:text-blue-800" onClick={() => openGrantExplain(r)} title="부여 사유 보기">
+                              {formatLeaveHours(r.companyGrantedHours)}
+                            </button>
+                          ) : '-'}
+                        </td>
                         <td className="p-2 text-center font-medium">{formatLeaveHours(r.accruedHours)}</td>
                         <td className="p-2 text-center text-gray-500">{formatLeaveHours(r.usedHours)}</td>
                         <td className="p-2 text-center font-semibold text-blue-700">{formatLeaveHours(r.remainingHours)}</td>
@@ -419,20 +459,32 @@ export default function ShoreLeaveManagementPage() {
             <DialogTitle>{resetDialog?.user.name}님 연차 사용/잔여 초기화</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="p-3 bg-gray-50 rounded-md text-sm">
-              <p className="text-xs text-gray-500">현재 사용</p>
-              <p className="font-semibold text-orange-600">{resetDialog && formatLeaveHours(resetDialog.usedHours)}</p>
-              <p className="text-xs text-gray-400 mt-1">초기화하면 사용이 0으로, 잔여는 발생(법정+회사부여) 그대로 복원됩니다. 회사 부여분은 영향받지 않습니다.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 bg-gray-50 rounded-md text-sm">
+                <p className="text-xs text-gray-500">현재 사용</p>
+                <p className="font-semibold text-orange-600">{resetDialog && formatLeaveHours(resetDialog.usedHours)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-md text-sm">
+                <p className="text-xs text-gray-500">현재 회사 부여</p>
+                <p className="font-semibold text-blue-600">{resetDialog && formatLeaveHours(resetDialog.companyGrantedHours)}</p>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">사유 *</Label>
               <Textarea value={resetForm.reason} onChange={e => setResetForm({ ...resetForm, reason: e.target.value })} rows={2} className="text-sm resize-none" disabled={resetSubmitting} placeholder="예: 연차 재산정으로 인한 초기화" />
             </div>
             <label className="flex items-start gap-2 p-2.5 border rounded-md cursor-pointer">
+              <Checkbox checked={resetForm.resetGrants} onCheckedChange={c => setResetForm({ ...resetForm, resetGrants: c === true })} disabled={resetSubmitting} className="mt-0.5" />
+              <span className="text-xs">
+                <span className="font-medium text-blue-700">회사 부여 연차도 함께 초기화</span>
+                <span className="block text-gray-500 mt-0.5">체크하지 않으면 사용/잔여만 초기화되고 회사 부여분은 그대로 유지됩니다. 체크하면 회사 부여분도 0으로 초기화됩니다.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 p-2.5 border rounded-md cursor-pointer">
               <Checkbox checked={resetForm.deleteHistory} onCheckedChange={c => setResetForm({ ...resetForm, deleteHistory: c === true })} disabled={resetSubmitting} className="mt-0.5" />
               <span className="text-xs">
                 <span className="font-medium text-red-600">내역까지 삭제</span>
-                <span className="block text-gray-500 mt-0.5">체크하면 초기화 이전의 연차 신청/수동 사용 입력 내역 자체를 삭제합니다. 되돌릴 수 없습니다. 체크하지 않으면 내역은 그대로 남고 잔여 계산에서만 제외됩니다.</span>
+                <span className="block text-gray-500 mt-0.5">체크하면 초기화 이전의 연차 신청/수동 사용 입력{resetForm.resetGrants ? '/회사 부여' : ''} 내역 자체를 삭제합니다. 되돌릴 수 없습니다. 체크하지 않으면 내역은 그대로 남고 잔여 계산에서만 제외됩니다.</span>
               </span>
             </label>
           </div>
@@ -440,6 +492,73 @@ export default function ShoreLeaveManagementPage() {
             <Button variant="outline" onClick={() => setResetDialog(null)} disabled={resetSubmitting}>취소</Button>
             <Button variant="destructive" onClick={submitReset} disabled={resetSubmitting}>{resetSubmitting ? '처리 중...' : '초기화'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 법정 발생 계산식 */}
+      <Dialog open={!!legalExplainRow} onOpenChange={open => !open && setLegalExplainRow(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{legalExplainRow?.user.name}님 법정 발생 연차 계산</DialogTitle>
+          </DialogHeader>
+          {legalExplainRow && (() => {
+            const ex = legalExplainRow.user.hire_date ? explainAccruedLeaveDays(legalExplainRow.user.hire_date) : null;
+            if (!ex || !legalExplainRow.user.hire_date) {
+              return <p className="text-sm text-gray-400 py-4 text-center">입사일이 등록되어 있지 않아 계산할 수 없습니다.</p>;
+            }
+            return (
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 bg-gray-50 rounded-md">
+                    <p className="text-xs text-gray-500">입사일</p>
+                    <p className="font-medium">{ex.hireDate}</p>
+                  </div>
+                  <div className="p-2.5 bg-gray-50 rounded-md">
+                    <p className="text-xs text-gray-500">기준일(오늘)</p>
+                    <p className="font-medium">{ex.asOfDate}</p>
+                  </div>
+                </div>
+                <div className="p-2.5 bg-gray-50 rounded-md">
+                  <p className="text-xs text-gray-500">적용 규정</p>
+                  <p className="font-medium">{ex.ruleLabel} (근로기준법 제60조)</p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-md">
+                  <p className="text-xs text-blue-600 mb-1">계산 과정</p>
+                  <p className="text-sm text-blue-900">{ex.formulaText}</p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-md text-center">
+                  <p className="text-xs text-blue-600">결과</p>
+                  <p className="text-lg font-bold text-blue-700">{ex.days}일 = {formatLeaveHours(ex.days * HOURS_PER_DAY)}</p>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* 회사 부여 사유 */}
+      <Dialog open={!!grantExplainRow} onOpenChange={open => !open && setGrantExplainRow(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{grantExplainRow?.user.name}님 회사 부여 연차 내역</DialogTitle>
+          </DialogHeader>
+          {grantExplainLoading ? (
+            <div className="py-8 text-center text-sm text-gray-400">불러오는 중...</div>
+          ) : grantExplainList.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-400">부여 내역이 없습니다</div>
+          ) : (
+            <div className="space-y-2">
+              {grantExplainList.map(a => (
+                <div key={a.id} className="p-2.5 bg-blue-50 rounded-md text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">{new Date(a.created_at).toLocaleDateString('ko-KR')}</span>
+                    <span className="font-semibold text-blue-700">+{formatLeaveHours(a.hours)}</span>
+                  </div>
+                  <p className="text-gray-700 mt-0.5">{a.reason || '사유 미기재'}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

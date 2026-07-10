@@ -165,7 +165,7 @@ export default function ShoreLeaveDetailPage() {
                 return (
                   <div key={`reset-${rs.id}`} className="flex items-center justify-between p-2.5 rounded-md text-sm bg-red-50">
                     <div>
-                      <p className="font-medium">사용/잔여 초기화 &middot; {new Date(rs.created_at).toLocaleDateString('ko-KR')}</p>
+                      <p className="font-medium">{rs.reset_grants ? '사용/잔여/회사부여 초기화' : '사용/잔여 초기화'} &middot; {new Date(rs.created_at).toLocaleDateString('ko-KR')}</p>
                       <p className="text-xs text-gray-500">{rs.reason || '-'}</p>
                     </div>
                     <Badge className="text-xs bg-red-100 text-red-700">{rs.deleted_history ? '내역 삭제됨' : '내역 유지'}</Badge>

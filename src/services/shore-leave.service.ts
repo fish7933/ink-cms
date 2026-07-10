@@ -62,6 +62,20 @@ export async function getLeaveResets(userId: string): Promise<ShoreLeaveReset[]>
   return data || [];
 }
 
+// 회사 부여(grant)까지 초기화하도록 지정된 가장 최근 초기화 시점 (없으면 null).
+async function getLatestGrantResetAt(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('shore_leave_resets')
+    .select('reset_at')
+    .eq('user_id', userId)
+    .eq('reset_grants', true)
+    .order('reset_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) { console.error('shore_leave_resets 조회 실패 (마이그레이션 미적용 가능성)', error); return null; }
+  return data?.reset_at || null;
+}
+
 // 승인된 연차 신청 시간의 합 (해당 사용자 기준, 전체 기간 — 연도 구분 없이 입사일 기준 누적, 초기화 이후분만)
 export async function getUsedLeaveHours(userId: string, resetAt?: string | null): Promise<number> {
   let query = supabase
@@ -112,8 +126,8 @@ export async function deleteLeaveAdjustment(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// 회사 부여(grant)는 초기화 대상이 아니므로 항상 전체 합산하고, 수동 사용 입력(manual_use)만 초기화 이후분으로 제한한다.
-async function getAdjustmentTotals(userId: string, resetAt?: string | null): Promise<{ grantHours: number; manualUseHours: number }> {
+// 수동 사용 입력(manual_use)은 usageResetAt 이후분만, 회사 부여(grant)는 grantResetAt이 지정된 경우에만 그 이후분으로 제한한다.
+async function getAdjustmentTotals(userId: string, usageResetAt?: string | null, grantResetAt?: string | null): Promise<{ grantHours: number; manualUseHours: number }> {
   const { data, error } = await supabase
     .from('shore_leave_adjustments')
     .select('adjustment_type, hours, created_at')
@@ -122,18 +136,21 @@ async function getAdjustmentTotals(userId: string, resetAt?: string | null): Pro
   let grantHours = 0;
   let manualUseHours = 0;
   for (const r of data || []) {
-    if (r.adjustment_type === 'grant') grantHours += Number(r.hours);
-    else if (!resetAt || r.created_at > resetAt) manualUseHours += Number(r.hours);
+    if (r.adjustment_type === 'grant') {
+      if (!grantResetAt || r.created_at > grantResetAt) grantHours += Number(r.hours);
+    } else if (!usageResetAt || r.created_at > usageResetAt) {
+      manualUseHours += Number(r.hours);
+    }
   }
   return { grantHours, manualUseHours };
 }
 
-// 잔여 연차 = (법정 발생시간 + 회사 부여시간) - (승인된 신청시간 + 수동 사용 입력시간, 초기화 이후분만)
+// 잔여 연차 = (법정 발생시간 + 회사 부여시간, 초기화 이후분만) - (승인된 신청시간 + 수동 사용 입력시간, 초기화 이후분만)
 export async function getLeaveBalance(userId: string, hireDate: string | null): Promise<LeaveBalance> {
-  const resetAt = await getLatestResetAt(userId);
+  const [resetAt, grantResetAt] = await Promise.all([getLatestResetAt(userId), getLatestGrantResetAt(userId)]);
   const [requestUsedHours, { grantHours, manualUseHours }] = await Promise.all([
     getUsedLeaveHours(userId, resetAt),
-    getAdjustmentTotals(userId, resetAt),
+    getAdjustmentTotals(userId, resetAt, grantResetAt),
   ]);
   const legalAccruedHours = hireDate ? calculateAccruedLeaveHours(hireDate) : 0;
   const companyGrantedHours = grantHours;
@@ -142,11 +159,13 @@ export async function getLeaveBalance(userId: string, hireDate: string | null): 
   return { legalAccruedHours, companyGrantedHours, accruedHours, usedHours, remainingHours: Math.round((accruedHours - usedHours) * 10) / 10 };
 }
 
-// 연차 사용/잔여 초기화. deleteHistory=true면 초기화 시점 이전의 신청/수동사용 이력 자체를 삭제하고,
-// false면 이력은 남기되(내역 조회에는 계속 노출) 잔여 계산에서만 제외한다. 회사 부여(grant)는 건드리지 않는다.
+// 연차 사용/잔여 초기화. deleteHistory=true면 초기화 시점 이전의 신청/수동사용(+선택 시 회사부여) 이력 자체를
+// 삭제하고, false면 이력은 남기되(내역 조회에는 계속 노출) 잔여 계산에서만 제외한다.
+// resetGrants=true면 회사 부여(grant) 연차도 함께 초기화 대상에 포함한다 (기본은 사용/잔여만).
 export async function resetLeaveUsage(input: {
   user_id: string;
   delete_history: boolean;
+  reset_grants: boolean;
   reason?: string;
   created_by: string;
 }): Promise<ShoreLeaveReset> {
@@ -157,6 +176,7 @@ export async function resetLeaveUsage(input: {
       user_id: input.user_id,
       reset_at: resetAt,
       deleted_history: input.delete_history,
+      reset_grants: input.reset_grants,
       reason: input.reason || null,
       created_by: input.created_by,
     })
@@ -165,12 +185,16 @@ export async function resetLeaveUsage(input: {
   if (error) throw error;
 
   if (input.delete_history) {
-    const [{ error: reqErr }, { error: adjErr }] = await Promise.all([
+    const deletes = [
       supabase.from('shore_leave_requests').delete().eq('user_id', input.user_id).lte('created_at', resetAt),
       supabase.from('shore_leave_adjustments').delete().eq('user_id', input.user_id).eq('adjustment_type', 'manual_use').lte('created_at', resetAt),
-    ]);
-    if (reqErr) throw reqErr;
-    if (adjErr) throw adjErr;
+    ];
+    if (input.reset_grants) {
+      deletes.push(supabase.from('shore_leave_adjustments').delete().eq('user_id', input.user_id).eq('adjustment_type', 'grant').lte('created_at', resetAt));
+    }
+    for (const { error: delError } of await Promise.all(deletes)) {
+      if (delError) throw delError;
+    }
   }
 
   return data;

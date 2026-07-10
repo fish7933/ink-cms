@@ -32,6 +32,7 @@ export interface ShoreLeaveReset {
   user_id: string;
   reset_at: string;
   deleted_history: boolean;
+  reset_grants: boolean;
   reason: string | null;
   created_by: string;
   created_at: string;

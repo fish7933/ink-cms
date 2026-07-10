@@ -25,6 +25,49 @@ export function calculateAccruedLeaveHours(hireDate: string, asOfDate?: string):
   return calculateAccruedLeaveDays(hireDate, asOfDate) * HOURS_PER_DAY;
 }
 
+export interface AccruedLeaveExplanation {
+  hireDate: string;
+  asOfDate: string;
+  fullYears: number;
+  fullMonths: number;
+  days: number;
+  ruleLabel: string; // "근속 1년 미만" | "근속 1년 이상"
+  formulaText: string; // 계산 과정을 그대로 보여줄 텍스트
+  cappedAt: number; // 상한 (11 또는 25)
+}
+
+// calculateAccruedLeaveDays와 동일한 규칙으로, "왜 이 날수가 나왔는지"를 사람이 읽을 수 있는 형태로 반환한다.
+export function explainAccruedLeaveDays(hireDate: string, asOfDate: string = new Date().toISOString().slice(0, 10)): AccruedLeaveExplanation {
+  const hire = new Date(hireDate);
+  const asOf = new Date(asOfDate);
+  const invalid = Number.isNaN(hire.getTime()) || asOf < hire;
+  const fullYears = invalid ? 0 : differenceInCalendarYears(asOf, hire);
+  const fullMonths = invalid ? 0 : differenceInCalendarMonths(asOf, hire);
+
+  if (invalid) {
+    return { hireDate, asOfDate, fullYears: 0, fullMonths: 0, days: 0, ruleLabel: '계산 불가', formulaText: '입사일이 등록되어 있지 않거나 기준일보다 이후입니다.', cappedAt: 0 };
+  }
+
+  if (fullYears < 1) {
+    const days = Math.min(11, Math.max(0, fullMonths));
+    return {
+      hireDate, asOfDate, fullYears, fullMonths, days,
+      ruleLabel: '근속 1년 미만',
+      formulaText: `만 1개월 개근마다 1일 발생 → 입사 후 ${fullMonths}개월 경과 = ${fullMonths}일${fullMonths > 11 ? ' (상한 11일 적용)' : ''}`,
+      cappedAt: 11,
+    };
+  }
+  const addOn = Math.floor((fullYears - 1) / 2);
+  const rawDays = 15 + addOn;
+  const days = Math.min(25, rawDays);
+  return {
+    hireDate, asOfDate, fullYears, fullMonths, days,
+    ruleLabel: '근속 1년 이상',
+    formulaText: `기본 15일 + ⌊(근속연수 ${fullYears}년 − 1) ÷ 2⌋ = 15 + ⌊${fullYears - 1} ÷ 2⌋ = 15 + ${addOn} = ${rawDays}일${rawDays > 25 ? ' (상한 25일 적용 → 25일)' : ''}`,
+    cappedAt: 25,
+  };
+}
+
 // 연차는 입사일 기준으로 매년 갱신되므로(회계연도 구분 없음), "올해"의 발생일은
 // 입사일의 월/일을 기준연도로 옮긴 날짜다 (예: 입사일 2019-03-15 -> 2026년 발생일 2026-03-15).
 export function getThisYearLeaveGrantDate(hireDate: string, referenceYear: number = new Date().getFullYear()): string {
