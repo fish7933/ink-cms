@@ -13,7 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 
-type PermField = 'can_create' | 'can_edit' | 'can_delete';
+type PermField = 'can_view' | 'can_create' | 'can_edit' | 'can_delete';
+const PERM_FIELDS: PermField[] = ['can_view', 'can_create', 'can_edit', 'can_delete'];
+const FIELD_LABEL: Record<PermField, string> = { can_view: '접속', can_create: '추가', can_edit: '수정', can_delete: '삭제' };
 type ManagedRole = 'admin' | 'system_admin' | 'ship_manager';
 
 const ROLE_LABEL: Record<ManagedRole, string> = {
@@ -136,7 +138,7 @@ export default function PermissionsPage() {
         id: `${selectedUser?.id}-${resource}`,
         user_id: selectedUser?.id || '',
         resource,
-        can_view: true,
+        can_view: field === 'can_view' ? value : true,
         can_create: field === 'can_create' ? value : false,
         can_edit: field === 'can_edit' ? value : false,
         can_delete: field === 'can_delete' ? value : false,
@@ -150,7 +152,7 @@ export default function PermissionsPage() {
     if (isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return;
     MENU_STRUCTURE.forEach(menu =>
       menu.children?.forEach(page =>
-        (['can_create', 'can_edit', 'can_delete'] as PermField[]).forEach(field =>
+        PERM_FIELDS.forEach(field =>
           setResourceField(page.resource, field, value)
         )
       )
@@ -167,7 +169,7 @@ export default function PermissionsPage() {
     if (isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return true;
     const menu = MENU_STRUCTURE.find(m => m.id === menuId);
     if (!menu?.children?.length) return false;
-    const values = menu.children.map(page => getPermission(page.resource)?.[field] ?? false);
+    const values = menu.children.map(page => getPermission(page.resource)?.[field] ?? (field === 'can_view' ? true : false));
     if (values.every(v => v)) return true;
     if (values.every(v => !v)) return false;
     return 'indeterminate';
@@ -182,7 +184,7 @@ export default function PermissionsPage() {
     try {
       const updates: PermissionUpdate[] = MENU_STRUCTURE.flatMap(m => m.children ?? []).map(page => {
         const p = getPermission(page.resource);
-        return { resource: page.resource, can_view: true, can_create: p?.can_create ?? false, can_edit: p?.can_edit ?? false, can_delete: p?.can_delete ?? false };
+        return { resource: page.resource, can_view: p?.can_view ?? true, can_create: p?.can_create ?? false, can_edit: p?.can_edit ?? false, can_delete: p?.can_delete ?? false };
       });
       await updateUserPermissions(selectedUser.id, updates);
       toast({ title: '저장 완료', description: `${selectedUser.name}님 권한이 업데이트되었습니다.` });
@@ -366,23 +368,21 @@ export default function PermissionsPage() {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <div className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-1.5 text-xs font-medium text-gray-400 text-center border-b mb-1">
+                  <div className="grid grid-cols-[1fr_56px_56px_56px_56px] px-3 py-1.5 text-xs font-medium text-gray-400 text-center border-b mb-1">
                     <div className="text-left">메뉴 / 페이지</div>
-                    <div>추가</div>
-                    <div>수정</div>
-                    <div>삭제</div>
+                    {PERM_FIELDS.map(field => <div key={field}>{FIELD_LABEL[field]}</div>)}
                   </div>
                   {MENU_STRUCTURE.map(menu => {
                     const isExpanded = expandedMenus.has(menu.id);
                     return (
                       <div key={menu.id} className="border rounded-md overflow-hidden">
-                        <div className="grid grid-cols-[1fr_56px_56px_56px] items-center bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="grid grid-cols-[1fr_56px_56px_56px_56px] items-center bg-gray-50 hover:bg-gray-100 transition-colors">
                           <button onClick={() => toggleMenu(menu.id)} className="flex items-center gap-2 px-3 py-2.5 text-left">
                             {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
                             <Folder className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                             <span className="text-xs font-semibold text-gray-700">{menu.name}</span>
                           </button>
-                          {(['can_create', 'can_edit', 'can_delete'] as PermField[]).map(field => (
+                          {PERM_FIELDS.map(field => (
                             <div key={field} className="flex justify-center">
                               <Checkbox
                                 checked={getMenuFieldState(menu.id, field)}
@@ -397,15 +397,15 @@ export default function PermissionsPage() {
                             {menu.children.map(page => {
                               const perm = getPermission(page.resource);
                               return (
-                                <div key={page.id} className="grid grid-cols-[1fr_56px_56px_56px] px-3 py-2 border-b last:border-b-0 hover:bg-blue-50/30 transition-colors items-center">
+                                <div key={page.id} className="grid grid-cols-[1fr_56px_56px_56px_56px] px-3 py-2 border-b last:border-b-0 hover:bg-blue-50/30 transition-colors items-center">
                                   <div className="flex items-center gap-1.5 pl-7">
                                     <FileText className="w-3 h-3 text-gray-300 shrink-0" />
                                     <span className="text-xs text-gray-600">{page.name}</span>
                                   </div>
-                                  {(['can_create', 'can_edit', 'can_delete'] as PermField[]).map(field => (
+                                  {PERM_FIELDS.map(field => (
                                     <div key={field} className="flex justify-center">
                                       <Checkbox
-                                        checked={perm?.[field] ?? false}
+                                        checked={field === 'can_view' ? (perm?.can_view ?? true) : (perm?.[field] ?? false)}
                                         onCheckedChange={v => setResourceField(page.resource, field, !!v)}
                                       />
                                     </div>

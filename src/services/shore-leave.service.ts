@@ -43,6 +43,12 @@ export async function getAdminActionLog(): Promise<ShoreLeaveAdminLogWithNames[]
   }));
 }
 
+// 슈퍼관리자(admin) 전용 — 화면에서도 admin 역할로 접근을 제한해야 한다.
+export async function deleteAdminActionLog(logId: string): Promise<void> {
+  const { error } = await supabase.from('shore_leave_admin_log').delete().eq('id', logId);
+  if (error) throw error;
+}
+
 export async function getMyLeaveRequests(userId: string): Promise<ShoreLeaveRequest[]> {
   const { data, error } = await supabase
     .from('shore_leave_requests')

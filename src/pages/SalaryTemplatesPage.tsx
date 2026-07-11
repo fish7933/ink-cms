@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, Eye, RefreshCw, ClipboardList } from 'lucide-react';
+import { Plus, Edit2, Trash2, Eye, RefreshCw, ClipboardList, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,6 +15,7 @@ import {
   getSalaryTemplates,
   deleteSalaryTemplate,
   renewSalaryTemplate,
+  copySalaryTemplate,
   type SalaryTemplate,
 } from '@/lib/salary-store';
 import { useTabContext } from '@/contexts/TabContext';
@@ -30,6 +31,10 @@ export default function SalaryTemplatesPage() {
   const [renewTarget, setRenewTarget] = useState<SalaryTemplate | null>(null);
   const [renewDate, setRenewDate] = useState('');
   const [renewing, setRenewing] = useState(false);
+
+  const [copyTarget, setCopyTarget] = useState<SalaryTemplate | null>(null);
+  const [copyName, setCopyName] = useState('');
+  const [copying, setCopying] = useState(false);
 
   const [activeTab, setActiveTab] = useState('templates');
   const [prefillAssignId, setPrefillAssignId] = useState<string | null>(null);
@@ -76,6 +81,29 @@ export default function SalaryTemplatesPage() {
   const openRenew = (t: SalaryTemplate) => {
     setRenewTarget(t);
     setRenewDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const openCopy = (t: SalaryTemplate) => {
+    setCopyTarget(t);
+    setCopyName(`${t.name} 복사본`);
+  };
+
+  const handleCopy = async () => {
+    if (!copyTarget || !copyName.trim()) return;
+    setCopying(true);
+    try {
+      const newTemplate = await copySalaryTemplate(copyTarget.id, copyName.trim());
+      if (!newTemplate) {
+        toast({ title: '복사 실패', description: '템플릿을 복사하는 중 오류가 발생했습니다.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: '복사 완료', description: '직급/급여 구성이 그대로 복사되었습니다. 필요한 금액을 수정해주세요.' });
+      window.dispatchEvent(new CustomEvent('salary-template-data-changed'));
+      setCopyTarget(null);
+      openNewTab(`/salary/templates/${newTemplate.id}/edit`, `템플릿 수정: ${newTemplate.name}`);
+    } finally {
+      setCopying(false);
+    }
   };
 
   const handleRenew = async () => {
@@ -175,6 +203,13 @@ export default function SalaryTemplatesPage() {
                               </Button>
                               <Button
                                 variant="ghost" size="sm"
+                                className="gap-1 h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                onClick={() => openCopy(t)}
+                              >
+                                <Copy className="h-3.5 w-3.5" /><span className="text-xs">복사</span>
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
                                 className="gap-1 h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
                                 onClick={() => openAssign(t)}
                               >
@@ -226,6 +261,30 @@ export default function SalaryTemplatesPage() {
             <Button variant="outline" size="sm" onClick={() => setRenewTarget(null)}>취소</Button>
             <Button size="sm" onClick={handleRenew} disabled={renewing || !renewDate}>
               {renewing ? '갱신 중...' : '갱신'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 복사 다이얼로그 */}
+      <Dialog open={copyTarget !== null} onOpenChange={open => { if (!open) setCopyTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">템플릿 복사 — {copyTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-gray-500">
+              직급 구성과 급여 항목/금액을 그대로 복사한 새 템플릿을 만듭니다. 원본과는 완전히 독립된 별개 템플릿이며, 복사 후 필요한 부분만 수정하면 됩니다.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-sm">새 템플릿명</Label>
+              <Input value={copyName} onChange={e => setCopyName(e.target.value)} className="h-9 text-sm" placeholder="예: A 템플릿 복사본" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setCopyTarget(null)}>취소</Button>
+            <Button size="sm" onClick={handleCopy} disabled={copying || !copyName.trim()}>
+              {copying ? '복사 중...' : '복사'}
             </Button>
           </DialogFooter>
         </DialogContent>

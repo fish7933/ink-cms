@@ -6,6 +6,7 @@ import type {
   CrewRecommendationApproval,
   CrewRecommendationApprovalWithDetails,
   ApprovalAction,
+  CrewRecommendationApprovalLog,
 } from '@/types/approval';
 import { crewRecommendationService } from './crew-recommendation.service';
 
@@ -596,6 +597,59 @@ class ApprovalService {
       })
       .eq('id', approvalId);
 
+    if (error) throw error;
+  }
+
+  // 결재 이력만 삭제 (승인/반려로 이미 등록된 선원 등 파생 데이터는 건드리지 않음).
+  // 삭제 전에 누가 추천/결재했는지를 crew_recommendation_approval_log에 영구 기록한다.
+  async deleteApproval(
+    approval: CrewRecommendationApprovalWithDetails,
+    crewName: string,
+    deletedBy: string,
+    deletedByName: string
+  ): Promise<void> {
+    const { error: logError } = await supabase.from('crew_recommendation_approval_log').insert({
+      crew_recommendation_id: approval.crew_recommendation_id,
+      crew_name: crewName,
+      requester_id: approval.requester_id,
+      requester_name: approval.requester_name,
+      approval_line_name: approval.approval_line?.name,
+      final_status: approval.status,
+      actions: approval.actions.map(a => ({
+        step_order: a.step_order,
+        approver_name: a.approver_name,
+        action: a.action,
+        comment: a.comment,
+        created_at: a.created_at,
+      })),
+      requested_at: approval.created_at,
+      completed_at: approval.completed_at,
+      deleted_by: deletedBy,
+      deleted_by_name: deletedByName,
+    });
+    if (logError) throw logError;
+
+    const { error } = await supabase
+      .from('crew_recommendation_approvals')
+      .delete()
+      .eq('id', approval.id);
+
+    if (error) throw error;
+  }
+
+  // 채용 히스토리 관리 탭: 삭제된 선원추천 결재의 영구 이력 목록 (최신순)
+  async getApprovalDeletionLogs(): Promise<CrewRecommendationApprovalLog[]> {
+    const { data, error } = await supabase
+      .from('crew_recommendation_approval_log')
+      .select('*')
+      .order('deleted_at', { ascending: false });
+    if (error) throw error;
+    return (data || []) as CrewRecommendationApprovalLog[];
+  }
+
+  // 시스템관리자 이상 전용
+  async deleteApprovalDeletionLog(logId: string): Promise<void> {
+    const { error } = await supabase.from('crew_recommendation_approval_log').delete().eq('id', logId);
     if (error) throw error;
   }
 

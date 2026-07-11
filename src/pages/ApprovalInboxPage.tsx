@@ -34,6 +34,7 @@ export default function ApprovalInboxPage() {
 
   const [initializing, setInitializing] = useState(true);
   const [currentUserId, setCurrentUserId] = useState('');
+  const [currentUserName, setCurrentUserName] = useState('');
   const [currentUserRole, setCurrentUserRole] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [myOrgUnitIds, setMyOrgUnitIds] = useState<string[]>([]);
@@ -67,6 +68,7 @@ export default function ApprovalInboxPage() {
 
       const admin = currentUser.role === 'admin' || currentUser.role === 'system_admin';
       setCurrentUserId(currentUser.id);
+      setCurrentUserName(currentUser.name ?? '');
       setCurrentUserRole(currentUser.role ?? '');
       setIsAdmin(admin);
 
@@ -140,8 +142,22 @@ export default function ApprovalInboxPage() {
     return approval.current_approver?.approver_id === currentUserId;
   };
 
+  const canDeleteCrew = (approval: ApprovalWithRecommendation) =>
+    approval.status !== 'pending' && (approval.requester_id === currentUserId || isAdmin);
+
   const crewGoBackToList = () => {
     setCrewViewMode('list'); setSelectedCrewApproval(null); setCrewActionType(null); setCrewComment('');
+  };
+
+  const handleDeleteCrew = async (approval: ApprovalWithRecommendation) => {
+    if (!confirm('이 결재 이력을 삭제하시겠습니까? 이미 등록된 선원 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다. (추천/결재 히스토리는 별도로 영구 보관됩니다)')) return;
+    try {
+      await approvalService.deleteApproval(approval, approval.recommendation?.crew_name || '알 수 없음', currentUserId, currentUserName);
+      toast({ title: '삭제되었습니다.' });
+      await loadCrewApprovals(currentUserId, isAdmin);
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
   };
 
   const handleCrewAction = async () => {
@@ -331,6 +347,11 @@ export default function ApprovalInboxPage() {
               <div className="flex gap-2 pt-4 border-t">
                 <Button onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('approve'); setCrewViewMode('action'); }} className="flex-1">승인</Button>
                 <Button onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('reject'); setCrewViewMode('action'); }} variant="destructive" className="flex-1">반려</Button>
+              </div>
+            )}
+            {canDeleteCrew(approval) && (
+              <div className="flex justify-end pt-4 border-t">
+                <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteCrew(approval)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
               </div>
             )}
           </div>

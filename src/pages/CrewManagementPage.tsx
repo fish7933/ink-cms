@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
+import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import type { Rank } from '@/types/models';
@@ -366,23 +367,15 @@ export function CrewManagementPage() {
   const confirmDelete = async () => {
     const ids = selectedIds;
     try {
-      // 관련 테이블 먼저 삭제 (FK 제약 해제)
-      await supabase.from('crew_rotation_assignments').delete().in('on_crew_id', ids);
-      await supabase.from('crew_rotation_assignments').delete().in('off_crew_id', ids);
-      await supabase.from('crew_status_history').delete().in('crew_member_id', ids);
-      await supabase.from('crew_embarkation_records').delete().in('crew_member_id', ids);
-      await supabase.from('crew_certificates').delete().in('crew_id', ids);
-      await supabase.from('crew_appointments').delete().in('crew_id', ids);
-      await supabase.from('allotments').delete().in('crew_member_id', ids);
-      await supabase.from('contracts').delete().in('crew_member_id', ids);
-
-      const { error } = await supabase.from('crew_members').delete().in('id', ids);
+      const me = await getCurrentUser();
+      if (!me) return;
+      const { error } = await crewService.softDelete(ids, me.id);
       if (error) {
         console.error('선원 삭제 오류:', error);
-        toast({ title: '삭제 실패', description: error.message, variant: 'destructive' });
+        toast({ title: '삭제 실패', description: error, variant: 'destructive' });
         return;
       }
-      toast({ title: '삭제 완료', description: `${ids.length}명 삭제됨` });
+      toast({ title: '삭제 완료', description: `${ids.length}명이 삭제 선원 리스트로 이동되었습니다.` });
       setSelectedIds([]);
       setShowDeleteDialog(false);
       await loadData();
@@ -814,7 +807,8 @@ export function CrewManagementPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>선원 삭제 확인</AlertDialogTitle>
             <AlertDialogDescription>
-              선택한 {selectedIds.length}명의 선원을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+              선택한 {selectedIds.length}명의 선원을 삭제 선원 리스트로 이동하시겠습니까?
+              선원 관리 설정 &gt; 삭제 선원 리스트에서 다시 복구하거나(시스템관리자 이상은 영구 삭제) 할 수 있습니다.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

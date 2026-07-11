@@ -56,9 +56,11 @@ export function usePermissions(resource: string): PermissionState {
           ...roleFlags,
         });
       } else {
-        // 위임된 권한 레코드가 없으면 기본값은 전부 거부 — PermissionsPage의 체크박스도 레코드가 없으면
-        // 미체크(false)로 표시되므로, 실제 조회 시에도 동일하게 취급해야 한다.
-        setPermissions({ canView: false, canCreate: false, canEdit: false, canDelete: false, ...roleFlags });
+        // 위임된 권한 레코드가 없으면 추가/수정/삭제는 기본 거부. 다만 접속(canView)은 예외적으로
+        // 기본 허용 — 그래야 관리자가 한 번도 손대지 않은 리소스의 메뉴가 갑자기 전부 숨겨지는
+        // 회귀 없이, "명시적으로 접속을 끈 경우"에만 사이드바에서 사라진다. PermissionsPage의
+        // 체크박스도 레코드가 없으면 접속만 체크된 상태로 표시되어 이 기본값과 일치한다.
+        setPermissions({ canView: true, canCreate: false, canEdit: false, canDelete: false, ...roleFlags });
       }
     };
 

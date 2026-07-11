@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments, getAdminActionLog,
+  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments, getAdminActionLog, deleteAdminActionLog,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
 import { formatLeaveHours, getThisYearLeaveGrantDate, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
@@ -132,6 +132,17 @@ export default function ShoreLeaveManagementPage() {
 
   const openDetail = (user: User) => {
     openNewTab(`/shore-leave-management/${user.id}`, `${user.name} 연차 내역`);
+  };
+
+  const handleDeleteLog = async (log: ShoreLeaveAdminLogWithNames) => {
+    if (!confirm('이 작업 로그를 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+    try {
+      await deleteAdminActionLog(log.id);
+      setAdminLog(prev => prev.filter(l => l.id !== log.id));
+      toast({ title: '삭제되었습니다.' });
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
   };
 
   const openAdjust = (user: User, type: 'grant' | 'manual_use') => {
@@ -353,7 +364,10 @@ export default function ShoreLeaveManagementPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-1.5"><ScrollText className="w-4 h-4 text-gray-400" />관리자 작업 로그</CardTitle>
-              <p className="text-xs text-gray-500">부여/차감/초기화/제외 지정·해제 등 관리자가 수행한 작업을 담당자와 함께 기록합니다. 이 로그는 삭제할 수 없습니다.</p>
+              <p className="text-xs text-gray-500">
+                부여/차감/초기화/제외 지정·해제 등 관리자가 수행한 작업을 담당자와 함께 기록합니다.
+                {currentUser?.role === 'admin' ? ' 슈퍼관리자만 삭제할 수 있습니다.' : ' 이 로그는 삭제할 수 없습니다.'}
+              </p>
             </CardHeader>
             <CardContent className="pt-0">
               {adminLog.length === 0 ? (
@@ -369,6 +383,7 @@ export default function ShoreLeaveManagementPage() {
                         <th className="text-center p-2">시간</th>
                         <th className="text-left p-2">사유</th>
                         <th className="text-left p-2">담당자</th>
+                        {currentUser?.role === 'admin' && <th className="text-center p-2 w-12">작업</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -380,6 +395,13 @@ export default function ShoreLeaveManagementPage() {
                           <td className="p-2 text-center">{l.hours != null ? formatLeaveHours(l.hours) : '-'}</td>
                           <td className="p-2 text-gray-500">{l.reason || '-'}</td>
                           <td className="p-2 text-blue-700 font-medium whitespace-nowrap">{l.performed_by_name}</td>
+                          {currentUser?.role === 'admin' && (
+                            <td className="p-2 text-center">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => handleDeleteLog(l)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

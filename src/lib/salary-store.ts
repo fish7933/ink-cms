@@ -643,6 +643,28 @@ export async function renewSalaryTemplate(templateId: string, newEffectiveFrom: 
   return { ...newTemplate, root_template_id: root };
 }
 
+// 유사한 급여 템플릿을 새로 만들 때 쓰는 복사: 직급 구성/급여 항목을 그대로 복제한 완전히 독립된
+// 새 템플릿을 만든다 (renewSalaryTemplate과 달리 root_template_id로 원본과 연결되지 않음 — 별개 템플릿).
+export async function copySalaryTemplate(templateId: string, newName: string): Promise<SalaryTemplate | null> {
+  const source = await getSalaryTemplateWithItems(templateId);
+  if (!source) {
+    console.error('Error copying salary template: template not found', templateId);
+    return null;
+  }
+
+  return addSalaryTemplate(
+    {
+      name: newName,
+      description: source.description,
+      currency: source.currency,
+      is_active: true,
+      effective_from: new Date().toISOString().slice(0, 10),
+    },
+    source.ranks,
+    source.items.map(i => ({ rank: i.rank || '', rank_grade: i.rank_grade, component_id: i.component_id, amount: i.amount })),
+  );
+}
+
 // Ship Salary Assignment functions
 export async function getShipSalaryAssignments(shipId?: string): Promise<ShipSalaryAssignment[]> {
   let query = supabase.from('ship_salary_assignments').select('*');

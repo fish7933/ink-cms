@@ -54,3 +54,28 @@ export interface CrewRecommendationApprovalWithDetails extends CrewRecommendatio
   actions: ApprovalAction[];
   current_approver?: ApprovalLineStep;
 }
+
+export interface CrewRecommendationApprovalLogAction {
+  step_order: number;
+  approver_name?: string;
+  action: 'approved' | 'rejected';
+  comment?: string;
+  created_at: string;
+}
+
+// 채용(선원추천) 결재가 삭제될 때 남는 영구 이력. 원본 결재/결재액션 행이 지워져도 남는다.
+export interface CrewRecommendationApprovalLog {
+  id: string;
+  crew_recommendation_id: string | null;
+  crew_name: string;
+  requester_id: string | null;
+  requester_name: string;
+  approval_line_name?: string;
+  final_status: string;
+  actions: CrewRecommendationApprovalLogAction[];
+  requested_at?: string;
+  completed_at?: string;
+  deleted_by: string;
+  deleted_by_name: string;
+  deleted_at: string;
+}

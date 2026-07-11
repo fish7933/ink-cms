@@ -114,14 +114,18 @@ export default function RanksPage() {
     const newIndex = deptRanks.findIndex(r => r.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const orderValues = deptRanks.map(r => r.display_order);
-    const reordered = arrayMove(deptRanks, oldIndex, newIndex);
-    const updates = reordered.map((r, i) => ({ id: r.id, display_order: orderValues[i] }));
+    // 부서 내 실제 순서를 새 표시 순서(1..n)로 재정렬해서 저장한다. 기존 display_order 값을
+    // 그대로 재사용하면(예: 부서 내 중복값이 있는 경우) 드래그해도 값이 안 바뀌는 것처럼 보일 수 있다.
+    const reordered = arrayMove(deptRanks, oldIndex, newIndex).map((r, i) => ({ ...r, display_order: i + 1 }));
+    const updates = reordered.map(r => ({ id: r.id, display_order: r.display_order }));
 
-    setRanks(prev => prev.map(r => {
-      const u = updates.find(u => u.id === r.id);
-      return u ? { ...r, display_order: u.display_order } : r;
-    }));
+    // prev.map()은 배열 내 원래 위치를 그대로 유지하므로, filter()로 부서별 화면을 그리는 이 페이지에서는
+    // display_order 값만 바꿔봤자 화면상 행 순서가 안 바뀌어 드래그가 "제자리로 돌아오는" 것처럼 보인다.
+    // 이 부서에 속한 항목들을 실제로 새 순서(reordered)로 재배치해서 배열 자체를 갱신해야 한다.
+    setRanks(prev => {
+      const others = prev.filter(r => r.department !== dept);
+      return [...others, ...reordered].sort((a, b) => a.display_order - b.display_order);
+    });
 
     try {
       await Promise.all(updates.map(u => supabase.from('ranks').update({ display_order: u.display_order }).eq('id', u.id)));

@@ -292,6 +292,21 @@ export async function addCrewSalaryRecord(record: Omit<CrewSalaryRecord, 'id' | 
   return data;
 }
 
+// 같은 레벨(직급) 선원들에게 동일한 급여 내역을 한 번에 적용할 때 사용
+export async function addCrewSalaryRecordsBulk(records: Omit<CrewSalaryRecord, 'id' | 'created_at' | 'updated_at'>[]): Promise<CrewSalaryRecord[]> {
+  const { data, error } = await supabase
+    .from('crew_salary_records')
+    .insert(records)
+    .select();
+
+  if (error) {
+    console.error('Error bulk-adding salary records:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
 export async function updateCrewSalaryRecord(id: string, updates: Partial<CrewSalaryRecord>): Promise<CrewSalaryRecord> {
   const { data, error } = await supabase
     .from('crew_salary_records')

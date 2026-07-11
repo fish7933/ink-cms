@@ -11,6 +11,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -18,7 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { addCrewSalaryRecord, updateCrewSalaryRecord } from '@/services/crew-extended.service';
+import { addCrewSalaryRecord, addCrewSalaryRecordsBulk, updateCrewSalaryRecord } from '@/services/crew-extended.service';
+import { crewService } from '@/services/crew.service';
+import { supabase } from '@/lib/supabase';
 import type { CrewSalaryRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
 
@@ -54,6 +57,10 @@ export default function SalaryRecordDialog({
 }: SalaryRecordDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+
+  // 같은 배에 승선 중인 다른 선원에게도 동일한 급여 내역을 한 번에 적용 (신규 등록 시에만)
+  const [sameShipCrew, setSameShipCrew] = useState<{ id: string; name: string; rank: string }[]>([]);
+  const [selectedSameLevelIds, setSelectedSameLevelIds] = useState<Set<string>>(new Set());
 
   const [formData, setFormData] = useState({
     payment_period_start: '',
@@ -114,7 +121,35 @@ export default function SalaryRecordDialog({
         notes: '',
       });
     }
+    setSelectedSameLevelIds(new Set());
   }, [record, open]);
+
+  useEffect(() => {
+    if (!open || record) { setSameShipCrew([]); return; }
+    const loadSameShipCrew = async () => {
+      const me = await crewService.getById(crewId);
+      if (!me?.current_ship_id) { setSameShipCrew([]); return; }
+      const { data, error } = await supabase
+        .from('crew_members')
+        .select('id, name, rank')
+        .eq('current_ship_id', me.current_ship_id)
+        .is('deleted_at', null)
+        .neq('id', crewId);
+      if (error) { console.error(error); setSameShipCrew([]); return; }
+      setSameShipCrew(data || []);
+    };
+    loadSameShipCrew();
+  }, [open, record, crewId]);
+
+  const toggleSameLevel = (id: string, checked: boolean) => {
+    setSelectedSameLevelIds(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+
+  const allSameLevelSelected = sameShipCrew.length > 0 && selectedSameLevelIds.size === sameShipCrew.length;
 
   const calcNet = () => {
     const basic = parseFloat(formData.basic_salary) || 0;
@@ -157,6 +192,10 @@ export default function SalaryRecordDialog({
       if (record) {
         await updateCrewSalaryRecord(record.id, data);
         toast({ title: '수정 완료', description: '급여 기록이 수정되었습니다.' });
+      } else if (selectedSameLevelIds.size > 0) {
+        const records = [data, ...[...selectedSameLevelIds].map(id => ({ ...data, crew_member_id: id }))];
+        await addCrewSalaryRecordsBulk(records);
+        toast({ title: '추가 완료', description: `${records.length}명에게 동일한 급여 기록이 추가되었습니다.` });
       } else {
         await addCrewSalaryRecord(data);
         toast({ title: '추가 완료', description: '급여 기록이 추가되었습니다.' });
@@ -277,6 +316,31 @@ export default function SalaryRecordDialog({
               <Label className="text-xs">비고</Label>
               <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="추가 정보" rows={2} className="text-sm resize-none" />
             </div>
+
+            {!record && sameShipCrew.length > 0 && (
+              <div className="border-t pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-600">동일 급여 적용 대상 (선택)</p>
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:underline"
+                    onClick={() => setSelectedSameLevelIds(allSameLevelSelected ? new Set() : new Set(sameShipCrew.map(c => c.id)))}
+                  >
+                    {allSameLevelSelected ? '전체 해제' : '전체 선택'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mb-2">같은 배에 승선 중인 선원 중 급여가 같은 선원을 선택하면, 위 급여 내역이 선택한 선원 전원에게 동일하게 한 번에 등록됩니다.</p>
+                <div className="border rounded-md max-h-40 overflow-y-auto divide-y">
+                  {sameShipCrew.map(c => (
+                    <label key={c.id} className="flex items-center gap-2 px-2.5 py-1.5 text-sm cursor-pointer hover:bg-gray-50">
+                      <Checkbox checked={selectedSameLevelIds.has(c.id)} onCheckedChange={checked => toggleSameLevel(c.id, checked === true)} />
+                      <span>{c.name}</span>
+                      <span className="text-xs text-gray-400">{c.rank}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">취소</Button>

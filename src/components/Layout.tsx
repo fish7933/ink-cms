@@ -7,6 +7,8 @@ import { defaultMenuStructure } from '@/lib/default-menu';
 import { getCurrentUser } from '@/lib/store';
 import type { User } from '@/lib/store';
 import type { MenuCategory } from '@/types/menu';
+import type { Permission } from '@/types/permissions';
+import { getPermissionsByUserId } from '@/services/permission.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { routeConfig } from '@/lib/route-config';
 
@@ -14,6 +16,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -27,6 +30,7 @@ export default function Layout() {
         if (!isMounted) return;
         if (!user) { navigate('/login', { replace: true }); return; }
         setCurrentUser(user);
+        setPermissions(await getPermissionsByUserId(user.id));
       } catch {
         if (isMounted) navigate('/login', { replace: true });
       } finally {
@@ -73,6 +77,7 @@ export default function Layout() {
         <Sidebar
           menuStructure={menuStructure}
           currentRole={currentUser?.role || 'crew'}
+          permissions={permissions}
           selectedCategoryId={selectedCategoryId}
         />
         <div className="flex-1 flex flex-col overflow-hidden">

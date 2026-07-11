@@ -91,6 +91,17 @@ export interface CrewWithDetails extends CrewMember {
   offered_salary_currency?: string;
 }
 
+export interface DeletedCrewMember {
+  id: string;
+  name: string;
+  rank_name: string;
+  rank_code: string;
+  nationality: string;
+  date_of_birth: string;
+  deleted_at: string;
+  deleted_by_name: string;
+}
+
 interface CrewMemberRow {
   id: string;
   name: string;
@@ -137,7 +148,7 @@ export const crewService = {
   async getAllWithDetails(filterOptions?: CrewFilterOptions): Promise<CrewWithDetails[]> {
     const currentUser = await getCurrentUser();
 
-    let query = supabase.from('crew_members').select('*');
+    let query = supabase.from('crew_members').select('*').is('deleted_at', null);
 
     if (currentUser && currentUser.role === 'manning_agency') {
       if (currentUser.company_id) {
@@ -532,6 +543,73 @@ export const crewService = {
     const { error } = await supabase.from('crew_members').delete().eq('id', id);
     if (error) { console.error('Error deleting crew member:', error); return false; }
     return true;
+  },
+
+  // 선원 목록에서의 "삭제" — 실제로는 삭제 선원 리스트로 이동(소프트 삭제)
+  async softDelete(ids: string[], deletedBy: string): Promise<{ error?: string }> {
+    const { error } = await supabase
+      .from('crew_members')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: deletedBy })
+      .in('id', ids);
+    if (error) { console.error('Error soft-deleting crew members:', error); return { error: error.message }; }
+    return {};
+  },
+
+  async restore(ids: string[]): Promise<{ error?: string }> {
+    const { error } = await supabase
+      .from('crew_members')
+      .update({ deleted_at: null, deleted_by: null })
+      .in('id', ids);
+    if (error) { console.error('Error restoring crew members:', error); return { error: error.message }; }
+    return {};
+  },
+
+  // 삭제 선원 리스트 조회 (시스템관리자 이상 전용 화면에서 사용)
+  async getDeleted(): Promise<DeletedCrewMember[]> {
+    const { data, error } = await supabase
+      .from('crew_members')
+      .select('*')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    if (error) { console.error('Error fetching deleted crew members:', error); return []; }
+    if (!data || data.length === 0) return [];
+
+    const rankIds = [...new Set(data.map(c => c.rank_id).filter(Boolean))];
+    const userIds = [...new Set(data.map(c => c.deleted_by).filter(Boolean))];
+    const [{ data: ranksData }, { data: usersData }] = await Promise.all([
+      rankIds.length > 0 ? supabase.from('ranks').select('id, name, rank_code').in('id', rankIds) : Promise.resolve({ data: [] as { id: string; name: string; rank_code: string }[] }),
+      userIds.length > 0 ? supabase.from('users').select('id, name').in('id', userIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ]);
+    const rankMap = new Map((ranksData || []).map(r => [r.id, r]));
+    const userMap = new Map((usersData || []).map(u => [u.id, u.name]));
+
+    return data.map(c => ({
+      id: c.id,
+      name: c.name,
+      rank_name: rankMap.get(c.rank_id)?.name || c.rank || '-',
+      rank_code: rankMap.get(c.rank_id)?.rank_code || '',
+      nationality: c.nationality,
+      date_of_birth: c.date_of_birth,
+      deleted_at: c.deleted_at,
+      deleted_by_name: c.deleted_by ? (userMap.get(c.deleted_by) || '알 수 없음') : '알 수 없음',
+    }));
+  },
+
+  // 삭제 선원 리스트에서의 영구 삭제 — 관련 테이블 먼저 정리(FK 제약 해제) 후 crew_members 삭제.
+  // 시스템관리자 이상만 호출할 수 있도록 화면에서 제한해야 한다.
+  async permanentlyDelete(ids: string[]): Promise<{ error?: string }> {
+    await supabase.from('crew_rotation_assignments').delete().in('on_crew_id', ids);
+    await supabase.from('crew_rotation_assignments').delete().in('off_crew_id', ids);
+    await supabase.from('crew_status_history').delete().in('crew_member_id', ids);
+    await supabase.from('crew_embarkation_records').delete().in('crew_member_id', ids);
+    await supabase.from('crew_certificates').delete().in('crew_id', ids);
+    await supabase.from('crew_appointments').delete().in('crew_id', ids);
+    await supabase.from('allotments').delete().in('crew_member_id', ids);
+    await supabase.from('contracts').delete().in('crew_member_id', ids);
+
+    const { error } = await supabase.from('crew_members').delete().in('id', ids);
+    if (error) { console.error('Error permanently deleting crew members:', error); return { error: error.message }; }
+    return {};
   },
 
   async updateStatus(
