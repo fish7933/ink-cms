@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Trash2, ArrowLeft, Save, Coins, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import type { AllowanceType, AllowancePaymentBasis, AllowancePaymentMethod, Crew
 import { buildContractChains, getEffectiveStatus, EFFECTIVE_STATUS_CONFIG, DISEMBARK_NEEDED_THRESHOLD_MONTHS, type ContractChain, type EffectiveStatus } from '@/utils/contract-chain';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const TYPE_LABELS: Record<string, string> = { initial: '최초', renewal: '갱신', extension: '연장', transfer: '이적' };
 const CURRENCIES = ['USD', 'KRW', 'EUR', 'JPY', 'SGD'];
@@ -27,6 +29,8 @@ interface ShipOption { id: string; name: string; }
 
 export default function ContractManagementPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const permissions = usePermissions('contract_management');
   const [contracts, setContracts] = useState<CrewContractWithDetails[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
@@ -61,6 +65,12 @@ export default function ContractManagementPage() {
   };
 
   const loadData = async () => { try { setLoading(true); setContracts(await getContracts()); } catch (e) { console.error(e); } finally { setLoading(false); } };
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
+  // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const openForm = (c?: CrewContractWithDetails) => {
     if (c) setForm({ crew_member_id: c.crew_member_id, ship_id: c.ship_id || '', contract_number: c.contract_number || '', contract_type: c.contract_type, rank: c.rank, start_date: c.start_date, end_date: c.end_date, duration_months: c.duration_months?.toString() || '', salary_amount: c.salary_amount?.toString() || '', salary_currency: c.salary_currency || 'USD', overtime_rate: c.overtime_rate?.toString() || '', leave_pay: c.leave_pay?.toString() || '', terms_and_conditions: c.terms_and_conditions || '', notes: c.notes || '' });
@@ -227,7 +237,7 @@ export default function ContractManagementPage() {
               {formView !== null && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>}
               <div><CardTitle className="text-base">{formView !== null ? (renewContext ? '계약 갱신' : formView.record ? '계약 수정' : '계약 등록') : '계약 관리'}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 고용 계약 정보를 입력합니다' : '선원 고용 계약을 관리합니다'}</p></div>
             </div>
-            {formView !== null ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button> : <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />계약 등록</Button>}
+            {formView !== null ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button> : permissions.canCreate && <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />계약 등록</Button>}
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
@@ -314,7 +324,7 @@ export default function ContractManagementPage() {
             <>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 선주사, 플릿, 선박, 직급으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
-                {selectedIds.length > 0 && (
+                {selectedIds.length > 0 && permissions.canDelete && (
                   <Button size="sm" variant="destructive" className="gap-1.5 h-9" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4" />선택 삭제 ({selectedIds.length})</Button>
                 )}
               </div>
@@ -336,7 +346,7 @@ export default function ContractManagementPage() {
                         const status = chainStatus(chain);
                         const needsDisembark = chain.totalMonths >= DISEMBARK_NEEDED_THRESHOLD_MONTHS && (status === 'valid' || status === 'expired');
                         return (
-                        <tr key={chain.rootId} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(c)}>
+                        <tr key={chain.rootId} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openForm(c)}>
                           <td className="p-2" onClick={e => e.stopPropagation()}><Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} /></td>
                           <td className="p-2 text-gray-600">{c.owner_name || '-'}</td>
                           <td className="p-2 text-gray-500">{c.fleet_name || '-'}</td>
@@ -358,10 +368,12 @@ export default function ContractManagementPage() {
                           <td className="p-2 text-center"><Badge className={`text-xs ${EFFECTIVE_STATUS_CONFIG[status].color}`}>{EFFECTIVE_STATUS_CONFIG[status].label}</Badge></td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-center gap-1">
-                              {status === 'expired' && (
+                              {status === 'expired' && permissions.canCreate && (
                                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="갱신" onClick={() => openRenewForm(chain)}><RefreshCw className="h-3 w-3" /></Button>
                               )}
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(c.id)}><Trash2 className="h-3 w-3" /></Button>
+                              {permissions.canDelete && (
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(c.id)}><Trash2 className="h-3 w-3" /></Button>
+                              )}
                             </div>
                           </td>
                         </tr>

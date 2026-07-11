@@ -45,7 +45,7 @@ export default function JobPostingPage() {
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const permissions = usePermissions('jobs');
+  const permissions = usePermissions('job_postings');
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false);

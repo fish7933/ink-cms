@@ -131,17 +131,22 @@ export default function PermissionsPage() {
 
   const setResourceField = (resource: string, field: PermField, value: boolean) => {
     if (isAdmin(selectedUser) || isSystemAdmin(selectedUser)) return;
+    // 접속(can_view)을 끄면 추가/수정/삭제를 볼 수도 없는 화면에서 할 수는 없으니 자동으로 같이 끈다.
+    // 접속을 켜면 일단 추가/수정/삭제까지 전부 허용해두고, 필요하면 개별로 다시 끄는 편이 더 편리하다.
+    const changes: Partial<Record<PermField, boolean>> = field === 'can_view'
+      ? { can_view: value, can_create: value, can_edit: value, can_delete: value }
+      : { [field]: value };
     setPermissions(prev => {
       const existing = prev.find(p => p.resource === resource);
-      if (existing) return prev.map(p => p.resource === resource ? { ...p, [field]: value } : p);
+      if (existing) return prev.map(p => p.resource === resource ? { ...p, ...changes } : p);
       return [...prev, {
         id: `${selectedUser?.id}-${resource}`,
         user_id: selectedUser?.id || '',
         resource,
-        can_view: field === 'can_view' ? value : true,
-        can_create: field === 'can_create' ? value : false,
-        can_edit: field === 'can_edit' ? value : false,
-        can_delete: field === 'can_delete' ? value : false,
+        can_view: changes.can_view ?? true,
+        can_create: changes.can_create ?? false,
+        can_edit: changes.can_edit ?? false,
+        can_delete: changes.can_delete ?? false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }];

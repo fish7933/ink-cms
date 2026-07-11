@@ -8,6 +8,7 @@ import { getCurrentUser } from '@/lib/store';
 import { getShorePositions, addShorePosition, updateShorePosition, deleteShorePosition } from '@/services/shore-position.service';
 import type { ShorePosition } from '@/types/models';
 import ShorePositionDialog from '@/components/shore-positions/ShorePositionDialog';
+import { usePermissions } from '@/hooks/usePermissions';
 import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { useDragReorder } from '@/hooks/useDragReorder';
 import { DndContext } from '@dnd-kit/core';
@@ -21,6 +22,8 @@ export default function ShorePositionsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<ShorePosition | null>(null);
 
+  const permissions = usePermissions('shore_positions');
+
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
@@ -30,6 +33,10 @@ export default function ShorePositionsPage() {
     };
     init();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -87,9 +94,11 @@ export default function ShorePositionsPage() {
               <Briefcase className="w-5 h-5 text-blue-600" />
               <CardTitle className="text-base">육상 직원 직급 관리</CardTitle>
             </div>
-            <Button size="sm" className="gap-1.5 h-8" onClick={handleAdd}>
-              <Plus className="h-4 w-4" />직급 추가
-            </Button>
+            {permissions.canCreate && (
+              <Button size="sm" className="gap-1.5 h-8" onClick={handleAdd}>
+                <Plus className="h-4 w-4" />직급 추가
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="pt-0">
@@ -110,13 +119,15 @@ export default function ShorePositionsPage() {
                   <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragEnd={handleDragEnd}>
                     <SortableContext items={positions.map(p => p.id)} strategy={verticalListSortingStrategy}>
                       {positions.map(pos => (
-                        <SortableTableRow key={pos.id} id={pos.id} onClick={() => handleEdit(pos)}>
+                        <SortableTableRow key={pos.id} id={pos.id} onClick={() => permissions.canEdit && handleEdit(pos)}>
                           <TableCell className="font-medium text-sm">{pos.name}</TableCell>
                           <TableCell className="text-sm">{pos.display_order}</TableCell>
                           <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(pos.id)} className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
-                              <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
-                            </Button>
+                            {permissions.canDelete && (
+                              <Button variant="ghost" size="sm" onClick={() => handleDelete(pos.id)} className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
+                              </Button>
+                            )}
                           </TableCell>
                         </SortableTableRow>
                       ))}

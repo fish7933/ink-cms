@@ -23,7 +23,7 @@ export default function ShipFlagManagementPage() {
   const [shipFlags, setShipFlags] = useState<ShipFlag[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const permissions = usePermissions('ships');
+  const permissions = usePermissions('ship_management_settings');
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFlag, setEditingFlag] = useState<ShipFlag | null>(null);

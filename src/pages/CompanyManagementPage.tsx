@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, Search, Pencil, Trash2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
 import { useTabContext } from '@/contexts/TabContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Company {
   id: string;
@@ -39,6 +40,7 @@ const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', off
 const MONTH_BASIS_LABELS: Record<string, string> = { '30': '30일 고정', 'actual': '실제 일수' };
 
 export default function CompanyManagementPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
   const { toast } = useToast();
@@ -50,6 +52,15 @@ export default function CompanyManagementPage() {
 
   const pageTitle = companyType === 'owner' ? '선주사 관리' : '선원 매닝사 관리';
   const formTitle = isFormMode ? (editId ? (companyType === 'owner' ? '선주사 수정' : '매닝사 수정') : (companyType === 'owner' ? '선주사 등록' : '매닝사 등록')) : pageTitle;
+
+  // 이 컴포넌트는 /companies?type=owner(선주사 관리)와 /companies?type=manning(선원 매닝사 관리)
+  // 두 개의 서로 다른 메뉴 항목을 겸하므로, 쿼리 파라미터에 따라 리소스 키를 동적으로 결정한다.
+  const resource = companyType === 'manning' ? 'companies_manning' : 'companies_owner';
+  const permissions = usePermissions(resource);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const [companies, setCompanies] = useState<Company[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
@@ -143,14 +154,18 @@ export default function CompanyManagementPage() {
               {isFormMode ? (
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>취소</Button>
-                  <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
-                    <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
-                  </Button>
+                  {(editId ? permissions.canEdit : permissions.canCreate) && (
+                    <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
+                      <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+                    </Button>
+                  )}
                 </div>
               ) : (
-                <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/companies?type=${companyType}&mode=new`, `${companyType === 'owner' ? '선주사' : '매닝사'} 등록`, true)}>
-                  <Plus className="w-4 h-4" />등록
-                </Button>
+                permissions.canCreate && (
+                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/companies?type=${companyType}&mode=new`, `${companyType === 'owner' ? '선주사' : '매닝사'} 등록`, true)}>
+                    <Plus className="w-4 h-4" />등록
+                  </Button>
+                )
               )}
             </div>
           </CardHeader>
@@ -232,7 +247,7 @@ export default function CompanyManagementPage() {
                         {filtered.length === 0 ? (
                           <tr><td colSpan={companyType === 'owner' ? 9 : 8} className="text-center py-10 text-sm text-gray-400">등록된 회사가 없습니다</td></tr>
                         ) : filtered.map((c, i) => (
-                          <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
+                          <tr key={c.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
                             <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
                             <td className="px-3 py-2 font-medium">
                               {c.name}
@@ -252,12 +267,16 @@ export default function CompanyManagementPage() {
                             )}
                             <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
                               <div className="flex justify-end gap-1">
-                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => setDeleteId(c.id)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
+                                {permissions.canEdit && (
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                {permissions.canDelete && (
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => setDeleteId(c.id)}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
                               </div>
                             </td>
                           </tr>

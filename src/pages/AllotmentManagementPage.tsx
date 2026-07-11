@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit2, Trash2, ArrowLeft, Save } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,13 +13,16 @@ import { getAllotments, addAllotment, updateAllotment, deleteAllotment, getRemit
 import type { AllotmentWithDetails, Remittance } from '@/types/allotment';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const TYPE_LABELS: Record<string, string> = { monthly: '정기 송금', bonus: '상여금', one_time: '일시', advance: '선지급' };
 const CURRENCIES = ['USD', 'KRW', 'EUR', 'JPY', 'SGD', 'PHP', 'IDR', 'INR'];
 interface CrewOption { id: string; name: string; rank: string; }
 
 export default function AllotmentManagementPage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const permissions = usePermissions('allotment_management');
   const [allotments, setAllotments] = useState<AllotmentWithDetails[]>([]);
   const [remittances, setRemittances] = useState<Remittance[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
@@ -37,6 +41,10 @@ export default function AllotmentManagementPage() {
     supabase.from('crew_members').select('id, name, rank').then(({ data }) => { if (data) setCrewOptions(data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '' }))); });
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => { try { setLoading(true); const [a, r] = await Promise.all([getAllotments(), getRemittances()]); setAllotments(a); setRemittances(r); } catch (e) { console.error(e); } finally { setLoading(false); } };
 
@@ -92,9 +100,9 @@ export default function AllotmentManagementPage() {
               {formView !== null && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>}
               <div><CardTitle className="text-base">{formView !== null ? formTitle : '송금 관리'}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? '' : '선원 송금(Allotment) 설정 및 이력을 관리합니다'}</p></div>
             </div>
-            {formView === 'allotment' ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSaveAllotment} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button>
-              : formView === 'remittance' ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSaveRemittance} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '송금 기록'}</Button>
-              : <Button size="sm" className="gap-1.5 h-8" onClick={() => openAllotmentForm()}><Plus className="w-4 h-4" />송금 설정</Button>}
+            {formView === 'allotment' ? ((editingAllotment ? permissions.canEdit : permissions.canCreate) && <Button size="sm" className="gap-1.5 h-8" onClick={handleSaveAllotment} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button>)
+              : formView === 'remittance' ? (permissions.canCreate && <Button size="sm" className="gap-1.5 h-8" onClick={handleSaveRemittance} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '송금 기록'}</Button>)
+              : (permissions.canCreate && <Button size="sm" className="gap-1.5 h-8" onClick={() => openAllotmentForm()}><Plus className="w-4 h-4" />송금 설정</Button>)}
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
@@ -146,8 +154,12 @@ export default function AllotmentManagementPage() {
                         <td className="p-2 text-center">{a.is_active ? <Badge className="bg-green-100 text-green-700 text-xs">활성</Badge> : <Badge className="bg-gray-100 text-gray-500 text-xs">비활성</Badge>}</td>
                         <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-center gap-1">
-                            <Button variant="ghost" size="sm" className="h-6 px-2 text-blue-600" onClick={() => openRemitForm(a)}>송금</Button>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(a.id)}><Trash2 className="h-3 w-3" /></Button>
+                            {permissions.canCreate && (
+                              <Button variant="ghost" size="sm" className="h-6 px-2 text-blue-600" onClick={() => openRemitForm(a)}>송금</Button>
+                            )}
+                            {permissions.canDelete && (
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(a.id)}><Trash2 className="h-3 w-3" /></Button>
+                            )}
                           </div>
                         </td>
                       </tr>))}</tbody></table>

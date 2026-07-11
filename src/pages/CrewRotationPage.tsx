@@ -18,8 +18,10 @@ import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Company, Fleet, Ship as ShipType, User } from '@/types/models';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type StatusTab = 'all' | 'draft' | 'pending_approval' | 'approved' | 'executed';
 
@@ -34,6 +36,8 @@ const STATUS_CONFIG: Record<StatusTab, { label: string; color: string }> = {
 export function CrewRotationPage() {
   const { openNewTab, activeTabId, tabs } = useTabContext();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const permissions = usePermissions('crew_rotation');
 
   const [plans, setPlans] = useState<CrewRotationPlanWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +62,12 @@ export function CrewRotationPage() {
   const [autoGenLoading, setAutoGenLoading] = useState(false);
 
   useEffect(() => { loadPlans(); loadOwners(); getCurrentUser().then(setCurrentUser); }, []);
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
+  // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => {
     const activeTab = tabs.find(t => t.id === activeTabId);
@@ -247,12 +257,16 @@ export function CrewRotationPage() {
           <p className="text-xs text-muted-foreground mt-1">선원 승선/하선 교대 계획을 작성하고 결재를 진행합니다</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={openAutoGen} className="h-8 text-xs gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50">
-            <AlertTriangle className="h-3.5 w-3.5" />계약만료 하선계획 자동생성
-          </Button>
-          <Button onClick={() => openNewTab('/crew-rotation/new', '교대계획 작성', true)} size="sm" className="h-8">
-            <Plus className="mr-2 h-4 w-4" />새 교대 계획 작성
-          </Button>
+          {permissions.canCreate && (
+            <>
+              <Button variant="outline" size="sm" onClick={openAutoGen} className="h-8 text-xs gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50">
+                <AlertTriangle className="h-3.5 w-3.5" />계약만료 하선계획 자동생성
+              </Button>
+              <Button onClick={() => openNewTab('/crew-rotation/new', '교대계획 작성', true)} size="sm" className="h-8">
+                <Plus className="mr-2 h-4 w-4" />새 교대 계획 작성
+              </Button>
+            </>
+          )}
         </div>
       </div>
 

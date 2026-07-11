@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -6,6 +7,7 @@ import {
   type StatusSummary, type NationalitySummary, type RankSummary, type ShipCrewSummary,
 } from '@/services/reports.service';
 import { getExpiringCertificates, calcExpiryStats, type CertExpiryStats } from '@/services/certificate-alert.service';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   registered: { label: '등록', color: 'bg-gray-500' },
@@ -39,6 +41,8 @@ function BarChart({ items, maxCount }: { items: { label: string; count: number; 
 }
 
 export default function ReportsPage() {
+  const navigate = useNavigate();
+  const permissions = usePermissions('reports_dashboard');
   const [statusSummary, setStatusSummary] = useState<StatusSummary[]>([]);
   const [nationalitySummary, setNationalitySummary] = useState<NationalitySummary[]>([]);
   const [rankSummary, setRankSummary] = useState<RankSummary[]>([]);
@@ -67,6 +71,10 @@ export default function ReportsPage() {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const totalCrew = statusSummary.reduce((sum, s) => sum + s.count, 0);
 

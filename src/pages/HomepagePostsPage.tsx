@@ -16,6 +16,7 @@ import { getHomepagePosts, addHomepagePost, updateHomepagePost, deleteHomepagePo
 import type { HomepagePost, HomepagePostAttachment } from '@/types/homepage';
 import type { User } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const HOMEPAGE_MANAGER_ROLES = ['ship_manager', 'admin', 'system_admin'];
 const CATEGORY_LABELS: Record<HomepagePost['category'], string> = { notice: '공지사항', news: '뉴스' };
@@ -40,6 +41,8 @@ export default function HomepagePostsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const permissions = usePermissions('homepage_posts');
+
   useEffect(() => {
     const init = async () => {
       const me = await getCurrentUser();
@@ -49,6 +52,10 @@ export default function HomepagePostsPage() {
     };
     init();
   }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -234,7 +241,7 @@ export default function HomepagePostsPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardDescription className="text-xs">전체 {posts.length}건</CardDescription>
-            {formView === null && (
+            {formView === null && permissions.canCreate && (
               <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />글쓰기</Button>
             )}
           </div>
@@ -255,14 +262,14 @@ export default function HomepagePostsPage() {
               </TableHeader>
               <TableBody>
                 {posts.map(p => (
-                  <TableRow key={p.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openForm(p)}>
+                  <TableRow key={p.id} className={`hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openForm(p)}>
                     <TableCell><Badge variant="outline" className="text-xs">{CATEGORY_LABELS[p.category]}</Badge></TableCell>
                     <TableCell className="font-medium text-sm">
                       {p.title}{p.attachments.length > 0 && <Paperclip className="inline w-3 h-3 ml-1 text-gray-400" />}
                     </TableCell>
                     <TableCell className="text-sm text-gray-500">{p.published_at}</TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
-                      <button onClick={() => togglePublish(p)}>
+                      <button onClick={() => permissions.canEdit && togglePublish(p)} disabled={!permissions.canEdit}>
                         <Badge className={`text-xs ${p.is_published ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                           {p.is_published ? '게시중' : '비공개'}
                         </Badge>
@@ -270,8 +277,12 @@ export default function HomepagePostsPage() {
                     </TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(p)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(p)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        {permissions.canEdit && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(p)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                        )}
+                        {permissions.canDelete && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(p)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

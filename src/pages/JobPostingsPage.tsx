@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { msg } from '@/lib/messages';
 import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,11 +32,13 @@ import { useTabContext } from '@/contexts/TabContext';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { getCompanies, getFleets, getShips, getCurrentUser } from '@/lib/store';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { JobPostingGroupWithDetails, Company, Fleet, Ship, User } from '@/types/models';
 
 const ITEMS_PER_PAGE = 20;
 
 export default function JobPostingsPage() {
+  const navigate = useNavigate();
   const { openNewTab } = useTabContext();
   const [postings, setPostings] = useState<JobPostingGroupWithDetails[]>([]);
   const [filteredPostings, setFilteredPostings] = useState<JobPostingGroupWithDetails[]>([]);
@@ -57,6 +60,13 @@ export default function JobPostingsPage() {
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [fleetFilter, setFleetFilter] = useState<string>('all');
   const [shipFilter, setShipFilter] = useState<string>('all');
+
+  const permissions = usePermissions('job_postings');
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우 접근을 차단한다. loading 중에는 판단하지 않는다.
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => {
     loadData();
@@ -407,7 +417,7 @@ export default function JobPostingsPage() {
                   <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   새로고침
                 </Button>
-                {canEditPostings && (
+                {canEditPostings && permissions.canCreate && (
                   <Button onClick={handleAdd} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
                     다직급 공고 등록
@@ -638,7 +648,7 @@ export default function JobPostingsPage() {
                               <Eye className="w-3.5 h-3.5 mr-1" />
                               보기
                             </Button>
-                            {!isManningOrCrew && (
+                            {!isManningOrCrew && permissions.canDelete && (
                               <Button
                                 variant="ghost"
                                 size="sm"

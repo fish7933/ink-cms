@@ -8,6 +8,7 @@ import { Plus, Edit, Trash2, Users, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import { ApprovalLine } from '@/types/approval';
 import ApprovalLineForm from '@/components/approval/ApprovalLineForm';
 import {
@@ -57,9 +58,15 @@ export default function ApprovalLineManagementPage() {
   const [lineToDelete, setLineToDelete] = useState<string | null>(null);
   const [usageInfo, setUsageInfo] = useState<ApprovalUsageInfo | null>(null);
 
+  const permissions = usePermissions('approval_lines');
+
   useEffect(() => {
     loadApprovalLines();
   }, []);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadApprovalLines = async () => {
     try {
@@ -384,10 +391,12 @@ export default function ApprovalLineManagementPage() {
                 <h1 className="text-3xl font-bold">결재 라인 관리</h1>
                 <p className="text-gray-600 mt-1">선원 채용 결재 라인을 관리합니다</p>
               </div>
-              <Button onClick={handleCreate}>
-                <Plus className="h-4 w-4 mr-2" />
-                새 결재 라인
-              </Button>
+              {permissions.canCreate && (
+                <Button onClick={handleCreate}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  새 결재 라인
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -416,16 +425,18 @@ export default function ApprovalLineManagementPage() {
                 <CardContent className="py-12 text-center">
                   <Users className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                   <p className="text-gray-600 mb-4">등록된 결재 라인이 없습니다</p>
-                  <Button onClick={handleCreate}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    첫 결재 라인 만들기
-                  </Button>
+                  {permissions.canCreate && (
+                    <Button onClick={handleCreate}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      첫 결재 라인 만들기
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-4">
                 {approvalLines.map((line) => (
-                  <Card key={line.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => handleEdit(line)}>
+                  <Card key={line.id} className={`transition-colors ${permissions.canEdit ? 'cursor-pointer hover:bg-muted/50' : ''}`} onClick={() => permissions.canEdit && handleEdit(line)}>
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -440,27 +451,33 @@ export default function ApprovalLineManagementPage() {
                           )}
                         </div>
                         <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleActive(line)}
-                          >
-                            {line.is_active ? '비활성화' : '활성화'}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(line)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => confirmDelete(line.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {permissions.canEdit && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleActive(line)}
+                            >
+                              {line.is_active ? '비활성화' : '활성화'}
+                            </Button>
+                          )}
+                          {permissions.canEdit && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(line)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {permissions.canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => confirmDelete(line.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardHeader>

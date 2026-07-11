@@ -12,6 +12,7 @@ import { Plus, Users, ChevronRight } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Company { id: string; name: string; type: string; }
 interface Fleet { id: string; name: string; owner_id: string; }
@@ -39,6 +40,8 @@ export default function ManagerAssignmentPage() {
   const [modal, setModal] = useState<Modal | null>(null);
   const [selectedUser, setSelectedUser] = useState('');
 
+  const permissions = usePermissions('manager_assignments');
+
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
@@ -47,6 +50,10 @@ export default function ManagerAssignmentPage() {
     };
     init();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     try {
@@ -141,7 +148,9 @@ export default function ManagerAssignmentPage() {
             // 직접 배정: 보라색 + 삭제 버튼
             <span key={a.id} className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 flex items-center gap-1">
               {u.name}
-              <button onClick={e => { e.stopPropagation(); handleDelete(a.id); }} className="ml-0.5 hover:opacity-70">×</button>
+              {permissions.canDelete && (
+                <button onClick={e => { e.stopPropagation(); handleDelete(a.id); }} className="ml-0.5 hover:opacity-70">×</button>
+              )}
             </span>
           );
         })}
@@ -212,9 +221,11 @@ export default function ManagerAssignmentPage() {
                   <CardTitle className="text-sm font-bold text-gray-800 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />{owner.name}
                   </CardTitle>
-                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openModal('owner', owner.id, owner.name)}>
-                    <Plus className="w-3 h-3" />배정 추가
-                  </Button>
+                  {permissions.canCreate && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openModal('owner', owner.id, owner.name)}>
+                      <Plus className="w-3 h-3" />배정 추가
+                    </Button>
+                  )}
                 </div>
                 <div className="mt-1">{renderBadges('owner', owner.id)}</div>
               </CardHeader>
@@ -231,9 +242,11 @@ export default function ManagerAssignmentPage() {
                               <span className="text-xs font-medium text-gray-600">{fleet.name}</span>
                               <div>{renderBadges('fleet', fleet.id)}</div>
                             </div>
-                            <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('fleet', fleet.id, `${owner.name} › ${fleet.name}`)}>
-                              <Plus className="w-3 h-3" />배정
-                            </Button>
+                            {permissions.canCreate && (
+                              <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('fleet', fleet.id, `${owner.name} › ${fleet.name}`)}>
+                                <Plus className="w-3 h-3" />배정
+                              </Button>
+                            )}
                           </div>
                           {fleetShips.map(ship => (
                             <div key={ship.id} className="border-l-2 border-gray-100 pl-3 ml-3">
@@ -243,9 +256,11 @@ export default function ManagerAssignmentPage() {
                                   <span className="text-xs text-gray-500">{ship.name}</span>
                                   <div>{renderBadges('ship', ship.id)}</div>
                                 </div>
-                                <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${fleet.name} › ${ship.name}`)}>
-                                  <Plus className="w-3 h-3" />배정
-                                </Button>
+                                {permissions.canCreate && (
+                                  <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${fleet.name} › ${ship.name}`)}>
+                                    <Plus className="w-3 h-3" />배정
+                                  </Button>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -260,9 +275,11 @@ export default function ManagerAssignmentPage() {
                             <span className="text-xs text-gray-500">{ship.name}</span>
                             <div>{renderBadges('ship', ship.id)}</div>
                           </div>
-                          <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${ship.name}`)}>
-                            <Plus className="w-3 h-3" />배정
-                          </Button>
+                          {permissions.canCreate && (
+                            <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${ship.name}`)}>
+                              <Plus className="w-3 h-3" />배정
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -283,9 +300,11 @@ export default function ManagerAssignmentPage() {
                     <span className="text-xs font-medium text-gray-600">{fleet.name}</span>
                     <div>{renderBadges('fleet', fleet.id)}</div>
                   </div>
-                  <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2" onClick={() => openModal('fleet', fleet.id, fleet.name)}>
-                    <Plus className="w-3 h-3" />배정
-                  </Button>
+                  {permissions.canCreate && (
+                    <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2" onClick={() => openModal('fleet', fleet.id, fleet.name)}>
+                      <Plus className="w-3 h-3" />배정
+                    </Button>
+                  )}
                 </div>
               ))}
             </CardContent>

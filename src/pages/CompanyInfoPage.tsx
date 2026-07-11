@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Save, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCompanyInfo, saveCompanyInfo, uploadCompanyLogo } from '@/services/company-info.service';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface FormState {
   name: string;
@@ -18,6 +20,7 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: '', address: '', phone: '', fax: '', logo_url: '' };
 
 export default function CompanyInfoPage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [id, setId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -26,9 +29,15 @@ export default function CompanyInfoPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
 
+  const permissions = usePermissions('company_info');
+
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   async function load() {
     setLoading(true);
@@ -104,9 +113,11 @@ export default function CompanyInfoPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">회사 정보 관리</CardTitle>
-            <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving || loading}>
-              <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
-            </Button>
+            {permissions.canEdit && (
+              <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving || loading}>
+                <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>

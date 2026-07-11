@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Coins, Pencil, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { allowanceService } from '@/services/allowance.service';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { AllowanceType, AllowanceRankRateWithDetails, AllowancePaymentBasis, AllowancePaymentMethod } from '@/types/allowance';
 import type { Rank } from '@/types/models';
 
@@ -23,7 +25,9 @@ interface RateDraft {
 }
 
 export default function AllowanceTypesManagementPage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const permissions = usePermissions('allowance_types');
   const [types, setTypes] = useState<AllowanceType[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
@@ -55,6 +59,10 @@ export default function AllowanceTypesManagementPage() {
       setLoading(false);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadRates = useCallback(async () => {
     if (!selectedTypeId) { setRates([]); return; }
@@ -172,9 +180,11 @@ export default function AllowanceTypesManagementPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-sm">수당 유형 목록</CardTitle>
-            <Button size="sm" className="h-8 gap-1.5" onClick={openNewTypeForm}>
-              <Plus className="w-4 h-4" />새 수당 유형
-            </Button>
+            {permissions.canCreate && (
+              <Button size="sm" className="h-8 gap-1.5" onClick={openNewTypeForm}>
+                <Plus className="w-4 h-4" />새 수당 유형
+              </Button>
+            )}
           </div>
         </CardHeader>
         {typeFormOpen && (
@@ -197,7 +207,9 @@ export default function AllowanceTypesManagementPage() {
               </Select>
             </div>
             <div className="flex gap-2 items-end">
-              <Button size="sm" onClick={handleSaveType}>{editingType ? '수정 저장' : '추가'}</Button>
+              {(editingType ? permissions.canEdit : permissions.canCreate) && (
+                <Button size="sm" onClick={handleSaveType}>{editingType ? '수정 저장' : '추가'}</Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => setTypeFormOpen(false)}>취소</Button>
             </div>
           </CardContent>
@@ -245,9 +257,15 @@ export default function AllowanceTypesManagementPage() {
                     </TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditTypeForm(t)}><Pencil className="w-3.5 h-3.5" /></Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => handleToggleActive(t)}>{t.is_active ? '비활성화' : '활성화'}</Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteType(t.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                        {permissions.canEdit && (
+                          <>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditTypeForm(t)}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={() => handleToggleActive(t)}>{t.is_active ? '비활성화' : '활성화'}</Button>
+                          </>
+                        )}
+                        {permissions.canDelete && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteType(t.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -303,8 +321,10 @@ export default function AllowanceTypesManagementPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleSaveRate(rank.id)}>저장</Button>
-                          {hasRate && (
+                          {(hasRate ? permissions.canEdit : permissions.canCreate) && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleSaveRate(rank.id)}>저장</Button>
+                          )}
+                          {hasRate && permissions.canDelete && (
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteRate(rank.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                           )}
                         </div>

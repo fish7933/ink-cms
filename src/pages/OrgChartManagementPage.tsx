@@ -16,6 +16,7 @@ import { OrgUnitDialog } from '@/components/org-chart/OrgUnitDialog';
 import { orgChartService } from '@/services/org-chart.service';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { OrgUnit, OrgMember, OrgUnitNode } from '@/types/org-chart';
 
 // 부서와 그 모든 하위 부서 id를 모아준다 — "상위 부서" 선택지에서 자기 자신/하위 부서를
@@ -51,6 +52,8 @@ export default function OrgChartManagementPage() {
   const [deleteTarget, setDeleteTarget] = useState<OrgUnitNode | null>(null);
   const [addMemberId, setAddMemberId] = useState('_none');
 
+  const permissions = usePermissions('org_chart');
+
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
@@ -59,6 +62,10 @@ export default function OrgChartManagementPage() {
     };
     init();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -190,15 +197,21 @@ export default function OrgChartManagementPage() {
           <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4 shrink-0">{node.members.length}명</Badge>
           <div className="flex-1" />
           <div className="hidden group-hover:flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="하위 부서 추가" onClick={() => openCreate(node.id)}>
-              <Plus className="w-3.5 h-3.5" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="수정" onClick={() => openEdit(node)}>
-              <Pencil className="w-3.5 h-3.5" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-600 hover:text-red-700" title="삭제" onClick={() => requestDelete(node)}>
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
+            {permissions.canCreate && (
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="하위 부서 추가" onClick={() => openCreate(node.id)}>
+                <Plus className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {permissions.canEdit && (
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="수정" onClick={() => openEdit(node)}>
+                <Pencil className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            {permissions.canDelete && (
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-600 hover:text-red-700" title="삭제" onClick={() => requestDelete(node)}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
         </div>
         {!isCollapsed && node.children.map(child => renderNode(child, depth + 1))}
@@ -226,9 +239,11 @@ export default function OrgChartManagementPage() {
                 부서 구조와 부서장을 관리합니다. 결재선을 만들 때 부서를 선택하면 부서장 → 상위 부서장 순으로 결재라인이 자동 구성됩니다.
               </p>
             </div>
-            <Button size="sm" className="gap-1.5 h-8" onClick={() => openCreate(null)}>
-              <Plus className="w-4 h-4" />최상위 부서 추가
-            </Button>
+            {permissions.canCreate && (
+              <Button size="sm" className="gap-1.5 h-8" onClick={() => openCreate(null)}>
+                <Plus className="w-4 h-4" />최상위 부서 추가
+              </Button>
+            )}
           </div>
         </CardHeader>
       </Card>
@@ -293,29 +308,33 @@ export default function OrgChartManagementPage() {
                             {m.name}{m.position_name ? <span className="text-gray-500"> · {m.position_name}</span> : ''}
                             {selectedNode.head_user_id === m.id && <Badge className="ml-1.5 text-xs px-1.5 py-0 h-4 bg-blue-600">부서장</Badge>}
                           </span>
-                          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-gray-500 hover:text-red-600" onClick={() => handleRemoveMember(m.id)}>
-                            <UserMinus className="w-3 h-3 mr-1" />제외
-                          </Button>
+                          {permissions.canEdit && (
+                            <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs text-gray-500 hover:text-red-600" onClick={() => handleRemoveMember(m.id)}>
+                              <UserMinus className="w-3 h-3 mr-1" />제외
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
-                  <div className="flex items-center gap-2">
-                    <Select value={addMemberId} onValueChange={setAddMemberId}>
-                      <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="구성원 추가" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">— 직원 선택 —</SelectItem>
-                        {members.filter(m => !m.org_unit_ids.includes(selectedNode.id)).map(m => (
-                          <SelectItem key={m.id} value={m.id} className="text-sm">
-                            {m.name}{m.position_name ? ` (${m.position_name})` : ''}{m.org_unit_ids.length > 0 ? ' · 겸직 추가' : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button size="sm" className="h-8 gap-1" disabled={addMemberId === '_none'} onClick={handleAddMember}>
-                      <Plus className="w-3.5 h-3.5" />추가
-                    </Button>
-                  </div>
+                  {permissions.canEdit && (
+                    <div className="flex items-center gap-2">
+                      <Select value={addMemberId} onValueChange={setAddMemberId}>
+                        <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="구성원 추가" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">— 직원 선택 —</SelectItem>
+                          {members.filter(m => !m.org_unit_ids.includes(selectedNode.id)).map(m => (
+                            <SelectItem key={m.id} value={m.id} className="text-sm">
+                              {m.name}{m.position_name ? ` (${m.position_name})` : ''}{m.org_unit_ids.length > 0 ? ' · 겸직 추가' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" className="h-8 gap-1" disabled={addMemberId === '_none'} onClick={handleAddMember}>
+                        <Plus className="w-3.5 h-3.5" />추가
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </>
             )}

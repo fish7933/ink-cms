@@ -11,6 +11,7 @@ import { crewRecommendationService } from '@/services/crew-recommendation.servic
 import { CertificateUploadDialog } from '@/components/crew/CertificateUploadDialog';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { CrewRecommendationWithDetails, User as UserType, Company, Fleet, Ship, Rank } from '@/types/models';
 import { useTabContext } from '@/contexts/TabContext';
 
@@ -52,6 +53,13 @@ export default function MyRecommendationsPage() {
   const [fleetF, setFleetF] = useState('all');
   const [shipF, setShipF] = useState('all');
   const [rankF, setRankF] = useState('all');
+
+  const permissions = usePermissions('my_recommendations');
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우 접근을 차단한다. loading 중에는 판단하지 않는다.
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { applyFilters(); }, [recommendations, search, statusF, dateF, ownerF, fleetF, shipF, rankF]);
@@ -284,7 +292,7 @@ export default function MyRecommendationsPage() {
                       <TableCell className="text-xs py-2">{new Date(rec.created_at).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}</TableCell>
                       <TableCell className="text-right py-2">
                         <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
-                          {rec.status === 'accepted' && (
+                          {rec.status === 'accepted' && permissions.canEdit && (
                             <>
                               <Button variant="default" size="sm" onClick={() => openNewTab(`/crew/input/${rec.id}`, '선원 상세입력', true)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
                                 <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
@@ -302,17 +310,17 @@ export default function MyRecommendationsPage() {
                               <ExternalLink className="w-3.5 h-3.5 mr-1.5" />이력서
                             </Button>
                           )}
-                          {rec.status === 'pending' && (
+                          {rec.status === 'pending' && permissions.canEdit && (
                             <Button variant="outline" size="sm" onClick={() => handleWithdraw(rec)} className="h-8 px-3 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
                               <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
                             </Button>
                           )}
-                          {(rec.status === 'withdrawn' || rec.status === 'rejected') && (
+                          {(rec.status === 'withdrawn' || rec.status === 'rejected') && permissions.canCreate && (
                             <Button variant="default" size="sm" onClick={() => handleReRecommend(rec)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
                               <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
                             </Button>
                           )}
-                          {(rec.status === 'accepted' || rec.status === 'rejected' || rec.status === 'withdrawn') && (
+                          {(rec.status === 'accepted' || rec.status === 'rejected' || rec.status === 'withdrawn') && permissions.canDelete && (
                             <Button variant="outline" size="sm" onClick={() => handleDelete(rec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
                               <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
                             </Button>
@@ -425,7 +433,7 @@ export default function MyRecommendationsPage() {
 
                   {/* Action buttons */}
                   <div className="flex justify-end gap-2 pt-4">
-                    {selectedRec.status === 'accepted' && (
+                    {selectedRec.status === 'accepted' && permissions.canEdit && (
                       <>
                         <Button variant="default" size="sm" onClick={() => openNewTab(`/crew/input/${selectedRec.id}`, '선원 상세입력', true)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
                           <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
@@ -435,17 +443,17 @@ export default function MyRecommendationsPage() {
                         </Button>
                       </>
                     )}
-                    {selectedRec.status === 'pending' && (
+                    {selectedRec.status === 'pending' && permissions.canEdit && (
                       <Button variant="outline" size="sm" onClick={() => handleWithdraw(selectedRec)} className="h-8 px-3 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
                         <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
                       </Button>
                     )}
-                    {(selectedRec.status === 'withdrawn' || selectedRec.status === 'rejected') && (
+                    {(selectedRec.status === 'withdrawn' || selectedRec.status === 'rejected') && permissions.canCreate && (
                       <Button variant="default" size="sm" onClick={() => handleReRecommend(selectedRec)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
                         <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
                       </Button>
                     )}
-                    {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected' || selectedRec.status === 'withdrawn') && (
+                    {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected' || selectedRec.status === 'withdrawn') && permissions.canDelete && (
                       <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
                         <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
                       </Button>

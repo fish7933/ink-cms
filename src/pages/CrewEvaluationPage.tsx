@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Star, Trash2, Edit2, ArrowLeft, Save, Upload, X, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import type { Rank } from '@/types/models';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const CATEGORIES = [
   { key: 'professional_knowledge', label: '전문 지식' }, { key: 'work_performance', label: '업무 수행력' },
@@ -30,6 +32,8 @@ interface ShipOption { id: string; name: string; }
 
 export default function CrewEvaluationPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const permissions = usePermissions('crew_evaluations');
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
@@ -53,6 +57,12 @@ export default function CrewEvaluationPage() {
   }, []);
 
   const loadData = async () => { try { setLoading(true); setEvaluations(await getEvaluations()); } catch (e) { console.error(e); } finally { setLoading(false); } };
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
+  // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const openForm = (record?: CrewEvaluationWithDetails) => {
     if (record) {
@@ -171,10 +181,12 @@ export default function CrewEvaluationPage() {
               <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{uploading ? '업로드 중...' : saving ? '저장 중...' : '저장'}</Button>
             ) : (
               <div className="flex gap-2">
-                {selectedIds.length > 0 && (
+                {selectedIds.length > 0 && permissions.canDelete && (
                   <Button size="sm" variant="destructive" className="gap-1.5 h-8" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4" />선택 삭제 ({selectedIds.length})</Button>
                 )}
-                <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />평가 작성</Button>
+                {permissions.canCreate && (
+                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />평가 작성</Button>
+                )}
               </div>
             )}
           </div>
@@ -272,7 +284,7 @@ export default function CrewEvaluationPage() {
                 </tr></thead>
                 <tbody>
                   {filtered.length === 0 ? <tr><td colSpan={10} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(e => (
-                    <tr key={e.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(e)}>
+                    <tr key={e.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openForm(e)}>
                       <td className="p-2" onClick={ev => ev.stopPropagation()}><Checkbox checked={selectedIds.includes(e.id)} onCheckedChange={() => toggleSelect(e.id)} /></td>
                       <td className="p-2 text-gray-600">{e.owner_name || '-'}</td>
                       <td className="p-2 text-gray-500">{e.fleet_name || '-'}</td>
@@ -282,7 +294,11 @@ export default function CrewEvaluationPage() {
                       <td className="p-2">{e.evaluation_period_start} ~ {e.evaluation_period_end}</td>
                       <td className="p-2 text-center">{e.overall_rating ? <span className="inline-flex items-center gap-0.5 font-semibold"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{e.overall_rating}</span> : '-'}</td>
                       <td className="p-2 text-center">{e.recommendation ? <Badge className={`text-xs ${REC_LABELS[e.recommendation]?.color}`}>{REC_LABELS[e.recommendation]?.label}</Badge> : '-'}</td>
-                      <td className="p-2 text-center" onClick={ev => ev.stopPropagation()}><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(e.id)}><Trash2 className="h-3 w-3" /></Button></td>
+                      <td className="p-2 text-center" onClick={ev => ev.stopPropagation()}>
+                        {permissions.canDelete && (
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(e.id)}><Trash2 className="h-3 w-3" /></Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -30,7 +30,7 @@ export default function ShipTypeManagementPage() {
   const [sizeClassifications, setSizeClassifications] = useState<ShipSizeClassification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const permissions = usePermissions('ships');
+  const permissions = usePermissions('ship_management_settings');
 
   const [isShipTypeDialogOpen, setIsShipTypeDialogOpen] = useState(false);
   const [isSizeDialogOpen, setIsSizeDialogOpen] = useState(false);

@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import { msg } from '@/lib/messages';
 import type { OrgUnit } from '@/types/org-chart';
 import type { ApprovalDocumentType, ApprovalDocumentAttachment } from '@/types/approval-document';
@@ -37,6 +38,13 @@ export default function DocumentDraftPage() {
   const [previewChain, setPreviewChain] = useState<ApprovalChainStep[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
+
+  const permissions = usePermissions('document_draft');
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우 접근을 차단한다. loading 중에는 판단하지 않는다.
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => {
     const init = async () => {
@@ -239,9 +247,11 @@ export default function DocumentDraftPage() {
 
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" size="sm" onClick={() => navigate('/documents')} disabled={submitting}>취소</Button>
-            <Button size="sm" onClick={handleSubmit} disabled={submitting || previewChain.length === 0}>
-              {submitting ? '제출 중...' : '제출'}
-            </Button>
+            {permissions.canCreate && (
+              <Button size="sm" onClick={handleSubmit} disabled={submitting || previewChain.length === 0}>
+                {submitting ? '제출 중...' : '제출'}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

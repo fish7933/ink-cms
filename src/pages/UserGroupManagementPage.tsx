@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const ROLE_LABELS: Record<string, string> = { ship_owner: '선주', ship_manager: '선박관리사', manning_agency: '선원매닝사', crew: '선원', admin: '슈퍼관리자', system_admin: '시스템관리자' };
 const ROLE_COLORS: Record<string, string> = { ship_owner: 'bg-purple-500', ship_manager: 'bg-blue-500', manning_agency: 'bg-green-500', crew: 'bg-gray-500', admin: 'bg-red-500', system_admin: 'bg-indigo-500' };
@@ -45,6 +46,8 @@ export default function UserGroupManagementPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
 
+  const permissions = usePermissions('user_groups');
+
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
@@ -53,6 +56,10 @@ export default function UserGroupManagementPage() {
     };
     init();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     try {
@@ -165,9 +172,11 @@ export default function UserGroupManagementPage() {
               <CardTitle className="text-base">{ROLE_LABELS[role] || role} 관리</CardTitle>
               <p className="text-xs text-muted-foreground mt-1">총 {roleUsers.length}명</p>
             </div>
-            <Button size="sm" className="gap-1.5 h-8" onClick={() => openAdd(role)}>
-              <Plus className="w-3.5 h-3.5" />사용자 추가
-            </Button>
+            {permissions.canCreate && (
+              <Button size="sm" className="gap-1.5 h-8" onClick={() => openAdd(role)}>
+                <Plus className="w-3.5 h-3.5" />사용자 추가
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="pt-0">
@@ -191,16 +200,18 @@ export default function UserGroupManagementPage() {
                     const eu = u as User & { username?: string };
                     const company = companies.find(c => c.id === u.company_id);
                     return (
-                      <TableRow key={u.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openEdit(u)}>
+                      <TableRow key={u.id} className={`hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openEdit(u)}>
                         <TableCell className="font-medium text-sm">{eu.username || '-'}</TableCell>
                         <TableCell className="text-sm">{u.name}</TableCell>
                         <TableCell className="text-sm">{u.email}</TableCell>
                         <TableCell className="text-sm">{company ? company.name : (['ship_manager','admin'].includes(role) ? 'INK' : '-')}</TableCell>
                         <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-500'}`}>{ROLE_LABELS[u.role] || u.role}</Badge></TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                          <Button size="sm" variant="ghost" onClick={() => handleDelete(u.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          {permissions.canDelete && (
+                            <Button size="sm" variant="ghost" onClick={() => handleDelete(u.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

@@ -19,8 +19,9 @@ import {
   getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments, getAdminActionLog, deleteAdminActionLog,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
-import { formatLeaveHours, getThisYearLeaveGrantDate, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
+import { formatLeaveHours, formatLeaveDays, getCurrentLeaveYearStart, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import LeaveUsageCalendar from '@/components/leave/LeaveUsageCalendar';
 import type { User } from '@/types/models';
 import type { SickLeaveRequestWithDetails } from '@/types/sick-leave';
@@ -81,6 +82,8 @@ export default function ShoreLeaveManagementPage() {
   const [grantExplainList, setGrantExplainList] = useState<ShoreLeaveAdjustment[]>([]);
   const [grantExplainLoading, setGrantExplainLoading] = useState(false);
 
+  const permissions = usePermissions('shore_leave_management');
+
   useEffect(() => {
     const init = async () => {
       const me = await getCurrentUser();
@@ -90,6 +93,12 @@ export default function ShoreLeaveManagementPage() {
     };
     init();
   }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
+  // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -272,7 +281,7 @@ export default function ShoreLeaveManagementPage() {
                     <tr>
                       <th className="text-left p-2 text-xs font-medium text-gray-600">이름</th>
                       <th className="text-left p-2 text-xs font-medium text-gray-600">입사일</th>
-                      <th className="text-left p-2 text-xs font-medium text-gray-600">연차 발생일(올해)</th>
+                      <th className="text-left p-2 text-xs font-medium text-gray-600">연차 발생일</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">법정 발생</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">회사 부여</th>
                       <th className="text-center p-2 text-xs font-medium text-gray-600">총 발생 연차</th>
@@ -291,7 +300,7 @@ export default function ShoreLeaveManagementPage() {
                           {r.user.hire_date || <span className="text-red-500">미등록</span>}
                         </td>
                         <td className="p-2 text-gray-500">
-                          {r.user.hire_date ? getThisYearLeaveGrantDate(r.user.hire_date) : '-'}
+                          {r.user.hire_date ? getCurrentLeaveYearStart(r.user.hire_date) : '-'}
                         </td>
                         <td className="p-2 text-center">
                           <button type="button" className="underline decoration-dotted underline-offset-2 hover:text-blue-600" onClick={() => setLegalExplainRow(r)} title="계산 방법 보기">
@@ -306,19 +315,23 @@ export default function ShoreLeaveManagementPage() {
                           ) : '-'}
                         </td>
                         <td className="p-2 text-center font-medium">{formatLeaveHours(r.accruedHours)}</td>
-                        <td className="p-2 text-center text-gray-500">{formatLeaveHours(r.usedHours)}</td>
+                        <td className="p-2 text-center text-gray-500">{formatLeaveDays(r.usedHours)}</td>
                         <td className="p-2 text-center font-semibold text-blue-700">{formatLeaveHours(r.remainingHours)}</td>
                         <td className="p-2">
                           <div className="flex items-center justify-center gap-0.5 whitespace-nowrap">
                             <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5" onClick={() => openDetail(r.user)} title="연차 내역">
                               <History className="w-3 h-3" />내역
                             </Button>
-                            <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-blue-600" onClick={() => openAdjust(r.user, 'grant')} title="회사 부여">
-                              <Plus className="w-3 h-3" />부여
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-orange-600" onClick={() => openAdjust(r.user, 'manual_use')} title="수동 사용 입력">
-                              <Minus className="w-3 h-3" />차감
-                            </Button>
+                            {permissions.canCreate && (
+                              <>
+                                <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-blue-600" onClick={() => openAdjust(r.user, 'grant')} title="회사 부여">
+                                  <Plus className="w-3 h-3" />부여
+                                </Button>
+                                <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-orange-600" onClick={() => openAdjust(r.user, 'manual_use')} title="수동 사용 입력">
+                                  <Minus className="w-3 h-3" />차감
+                                </Button>
+                              </>
+                            )}
                             {currentUser && RESET_ROLES.includes(currentUser.role) && (
                               <Button variant="outline" size="sm" className="h-7 px-1.5 text-xs gap-0.5 text-red-600" onClick={() => openReset(r)} title="사용/잔여 초기화">
                                 <RotateCcw className="w-3 h-3" />초기화
@@ -536,7 +549,7 @@ export default function ShoreLeaveManagementPage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="p-3 bg-gray-50 rounded-md text-sm">
                 <p className="text-xs text-gray-500">현재 사용</p>
-                <p className="font-semibold text-orange-600">{resetDialog && formatLeaveHours(resetDialog.usedHours)}</p>
+                <p className="font-semibold text-orange-600">{resetDialog && formatLeaveDays(resetDialog.usedHours)}</p>
               </div>
               <div className="p-3 bg-gray-50 rounded-md text-sm">
                 <p className="text-xs text-gray-500">현재 회사 부여</p>

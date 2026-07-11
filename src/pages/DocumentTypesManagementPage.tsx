@@ -13,6 +13,7 @@ import { getCurrentUser } from '@/lib/store';
 import { getShorePositions } from '@/services/shore-position.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { ShorePosition } from '@/types/models';
 import type { ApprovalDocumentType, ApprovalAuthorityLimit } from '@/types/approval-document';
 
@@ -29,6 +30,8 @@ export default function DocumentTypesManagementPage() {
   const [form, setForm] = useState({ code: '', name: '' });
   const [saving, setSaving] = useState(false);
 
+  const permissions = usePermissions('document_types');
+
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
@@ -37,6 +40,10 @@ export default function DocumentTypesManagementPage() {
     };
     init();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -120,9 +127,11 @@ export default function DocumentTypesManagementPage() {
                 </p>
               </div>
             </div>
-            <Button size="sm" className="gap-1.5 h-8" onClick={openCreate}>
-              <Plus className="w-4 h-4" />문서유형 추가
-            </Button>
+            {permissions.canCreate && (
+              <Button size="sm" className="gap-1.5 h-8" onClick={openCreate}>
+                <Plus className="w-4 h-4" />문서유형 추가
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="pt-0">
@@ -146,9 +155,9 @@ export default function DocumentTypesManagementPage() {
                     return (
                       <TableRow key={t.id}>
                         <TableCell className="font-mono text-xs">{t.code}</TableCell>
-                        <TableCell className="text-sm cursor-pointer" onClick={() => openEdit(t)}>{t.name}</TableCell>
+                        <TableCell className={`text-sm ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openEdit(t)}>{t.name}</TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
-                          <Select value={limit?.position_id || '_none'} onValueChange={v => handleAuthorityChange(t.id, v)}>
+                          <Select value={limit?.position_id || '_none'} onValueChange={v => handleAuthorityChange(t.id, v)} disabled={!permissions.canEdit}>
                             <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="전결 없음(대표까지)" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="_none">전결 없음(대표까지)</SelectItem>
@@ -160,10 +169,14 @@ export default function DocumentTypesManagementPage() {
                           <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">{t.is_active ? '사용중' : '비활성'}</Badge>
                         </TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEdit(t)}>수정</Button>
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleActive(t)}>
-                            {t.is_active ? '비활성화' : '활성화'}
-                          </Button>
+                          {permissions.canEdit && (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEdit(t)}>수정</Button>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleActive(t)}>
+                                {t.is_active ? '비활성화' : '활성화'}
+                              </Button>
+                            </>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

@@ -37,6 +37,33 @@ import {
 } from '@/components/ui/select';
 import { useUISettings, DEFAULT_UI_SETTINGS } from '@/contexts/UISettingsContext';
 
+interface SortableCategoryProps {
+  id: string;
+  header: React.ReactNode;
+  children?: React.ReactNode;
+}
+
+function SortableCategory({ id, header, children }: SortableCategoryProps) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="border rounded-lg p-4 bg-gray-50">
+      <div className="flex items-center gap-2 mb-3">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+          <GripVertical className="w-5 h-5 text-gray-400" />
+        </div>
+        {header}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 interface SortableItemProps {
   id: string;
   item: MenuItem;
@@ -430,30 +457,34 @@ export default function MenuConfigurationPage() {
                       {menuStructure.map(category => {
                         const isExpanded = expandedCategories.has(category.id);
                         return (
-                          <div key={category.id} className="border rounded-lg p-4 bg-gray-50">
-                            <div className="flex items-center gap-2 mb-3">
-                              <GripVertical className="w-5 h-5 text-gray-400 cursor-grab" />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleCategory(category.id)}
-                                className="flex-1 justify-start"
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="w-4 h-4 mr-2" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4 mr-2" />
-                                )}
-                                <span className="font-semibold text-base">{category.label}</span>
-                                <span className="ml-2 text-xs text-gray-500">
-                                  ({category.items.length}개 항목)
-                                </span>
-                              </Button>
-                              <Switch
-                                checked={category.is_active}
-                                onCheckedChange={(checked) => handleToggleCategory(category.id, checked)}
-                              />
-                            </div>
+                          <SortableCategory
+                            key={category.id}
+                            id={category.id}
+                            header={
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleCategory(category.id)}
+                                  className="flex-1 justify-start"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="w-4 h-4 mr-2" />
+                                  ) : (
+                                    <ChevronRight className="w-4 h-4 mr-2" />
+                                  )}
+                                  <span className="font-semibold text-base">{category.label}</span>
+                                  <span className="ml-2 text-xs text-gray-500">
+                                    ({category.items.length}개 항목)
+                                  </span>
+                                </Button>
+                                <Switch
+                                  checked={category.is_active}
+                                  onCheckedChange={(checked) => handleToggleCategory(category.id, checked)}
+                                />
+                              </>
+                            }
+                          >
                             {isExpanded && (
                               <div className="ml-8 space-y-2">
                                 <DndContext
@@ -478,7 +509,7 @@ export default function MenuConfigurationPage() {
                                 </DndContext>
                               </div>
                             )}
-                          </div>
+                          </SortableCategory>
                         );
                       })}
                     </div>

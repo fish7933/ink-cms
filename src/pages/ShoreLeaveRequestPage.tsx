@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,7 @@ import type { OrgUnit, ApprovalChainStep } from '@/types/org-chart';
 import type { ShoreLeaveRequest } from '@/types/shore-leave';
 import type { User } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: '결재중', color: 'bg-yellow-100 text-yellow-700' },
@@ -39,7 +41,9 @@ const LEAVE_TYPE_TIMES: Record<LeaveType, { start_time: string; end_time: string
 };
 
 export default function ShoreLeaveRequestPage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const permissions = usePermissions('shore_leave_request');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [balance, setBalance] = useState<LeaveBalance>({ legalAccruedHours: 0, companyGrantedHours: 0, accruedHours: 0, usedHours: 0, remainingHours: 0 });
   const [myRequests, setMyRequests] = useState<ShoreLeaveRequest[]>([]);
@@ -53,6 +57,10 @@ export default function ShoreLeaveRequestPage() {
   const [form, setForm] = useState({ start_date: '', end_date: '', leaveType: 'full' as LeaveType, reason: '', ccOrgUnitIds: [] as string[] });
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -321,11 +329,13 @@ export default function ShoreLeaveRequestPage() {
               ))}
             </div>
           </div>
-          <div className="flex justify-end pt-1">
-            <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting || isSameDayRequestBlocked}>
-              <Send className="w-4 h-4" />{submitting ? '제출 중...' : '결재 상신'}
-            </Button>
-          </div>
+          {permissions.canCreate && (
+            <div className="flex justify-end pt-1">
+              <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting || isSameDayRequestBlocked}>
+                <Send className="w-4 h-4" />{submitting ? '제출 중...' : '결재 상신'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

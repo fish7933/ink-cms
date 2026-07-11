@@ -113,3 +113,12 @@ export function formatLeaveHours(hours: number): string {
   if (days > 0) return `${sign}${days}일`;
   return `${sign}${rem}시간`;
 }
+
+// "사용" 연차처럼 반차 미만 단위도 항상 일수로 보여주고 싶을 때 쓰는 소수점 일수 표기
+// (예: 4시간 -> "0.5일", 26시간 -> "3.3일"). formatLeaveHours와 달리 항상 "일" 단위 하나로만 표시한다.
+export function formatLeaveDays(hours: number): string {
+  const sign = hours < 0 ? '-' : '';
+  const abs = Math.abs(hours);
+  const days = Math.round((abs / HOURS_PER_DAY) * 10) / 10;
+  return `${sign}${days}일`;
+}

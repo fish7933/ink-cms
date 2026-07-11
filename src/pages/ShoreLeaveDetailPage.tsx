@@ -3,13 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { getCurrentUser } from '@/lib/store';
 import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { getLeaveBalance, getLeaveAdjustments, getLeaveRequestsByUser, getLeaveResets, deleteLeaveRequest, deleteLeaveAdjustment } from '@/services/shore-leave.service';
-import { formatLeaveHours, type LeaveBalance } from '@/lib/leave-calc';
+import { formatLeaveHours, formatLeaveDays, type LeaveBalance } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/types/models';
 import type { ShoreLeaveRequest, ShoreLeaveAdjustment, ShoreLeaveReset } from '@/types/shore-leave';
@@ -111,6 +112,9 @@ export default function ShoreLeaveDetailPage() {
     }
   };
 
+  const usageEntries = timeline.filter((e): e is Extract<TimelineEntry, { kind: 'request' }> => e.kind === 'request').map(e => e.item);
+  const adjustmentEntries = timeline.filter(e => e.kind === 'adjustment' || e.kind === 'reset');
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
   if (!targetUser) {
@@ -147,7 +151,7 @@ export default function ShoreLeaveDetailPage() {
           </div>
           <div className="p-3 bg-gray-50 rounded-md">
             <p className="text-xs text-gray-500">사용</p>
-            <p className="text-xl font-bold text-gray-500">{formatLeaveHours(balance.usedHours)}</p>
+            <p className="text-xl font-bold text-gray-500">{formatLeaveDays(balance.usedHours)}</p>
           </div>
           <div className="p-3 bg-blue-50 rounded-md">
             <p className="text-xs text-blue-600">잔여</p>
@@ -156,17 +160,21 @@ export default function ShoreLeaveDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">전체 내역</CardTitle></CardHeader>
-        <CardContent>
-          {timeline.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">내역이 없습니다</p>
-          ) : (
-            <div className="space-y-2">
-              {timeline.map(entry => {
-                if (entry.kind === 'request') {
-                  const r = entry.item;
-                  return (
+      <Tabs defaultValue="usage">
+        <TabsList className="grid w-full grid-cols-2 h-9 max-w-sm">
+          <TabsTrigger value="usage" className="text-xs">연차 사용 내역</TabsTrigger>
+          <TabsTrigger value="adjustments" className="text-xs">연차 조정 내역</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="usage" className="mt-3">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-base">연차 사용 내역</CardTitle></CardHeader>
+            <CardContent>
+              {usageEntries.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">연차 사용 내역이 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  {usageEntries.map(r => (
                     <div key={`req-${r.id}`} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-md text-sm">
                       <div>
                         <p className="font-medium">연차 신청 &middot; {r.start_date} ~ {r.end_date}</p>
@@ -182,41 +190,57 @@ export default function ShoreLeaveDetailPage() {
                         )}
                       </div>
                     </div>
-                  );
-                }
-                if (entry.kind === 'adjustment') {
-                  const a = entry.item;
-                  const isGrant = a.adjustment_type === 'grant';
-                  return (
-                    <div key={`adj-${a.id}`} className={`flex items-center justify-between p-2.5 rounded-md text-sm ${isGrant ? 'bg-blue-50' : 'bg-orange-50'}`}>
-                      <div>
-                        <p className="font-medium">{isGrant ? '회사 부여' : '수동 사용 입력'} &middot; {new Date(a.created_at).toLocaleDateString('ko-KR')}</p>
-                        <p className="text-xs text-gray-500">{a.reason || '-'}</p>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="adjustments" className="mt-3">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-base">연차 조정 내역</CardTitle></CardHeader>
+            <CardContent>
+              {adjustmentEntries.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">연차 조정 내역이 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  {adjustmentEntries.map(entry => {
+                    if (entry.kind === 'adjustment') {
+                      const a = entry.item;
+                      const isGrant = a.adjustment_type === 'grant';
+                      return (
+                        <div key={`adj-${a.id}`} className={`flex items-center justify-between p-2.5 rounded-md text-sm ${isGrant ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                          <div>
+                            <p className="font-medium">{isGrant ? '회사 부여' : '수동 사용 입력'} &middot; {new Date(a.created_at).toLocaleDateString('ko-KR')}</p>
+                            <p className="text-xs text-gray-500">{a.reason || '-'}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className={`font-semibold ${isGrant ? 'text-blue-700' : 'text-orange-700'}`}>{isGrant ? '+' : '-'}{formatLeaveHours(a.hours)}</p>
+                            {canDelete && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 shrink-0" onClick={() => handleDeleteAdjustment(a)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                    const rs = entry.item;
+                    return (
+                      <div key={`reset-${rs.id}`} className="flex items-center justify-between p-2.5 rounded-md text-sm bg-red-50">
+                        <div>
+                          <p className="font-medium">{rs.reset_grants ? '사용/잔여/회사부여 초기화' : '사용/잔여 초기화'} &middot; {new Date(rs.created_at).toLocaleDateString('ko-KR')}</p>
+                          <p className="text-xs text-gray-500">{rs.reason || '-'}</p>
+                        </div>
+                        <Badge className="text-xs bg-red-100 text-red-700">{rs.deleted_history ? '내역 삭제됨' : '내역 유지'}</Badge>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <p className={`font-semibold ${isGrant ? 'text-blue-700' : 'text-orange-700'}`}>{isGrant ? '+' : '-'}{formatLeaveHours(a.hours)}</p>
-                        {canDelete && (
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 shrink-0" onClick={() => handleDeleteAdjustment(a)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-                const rs = entry.item;
-                return (
-                  <div key={`reset-${rs.id}`} className="flex items-center justify-between p-2.5 rounded-md text-sm bg-red-50">
-                    <div>
-                      <p className="font-medium">{rs.reset_grants ? '사용/잔여/회사부여 초기화' : '사용/잔여 초기화'} &middot; {new Date(rs.created_at).toLocaleDateString('ko-KR')}</p>
-                      <p className="text-xs text-gray-500">{rs.reason || '-'}</p>
-                    </div>
-                    <Badge className="text-xs bg-red-100 text-red-700">{rs.deleted_history ? '내역 삭제됨' : '내역 유지'}</Badge>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

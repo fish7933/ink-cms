@@ -1,3 +1,5 @@
+import { defaultMenuStructure } from '@/lib/default-menu';
+
 export interface Permission {
   id: string;
   user_id: string;
@@ -30,98 +32,19 @@ export interface PageStructure {
   resource: string;
 }
 
-export const MENU_STRUCTURE: MenuStructure[] = [
-  {
-    id: 'crew-management',
-    name: '선원 관리',
-    children: [
-      { id: 'crew', name: '선원 목록', resource: 'crew' },
-      { id: 'crew-rotation', name: '선원 교대 발령', resource: 'crew_rotation' },
-      { id: 'leave-management', name: '휴가 관리', resource: 'leave_management' },
-      { id: 'crew-evaluations', name: '선원 평가', resource: 'crew_evaluations' },
-      { id: 'contract-management', name: '계약 관리', resource: 'contract_management' },
-      { id: 'certificate-expiry', name: '증서 만료 현황', resource: 'certificate_expiry' },
-      { id: 'ranks', name: '직급 관리', resource: 'ranks' },
-      { id: 'nationalities', name: '선원 국적 관리', resource: 'nationalities' },
-      { id: 'certificate-types', name: '증서 유형 관리', resource: 'certificate_types' },
-      { id: 'ports', name: '교대지 관리', resource: 'ports' },
-    ],
-  },
-  {
-    id: 'ship-management',
-    name: '선박 관리',
-    children: [
-      { id: 'ships', name: '선박 목록', resource: 'ships' },
-      { id: 'fleet-management', name: '플릿 관리', resource: 'fleet_management' },
-      { id: 'ship-types', name: '선종/분류 관리', resource: 'ship_types' },
-      { id: 'ship-flags', name: '선적국 관리', resource: 'ship_flags' },
-    ],
-  },
-  {
-    id: 'recruitment',
-    name: '구인구직',
-    children: [
-      { id: 'job-postings', name: '구인 공고', resource: 'job_postings' },
-      { id: 'recommendation-review', name: '추천 검토', resource: 'recommendation_review' },
-      { id: 'my-recommendations', name: '내 추천 선원', resource: 'my_recommendations' },
-    ],
-  },
-  {
-    id: 'approval',
-    name: '결재',
-    children: [
-      { id: 'approval-inbox', name: '결재함', resource: 'approval_inbox' },
-      { id: 'document-draft', name: '기안서 작성', resource: 'document_draft' },
-    ],
-  },
-  {
-    id: 'shore-leave',
-    name: '육상 직원 연차',
-    children: [
-      { id: 'shore-leave-request', name: '연차 신청', resource: 'shore_leave_request' },
-      { id: 'sick-leave-request', name: '질병휴가 신청', resource: 'sick_leave_request' },
-      { id: 'shore-leave-management', name: '육상 직원 연차 관리', resource: 'shore_leave_management' },
-    ],
-  },
-  {
-    id: 'homepage-management',
-    name: '홈페이지 관리',
-    children: [
-      { id: 'homepage-posts', name: '게시판 관리', resource: 'homepage_posts' },
-    ],
-  },
-  {
-    id: 'salary',
-    name: '급여 관리',
-    children: [
-      { id: 'salary-templates', name: '급여 템플릿', resource: 'salary_templates' },
-      { id: 'salary-components', name: '급여 구성항목', resource: 'salary_components' },
-      { id: 'allotment-management', name: '송금 관리', resource: 'allotment_management' },
-      { id: 'allowance-types', name: '수당 기준 관리', resource: 'allowance_types' },
-    ],
-  },
-  {
-    id: 'reports',
-    name: '보고서/통계',
-    children: [
-      { id: 'reports-dashboard', name: '통계 대시보드', resource: 'reports' },
-    ],
-  },
-  {
-    id: 'settings',
-    name: '설정',
-    children: [
-      { id: 'companies', name: '선주사/매닝사 관리', resource: 'companies' },
-      { id: 'user-groups', name: '사용자 그룹 관리', resource: 'user_groups' },
-      { id: 'manager-assignments', name: '선주 사용자 관리', resource: 'manager_assignments' },
-      { id: 'supervisor-management', name: '우리회사 담당자 관리', resource: 'supervisor_management' },
-      { id: 'shore-positions', name: '육상 직원 직급', resource: 'shore_positions' },
-      { id: 'org-chart', name: '조직도 관리', resource: 'org_chart' },
-      { id: 'approval-lines', name: '결재선 관리', resource: 'approval_lines' },
-      { id: 'document-types', name: '문서유형/전결규정 관리', resource: 'document_types' },
-      { id: 'menu-configuration', name: 'UI 구성 관리', resource: 'menu_configuration' },
-    ],
-  },
-];
+// 권한 관리 화면의 메뉴 구조는 실제 사이드바 메뉴(default-menu.ts)를 그대로 따라간다 — 예전엔 이 구조를
+// 별도로 손으로 유지해서 실제 메뉴와 어긋나곤 했다(예: 연차 관련 페이지들이 실제로는 "결재"/"설정" 메뉴
+// 아래 흩어져 있는데 권한 화면에만 "육상 직원 연차"라는 별도 카테고리로 묶여 있었음). 권한 부여 단위는
+// 대메뉴(카테고리) > 소메뉴(항목)까지만 — 소메뉴 화면 내부의 탭(예: 선원 관리 설정의 직급/국적/증서유형
+// 탭)은 default-menu에 별도 항목이 없으므로 자동으로 하나의 리소스로 묶인다.
+export const MENU_STRUCTURE: MenuStructure[] = defaultMenuStructure.map(category => ({
+  id: category.id,
+  name: category.label,
+  children: category.items.map(item => ({
+    id: item.id,
+    name: item.label,
+    resource: item.id.replace(/-/g, '_'),
+  })),
+}));
 
 export const RESOURCES = MENU_STRUCTURE.flatMap(m => m.children ?? []).map(p => ({ id: p.resource, name: p.name }));

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getExpiringCertificates, calcExpiryStats, type CertExpiryItem, type CertExpiryStats } from '@/services/certificate-alert.service';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const STATUS_CONFIG = {
   expired: { label: '만료됨', color: 'bg-red-100 text-red-700', icon: ShieldAlert, cardBg: 'bg-red-50 border-red-200' },
@@ -18,6 +19,7 @@ const STATUS_CONFIG = {
 
 export default function CertificateExpiryDashboardPage() {
   const navigate = useNavigate();
+  const permissions = usePermissions('certificate_expiry');
   const [items, setItems] = useState<CertExpiryItem[]>([]);
   const [stats, setStats] = useState<CertExpiryStats>({ expired: 0, critical: 0, warning: 0, caution: 0, valid: 0, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,12 @@ export default function CertificateExpiryDashboardPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
+  // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     try {

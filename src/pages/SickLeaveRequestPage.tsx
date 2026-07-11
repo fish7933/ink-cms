@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Stethoscope, Send, X, Paperclip, Upload, Trash2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +19,7 @@ import {
 import { formatLeaveHours, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { rangesOverlap } from '@/lib/leave-duration';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { OrgUnit } from '@/types/org-chart';
 import type { SickLeaveRequest, SickLeaveAttachment } from '@/types/sick-leave';
 import type { User } from '@/types/models';
@@ -39,7 +41,9 @@ function countDays(startDate: string, endDate: string): number {
 }
 
 export default function SickLeaveRequestPage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const permissions = usePermissions('sick_leave_request');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [usedHours, setUsedHours] = useState(0);
   const [myRequests, setMyRequests] = useState<SickLeaveRequest[]>([]);
@@ -56,6 +60,10 @@ export default function SickLeaveRequestPage() {
   const [evidenceSaving, setEvidenceSaving] = useState(false);
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -266,11 +274,13 @@ export default function SickLeaveRequestPage() {
               ))}
             </div>
           </div>
-          <div className="flex justify-end pt-1">
-            <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting}>
-              <Send className="w-4 h-4" />{submitting ? '제출 중...' : '결재 상신'}
-            </Button>
-          </div>
+          {permissions.canCreate && (
+            <div className="flex justify-end pt-1">
+              <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting}>
+                <Send className="w-4 h-4" />{submitting ? '제출 중...' : '결재 상신'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

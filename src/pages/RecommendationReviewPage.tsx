@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, Filter, Eye, XCircle, Clock, ExternalLink, FileText, Send, CheckCircle2, ChevronRight, ArrowLeft, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import { supervisorService } from '@/services/supervisor.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
+import { usePermissions } from '@/hooks/usePermissions';
 import type { CrewRecommendationWithDetails, CrewRecommendationResumeFile, User, Company, Fleet, Ship, Rank } from '@/types/models';
 import type { ApprovalLineWithSteps, CrewRecommendationApprovalWithDetails } from '@/types/approval';
 
@@ -30,6 +31,7 @@ const calcAge = (birthDate: string): number => {
 };
 
 export default function RecommendationReviewPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openTab, openNewTab, closeTab, activeTabId } = useTabContext();
   // 목록에서 상세 보기는 별도 탭(/recommendation-review?id=...)으로 열린다
@@ -71,6 +73,13 @@ export default function RecommendationReviewPage() {
   const [rankF, setRankF] = useState('all');
   const [agencyF, setAgencyF] = useState('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const permissions = usePermissions('recommendation_review');
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우 접근을 차단한다. loading 중에는 판단하지 않는다.
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => { loadAll(); }, []);
   // 상세 탭: recommendations가 (재)로딩될 때마다 URL의 id에 해당하는 건을 최신 상태로 동기화
@@ -441,7 +450,7 @@ export default function RecommendationReviewPage() {
               </div>
             </div>
 
-            {selectedIds.length > 0 && (
+            {selectedIds.length > 0 && permissions.canDelete && (
               <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-3">
                 <span className="text-xs text-blue-800">{selectedIds.length}건 선택됨</span>
                 <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-7 text-xs gap-1">
@@ -528,7 +537,7 @@ export default function RecommendationReviewPage() {
                           <Button variant="outline" size="sm" onClick={() => openDetail(rec)} className="h-7 px-2 text-xs">
                             <Eye className="w-3.5 h-3.5 mr-1" />상세
                           </Button>
-                          {rec.status === 'pending' && (
+                          {rec.status === 'pending' && permissions.canEdit && (
                             <>
                               <Button variant="outline" size="sm" onClick={() => openApproval(rec, 'accept')} disabled={!canAp(rec)} className="h-7 px-2 text-xs text-blue-600 hover:bg-blue-50 disabled:opacity-50">
                                 <Send className="w-3.5 h-3.5 mr-1" />결재
@@ -538,7 +547,7 @@ export default function RecommendationReviewPage() {
                               </Button>
                             </>
                           )}
-                          {rec.status !== 'pending' && (
+                          {rec.status !== 'pending' && permissions.canDelete && (
                             <Button variant="outline" size="sm" onClick={() => handleDelete(rec)} className="h-7 px-2 text-xs text-red-600 hover:bg-red-50">
                               <Trash2 className="w-3.5 h-3.5 mr-1" />삭제
                             </Button>
@@ -590,7 +599,7 @@ export default function RecommendationReviewPage() {
                   </Button>
                   <h2 className="text-lg font-semibold">추천 선원 상세 정보</h2>
                 </div>
-                {selectedRec.status !== 'pending' && (
+                {selectedRec.status !== 'pending' && permissions.canDelete && (
                   <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRec)} className="h-8 px-2 text-xs text-red-600 hover:bg-red-50">
                     <Trash2 className="w-3.5 h-3.5 mr-1" />삭제
                   </Button>
@@ -708,7 +717,7 @@ export default function RecommendationReviewPage() {
                   </div>
                 )}
 
-                {selectedRec.status === 'pending' && (
+                {selectedRec.status === 'pending' && permissions.canEdit && (
                   <div className="flex justify-end gap-2 pt-4 border-t">
                     <Button variant="outline" onClick={() => openApproval(selectedRec, 'reject')} disabled={!canAp(selectedRec)} className="text-red-600 hover:bg-red-50 disabled:opacity-50">
                       <XCircle className="w-4 h-4 mr-2" />거절

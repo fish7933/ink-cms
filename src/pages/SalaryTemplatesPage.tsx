@@ -20,11 +20,13 @@ import {
 } from '@/lib/salary-store';
 import { useTabContext } from '@/contexts/TabContext';
 import TemplateAssignmentsSection from '@/components/salary/TemplateAssignmentsSection';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function SalaryTemplatesPage() {
   const navigate = useNavigate();
   const { openNewTab } = useTabContext();
   const { toast } = useToast();
+  const permissions = usePermissions('salary_templates');
   const [templates, setTemplates] = useState<SalaryTemplate[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,6 +50,10 @@ export default function SalaryTemplatesPage() {
     };
     init();
   }, [navigate]);
+
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const loadData = async () => {
     setLoading(true);
@@ -135,9 +141,9 @@ export default function SalaryTemplatesPage() {
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-9 mb-3 max-w-md">
+        <TabsList className={`grid w-full ${permissions.canEdit ? 'grid-cols-2' : 'grid-cols-1'} h-9 mb-3 max-w-md`}>
           <TabsTrigger value="templates" className="text-xs">템플릿 목록</TabsTrigger>
-          <TabsTrigger value="assignments" className="text-xs">템플릿 할당</TabsTrigger>
+          {permissions.canEdit && <TabsTrigger value="assignments" className="text-xs">템플릿 할당</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="templates">
@@ -145,9 +151,11 @@ export default function SalaryTemplatesPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">급여 템플릿 관리</CardTitle>
-                <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/salary/templates/new', '급여 템플릿 추가')}>
-                  <Plus className="h-4 w-4" />템플릿 추가
-                </Button>
+                {permissions.canCreate && (
+                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/salary/templates/new', '급여 템플릿 추가')}>
+                    <Plus className="h-4 w-4" />템플릿 추가
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="pt-0">
@@ -187,41 +195,51 @@ export default function SalaryTemplatesPage() {
                               >
                                 <Eye className="h-3.5 w-3.5" /><span className="text-xs">보기</span>
                               </Button>
-                              <Button
-                                variant="ghost" size="sm"
-                                className="gap-1 h-7 px-2"
-                                onClick={() => openNewTab(`/salary/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`)}
-                              >
-                                <Edit2 className="h-3.5 w-3.5" /><span className="text-xs">수정</span>
-                              </Button>
-                              <Button
-                                variant="ghost" size="sm"
-                                className="gap-1 h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                onClick={() => openRenew(t)}
-                              >
-                                <RefreshCw className="h-3.5 w-3.5" /><span className="text-xs">갱신</span>
-                              </Button>
-                              <Button
-                                variant="ghost" size="sm"
-                                className="gap-1 h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                onClick={() => openCopy(t)}
-                              >
-                                <Copy className="h-3.5 w-3.5" /><span className="text-xs">복사</span>
-                              </Button>
-                              <Button
-                                variant="ghost" size="sm"
-                                className="gap-1 h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                onClick={() => openAssign(t)}
-                              >
-                                <ClipboardList className="h-3.5 w-3.5" /><span className="text-xs">할당</span>
-                              </Button>
-                              <Button
-                                variant="ghost" size="sm"
-                                className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => handleDelete(t.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
-                              </Button>
+                              {permissions.canEdit && (
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="gap-1 h-7 px-2"
+                                  onClick={() => openNewTab(`/salary/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`)}
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" /><span className="text-xs">수정</span>
+                                </Button>
+                              )}
+                              {permissions.canEdit && (
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="gap-1 h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  onClick={() => openRenew(t)}
+                                >
+                                  <RefreshCw className="h-3.5 w-3.5" /><span className="text-xs">갱신</span>
+                                </Button>
+                              )}
+                              {permissions.canCreate && (
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="gap-1 h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                  onClick={() => openCopy(t)}
+                                >
+                                  <Copy className="h-3.5 w-3.5" /><span className="text-xs">복사</span>
+                                </Button>
+                              )}
+                              {permissions.canEdit && (
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="gap-1 h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  onClick={() => openAssign(t)}
+                                >
+                                  <ClipboardList className="h-3.5 w-3.5" /><span className="text-xs">할당</span>
+                                </Button>
+                              )}
+                              {permissions.canDelete && (
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => handleDelete(t.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

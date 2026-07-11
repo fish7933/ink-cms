@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, ArrowLeft, Save, Check, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { getLeaveRequests, addLeaveRequest, updateLeaveRequest, approveLeaveRequ
 import type { LeaveRequestWithDetails } from '@/types/leave';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const LEAVE_TYPES = [
   { value: 'annual', label: '연차 휴가' }, { value: 'sick', label: '병가' }, { value: 'special', label: '특별 휴가' },
@@ -28,6 +30,8 @@ interface CrewOption { id: string; name: string; rank: string; }
 
 export default function LeaveManagementPage() {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const permissions = usePermissions('leave_management');
   const [requests, setRequests] = useState<LeaveRequestWithDetails[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,6 +49,12 @@ export default function LeaveManagementPage() {
   }, []);
 
   const loadData = async () => { try { setLoading(true); setRequests(await getLeaveRequests()); } catch (e) { console.error(e); } finally { setLoading(false); } };
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
+  // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   const openForm = (record?: LeaveRequestWithDetails) => {
     if (record) {
@@ -102,7 +112,9 @@ export default function LeaveManagementPage() {
             {formView !== null ? (
               <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button>
             ) : (
-              <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />휴가 신청</Button>
+              permissions.canCreate && (
+                <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />휴가 신청</Button>
+              )
             )}
           </div>
         </CardHeader>
@@ -143,7 +155,7 @@ export default function LeaveManagementPage() {
                       </tr></thead>
                       <tbody>
                         {filtered.length === 0 ? <tr><td colSpan={8} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(r => (
-                          <tr key={r.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(r)}>
+                          <tr key={r.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openForm(r)}>
                             <td className="p-2 font-medium">{r.crew_name}</td><td className="p-2">{r.rank_code || r.rank_name}</td>
                             <td className="p-2">{LEAVE_TYPE_LABELS[r.leave_type] || r.leave_type}</td><td className="p-2">{r.start_date} ~ {r.end_date}</td>
                             <td className="p-2 text-right">{r.total_days}일</td><td className="p-2 max-w-[150px] truncate">{r.reason || '-'}</td>
@@ -154,7 +166,9 @@ export default function LeaveManagementPage() {
                                   <Button variant="ghost" size="sm" className="h-6 px-2 text-green-600" onClick={() => handleApprove(r.id)}><Check className="h-3 w-3 mr-1" />승인</Button>
                                   <Button variant="ghost" size="sm" className="h-6 px-2 text-red-600" onClick={() => handleReject(r.id)}><XCircle className="h-3 w-3 mr-1" />반려</Button>
                                 </>)}
-                                <Button variant="ghost" size="sm" className="h-6 px-2 text-red-500" onClick={() => handleDelete(r.id)}>삭제</Button>
+                                {permissions.canDelete && (
+                                  <Button variant="ghost" size="sm" className="h-6 px-2 text-red-500" onClick={() => handleDelete(r.id)}>삭제</Button>
+                                )}
                               </div>
                             </td>
                           </tr>

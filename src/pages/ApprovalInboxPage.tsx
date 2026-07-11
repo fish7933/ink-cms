@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import { approvalService } from '@/services/approval.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
@@ -57,6 +58,15 @@ export default function ApprovalInboxPage() {
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
   const [docComment, setDocComment] = useState('');
   const [docProcessing, setDocProcessing] = useState(false);
+
+  const permissions = usePermissions('approval_inbox');
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우 접근을 차단한다. loading 중에는 판단하지 않는다.
+  // 참고: isAdmin은 결재 워크플로우상의 권한(전체 문서 조회 등)이고, 이 canView는 완전히 별개인
+  // "이 메뉴 자체에 접근 가능한지"를 다루는 상위 레벨 권한이다.
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => { init(); }, []);
 
@@ -349,7 +359,7 @@ export default function ApprovalInboxPage() {
                 <Button onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('reject'); setCrewViewMode('action'); }} variant="destructive" className="flex-1">반려</Button>
               </div>
             )}
-            {canDeleteCrew(approval) && (
+            {canDeleteCrew(approval) && permissions.canDelete && (
               <div className="flex justify-end pt-4 border-t">
                 <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteCrew(approval)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
               </div>
@@ -503,7 +513,7 @@ export default function ApprovalInboxPage() {
             {(canCancelDoc(doc) || canDeleteDoc(doc)) && (
               <div className="flex gap-2 pt-3 border-t">
                 {canCancelDoc(doc) && <Button size="sm" variant="outline" className="text-red-600 border-red-300" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
-                {canDeleteDoc(doc) && (
+                {canDeleteDoc(doc) && permissions.canDelete && (
                   <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteDoc(doc)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
                 )}
               </div>
@@ -583,7 +593,7 @@ export default function ApprovalInboxPage() {
             {isAdmin ? '모든 결재 문서를 조회하고 처리합니다.' : '기안자, 결재자, 참조자로 나와 관계있는 문서를 조회하고, 내 차례인 결재를 처리합니다.'}
           </p>
         </div>
-        {DRAFT_ROLES.includes(currentUserRole) && (
+        {DRAFT_ROLES.includes(currentUserRole) && permissions.canCreate && (
           <Button size="sm" className="gap-1.5" onClick={() => navigate('/documents/new')}><Plus className="w-4 h-4" />기안서 작성</Button>
         )}
       </div>

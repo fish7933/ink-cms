@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { msg } from '@/lib/messages';
 import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
@@ -27,6 +28,7 @@ import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
 import { getEvaluations } from '@/services/evaluation.service';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type CategoryTab = 'all' | 'registered' | 'standby' | 'onboard' | 'disembarked';
 
@@ -61,6 +63,8 @@ const matchesCategory = (c: CrewWithDetails & { status?: string }, cat: Category
 export function CrewManagementPage() {
   const { toast } = useToast();
   const { openNewTab } = useTabContext();
+  const navigate = useNavigate();
+  const permissions = usePermissions('crew_list');
 
   const [crew, setCrew] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
@@ -90,6 +94,12 @@ export function CrewManagementPage() {
 
   useEffect(() => { loadData(); }, []);
   useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality, sortField, sortDirection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
+  // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
+  useEffect(() => {
+    if (!permissions.loading && !permissions.canView) navigate('/dashboard');
+  }, [permissions.loading, permissions.canView, navigate]);
   // 선주사가 바뀌면 하위(플릿/선박) 선택은 더 이상 유효하지 않을 수 있어 초기화
   useEffect(() => { if (filterOwner === 'all') setFilterFleet('all'); }, [filterOwner]);
   useEffect(() => { if (filterFleet === 'all' && filterOwner === 'all') setFilterShip('all'); }, [filterFleet, filterOwner]);
@@ -431,14 +441,18 @@ export function CrewManagementPage() {
                         </Button>
                       </>
                     )}
-                    <Button onClick={() => setShowDeleteDialog(true)} size="sm" variant="destructive" className="gap-1.5 h-8">
-                      <Trash2 className="w-4 h-4" />삭제 ({selectedIds.length})
-                    </Button>
+                    {permissions.canDelete && (
+                      <Button onClick={() => setShowDeleteDialog(true)} size="sm" variant="destructive" className="gap-1.5 h-8">
+                        <Trash2 className="w-4 h-4" />삭제 ({selectedIds.length})
+                      </Button>
+                    )}
                   </>
                 )}
-                <Button onClick={() => openNewTab('/crew/new', '선원 등록', true)} size="sm" className="gap-1.5 h-8">
-                  <Plus className="w-4 h-4" />선원 등록
-                </Button>
+                {permissions.canCreate && (
+                  <Button onClick={() => openNewTab('/crew/new', '선원 등록', true)} size="sm" className="gap-1.5 h-8">
+                    <Plus className="w-4 h-4" />선원 등록
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={loadData} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />새로고침
                 </Button>
@@ -759,12 +773,14 @@ export function CrewManagementPage() {
                                   >
                                     <Eye className="w-3 h-3" />열람
                                   </Button>
-                                  <Button
-                                    size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                    onClick={() => { setSelectedIds([c.id]); setShowDeleteDialog(true); }}
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
+                                  {permissions.canDelete && (
+                                    <Button
+                                      size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                      onClick={() => { setSelectedIds([c.id]); setShowDeleteDialog(true); }}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
