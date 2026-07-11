@@ -8,6 +8,7 @@ import type {
   ApprovalDocumentAttachment,
   ApprovalDocumentStep,
   ApprovalDocumentWithDetails,
+  DocumentFormField,
 } from '@/types/approval-document';
 
 const SELF_APPROVE_COMMENT = '본인 기안으로 자동 승인 처리됨';
@@ -112,17 +113,17 @@ export const approvalDocumentService = {
     return data || [];
   },
 
-  async createDocumentType(input: { code: string; name: string }): Promise<ApprovalDocumentType> {
+  async createDocumentType(input: { code: string; name: string; field_schema?: DocumentFormField[] | null }): Promise<ApprovalDocumentType> {
     const { data, error } = await supabase
       .from('approval_document_types')
-      .insert({ code: input.code, name: input.name })
+      .insert({ code: input.code, name: input.name, field_schema: input.field_schema || null })
       .select()
       .single();
     if (error) throw error;
     return data;
   },
 
-  async updateDocumentType(id: string, updates: Partial<Pick<ApprovalDocumentType, 'code' | 'name' | 'is_active'>>): Promise<void> {
+  async updateDocumentType(id: string, updates: Partial<Pick<ApprovalDocumentType, 'code' | 'name' | 'is_active' | 'field_schema'>>): Promise<void> {
     const { error } = await supabase
       .from('approval_document_types')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -163,6 +164,7 @@ export const approvalDocumentService = {
     document_type_id: string;
     title: string;
     content?: string;
+    form_data?: Record<string, string | number | null>;
     attachments?: ApprovalDocumentAttachment[];
     org_unit_id: string;
     created_by: string;
@@ -202,6 +204,7 @@ export const approvalDocumentService = {
         document_type_id: input.document_type_id,
         title: input.title,
         content: input.content || null,
+        form_data: input.form_data || null,
         attachments: input.attachments || [],
         org_unit_id: input.org_unit_id,
         created_by: input.created_by,

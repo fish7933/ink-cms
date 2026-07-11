@@ -21,7 +21,7 @@ import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import type { CrewRecommendationApprovalWithDetails } from '@/types/approval';
 import type { CrewRecommendation } from '@/types/crew-recommendation';
-import type { ApprovalDocumentWithDetails } from '@/types/approval-document';
+import type { ApprovalDocumentWithDetails, DocumentFormField } from '@/types/approval-document';
 
 type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & { recommendation?: CrewRecommendation };
 type CrewFilter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
@@ -58,6 +58,7 @@ export default function ApprovalInboxPage() {
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
   const [docComment, setDocComment] = useState('');
   const [docProcessing, setDocProcessing] = useState(false);
+  const [documentFieldSchemas, setDocumentFieldSchemas] = useState<Map<string, DocumentFormField[]>>(new Map());
 
   const permissions = usePermissions('approval_inbox');
 
@@ -85,6 +86,9 @@ export default function ApprovalInboxPage() {
       const members = await orgChartService.getOrgMembers();
       const orgUnitIds = members.find(m => m.id === currentUser.id)?.org_unit_ids || [];
       setMyOrgUnitIds(orgUnitIds);
+
+      const docTypes = await approvalDocumentService.getDocumentTypes(true);
+      setDocumentFieldSchemas(new Map(docTypes.map(t => [t.id, t.field_schema || []])));
 
       await Promise.all([
         loadCrewApprovals(currentUser.id, admin),
@@ -501,7 +505,18 @@ export default function ApprovalInboxPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {doc.content && <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{doc.content}</div>}
+            {doc.form_data && Object.keys(doc.form_data).length > 0 ? (
+              <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
+                {(documentFieldSchemas.get(doc.document_type_id) || []).map(field => (
+                  <div key={field.key} className="flex gap-2">
+                    <span className="text-gray-500 shrink-0 w-24">{field.label}</span>
+                    <span className="whitespace-pre-wrap">{doc.form_data?.[field.key] ?? '-'}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              doc.content && <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{doc.content}</div>
+            )}
             {renderAttachments(doc)}
             {doc.requester_comment && (
               <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{doc.requester_comment}</p></div>

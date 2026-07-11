@@ -14,8 +14,9 @@ import { getShorePositions } from '@/services/shore-position.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import DocumentFormFieldsEditor from '@/components/document/DocumentFormFieldsEditor';
 import type { ShorePosition } from '@/types/models';
-import type { ApprovalDocumentType, ApprovalAuthorityLimit } from '@/types/approval-document';
+import type { ApprovalDocumentType, ApprovalAuthorityLimit, DocumentFormField } from '@/types/approval-document';
 
 export default function DocumentTypesManagementPage() {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function DocumentTypesManagementPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ApprovalDocumentType | null>(null);
   const [form, setForm] = useState({ code: '', name: '' });
+  const [fieldSchema, setFieldSchema] = useState<DocumentFormField[]>([]);
   const [saving, setSaving] = useState(false);
 
   const permissions = usePermissions('document_types');
@@ -64,17 +66,19 @@ export default function DocumentTypesManagementPage() {
     }
   };
 
-  const openCreate = () => { setEditingType(null); setForm({ code: '', name: '' }); setDialogOpen(true); };
-  const openEdit = (t: ApprovalDocumentType) => { setEditingType(t); setForm({ code: t.code, name: t.name }); setDialogOpen(true); };
+  const openCreate = () => { setEditingType(null); setForm({ code: '', name: '' }); setFieldSchema([]); setDialogOpen(true); };
+  const openEdit = (t: ApprovalDocumentType) => { setEditingType(t); setForm({ code: t.code, name: t.name }); setFieldSchema(t.field_schema || []); setDialogOpen(true); };
 
   const handleSave = async () => {
     if (!form.code.trim() || !form.name.trim()) { toast({ title: '코드와 이름을 모두 입력해주세요.', variant: 'destructive' }); return; }
+    if (fieldSchema.some(f => !f.label.trim())) { toast({ title: '필드명이 비어있는 항목이 있습니다.', variant: 'destructive' }); return; }
     try {
       setSaving(true);
+      const schema = fieldSchema.length > 0 ? fieldSchema : null;
       if (editingType) {
-        await approvalDocumentService.updateDocumentType(editingType.id, { code: form.code.trim(), name: form.name.trim() });
+        await approvalDocumentService.updateDocumentType(editingType.id, { code: form.code.trim(), name: form.name.trim(), field_schema: schema });
       } else {
-        await approvalDocumentService.createDocumentType({ code: form.code.trim(), name: form.name.trim() });
+        await approvalDocumentService.createDocumentType({ code: form.code.trim(), name: form.name.trim(), field_schema: schema });
       }
       setDialogOpen(false);
       await loadData();
@@ -121,9 +125,10 @@ export default function DocumentTypesManagementPage() {
             <div className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-blue-600" />
               <div>
-                <CardTitle className="text-base">문서유형 / 전결규정 관리</CardTitle>
+                <CardTitle className="text-base">문서유형 / 전결규정 관리 (문서 양식함)</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
                   기안서 문서유형과, 유형별 결재 종결 직급(전결규정)을 관리합니다. 전결 직급을 지정하면 결재라인이 그 직급(또는 더 상위)에서 자동으로 종결됩니다.
+                  문서유형에 입력 필드를 구성하면(문서 양식함) 기안서 작성 화면이 그 양식대로의 입력폼으로 바뀝니다.
                 </p>
               </div>
             </div>
@@ -144,6 +149,7 @@ export default function DocumentTypesManagementPage() {
                   <TableRow>
                     <TableHead className="text-xs">코드</TableHead>
                     <TableHead className="text-xs">이름</TableHead>
+                    <TableHead className="text-xs">양식</TableHead>
                     <TableHead className="text-xs">전결 기준 직급</TableHead>
                     <TableHead className="text-xs">상태</TableHead>
                     <TableHead className="text-right text-xs w-40">작업</TableHead>
@@ -156,6 +162,11 @@ export default function DocumentTypesManagementPage() {
                       <TableRow key={t.id}>
                         <TableCell className="font-mono text-xs">{t.code}</TableCell>
                         <TableCell className={`text-sm ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openEdit(t)}>{t.name}</TableCell>
+                        <TableCell>
+                          {t.field_schema && t.field_schema.length > 0
+                            ? <Badge variant="outline" className="text-xs">필드 {t.field_schema.length}개</Badge>
+                            : <span className="text-xs text-gray-400">자유 서식</span>}
+                        </TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Select value={limit?.position_id || '_none'} onValueChange={v => handleAuthorityChange(t.id, v)} disabled={!permissions.canEdit}>
                             <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="전결 없음(대표까지)" /></SelectTrigger>
@@ -189,16 +200,22 @@ export default function DocumentTypesManagementPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={o => !saving && setDialogOpen(o)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="text-base">{editingType ? '문서유형 수정' : '문서유형 추가'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label className="text-xs">코드 *</Label>
-              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="예: general_draft" className="h-8 text-sm" disabled={saving} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">코드 *</Label>
+                <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="예: general_draft" className="h-8 text-sm" disabled={saving} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">이름 *</Label>
+                <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 일반 기안서" className="h-8 text-sm" disabled={saving} />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">이름 *</Label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 일반 기안서" className="h-8 text-sm" disabled={saving} />
+            <div className="space-y-1.5 border-t pt-3">
+              <Label className="text-xs">입력 양식 (문서 양식함)</Label>
+              <DocumentFormFieldsEditor fields={fieldSchema} onChange={setFieldSchema} disabled={saving} />
             </div>
           </div>
           <DialogFooter>

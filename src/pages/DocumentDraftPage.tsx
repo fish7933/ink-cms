@@ -13,6 +13,7 @@ import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
 import { msg } from '@/lib/messages';
 import type { OrgUnit } from '@/types/org-chart';
 import type { ApprovalDocumentType, ApprovalDocumentAttachment } from '@/types/approval-document';
@@ -32,6 +33,7 @@ export default function DocumentDraftPage() {
   const [orgUnitId, setOrgUnitId] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [formValues, setFormValues] = useState<Record<string, string | number | null>>({});
   const [requesterComment, setRequesterComment] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
@@ -76,6 +78,11 @@ export default function DocumentDraftPage() {
     return () => { cancelled = true; };
   }, [documentTypeId, orgUnitId]);
 
+  const selectedType = types.find(t => t.id === documentTypeId) || null;
+  const formFields = selectedType?.field_schema || [];
+
+  useEffect(() => { setFormValues({}); }, [documentTypeId]);
+
   const selfStepIndexes = useMemo(
     () => previewChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
     [previewChain, currentUser],
@@ -110,6 +117,8 @@ export default function DocumentDraftPage() {
     if (!orgUnitId) { toast({ title: '기안 부서를 선택해주세요.', variant: 'destructive' }); return; }
     if (!title.trim()) { toast({ title: '제목을 입력해주세요.', variant: 'destructive' }); return; }
     if (previewChain.length === 0) { toast({ title: '결재라인을 구성할 수 없는 부서입니다.', variant: 'destructive' }); return; }
+    const missingField = formFields.find(f => f.required && (formValues[f.key] === undefined || formValues[f.key] === '' || formValues[f.key] === null));
+    if (missingField) { toast({ title: `${missingField.label}을(를) 입력해주세요.`, variant: 'destructive' }); return; }
 
     try {
       setSubmitting(true);
@@ -117,7 +126,8 @@ export default function DocumentDraftPage() {
       await approvalDocumentService.createDocument({
         document_type_id: documentTypeId,
         title: title.trim(),
-        content: content.trim() || undefined,
+        content: formFields.length > 0 ? undefined : (content.trim() || undefined),
+        form_data: formFields.length > 0 ? formValues : undefined,
         attachments,
         org_unit_id: orgUnitId,
         created_by: currentUser.id,
@@ -182,10 +192,22 @@ export default function DocumentDraftPage() {
             <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="기안서 제목" className="h-9 text-sm" disabled={submitting} />
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs">본문</Label>
-            <Textarea value={content} onChange={e => setContent(e.target.value)} placeholder="기안 내용을 입력하세요" rows={8} disabled={submitting} />
-          </div>
+          {formFields.length > 0 ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs">{selectedType?.name} 양식</Label>
+              <DynamicDocumentForm
+                fields={formFields}
+                values={formValues}
+                onChange={(key, value) => setFormValues(prev => ({ ...prev, [key]: value }))}
+                disabled={submitting}
+              />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-xs">본문</Label>
+              <Textarea value={content} onChange={e => setContent(e.target.value)} placeholder="기안 내용을 입력하세요" rows={8} disabled={submitting} />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label className="text-xs">요청 사유 <span className="text-gray-400 font-normal">(선택)</span></Label>

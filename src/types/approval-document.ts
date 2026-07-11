@@ -1,9 +1,21 @@
+export type DocumentFormFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select';
+
+export interface DocumentFormField {
+  key: string;
+  label: string;
+  type: DocumentFormFieldType;
+  required: boolean;
+  options?: string[]; // type === 'select'일 때만 사용
+}
+
 export interface ApprovalDocumentType {
   id: string;
   code: string;
   name: string;
   is_free_form: boolean;
   is_active: boolean;
+  // null/빈 배열이면 자유 서식(제목+본문). 값이 있으면 기안서 작성 화면이 이 스키마대로 동적 입력폼을 보여준다.
+  field_schema: DocumentFormField[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +53,8 @@ export interface ApprovalDocument {
   document_type_id: string;
   title: string;
   content: string | null;
+  // 문서유형에 field_schema가 있을 때, 동적 입력폼에서 제출된 값 { [field.key]: value }
+  form_data: Record<string, string | number | null> | null;
   attachments: ApprovalDocumentAttachment[];
   reference_type: string | null;
   reference_id: string | null;
