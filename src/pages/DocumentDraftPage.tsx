@@ -579,6 +579,7 @@ export default function DocumentDraftPage() {
                 ) : (
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="px-2.5 py-1.5 rounded border bg-purple-50 border-purple-300 text-xs">
+                      <div className="text-[10px] text-purple-500 font-medium">신청자</div>
                       <div className="font-medium">기안자 · {currentUser?.name}</div>
                       <div className="text-gray-500">
                         {[units.find(u => u.id === orgUnitId)?.name, myPositionName].filter(Boolean).join(' · ') || '-'}
@@ -590,6 +591,7 @@ export default function DocumentDraftPage() {
                       return (
                         <div key={i} className="flex items-center gap-2">
                           <div className={`px-2.5 py-1.5 rounded border text-xs ${isSelf ? 'bg-blue-50 border-blue-400' : 'bg-white border-gray-300'}`}>
+                            <div className="text-[10px] text-gray-500 font-medium">{i === previewChain.length - 1 ? '최종결재자' : '중간결재자'}</div>
                             <div className="font-medium">{i + 1}. {c.approver_name}{isSelf && <span className="text-blue-600 ml-1">(본인 · 자동승인)</span>}</div>
                             <div className="text-gray-500">{c.approver_role}</div>
                           </div>

@@ -338,6 +338,7 @@ export default function ShoreLeaveRequestPage() {
                   <div key={step.approver_id + idx} className="flex items-center gap-1.5">
                     <span className="text-gray-300">→</span>
                     <div className="px-2.5 py-1.5 rounded border bg-white border-gray-200 text-xs">
+                      <p className="text-[10px] text-gray-500 font-medium">{idx === approvalChain.length - 1 ? '최종결재자' : '중간결재자'}</p>
                       <p className="font-medium">{idx + 1}. {step.approver_name}</p>
                       <p className="text-gray-500">{step.approver_role}</p>
                     </div>

@@ -233,6 +233,7 @@ export default function ApprovalDocumentDetailPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center">
                   <div className="px-3 py-2 rounded border bg-purple-50 border-purple-400">
+                    <div className="text-[10px] text-purple-500 font-medium">신청자</div>
                     <div className="text-xs font-semibold">기안자</div>
                     <div className="text-xs text-gray-600">{doc.creator_name}</div>
                     <div className="text-xs mt-1 text-purple-600">✓ 기안완료</div>
@@ -248,6 +249,7 @@ export default function ApprovalDocumentDetailPage() {
                       : step.step_order < doc.current_step ? 'bg-gray-100 border-gray-300'
                       : 'bg-white border-gray-300'
                     }`}>
+                      <div className="text-[10px] text-gray-500 font-medium">{index === doc.steps.length - 1 ? '최종결재자' : '중간결재자'}</div>
                       <div className="text-xs font-semibold">{step.step_order}. {step.approver_name}</div>
                       <div className="text-xs text-gray-600">{step.approver_label}</div>
                       {step.status !== 'pending' && (

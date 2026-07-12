@@ -265,6 +265,7 @@ export default function ApprovalInboxPage() {
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-blue-100 text-blue-700">기안</div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
+              <span className="text-[10px] text-blue-500 font-medium">신청자</span>
               <span className="font-medium">{approval.requester_name}</span>
               <span className="text-sm text-gray-500">{approval.requester_role}</span>
               <CheckCircle2 className="w-4 h-4 text-blue-600" />
@@ -275,6 +276,7 @@ export default function ApprovalInboxPage() {
         {approval.approval_line.steps.map((step, index) => {
           const action = approval.actions.find(a => a.step_order === step.step_order);
           const isCurrent = approval.current_step === step.step_order && approval.status === 'pending';
+          const isFinal = index === approval.approval_line.steps.length - 1;
           return (
             <div key={step.id} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
@@ -284,6 +286,7 @@ export default function ApprovalInboxPage() {
               }`}>{index + 1}</div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-gray-500 font-medium">{isFinal ? '최종결재자' : '중간결재자'}</span>
                   <span className="font-medium">{step.approver_name}</span>
                   <span className="text-sm text-gray-500">{step.approver_role}</span>
                   {action?.action === 'approved' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
