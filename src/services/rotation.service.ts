@@ -184,6 +184,28 @@ export const rotationService = {
       return null;
     }
 
+    // 저장 시점에 다시 한번 다른 활성 계획에 이미 배정된 선원이 없는지 확인한다. 화면의 후보
+    // 목록은 폼을 열었을 때의 스냅샷이라, 그 사이 다른 계획(다른 탭/사용자)에 먼저 배정됐을 수 있다.
+    const requestedCrewIds = [...new Set(
+      formData.assignments.flatMap(a => [a.on_crew_id, a.off_crew_id]).filter((id): id is string => !!id)
+    )];
+    if (requestedCrewIds.length > 0) {
+      const { data: conflictRows } = await supabase
+        .from('crew_rotation_assignments')
+        .select('on_crew_id, off_crew_id, plan:crew_rotation_plans!inner(status)')
+        .in('plan.status', ['draft', 'pending_approval', 'approved']);
+      const conflictCrewIds = new Set<string>();
+      for (const row of conflictRows || []) {
+        if (row.on_crew_id && requestedCrewIds.includes(row.on_crew_id)) conflictCrewIds.add(row.on_crew_id as string);
+        if (row.off_crew_id && requestedCrewIds.includes(row.off_crew_id)) conflictCrewIds.add(row.off_crew_id as string);
+      }
+      if (conflictCrewIds.size > 0) {
+        const { data: crewRows } = await supabase.from('crew_members').select('id, name').in('id', [...conflictCrewIds]);
+        const names = (crewRows || []).map(c => c.name).join(', ') || '선택한 선원';
+        throw new Error(`${names} — 이미 다른 진행중인 교대계획에 배정되어 있습니다. 화면을 새로고침한 뒤 다시 시도해주세요.`);
+      }
+    }
+
     // Create the plan
     const { data: plan, error: planError } = await supabase
       .from('crew_rotation_plans')
