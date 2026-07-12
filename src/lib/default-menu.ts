@@ -162,6 +162,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         is_active: true,
       },
       {
+        id: 'my-documents',
+        label: '내 문서함',
+        path: '/my-documents',
+        icon: 'Archive',
+        roles: ['ship_manager', 'admin', 'system_admin'],
+        order: 3,
+        is_active: true,
+      },
+      {
         id: 'shore-leave-request',
         label: '연차 신청',
         path: '/shore-leave-request',

@@ -18,12 +18,14 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   const issuedDate = doc.completed_at ? new Date(doc.completed_at) : new Date(doc.created_at);
   const fields = documentType?.field_schema || [];
 
-  // 결재란에 표시되는 approver_label은 "부서명 · 직급명" 형태로 저장되어 있어, 마지막 단계
-  // 결재자의 직급명을 뽑아 최상위 직급(대표이사 등, display_order가 가장 작은 직급)과 비교한다.
+  // 결재란에 표시되는 approver_label은 "부서명 · 직급명" 형태로 저장되어 있어, 그 중 직급(직책)만 뽑아 쓴다.
+  const positionOf = (label?: string | null) => label?.split(' · ').pop()?.trim() || '';
+
+  // 마지막 단계 결재자의 직급명을 최상위 직급(대표이사 등, display_order가 가장 작은 직급)과 비교해서,
   // 최상위 직급이 실제로 결재하지 않았다면 전결(위임 결재)이 일어난 것이므로 결재란에 표시해준다.
   const topPosition = positions.length > 0 ? [...positions].sort((a, b) => a.display_order - b.display_order)[0] : null;
   const lastStep = doc.steps[doc.steps.length - 1];
-  const lastStepPositionName = lastStep?.approver_label?.split(' · ').pop()?.trim();
+  const lastStepPositionName = positionOf(lastStep?.approver_label);
   const isDelegated = doc.status === 'approved' && !!topPosition && !!lastStepPositionName && lastStepPositionName !== topPosition.name;
 
   return (
@@ -95,7 +97,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         <thead>
           <tr>
             <th style={{ width: 80 }}>기안</th>
-            {doc.steps.map(s => <th key={s.id}>{s.approver_label || `${s.step_order}차 결재`}</th>)}
+            {doc.steps.map(s => <th key={s.id}>{positionOf(s.approver_label) || `${s.step_order}차 결재`}</th>)}
             {isDelegated && <th>{topPosition!.name}</th>}
           </tr>
         </thead>
@@ -109,7 +111,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
               const isLast = i === doc.steps.length - 1;
               return (
                 <td key={s.id} className="sign-cell">
-                  <div>{s.approver_name}</div>
+                  <div>{positionOf(s.approver_label)} {s.approver_name}</div>
                   <div style={{ fontSize: 10, color: s.status === 'approved' ? '#1e40af' : '#999' }}>
                     {s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : '대기'}
                     {isLast && isDelegated ? ' (전결)' : ''}

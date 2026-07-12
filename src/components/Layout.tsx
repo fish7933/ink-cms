@@ -9,7 +9,7 @@ import type { User } from '@/lib/store';
 import type { MenuCategory } from '@/types/menu';
 import type { Permission } from '@/types/permissions';
 import { getPermissionsByUserId } from '@/services/permission.service';
-import { getMenuConfig } from '@/services/menu-config.service';
+import { getEffectiveMenuStructure } from '@/services/menu-config.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { routeConfig } from '@/lib/route-config';
 
@@ -31,14 +31,13 @@ export default function Layout() {
         if (!isMounted) return;
         if (!user) { navigate('/login', { replace: true }); return; }
         setCurrentUser(user);
-        const [perms, savedMenu] = await Promise.all([
+        const [perms, effectiveMenu] = await Promise.all([
           getPermissionsByUserId(user.id),
-          getMenuConfig(),
+          getEffectiveMenuStructure(),
         ]);
         if (!isMounted) return;
         setPermissions(perms);
-        // UI 구성 관리에서 저장한 커스텀 메뉴 구조가 있으면 그걸 쓴다 (없으면 기본 구조 유지)
-        if (savedMenu) setMenuStructure(savedMenu);
+        setMenuStructure(effectiveMenu);
       } catch {
         if (isMounted) navigate('/login', { replace: true });
       } finally {

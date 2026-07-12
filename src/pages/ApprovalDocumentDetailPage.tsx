@@ -14,11 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import { approvalDocumentService } from '@/services/approval-document.service';
-import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
-import { getShorePositions } from '@/services/shore-position.service';
-import ApprovalDocumentPrintDialog from '@/components/document/ApprovalDocumentPrintDialog';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
-import type { ShorePosition } from '@/types/models';
 
 const STATUS_BADGE: Record<string, { label: string; className: string; icon: typeof CheckCircle2 }> = {
   pending: { label: '결재중', className: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: FileText },
@@ -37,14 +33,11 @@ export default function ApprovalDocumentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [doc, setDoc] = useState<ApprovalDocumentWithDetails | null>(null);
   const [docType, setDocType] = useState<ApprovalDocumentType | null>(null);
-  const [company, setCompany] = useState<CompanyInfo | null>(null);
-  const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [currentUserId, setCurrentUserId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionType, setActionType] = useState<'approved' | 'rejected' | null>(null);
   const [comment, setComment] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => { loadData(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -58,17 +51,13 @@ export default function ApprovalDocumentDetailPage() {
       setCurrentUserId(user.id);
       setIsAdmin(admin);
 
-      const [docs, types, companyInfo, shorePositions] = await Promise.all([
+      const [docs, types] = await Promise.all([
         approvalDocumentService.getDocumentDetails([id]),
         approvalDocumentService.getDocumentTypes(true),
-        getCompanyInfo().catch(() => null),
-        getShorePositions().catch(() => []),
       ]);
       const found = docs[0] || null;
       setDoc(found);
       setDocType(found ? types.find(t => t.id === found.document_type_id) || null : null);
-      setCompany(companyInfo);
-      setPositions(shorePositions);
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '문서를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -277,7 +266,7 @@ export default function ApprovalDocumentDetailPage() {
             {(doc.status === 'approved' || canCancel || canDelete) && (
               <div className="flex gap-2 pt-3 border-t">
                 {doc.status === 'approved' && (
-                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setPrintOpen(true)}><Printer className="w-3.5 h-3.5" />시행문 출력</Button>
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => window.open(`/print/documents/${doc.id}`, '_blank')}><Printer className="w-3.5 h-3.5" />시행문 출력</Button>
                 )}
                 {canCancel && <Button size="sm" variant="outline" className="text-red-600 border-red-300" onClick={handleCancel}>기안 취소</Button>}
                 {canDelete && (
@@ -288,17 +277,6 @@ export default function ApprovalDocumentDetailPage() {
           </div>
         </CardContent>
       </Card>
-
-      {printOpen && (
-        <ApprovalDocumentPrintDialog
-          open={printOpen}
-          onOpenChange={setPrintOpen}
-          doc={doc}
-          documentType={docType}
-          company={company}
-          positions={positions}
-        />
-      )}
     </div>
   );
 }

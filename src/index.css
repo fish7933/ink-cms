@@ -110,9 +110,4 @@
   body.ship-roster-print-open #root {
     display: none !important;
   }
-
-  /* 결재문서 시행문 인쇄 모달이 열려있는 동안은 뒤에 있는 앱 화면을 인쇄에서 제외한다 */
-  body.document-print-dialog-open #root {
-    display: none !important;
-  }
 }
