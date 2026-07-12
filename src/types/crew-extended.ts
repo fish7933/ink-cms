@@ -140,6 +140,7 @@ export interface MedicalRecordLog {
   medical_record_id: string;
   log_date: string;
   note: string;
+  attachments?: MedicalAttachment[];
   created_at: string;
 }
 

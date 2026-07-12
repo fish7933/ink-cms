@@ -294,10 +294,10 @@ export async function getMedicalRecordLogs(medicalRecordId: string): Promise<Med
   return data || [];
 }
 
-export async function addMedicalRecordLog(medicalRecordId: string, logDate: string, note: string): Promise<MedicalRecordLog> {
+export async function addMedicalRecordLog(medicalRecordId: string, logDate: string, note: string, attachments: MedicalRecordLog['attachments'] = []): Promise<MedicalRecordLog> {
   const { data, error } = await supabase
     .from('medical_record_logs')
-    .insert({ medical_record_id: medicalRecordId, log_date: logDate, note })
+    .insert({ medical_record_id: medicalRecordId, log_date: logDate, note, attachments })
     .select()
     .single();
 
@@ -307,6 +307,18 @@ export async function addMedicalRecordLog(medicalRecordId: string, logDate: stri
   }
 
   return data;
+}
+
+export async function updateMedicalRecordLogAttachments(id: string, attachments: MedicalRecordLog['attachments']): Promise<void> {
+  const { error } = await supabase
+    .from('medical_record_logs')
+    .update({ attachments })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error updating medical record log attachments:', error);
+    throw error;
+  }
 }
 
 export async function deleteMedicalRecordLog(id: string): Promise<void> {
