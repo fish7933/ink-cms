@@ -156,6 +156,9 @@ export default function DocumentDraftPage() {
   }, [documentTypeId, orgUnitId]);
 
   const myUnits = units.filter(u => myOrgUnitIds.includes(u.id));
+  // 연차/질병휴가 신청, 교대계획, 승진·강등 발령 등은 각 기능이 시스템에서 자동으로 결재문서를
+  // 생성하는 유형(is_free_form === false)이라, 기안서 작성 화면에서 직접 골라 만들 수 없다.
+  const draftableTypes = types.filter(t => t.is_free_form !== false);
   const selectedType = types.find(t => t.id === documentTypeId) || null;
   const formFields = selectedType?.field_schema || [];
 
@@ -195,11 +198,14 @@ export default function DocumentDraftPage() {
   };
 
   // 자주 쓰는 문서: 최근에 제출한(임시저장 제외) 문서 중 제목이 겹치지 않고, 사용자가 지우지 않은 것들을 최신순으로 보여준다.
+  // 연차/질병휴가 신청 등 시스템이 자동 생성한 문서는 기안서 작성으로 이어서 만들 수 있는 대상이 아니므로 제외한다.
   const frequentDocs = useMemo(() => {
+    const draftableTypeIds = new Set(draftableTypes.map(t => t.id));
     const seen = new Set<string>();
     const result: ApprovalDocumentWithDetails[] = [];
     for (const d of documents) {
       if (d.status === 'draft') continue;
+      if (!draftableTypeIds.has(d.document_type_id)) continue;
       if (dismissedFrequentTitles.has(d.title)) continue;
       if (seen.has(d.title)) continue;
       seen.add(d.title);
@@ -207,7 +213,7 @@ export default function DocumentDraftPage() {
       if (result.length >= 6) break;
     }
     return result;
-  }, [documents, dismissedFrequentTitles]);
+  }, [documents, dismissedFrequentTitles, draftableTypes]);
 
   const resetForm = () => {
     setDraftId(null);
@@ -420,9 +426,9 @@ export default function DocumentDraftPage() {
                   <Select value={documentTypeId} onValueChange={setDocumentTypeId} disabled={submitting}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="문서유형 선택" /></SelectTrigger>
                     <SelectContent>
-                      {types.length === 0
+                      {draftableTypes.length === 0
                         ? <div className="px-2 py-1.5 text-sm text-gray-500">등록된 문서유형이 없습니다</div>
-                        : types.map(t => <SelectItem key={t.id} value={t.id} className="text-sm">{t.name}</SelectItem>)}
+                        : draftableTypes.map(t => <SelectItem key={t.id} value={t.id} className="text-sm">{t.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

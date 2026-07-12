@@ -74,6 +74,7 @@ export default function DocumentTypesManagementPage() {
 
   const openCreate = () => { setEditingType(null); setForm({ code: '', name: '' }); setFieldSchema([]); setDefaultCcOrgUnitIds([]); setDialogOpen(true); };
   const openEdit = (t: ApprovalDocumentType) => { setEditingType(t); setForm({ code: t.code, name: t.name }); setFieldSchema(t.field_schema || []); setDefaultCcOrgUnitIds(t.default_cc_org_unit_ids || []); setDialogOpen(true); };
+  const isSystemManaged = (t: ApprovalDocumentType) => t.is_free_form === false;
   const toggleDefaultCcUnit = (unitId: string) =>
     setDefaultCcOrgUnitIds(prev => prev.includes(unitId) ? prev.filter(id => id !== unitId) : [...prev, unitId]);
 
@@ -100,11 +101,31 @@ export default function DocumentTypesManagementPage() {
   };
 
   const toggleActive = async (t: ApprovalDocumentType) => {
+    if (t.is_active && isSystemManaged(t) && !confirm(`'${t.name}'은(는) 시스템에서 자동으로 생성하는 결재문서 유형입니다. 비활성화하면 관련 기능(연차/질병휴가 신청, 교대계획, 승진·강등 발령 등)에서 결재 상신이 실패할 수 있습니다. 계속하시겠습니까?`)) return;
     try {
       await approvalDocumentService.updateDocumentType(t.id, { is_active: !t.is_active });
       await loadData();
     } catch (e) {
       toast({ title: '변경 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async (t: ApprovalDocumentType) => {
+    const warning = isSystemManaged(t)
+      ? `'${t.name}'은(는) 시스템에서 자동으로 생성하는 결재문서 유형입니다. 삭제하면 관련 기능(연차/질병휴가 신청, 교대계획, 승진·강등 발령 등)에서 결재 상신이 실패합니다. 정말 삭제하시겠습니까?`
+      : `'${t.name}' 문서유형을 삭제하시겠습니까? 되돌릴 수 없습니다.`;
+    if (!confirm(warning)) return;
+    try {
+      await approvalDocumentService.deleteDocumentType(t.id);
+      await loadData();
+      toast({ title: '삭제되었습니다.' });
+    } catch (e) {
+      const isFkViolation = typeof e === 'object' && e !== null && 'code' in e && (e as { code?: string }).code === '23503';
+      toast({
+        title: '삭제 실패',
+        description: isFkViolation ? '이미 이 유형으로 생성된 문서가 있어 삭제할 수 없습니다. 대신 비활성화를 사용하세요.' : (e instanceof Error ? e.message : undefined),
+        variant: 'destructive',
+      });
     }
   };
 
@@ -158,10 +179,11 @@ export default function DocumentTypesManagementPage() {
                   <TableRow>
                     <TableHead className="text-xs">코드</TableHead>
                     <TableHead className="text-xs">이름</TableHead>
+                    <TableHead className="text-xs">구분</TableHead>
                     <TableHead className="text-xs">양식</TableHead>
                     <TableHead className="text-xs">전결 기준 직급</TableHead>
                     <TableHead className="text-xs">상태</TableHead>
-                    <TableHead className="text-right text-xs w-40">작업</TableHead>
+                    <TableHead className="text-right text-xs w-48">작업</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -172,9 +194,16 @@ export default function DocumentTypesManagementPage() {
                         <TableCell className="font-mono text-xs">{t.code}</TableCell>
                         <TableCell className={`text-sm ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openEdit(t)}>{t.name}</TableCell>
                         <TableCell>
-                          {t.field_schema && t.field_schema.length > 0
-                            ? <Badge variant="outline" className="text-xs">필드 {t.field_schema.length}개</Badge>
-                            : <span className="text-xs text-gray-400">자유 서식</span>}
+                          {isSystemManaged(t)
+                            ? <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">시스템 관리</Badge>
+                            : <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">기안 가능</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          {isSystemManaged(t)
+                            ? <span className="text-xs text-gray-400">-</span>
+                            : t.field_schema && t.field_schema.length > 0
+                              ? <Badge variant="outline" className="text-xs">필드 {t.field_schema.length}개</Badge>
+                              : <span className="text-xs text-gray-400">자유 서식</span>}
                         </TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Select value={limit?.position_id || '_none'} onValueChange={v => handleAuthorityChange(t.id, v)} disabled={!permissions.canEdit}>
@@ -188,15 +217,20 @@ export default function DocumentTypesManagementPage() {
                         <TableCell>
                           <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">{t.is_active ? '사용중' : '비활성'}</Badge>
                         </TableCell>
-                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                          {permissions.canEdit && (
-                            <>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEdit(t)}>수정</Button>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleActive(t)}>
-                                {t.is_active ? '비활성화' : '활성화'}
-                              </Button>
-                            </>
-                          )}
+                        <TableCell className="text-right whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-0.5">
+                            {permissions.canEdit && (
+                              <>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEdit(t)}>수정</Button>
+                                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleActive(t)}>
+                                  {t.is_active ? '비활성화' : '활성화'}
+                                </Button>
+                              </>
+                            )}
+                            {permissions.canDelete && (
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500 hover:text-red-600" onClick={() => handleDelete(t)}>삭제</Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -222,10 +256,17 @@ export default function DocumentTypesManagementPage() {
                 <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 일반 기안서" className="h-8 text-sm" disabled={saving} />
               </div>
             </div>
-            <div className="space-y-1.5 border-t pt-3">
-              <Label className="text-xs">입력 양식 (문서 양식함)</Label>
-              <DocumentFormFieldsEditor fields={fieldSchema} onChange={setFieldSchema} disabled={saving} />
-            </div>
+            {editingType && isSystemManaged(editingType) ? (
+              <div className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded-md p-2.5 space-y-1">
+                <p className="font-medium">시스템 관리 문서유형입니다.</p>
+                <p className="text-purple-600">연차/질병휴가 신청, 교대계획, 승진·강등 발령 등 해당 기능에서 자동으로 결재문서를 생성할 때 사용되며, 기안함의 "기안서 작성" 화면에서는 직접 선택할 수 없습니다. 입력 양식은 사용되지 않으므로 이름과 전결규정만 관리하세요.</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5 border-t pt-3">
+                <Label className="text-xs">입력 양식 (문서 양식함)</Label>
+                <DocumentFormFieldsEditor fields={fieldSchema} onChange={setFieldSchema} disabled={saving} />
+              </div>
+            )}
             <div className="space-y-1.5 border-t pt-3">
               <Label className="text-xs">기본 참조부서 <span className="text-gray-400 font-normal">(이 유형으로 기안하면 자동으로 참조 지정, 예: 지출결의서 → 총무팀)</span></Label>
               <div className="flex flex-wrap gap-1.5">

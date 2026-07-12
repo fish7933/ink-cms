@@ -131,6 +131,13 @@ export const approvalDocumentService = {
     if (error) throw error;
   },
 
+  // 이 유형으로 만들어진 문서가 하나라도 있으면 DB 제약(ON DELETE RESTRICT)으로 삭제가 거부된다 —
+  // 그 경우 비활성화를 안내한다 (호출부에서 에러코드 23503을 확인).
+  async deleteDocumentType(id: string): Promise<void> {
+    const { error } = await supabase.from('approval_document_types').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   async getAuthorityLimits(): Promise<ApprovalAuthorityLimit[]> {
     const { data, error } = await supabase.from('approval_authority_limits').select('*');
     if (error) throw error;
