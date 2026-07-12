@@ -130,7 +130,7 @@ export default function CertificateTypeManagementPage() {
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
               <div>
-                <CardTitle className="text-base">{isFormMode ? (editId ? '증서 유형 수정' : '증서 유형 추가') : '증서 유형 관리'}</CardTitle>
+                <CardTitle className="text-base">{isFormMode ? (editId ? '증서 유형 수정' : '증서 유형 추가') : '증서 관리'}</CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">{isFormMode ? '증서 유형 정보를 입력하세요' : '선원 증서 카테고리 및 유형 관리'}</p>
               </div>
             </div>

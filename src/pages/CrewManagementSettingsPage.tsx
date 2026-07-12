@@ -29,7 +29,7 @@ export default function CrewManagementSettingsPage() {
       <Tabs defaultValue="nationalities">
         <TabsList className="h-9 gap-1 flex-wrap">
           <TabsTrigger value="nationalities" className="text-xs h-8">선원 국적 관리</TabsTrigger>
-          <TabsTrigger value="certificate-types" className="text-xs h-8">증서 유형 관리</TabsTrigger>
+          <TabsTrigger value="certificate-types" className="text-xs h-8">증서 관리</TabsTrigger>
           <TabsTrigger value="ranks" className="text-xs h-8">직급 관리</TabsTrigger>
           <TabsTrigger value="ports" className="text-xs h-8">교대지 관리</TabsTrigger>
           <TabsTrigger value="sign-off-reasons" className="text-xs h-8">하선 사유 관리</TabsTrigger>

@@ -185,7 +185,7 @@ function getTitleFromPath(path: string): string {
     '/documents/new': '기안함', '/documents': '결재함', '/document-types': '문서유형/전결규정 관리', '/my-documents': '기안함',
     '/salary/templates': '급여 템플릿', '/salary/templates/new': '급여 템플릿 추가', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',
     '/companies': '회사 관리', '/companies?type=owner': '선주사 관리', '/companies?type=manning': '선원 매닝사 관리', '/company-info': '회사 정보 관리', '/user-groups': '사용자 그룹', '/manager-assignments': '선주 사용자 관리', '/supervisor-management': '우리회사 담당자 관리',
-    '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 유형 관리',
+    '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 관리',
     '/shore-positions': '육상 직원 직급', '/org-chart': '조직도 관리', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
     '/certificate-expiry': '증서 만료 현황', '/reports': '통계 대시보드',
     '/crew-evaluations': '고과 관리', '/crew-medical': '상병 관리', '/contract-management': '계약 관리', '/ports': '교대지 관리',
