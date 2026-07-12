@@ -1,18 +1,28 @@
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
+import type { ShorePosition } from '@/types/models';
 
 interface Props {
   doc: ApprovalDocumentWithDetails;
   documentType: ApprovalDocumentType | null;
   company: CompanyInfo | null;
+  positions: ShorePosition[];
 }
 
 // 결재 완료된 문서(특히 지출결의서 등 구조화 양식)를 총무팀 보관용 "시행문" 형식으로 출력하는 문서 본문.
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
-export default function ApprovalDocumentIssuedSheet({ doc, documentType, company }: Props) {
+export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
   const issuedDate = doc.completed_at ? new Date(doc.completed_at) : new Date(doc.created_at);
   const fields = documentType?.field_schema || [];
+
+  // 결재란에 표시되는 approver_label은 "부서명 · 직급명" 형태로 저장되어 있어, 마지막 단계
+  // 결재자의 직급명을 뽑아 최상위 직급(대표이사 등, display_order가 가장 작은 직급)과 비교한다.
+  // 최상위 직급이 실제로 결재하지 않았다면 전결(위임 결재)이 일어난 것이므로 결재란에 표시해준다.
+  const topPosition = positions.length > 0 ? [...positions].sort((a, b) => a.display_order - b.display_order)[0] : null;
+  const lastStep = doc.steps[doc.steps.length - 1];
+  const lastStepPositionName = lastStep?.approver_label?.split(' · ').pop()?.trim();
+  const isDelegated = doc.status === 'approved' && !!topPosition && !!lastStepPositionName && lastStepPositionName !== topPosition.name;
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
@@ -78,12 +88,13 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         </div>
       )}
 
-      <div style={{ marginTop: 36, marginBottom: 8, fontSize: 12, color: '#555' }}>결재</div>
+      <div style={{ marginTop: 36, marginBottom: 8, fontSize: 12, color: '#555' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 6 }}>({lastStepPositionName} 전결)</span>}</div>
       <table className="approval-block">
         <thead>
           <tr>
             <th style={{ width: 80 }}>기안</th>
             {doc.steps.map(s => <th key={s.id}>{s.approver_label || `${s.step_order}차 결재`}</th>)}
+            {isDelegated && <th>{topPosition!.name}</th>}
           </tr>
         </thead>
         <tbody>
@@ -92,15 +103,24 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
               <div>{doc.creator_name}</div>
               <div style={{ fontSize: 10, color: '#777' }}>{new Date(doc.created_at).toLocaleDateString('ko-KR')}</div>
             </td>
-            {doc.steps.map(s => (
-              <td key={s.id} className="sign-cell">
-                <div>{s.approver_name}</div>
-                <div style={{ fontSize: 10, color: s.status === 'approved' ? '#1e40af' : '#999' }}>
-                  {s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : '대기'}
-                  {s.acted_at ? ` · ${new Date(s.acted_at).toLocaleDateString('ko-KR')}` : ''}
-                </div>
+            {doc.steps.map((s, i) => {
+              const isLast = i === doc.steps.length - 1;
+              return (
+                <td key={s.id} className="sign-cell">
+                  <div>{s.approver_name}</div>
+                  <div style={{ fontSize: 10, color: s.status === 'approved' ? '#1e40af' : '#999' }}>
+                    {s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : '대기'}
+                    {isLast && isDelegated ? ' (전결)' : ''}
+                    {s.acted_at ? ` · ${new Date(s.acted_at).toLocaleDateString('ko-KR')}` : ''}
+                  </div>
+                </td>
+              );
+            })}
+            {isDelegated && (
+              <td className="sign-cell">
+                <div style={{ fontWeight: 700, color: '#b91c1c' }}>전결</div>
               </td>
-            ))}
+            )}
           </tr>
         </tbody>
       </table>

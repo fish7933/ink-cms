@@ -23,6 +23,8 @@ import type { CrewRecommendationApprovalWithDetails } from '@/types/approval';
 import type { CrewRecommendation } from '@/types/crew-recommendation';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
+import { getShorePositions } from '@/services/shore-position.service';
+import type { ShorePosition } from '@/types/models';
 import ApprovalDocumentPrintDialog from '@/components/document/ApprovalDocumentPrintDialog';
 
 type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & { recommendation?: CrewRecommendation };
@@ -62,6 +64,7 @@ export default function ApprovalInboxPage() {
   const [docProcessing, setDocProcessing] = useState(false);
   const [docTypesById, setDocTypesById] = useState<Map<string, ApprovalDocumentType>>(new Map());
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  const [shorePositions, setShorePositions] = useState<ShorePosition[]>([]);
   const [printDoc, setPrintDoc] = useState<ApprovalDocumentWithDetails | null>(null);
 
   const permissions = usePermissions('approval_inbox');
@@ -91,12 +94,14 @@ export default function ApprovalInboxPage() {
       const orgUnitIds = members.find(m => m.id === currentUser.id)?.org_unit_ids || [];
       setMyOrgUnitIds(orgUnitIds);
 
-      const [docTypes, company] = await Promise.all([
+      const [docTypes, company, positions] = await Promise.all([
         approvalDocumentService.getDocumentTypes(true),
         getCompanyInfo().catch(() => null),
+        getShorePositions().catch(() => []),
       ]);
       setDocTypesById(new Map(docTypes.map(t => [t.id, t])));
       setCompanyInfo(company);
+      setShorePositions(positions);
 
       await Promise.all([
         loadCrewApprovals(currentUser.id, admin),
@@ -682,6 +687,7 @@ export default function ApprovalInboxPage() {
           doc={printDoc}
           documentType={docTypesById.get(printDoc.document_type_id) || null}
           company={companyInfo}
+          positions={shorePositions}
         />
       )}
     </div>

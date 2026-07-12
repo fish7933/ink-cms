@@ -3,6 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X, Printer } from 'lucide-react';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
+import type { ShorePosition } from '@/types/models';
 import ApprovalDocumentIssuedSheet from './ApprovalDocumentIssuedSheet';
 
 const BODY_PRINT_CLASS = 'document-print-dialog-open';
@@ -13,10 +14,11 @@ interface Props {
   doc: ApprovalDocumentWithDetails;
   documentType: ApprovalDocumentType | null;
   company: CompanyInfo | null;
+  positions: ShorePosition[];
 }
 
 // 승인 완료된 결재문서를 총무팀 보관용 "시행문" 형식으로 인쇄/PDF 저장하는 모달.
-export default function ApprovalDocumentPrintDialog({ open, onOpenChange, doc, documentType, company }: Props) {
+export default function ApprovalDocumentPrintDialog({ open, onOpenChange, doc, documentType, company, positions }: Props) {
   useEffect(() => {
     if (open) document.body.classList.add(BODY_PRINT_CLASS);
     else document.body.classList.remove(BODY_PRINT_CLASS);
@@ -49,7 +51,7 @@ export default function ApprovalDocumentPrintDialog({ open, onOpenChange, doc, d
             </div>
           </div>
           <div className="p-6 print:p-0">
-            <ApprovalDocumentIssuedSheet doc={doc} documentType={documentType} company={company} />
+            <ApprovalDocumentIssuedSheet doc={doc} documentType={documentType} company={company} positions={positions} />
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
