@@ -50,6 +50,9 @@ export default function CrewEvaluationPage() {
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [filterOwner, setFilterOwner] = useState('all');
+  const [filterFleet, setFilterFleet] = useState('all');
+  const [filterShip, setFilterShip] = useState('all');
 
   useEffect(() => {
     loadData();
@@ -162,16 +165,30 @@ export default function CrewEvaluationPage() {
     );
   }, [evaluations, searchTerm]);
 
+  // 선주/플릿/선박 필터 옵션 — 실제 데이터에 존재하는 값만, 선주를 고르면 플릿/선박이, 플릿을 고르면 선박이 좁혀진다.
+  const ownerOptions = useMemo(() => [...new Set(evaluations.map(e => e.owner_name).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'ko')), [evaluations]);
+  const fleetOptions = useMemo(() => [...new Set(evaluations.filter(e => filterOwner === 'all' || e.owner_name === filterOwner).map(e => e.fleet_name).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'ko')), [evaluations, filterOwner]);
+  const shipOptions2 = useMemo(() => [...new Set(evaluations.filter(e => (filterOwner === 'all' || e.owner_name === filterOwner) && (filterFleet === 'all' || e.fleet_name === filterFleet)).map(e => e.ship_name).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'ko')), [evaluations, filterOwner, filterFleet]);
+
+  useEffect(() => { if (filterFleet !== 'all' && !fleetOptions.includes(filterFleet)) setFilterFleet('all'); }, [fleetOptions, filterFleet]);
+  useEffect(() => { if (filterShip !== 'all' && !shipOptions2.includes(filterShip)) setFilterShip('all'); }, [shipOptions2, filterShip]);
+
+  const filteredBySelectors = useMemo(() => searched.filter(e =>
+    (filterOwner === 'all' || e.owner_name === filterOwner) &&
+    (filterFleet === 'all' || e.fleet_name === filterFleet) &&
+    (filterShip === 'all' || e.ship_name === filterShip)
+  ), [searched, filterOwner, filterFleet, filterShip]);
+
   // 정렬: 선주사 > 플릿 > 선박 > 직급 > 이름
   const filtered = useMemo(() => {
-    return [...searched].sort((a, b) =>
+    return [...filteredBySelectors].sort((a, b) =>
       (a.owner_name || '').localeCompare(b.owner_name || '', 'ko') ||
       (a.fleet_name || '').localeCompare(b.fleet_name || '', 'ko') ||
       (a.ship_name || '').localeCompare(b.ship_name || '', 'ko') ||
       (a.rank_code || a.rank_name).localeCompare(b.rank_code || b.rank_name, 'ko') ||
       a.crew_name.localeCompare(b.crew_name, 'ko')
     );
-  }, [searched]);
+  }, [filteredBySelectors]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
@@ -293,6 +310,29 @@ export default function CrewEvaluationPage() {
           ) : (
             <>
               <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 직급, 선주사, 플릿, 선박으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
+              <div className="flex flex-wrap gap-2">
+                <Select value={filterOwner} onValueChange={setFilterOwner}>
+                  <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="선주사" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-sm">전체 선주사</SelectItem>
+                    {ownerOptions.map(o => <SelectItem key={o} value={o} className="text-sm">{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterFleet} onValueChange={setFilterFleet}>
+                  <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="플릿" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-sm">전체 플릿</SelectItem>
+                    {fleetOptions.map(f => <SelectItem key={f} value={f} className="text-sm">{f}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterShip} onValueChange={setFilterShip}>
+                  <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="선박" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-sm">전체 선박</SelectItem>
+                    {shipOptions2.map(s => <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <table className="w-full text-xs">
                 <thead><tr className="border-b bg-gray-50">
                   <th className="w-8 p-2"><Checkbox checked={filtered.length > 0 && filtered.every(e => selectedIds.includes(e.id))} onCheckedChange={checked => toggleSelectAll(!!checked)} /></th>

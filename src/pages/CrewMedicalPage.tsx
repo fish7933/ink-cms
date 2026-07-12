@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { getAllMedicalRecordsWithDetails } from '@/services/medical-record.service';
 import { deleteMedicalRecord } from '@/services/crew-extended.service';
@@ -35,6 +36,9 @@ export default function CrewMedicalPage() {
   const [editingRecord, setEditingRecord] = useState<MedicalRecord | undefined>();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [filterOwner, setFilterOwner] = useState('all');
+  const [filterFleet, setFilterFleet] = useState('all');
+  const [filterShip, setFilterShip] = useState('all');
 
   useEffect(() => { loadData(); }, []);
 
@@ -67,7 +71,7 @@ export default function CrewMedicalPage() {
   const toggleSelect = (id: string) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const toggleSelectAll = (checked: boolean) => setSelectedIds(checked ? filtered.map(r => r.id) : []);
 
-  const filtered = useMemo(() => {
+  const searched = useMemo(() => {
     if (!searchTerm) return records;
     const t = searchTerm.toLowerCase();
     return records.filter(r =>
@@ -79,6 +83,20 @@ export default function CrewMedicalPage() {
       r.diagnosis.toLowerCase().includes(t)
     );
   }, [records, searchTerm]);
+
+  // 선주/플릿/선박 필터 옵션 — 실제 데이터에 존재하는 값만, 선주를 고르면 플릿/선박이, 플릿을 고르면 선박이 좁혀진다.
+  const ownerOptions = useMemo(() => [...new Set(records.map(r => r.owner_name).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'ko')), [records]);
+  const fleetOptions = useMemo(() => [...new Set(records.filter(r => filterOwner === 'all' || r.owner_name === filterOwner).map(r => r.fleet_name).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'ko')), [records, filterOwner]);
+  const shipOptions2 = useMemo(() => [...new Set(records.filter(r => (filterOwner === 'all' || r.owner_name === filterOwner) && (filterFleet === 'all' || r.fleet_name === filterFleet)).map(r => r.resolved_ship_name).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'ko')), [records, filterOwner, filterFleet]);
+
+  useEffect(() => { if (filterFleet !== 'all' && !fleetOptions.includes(filterFleet)) setFilterFleet('all'); }, [fleetOptions, filterFleet]);
+  useEffect(() => { if (filterShip !== 'all' && !shipOptions2.includes(filterShip)) setFilterShip('all'); }, [shipOptions2, filterShip]);
+
+  const filtered = useMemo(() => searched.filter(r =>
+    (filterOwner === 'all' || r.owner_name === filterOwner) &&
+    (filterFleet === 'all' || r.fleet_name === filterFleet) &&
+    (filterShip === 'all' || r.resolved_ship_name === filterShip)
+  ), [searched, filterOwner, filterFleet, filterShip]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
@@ -106,17 +124,41 @@ export default function CrewMedicalPage() {
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
           <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 직급, 선주사, 선박, 진단명으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
+          <div className="flex flex-wrap gap-2">
+            <Select value={filterOwner} onValueChange={setFilterOwner}>
+              <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="선주사" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-sm">전체 선주사</SelectItem>
+                {ownerOptions.map(o => <SelectItem key={o} value={o} className="text-sm">{o}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterFleet} onValueChange={setFilterFleet}>
+              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="플릿" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-sm">전체 플릿</SelectItem>
+                {fleetOptions.map(f => <SelectItem key={f} value={f} className="text-sm">{f}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterShip} onValueChange={setFilterShip}>
+              <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="선박" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-sm">전체 선박</SelectItem>
+                {shipOptions2.map(s => <SelectItem key={s} value={s} className="text-sm">{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <table className="w-full text-xs">
             <thead><tr className="border-b bg-gray-50">
               <th className="w-8 p-2"><Checkbox checked={filtered.length > 0 && filtered.every(r => selectedIds.includes(r.id))} onCheckedChange={checked => toggleSelectAll(!!checked)} /></th>
-              <th className="text-left p-2">선주사</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th>
+              <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th>
               <th className="text-left p-2">발생일</th><th className="text-left p-2">유형</th><th className="text-left p-2">진단</th><th className="text-center p-2">적합성</th><th className="text-center p-2">휴무일수</th><th className="text-center p-2">작업</th>
             </tr></thead>
             <tbody>
-              {filtered.length === 0 ? <tr><td colSpan={11} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(r => (
+              {filtered.length === 0 ? <tr><td colSpan={12} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(r => (
                 <tr key={r.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openDialog(r)}>
                   <td className="p-2" onClick={ev => ev.stopPropagation()}><Checkbox checked={selectedIds.includes(r.id)} onCheckedChange={() => toggleSelect(r.id)} /></td>
                   <td className="p-2 text-gray-600">{r.owner_name || '-'}</td>
+                  <td className="p-2 text-gray-500">{r.fleet_name || '-'}</td>
                   <td className="p-2">{r.resolved_ship_name || '-'}</td>
                   <td className="p-2">{(r.rank_code || r.rank_name)}{r.rank_grade ? `(${r.rank_grade})` : ''}</td>
                   <td className="p-2 font-medium">{r.crew_name}</td>

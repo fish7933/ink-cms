@@ -151,6 +151,7 @@ export interface MedicalRecordWithDetails extends MedicalRecord {
   rank_grade?: string;
   resolved_ship_name?: string;
   owner_name?: string;
+  fleet_name?: string;
 }
 
 export interface CrewSalaryRecord {
