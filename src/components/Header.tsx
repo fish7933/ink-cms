@@ -22,14 +22,14 @@ import { getCompanyInfo } from '@/services/company-info.service';
 interface HeaderProps {
   selectedCategoryId?: string | null;
   onCategorySelect?: (id: string) => void;
+  menuStructure?: MenuCategory[];
 }
 
-export default function Header({ selectedCategoryId, onCategorySelect }: HeaderProps) {
+export default function Header({ selectedCategoryId, onCategorySelect, menuStructure = defaultMenuStructure }: HeaderProps) {
   const navigate = useNavigate();
   const { openTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [logoUrl, setLogoUrl] = useState('');
 
   useEffect(() => {

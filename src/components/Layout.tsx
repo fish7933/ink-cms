@@ -9,6 +9,7 @@ import type { User } from '@/lib/store';
 import type { MenuCategory } from '@/types/menu';
 import type { Permission } from '@/types/permissions';
 import { getPermissionsByUserId } from '@/services/permission.service';
+import { getMenuConfig } from '@/services/menu-config.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { routeConfig } from '@/lib/route-config';
 
@@ -18,7 +19,7 @@ export default function Layout() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [menuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
+  const [menuStructure, setMenuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const { tabs, activeTabId, refreshNonces } = useTabContext();
 
@@ -30,7 +31,14 @@ export default function Layout() {
         if (!isMounted) return;
         if (!user) { navigate('/login', { replace: true }); return; }
         setCurrentUser(user);
-        setPermissions(await getPermissionsByUserId(user.id));
+        const [perms, savedMenu] = await Promise.all([
+          getPermissionsByUserId(user.id),
+          getMenuConfig(),
+        ]);
+        if (!isMounted) return;
+        setPermissions(perms);
+        // UI 구성 관리에서 저장한 커스텀 메뉴 구조가 있으면 그걸 쓴다 (없으면 기본 구조 유지)
+        if (savedMenu) setMenuStructure(savedMenu);
       } catch {
         if (isMounted) navigate('/login', { replace: true });
       } finally {
@@ -72,6 +80,7 @@ export default function Layout() {
       <Header
         selectedCategoryId={selectedCategoryId}
         onCategorySelect={setSelectedCategoryId}
+        menuStructure={menuStructure}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar

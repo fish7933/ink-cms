@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser } from '@/lib/store';
 import { defaultMenuStructure } from '@/lib/default-menu';
+import { getMenuConfig, saveMenuConfig, resetMenuConfig } from '@/services/menu-config.service';
 import type { MenuCategory, MenuItem } from '@/types/menu';
 import {
   DndContext,
@@ -139,6 +140,8 @@ export default function MenuConfigurationPage() {
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'edit'>('list');
   const [localUI, setLocalUI] = useState(uiSettings);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -159,6 +162,10 @@ export default function MenuConfigurationPage() {
         navigate('/dashboard');
         return;
       }
+      setCurrentUserId(user.id);
+      // 저장된 커스텀 메뉴 구조가 있으면 그걸, 없으면 기본 구조를 보여준다.
+      const saved = await getMenuConfig();
+      if (saved) setMenuStructure(saved);
       setLoading(false);
     };
     checkAccess();
@@ -274,24 +281,35 @@ export default function MenuConfigurationPage() {
     });
   };
 
-  const handleSaveAll = () => {
-    // In a real application, save to backend/database
-    localStorage.setItem('menuStructure', JSON.stringify(menuStructure));
-
-    toast({
-      title: '저장 완료',
-      description: 'UI 구성이 저장되었습니다.',
-    });
+  const handleSaveAll = async () => {
+    setSaving(true);
+    try {
+      await saveMenuConfig(menuStructure, currentUserId);
+      toast({
+        title: '저장 완료',
+        description: 'UI 구성이 저장되었습니다. 모든 사용자의 메뉴에 반영됩니다.',
+      });
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleReset = () => {
-    setMenuStructure(defaultMenuStructure);
-    localStorage.removeItem('menuStructure');
-
-    toast({
-      title: '초기화 완료',
-      description: 'UI 구성이 기본값으로 초기화되었습니다.',
-    });
+  const handleReset = async () => {
+    setSaving(true);
+    try {
+      await resetMenuConfig();
+      setMenuStructure(defaultMenuStructure);
+      toast({
+        title: '초기화 완료',
+        description: 'UI 구성이 기본값으로 초기화되었습니다.',
+      });
+    } catch (e) {
+      toast({ title: '초기화 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -431,9 +449,9 @@ export default function MenuConfigurationPage() {
         {activeSection === 'menu' && (
           <>
             <div className="mb-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={handleReset}>초기화</Button>
-              <Button onClick={handleSaveAll}>
-                <Save className="w-4 h-4 mr-2" />저장
+              <Button variant="outline" onClick={handleReset} disabled={saving}>초기화</Button>
+              <Button onClick={handleSaveAll} disabled={saving}>
+                <Save className="w-4 h-4 mr-2" />{saving ? '저장 중...' : '저장'}
               </Button>
             </div>
             <Card>
