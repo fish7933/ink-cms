@@ -23,6 +23,7 @@ const MyRecommendationsPage = lazy(() => import('@/pages/MyRecommendationsPage')
 const RecommendationReviewPage = lazy(() => import('@/pages/RecommendationReviewPage'));
 const ApprovalLineManagementPage = lazy(() => import('@/pages/ApprovalLineManagementPage'));
 const ApprovalInboxPage = lazy(() => import('@/pages/ApprovalInboxPage'));
+const ApprovalDocumentDetailPage = lazy(() => import('@/pages/ApprovalDocumentDetailPage'));
 const SupervisorManagementPage = lazy(() => import('@/pages/SupervisorManagementPage'));
 const RanksPage = lazy(() => import('@/pages/RanksPage'));
 const PermissionsPage = lazy(() => import('@/pages/PermissionsPage'));
@@ -109,6 +110,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/org-chart', component: OrgChartManagementPage },
   { path: '/document-types', component: DocumentTypesManagementPage },
   { path: '/documents/new', component: DocumentDraftPage },
+  { path: '/documents/:id', component: ApprovalDocumentDetailPage },
   { path: '/documents', component: ApprovalInboxPage },
   { path: '/ports', component: PortManagementPage },
   { path: '/profile', component: ProfilePage },

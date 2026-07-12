@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
-  CheckCircle2, XCircle, Clock, FileText, User, Ship, Calendar, Send, ArrowLeft,
-  Paperclip, Trash2, Ban, Inbox, Plus, Printer,
+  CheckCircle2, XCircle, Clock, FileText, User, Ship, Calendar, ArrowLeft,
+  Trash2, Ban, Inbox, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
+import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { approvalService } from '@/services/approval.service';
@@ -21,11 +22,7 @@ import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import type { CrewRecommendationApprovalWithDetails } from '@/types/approval';
 import type { CrewRecommendation } from '@/types/crew-recommendation';
-import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
-import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
-import { getShorePositions } from '@/services/shore-position.service';
-import type { ShorePosition } from '@/types/models';
-import ApprovalDocumentPrintDialog from '@/components/document/ApprovalDocumentPrintDialog';
+import type { ApprovalDocumentWithDetails } from '@/types/approval-document';
 
 type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & { recommendation?: CrewRecommendation };
 type CrewFilter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
@@ -36,6 +33,7 @@ const DRAFT_ROLES = ['ship_manager', 'admin', 'system_admin'];
 export default function ApprovalInboxPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { openNewTab } = useTabContext();
 
   const [initializing, setInitializing] = useState(true);
   const [currentUserId, setCurrentUserId] = useState('');
@@ -57,15 +55,11 @@ export default function ApprovalInboxPage() {
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [referencedDocIds, setReferencedDocIds] = useState<Set<string>>(new Set());
   const [docFilter, setDocFilter] = useState<DocFilter>('all');
-  const [docViewMode, setDocViewMode] = useState<'list' | 'detail' | 'action'>('list');
+  const [docViewMode, setDocViewMode] = useState<'list' | 'action'>('list');
   const [selectedDocument, setSelectedDocument] = useState<ApprovalDocumentWithDetails | null>(null);
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
   const [docComment, setDocComment] = useState('');
   const [docProcessing, setDocProcessing] = useState(false);
-  const [docTypesById, setDocTypesById] = useState<Map<string, ApprovalDocumentType>>(new Map());
-  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
-  const [shorePositions, setShorePositions] = useState<ShorePosition[]>([]);
-  const [printDoc, setPrintDoc] = useState<ApprovalDocumentWithDetails | null>(null);
 
   const permissions = usePermissions('approval_inbox');
 
@@ -77,6 +71,13 @@ export default function ApprovalInboxPage() {
   }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => { init(); }, []);
+
+  // 문서 상세를 별도 탭에서 열어서 처리(승인/반려/취소/삭제)했을 때, 결재함 목록도 동기화되도록 새로고침한다.
+  useEffect(() => {
+    const handler = () => loadDocuments(currentUserId, isAdmin, myOrgUnitIds);
+    window.addEventListener('approval-inbox-data-changed', handler);
+    return () => window.removeEventListener('approval-inbox-data-changed', handler);
+  }, [currentUserId, isAdmin, myOrgUnitIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const init = async () => {
     try {
@@ -93,15 +94,6 @@ export default function ApprovalInboxPage() {
       const members = await orgChartService.getOrgMembers();
       const orgUnitIds = members.find(m => m.id === currentUser.id)?.org_unit_ids || [];
       setMyOrgUnitIds(orgUnitIds);
-
-      const [docTypes, company, positions] = await Promise.all([
-        approvalDocumentService.getDocumentTypes(true),
-        getCompanyInfo().catch(() => null),
-        getShorePositions().catch(() => []),
-      ]);
-      setDocTypesById(new Map(docTypes.map(t => [t.id, t])));
-      setCompanyInfo(company);
-      setShorePositions(positions);
 
       await Promise.all([
         loadCrewApprovals(currentUser.id, admin),
@@ -221,9 +213,6 @@ export default function ApprovalInboxPage() {
     return doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId);
   };
 
-  const canCancelDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && (doc.created_by === currentUserId || isAdmin);
-  const canDeleteDoc = (doc: ApprovalDocumentWithDetails) => doc.status !== 'pending' && (doc.created_by === currentUserId || isAdmin);
-
   const docGoBackToList = () => {
     setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment('');
   };
@@ -252,35 +241,6 @@ export default function ApprovalInboxPage() {
     } finally {
       setDocProcessing(false);
     }
-  };
-
-  const handleCancelDoc = async (doc: ApprovalDocumentWithDetails) => {
-    if (!confirm('이 기안서를 취소하시겠습니까?')) return;
-    try {
-      await approvalDocumentService.cancelDocument(doc.id);
-      toast({ title: '취소되었습니다.' });
-      docGoBackToList();
-      await loadDocuments(currentUserId, isAdmin, myOrgUnitIds);
-    } catch (e) {
-      toast({ title: '취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
-    }
-  };
-
-  const handleDeleteDoc = async (doc: ApprovalDocumentWithDetails) => {
-    if (!confirm('이 기안서를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
-    try {
-      await approvalDocumentService.deleteDocument(doc.id);
-      toast({ title: '삭제되었습니다.' });
-      docGoBackToList();
-      await loadDocuments(currentUserId, isAdmin, myOrgUnitIds);
-    } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
-    }
-  };
-
-  const openAttachment = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
   };
 
   // --- 공통 표시 헬퍼 ---
@@ -493,128 +453,7 @@ export default function ApprovalInboxPage() {
 
   // --- 일반 문서: 렌더링 ---
 
-  const renderAttachments = (doc: ApprovalDocumentWithDetails) => doc.attachments.length > 0 && (
-    <div className="bg-gray-50 p-3 rounded">
-      <p className="text-sm font-semibold mb-1.5 flex items-center gap-1"><Paperclip className="w-3.5 h-3.5" />첨부 문서</p>
-      <div className="space-y-1">
-        {doc.attachments.map((f, idx) => (
-          <button key={idx} type="button" onClick={() => openAttachment(f.path)} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-            <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
-            <span className="text-xs text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderDocProgress = (doc: ApprovalDocumentWithDetails) => (
-    <div>
-      <p className="text-sm font-semibold mb-2">결재 진행 상황:</p>
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center">
-          <div className="px-3 py-2 rounded border bg-purple-50 border-purple-400">
-            <div className="text-xs font-semibold">기안자</div>
-            <div className="text-xs text-gray-600">{doc.creator_name}</div>
-            <div className="text-xs mt-1 text-purple-600">✓ 기안완료</div>
-          </div>
-          <span className="mx-2 text-gray-400">→</span>
-        </div>
-        {doc.steps.map((step, index) => (
-          <div key={step.id} className="flex items-center">
-            <div className={`px-3 py-2 rounded border ${
-              step.status === 'approved' ? 'bg-green-50 border-green-500'
-              : step.status === 'rejected' ? 'bg-red-50 border-red-500'
-              : step.step_order === doc.current_step ? 'bg-blue-50 border-blue-500'
-              : step.step_order < doc.current_step ? 'bg-gray-100 border-gray-300'
-              : 'bg-white border-gray-300'
-            }`}>
-              <div className="text-xs font-semibold">{step.step_order}. {step.approver_name}</div>
-              <div className="text-xs text-gray-600">{step.approver_label}</div>
-              {step.status !== 'pending' && (
-                <div className="text-xs mt-1">
-                  {step.status === 'approved' ? '✓ 승인' : '✗ 반려'}
-                  {step.comment && <div className="text-xs text-gray-600 mt-1">{step.comment}</div>}
-                </div>
-              )}
-            </div>
-            {index < doc.steps.length - 1 && <span className="mx-2 text-gray-400">→</span>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderDocCard = (doc: ApprovalDocumentWithDetails) => {
-    const myTurn = isMyDocTurn(doc);
-    return (
-      <Card key={doc.id} className={myTurn ? 'border-blue-500 border-2' : ''}>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <CardTitle className="text-lg">{doc.title}</CardTitle>
-                {getStatusBadge(doc.status)}
-                {myTurn && <Badge className="bg-blue-500">내 차례</Badge>}
-                {referencedDocIds.has(doc.id) && <Badge variant="outline" className="text-xs">참조</Badge>}
-              </div>
-              <CardDescription className="space-y-1">
-                <div className="flex items-center gap-2 text-sm"><FileText className="w-4 h-4" /><span>{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</span></div>
-                <div className="flex items-center gap-2 text-sm"><User className="w-4 h-4" /><span>기안자: {doc.creator_name}</span></div>
-                <div className="flex items-center gap-2 text-sm"><Calendar className="w-4 h-4" /><span>{format(new Date(doc.created_at), 'PPP', { locale: ko })}</span></div>
-              </CardDescription>
-            </div>
-            {myTurn && (
-              <div className="flex gap-2 shrink-0">
-                <Button size="sm" variant="outline" className="text-green-600 border-green-600" onClick={() => { setSelectedDocument(doc); setDocActionType('approved'); setDocViewMode('action'); }}>
-                  <CheckCircle2 className="h-4 w-4 mr-1" />승인
-                </Button>
-                <Button size="sm" variant="outline" className="text-red-600 border-red-600" onClick={() => { setSelectedDocument(doc); setDocActionType('rejected'); setDocViewMode('action'); }}>
-                  <XCircle className="h-4 w-4 mr-1" />반려
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {doc.form_data && Object.keys(doc.form_data).length > 0 ? (
-              <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
-                {(docTypesById.get(doc.document_type_id)?.field_schema || []).map(field => (
-                  <div key={field.key} className="flex gap-2">
-                    <span className="text-gray-500 shrink-0 w-24">{field.label}</span>
-                    <span className="whitespace-pre-wrap">{doc.form_data?.[field.key] ?? '-'}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              doc.content && <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{doc.content}</div>
-            )}
-            {renderAttachments(doc)}
-            {doc.requester_comment && (
-              <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{doc.requester_comment}</p></div>
-            )}
-            {doc.final_comment && (
-              <div className="bg-red-50 p-3 rounded"><p className="text-sm font-semibold mb-1">반려 사유:</p><p className="text-sm text-gray-700">{doc.final_comment}</p></div>
-            )}
-            {renderDocProgress(doc)}
-            {(doc.status === 'approved' || canCancelDoc(doc) || canDeleteDoc(doc)) && (
-              <div className="flex gap-2 pt-3 border-t">
-                {doc.status === 'approved' && (
-                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setPrintDoc(doc)}><Printer className="w-3.5 h-3.5" />시행문 출력</Button>
-                )}
-                {canCancelDoc(doc) && <Button size="sm" variant="outline" className="text-red-600 border-red-300" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
-                {canDeleteDoc(doc) && permissions.canDelete && (
-                  <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteDoc(doc)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
-                )}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const openDocDetail = (doc: ApprovalDocumentWithDetails) => { setSelectedDocument(doc); setDocViewMode('detail'); };
+  const openDocDetail = (doc: ApprovalDocumentWithDetails) => openNewTab(`/documents/${doc.id}`, doc.title);
 
   const renderDocTable = (list: ApprovalDocumentWithDetails[]) => (
     <div className="rounded-md border overflow-hidden overflow-x-auto">
@@ -663,16 +502,6 @@ export default function ApprovalInboxPage() {
       </table>
     </div>
   );
-
-  const renderDocDetail = () => {
-    if (!selectedDocument) return null;
-    return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={docGoBackToList}><ArrowLeft className="w-4 h-4" />목록</Button>
-        {renderDocCard(selectedDocument)}
-      </div>
-    );
-  };
 
   const docMyRequested = documents.filter(d => d.created_by === currentUserId);
   const docPending = documents.filter(d => d.status === 'pending');
@@ -775,7 +604,7 @@ export default function ApprovalInboxPage() {
         </TabsContent>
 
         <TabsContent value="document" className="mt-4">
-          {docViewMode === 'action' ? renderDocAction() : docViewMode === 'detail' ? renderDocDetail() : (
+          {docViewMode === 'action' ? renderDocAction() : (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-1.5">
                 {FILTER_LABELS.map(f => (
@@ -794,17 +623,6 @@ export default function ApprovalInboxPage() {
           )}
         </TabsContent>
       </Tabs>
-
-      {printDoc && (
-        <ApprovalDocumentPrintDialog
-          open={!!printDoc}
-          onOpenChange={o => !o && setPrintDoc(null)}
-          doc={printDoc}
-          documentType={docTypesById.get(printDoc.document_type_id) || null}
-          company={companyInfo}
-          positions={shorePositions}
-        />
-      )}
     </div>
   );
 }
