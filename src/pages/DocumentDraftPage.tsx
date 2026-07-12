@@ -26,6 +26,7 @@ export default function DocumentDraftPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [types, setTypes] = useState<ApprovalDocumentType[]>([]);
   const [units, setUnits] = useState<OrgUnit[]>([]);
+  const [myOrgUnitIds, setMyOrgUnitIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -62,9 +63,13 @@ export default function DocumentDraftPage() {
         ]);
         setTypes(t);
         setUnits(u);
+        // 기안 부서는 본인이 소속된 부서만 고를 수 있어야 한다 (다른 부서 명의로 기안하면 안 됨).
+        // 단, 관리자는 조직도 담당자 지정 없이 시스템 전체를 관리하므로 예외적으로 전체 부서를 허용한다.
+        const myUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
+        const isAdminRole = user.role === 'admin' || user.role === 'system_admin';
+        setMyOrgUnitIds(isAdminRole ? u.map(x => x.id) : myUnitIds);
         // 대부분 본인 소속 부서로 기안하므로 기본값으로 미리 채워둔다 (필요하면 직접 바꿀 수 있음)
-        const myOrgUnitId = members.find(m => m.id === user.id)?.org_unit_ids[0];
-        if (myOrgUnitId) setOrgUnitId(myOrgUnitId);
+        if (myUnitIds[0]) setOrgUnitId(myUnitIds[0]);
       } catch (e) {
         console.error(e);
         toast({ title: '데이터를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -86,6 +91,7 @@ export default function DocumentDraftPage() {
     return () => { cancelled = true; };
   }, [documentTypeId, orgUnitId]);
 
+  const myUnits = units.filter(u => myOrgUnitIds.includes(u.id));
   const selectedType = types.find(t => t.id === documentTypeId) || null;
   const formFields = selectedType?.field_schema || [];
 
@@ -195,9 +201,9 @@ export default function DocumentDraftPage() {
               <Select value={orgUnitId} onValueChange={setOrgUnitId} disabled={submitting}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="부서 선택" /></SelectTrigger>
                 <SelectContent>
-                  {units.length === 0
-                    ? <div className="px-2 py-1.5 text-sm text-gray-500">등록된 부서가 없습니다</div>
-                    : units.map(u => <SelectItem key={u.id} value={u.id} className="text-sm">{u.name}</SelectItem>)}
+                  {myUnits.length === 0
+                    ? <div className="px-2 py-1.5 text-sm text-gray-500">소속된 부서가 없습니다. 관리자에게 문의하세요.</div>
+                    : myUnits.map(u => <SelectItem key={u.id} value={u.id} className="text-sm">{u.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -281,6 +287,11 @@ export default function DocumentDraftPage() {
               <p className="text-xs text-red-500">{previewError}</p>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
+                <div className="px-2.5 py-1.5 rounded border bg-purple-50 border-purple-300 text-xs">
+                  <div className="font-medium">기안자</div>
+                  <div className="text-gray-500">{currentUser?.name}</div>
+                </div>
+                {previewChain.length > 0 && <span className="text-gray-400">→</span>}
                 {previewChain.map((c, i) => {
                   const isSelf = selfStepIndexes.includes(i);
                   return (
