@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X, Printer } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
@@ -19,11 +20,15 @@ interface Props {
 
 // 승인 완료된 결재문서를 총무팀 보관용 "시행문" 형식으로 인쇄/PDF 저장하는 모달.
 export default function ApprovalDocumentPrintDialog({ open, onOpenChange, doc, documentType, company, positions }: Props) {
+  const [includeAttachments, setIncludeAttachments] = useState(false);
+
   useEffect(() => {
     if (open) document.body.classList.add(BODY_PRINT_CLASS);
     else document.body.classList.remove(BODY_PRINT_CLASS);
     return () => document.body.classList.remove(BODY_PRINT_CLASS);
   }, [open]);
+
+  useEffect(() => { if (open) setIncludeAttachments(false); }, [open]);
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -36,7 +41,13 @@ export default function ApprovalDocumentPrintDialog({ open, onOpenChange, doc, d
         >
           <div className="print:hidden sticky top-0 z-10 flex items-center justify-between border-b bg-white px-4 py-3">
             <DialogPrimitive.Title className="text-sm font-semibold">시행문 인쇄 — {doc.title}</DialogPrimitive.Title>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {doc.attachments.length > 0 && (
+                <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer">
+                  <Checkbox checked={includeAttachments} onCheckedChange={c => setIncludeAttachments(c === true)} />
+                  첨부파일({doc.attachments.length}개)도 함께 출력
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -51,7 +62,7 @@ export default function ApprovalDocumentPrintDialog({ open, onOpenChange, doc, d
             </div>
           </div>
           <div className="p-6 print:p-0">
-            <ApprovalDocumentIssuedSheet doc={doc} documentType={documentType} company={company} positions={positions} />
+            <ApprovalDocumentIssuedSheet doc={doc} documentType={documentType} company={company} positions={positions} includeAttachments={includeAttachments} />
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

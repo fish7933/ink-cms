@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
@@ -7,11 +8,12 @@ interface Props {
   documentType: ApprovalDocumentType | null;
   company: CompanyInfo | null;
   positions: ShorePosition[];
+  includeAttachments?: boolean;
 }
 
 // 결재 완료된 문서(특히 지출결의서 등 구조화 양식)를 총무팀 보관용 "시행문" 형식으로 출력하는 문서 본문.
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
-export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions }: Props) {
+export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, includeAttachments = false }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
   const issuedDate = doc.completed_at ? new Date(doc.completed_at) : new Date(doc.created_at);
   const fields = documentType?.field_schema || [];
@@ -128,6 +130,25 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
       <div style={{ textAlign: 'center', marginTop: 48, fontSize: 15, fontWeight: 600 }}>
         {company?.name || ''}
       </div>
+
+      {includeAttachments && doc.attachments.map((a, i) => {
+        const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
+        const url = data?.publicUrl;
+        const isImage = a.type?.startsWith('image/');
+        const isPdf = a.type === 'application/pdf';
+        return (
+          <div key={i} style={{ pageBreakBefore: 'always', paddingTop: 8 }}>
+            <p style={{ fontSize: 12, color: '#555', marginBottom: 8 }}>붙임 {i + 1}. {a.name}</p>
+            {isImage && url ? (
+              <img src={url} alt={a.name} style={{ maxWidth: '100%' }} />
+            ) : isPdf && url ? (
+              <iframe src={url} title={a.name} style={{ width: '100%', height: '1000px', border: '1px solid #ccc' }} />
+            ) : (
+              <p style={{ fontSize: 12, color: '#999' }}>이 파일 형식은 미리보기 인쇄를 지원하지 않습니다. 원본 파일은 결재함에서 별도로 확인해주세요.</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
