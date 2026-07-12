@@ -120,7 +120,16 @@ export default function ShoreLeaveRequestPage() {
     const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     return form.start_date === todayIso;
   })();
-  const isSameDayRequestBlocked = isToday && new Date().getHours() >= 9;
+  // 당일 신청은 원칙적으로 오전 9시 전까지만 가능하지만, 오후반차는 오후(14시)에 시작하므로
+  // 당일 오전 중에는(14시 전까지) 신청할 수 있게 예외를 둔다.
+  const isSameDayRequestBlocked = isToday && (
+    effectiveLeaveType === 'pm' ? new Date().getHours() >= 14 : new Date().getHours() >= 9
+  );
+  // 이틀 이상 연속 연차는 최소 3일 전(=시작일이 오늘부터 3일 이상 남았을 때)에 신청해야 한다.
+  const daysUntilStart = form.start_date
+    ? Math.round((new Date(form.start_date).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000)
+    : 0;
+  const isMultiDayTooSoon = isMultiDay && daysUntilStart < 3;
 
   const toggleCcUnit = (unitId: string) => {
     setForm(prev => ({
@@ -134,7 +143,8 @@ export default function ShoreLeaveRequestPage() {
     if (!currentUser.hire_date) { toast({ title: '입사일이 등록되어 있지 않습니다. 관리자에게 문의하세요.', variant: 'destructive' }); return; }
     if (!myOrgUnitId) { toast({ title: '소속 부서가 조직도에 등록되어 있지 않습니다. 관리자에게 문의하세요.', variant: 'destructive' }); return; }
     if (!form.start_date || !form.end_date) { toast({ title: '달력에서 휴가 기간을 선택하세요.', variant: 'destructive' }); return; }
-    if (isSameDayRequestBlocked) { toast({ title: '당일 연차는 오전 9시 이전에만 신청할 수 있습니다.', variant: 'destructive' }); return; }
+    if (isSameDayRequestBlocked) { toast({ title: effectiveLeaveType === 'pm' ? '당일 오후반차는 오후 2시 이전에만 신청할 수 있습니다.' : '당일 연차는 오전 9시 이전에만 신청할 수 있습니다.', variant: 'destructive' }); return; }
+    if (isMultiDayTooSoon) { toast({ title: '이틀 이상의 연차는 최소 3일 전에 신청해야 합니다.', variant: 'destructive' }); return; }
     if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
     if (totalHours > balance.remainingHours) { toast({ title: `잔여 연차(${formatLeaveHours(balance.remainingHours)})를 초과했습니다.`, variant: 'destructive' }); return; }
     if (isMultiDay && !form.reason.trim()) { toast({ title: '2일 이상 신청 시 특별한 사유를 입력해야 합니다.', description: '예: 여름휴가 등', variant: 'destructive' }); return; }
@@ -255,7 +265,12 @@ export default function ShoreLeaveRequestPage() {
               </div>
               {isSameDayRequestBlocked && (
                 <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-md p-2">
-                  당일 연차는 오전 9시 이전에만 신청할 수 있습니다.
+                  {effectiveLeaveType === 'pm' ? '당일 오후반차는 오후 2시 이전에만 신청할 수 있습니다.' : '당일 연차는 오전 9시 이전에만 신청할 수 있습니다.'}
+                </p>
+              )}
+              {isMultiDayTooSoon && (
+                <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-md p-2">
+                  이틀 이상의 연차는 최소 3일 전에 신청해야 합니다.
                 </p>
               )}
               <div className="space-y-1.5">
@@ -290,7 +305,7 @@ export default function ShoreLeaveRequestPage() {
               disabled={submitting || !isMultiDay}
               placeholder={isMultiDay ? '특별한 사유를 입력하세요 (예: 여름휴가 등)' : '2일 이상 신청 시에만 입력할 수 있습니다'}
             />
-            <p className="text-[11px] text-gray-400">연차는 특별한 사유(여름휴가 등)가 없으면 2일 이상 연속으로 신청할 수 없습니다.</p>
+            <p className="text-[11px] text-gray-400">연차는 특별한 사유(여름휴가 등)가 없으면 2일 이상 연속으로 신청할 수 없으며, 최소 3일 전에 신청해야 합니다.</p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">결재선</Label>
@@ -331,7 +346,7 @@ export default function ShoreLeaveRequestPage() {
           </div>
           {permissions.canCreate && (
             <div className="flex justify-end pt-1">
-              <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting || isSameDayRequestBlocked}>
+              <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting || isSameDayRequestBlocked || isMultiDayTooSoon}>
                 <Send className="w-4 h-4" />{submitting ? '제출 중...' : '결재 상신'}
               </Button>
             </div>
