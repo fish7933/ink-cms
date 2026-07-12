@@ -2,10 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getCurrentUser } from '@/services/auth.service';
 import { getCertificateTypes, addCertificateType, updateCertificateType, deleteCertificateType } from '@/services/certificate-type.service';
+import {
+  getCertificateCategories, addCertificateCategory, updateCertificateCategory, deleteCertificateCategory,
+} from '@/services/certificate-category.service';
 import type { CertificateType } from '@/types/certificate-type';
+import type { CertificateCategory } from '@/types/certificate-category';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Trash2, FileText, Save } from 'lucide-react';
+import { Plus, Trash2, FileText, Save, Settings, Edit2, X, Check } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,16 +18,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTabContext } from '@/contexts/TabContext';
 import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
-type Category = 'stcw'|'national'|'medical'|'safety'|'technical'|'other';
-
-const EMPTY_FORM = { category: 'stcw' as Category, type_code: '', type_name_en: '', type_name_ko: '', description: '', validity_period_months: undefined as number|undefined, is_mandatory: false, is_active: true, display_order: 999 };
-const CAT_LABELS: Record<string, string> = { stcw: 'STCW 증서', national: '자국/기국 증서', medical: '건강/의료 증서', safety: '안전 교육', technical: '기술 교육', other: '기타' };
-const CATEGORIES: Category[] = ['stcw', 'national', 'medical', 'safety', 'technical', 'other'];
+const EMPTY_FORM = { category: '', type_code: '', type_name_en: '', type_name_ko: '', description: '', validity_period_months: undefined as number|undefined, is_mandatory: false, is_active: true, display_order: 999 };
 
 export default function CertificateTypeManagementPage() {
   const navigate = useNavigate();
@@ -35,9 +36,18 @@ export default function CertificateTypeManagementPage() {
   const isFormMode = isNew || !!editId;
 
   const [types, setTypes] = useState<CertificateType[]>([]);
+  const [categories, setCategories] = useState<CertificateCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState(EMPTY_FORM);
+  const [activeTab, setActiveTab] = useState('');
+
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [newCatCode, setNewCatCode] = useState('');
+  const [newCatName, setNewCatName] = useState('');
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editingCatName, setEditingCatName] = useState('');
+  const [catSaving, setCatSaving] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -65,13 +75,61 @@ export default function CertificateTypeManagementPage() {
       const t = types.find(t => t.id === editId);
       if (t) setFormData({ category: t.category, type_code: t.type_code, type_name_en: t.type_name_en, type_name_ko: t.type_name_ko, description: t.description || '', validity_period_months: t.validity_period_months || undefined, is_mandatory: t.is_mandatory || false, is_active: t.is_active !== false, display_order: t.display_order || 999 });
     }
-    if (isNew) setFormData(EMPTY_FORM);
-  }, [editId, isNew, types]);
+    if (isNew) setFormData({ ...EMPTY_FORM, category: categories[0]?.code || '' });
+  }, [editId, isNew, types, categories]);
+
+  useEffect(() => {
+    if (!activeTab && categories.length > 0) setActiveTab(categories[0].code);
+  }, [categories, activeTab]);
 
   const loadData = async () => {
-    try { setTypes(await getCertificateTypes(false)); }
+    try {
+      const [t, c] = await Promise.all([getCertificateTypes(false), getCertificateCategories(false)]);
+      setTypes(t);
+      setCategories(c);
+    }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
+  };
+
+  const catLabel = (code: string) => categories.find(c => c.code === code)?.name || code;
+
+  const handleAddCategory = async () => {
+    const code = newCatCode.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!code || !newCatName.trim()) { alert('코드와 이름을 모두 입력하세요.'); return; }
+    if (categories.some(c => c.code === code)) { alert('이미 존재하는 코드입니다.'); return; }
+    try {
+      setCatSaving(true);
+      await addCertificateCategory({ code, name: newCatName.trim() });
+      setNewCatCode(''); setNewCatName('');
+      await loadData();
+    } catch { alert('카테고리 추가 중 오류가 발생했습니다.'); }
+    finally { setCatSaving(false); }
+  };
+
+  const startEditCategory = (c: CertificateCategory) => { setEditingCatId(c.id); setEditingCatName(c.name); };
+  const saveEditCategory = async (id: string) => {
+    if (!editingCatName.trim()) return;
+    try {
+      setCatSaving(true);
+      await updateCertificateCategory(id, { name: editingCatName.trim() });
+      setEditingCatId(null);
+      await loadData();
+    } catch { alert('카테고리 수정 중 오류가 발생했습니다.'); }
+    finally { setCatSaving(false); }
+  };
+
+  const handleDeleteCategory = async (c: CertificateCategory) => {
+    const inUse = types.filter(t => t.category === c.code).length;
+    if (inUse > 0) { alert(`이 카테고리를 사용하는 증서 유형이 ${inUse}개 있어 삭제할 수 없습니다. 먼저 해당 증서 유형의 카테고리를 변경하거나 삭제하세요.`); return; }
+    if (!confirm(`'${c.name}' 카테고리를 삭제하시겠습니까?`)) return;
+    try { await deleteCertificateCategory(c.id); await loadData(); }
+    catch { alert('카테고리 삭제 중 오류가 발생했습니다.'); }
+  };
+
+  const toggleCategoryActive = async (c: CertificateCategory) => {
+    try { await updateCertificateCategory(c.id, { is_active: !c.is_active }); await loadData(); }
+    catch { alert('변경 중 오류가 발생했습니다.'); }
   };
 
   const handleSave = async () => {
@@ -92,7 +150,7 @@ export default function CertificateTypeManagementPage() {
     catch { alert('삭제 중 오류가 발생했습니다.'); }
   };
 
-  const handleCategoryDragEnd = async (category: Category, event: DragEndEvent) => {
+  const handleCategoryDragEnd = async (category: string, event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -142,9 +200,14 @@ export default function CertificateTypeManagementPage() {
                 </Button>
               </div>
             ) : (
-              <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/certificate-types?mode=new', '증서 유형 추가', true)}>
-                <Plus className="w-3.5 h-3.5" />증서 유형 추가
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setCatDialogOpen(true)}>
+                  <Settings className="w-3.5 h-3.5" />카테고리 관리
+                </Button>
+                <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/certificate-types?mode=new', '증서 유형 추가', true)}>
+                  <Plus className="w-3.5 h-3.5" />증서 유형 추가
+                </Button>
+              </div>
             )}
           </div>
         </CardHeader>
@@ -154,9 +217,9 @@ export default function CertificateTypeManagementPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">카테고리 *</Label>
-                  <Select value={formData.category} onValueChange={(v: Category) => setFormData({ ...formData, category: v })}>
+                  <Select value={formData.category} onValueChange={(v: string) => setFormData({ ...formData, category: v })}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c} className="text-sm">{CAT_LABELS[c]}</SelectItem>)}</SelectContent>
+                    <SelectContent>{categories.map(c => <SelectItem key={c.code} value={c.code} className="text-sm">{c.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
@@ -187,15 +250,17 @@ export default function CertificateTypeManagementPage() {
                 <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_active} onCheckedChange={c => setFormData({ ...formData, is_active: c === true })} /><span className="text-xs">활성 상태</span></label>
               </div>
             </div>
+          ) : categories.length === 0 ? (
+            <div className="text-center py-8 text-sm text-gray-500">등록된 카테고리가 없습니다. 카테고리 관리에서 먼저 추가하세요.</div>
           ) : (
-            <Tabs defaultValue="stcw" className="w-full">
-              <TabsList className="grid w-full grid-cols-6 h-9">
-                {CATEGORIES.map(cat => <TabsTrigger key={cat} value={cat} className="text-xs">{CAT_LABELS[cat]} ({types.filter(t => t.category === cat).length})</TabsTrigger>)}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="w-full flex-wrap h-auto gap-1">
+                {categories.map(cat => <TabsTrigger key={cat.code} value={cat.code} className="text-xs">{cat.name} ({types.filter(t => t.category === cat.code).length})</TabsTrigger>)}
               </TabsList>
-              {CATEGORIES.map(cat => {
-                const items = types.filter(t => t.category === cat);
+              {categories.map(cat => {
+                const items = types.filter(t => t.category === cat.code);
                 return (
-                  <TabsContent key={cat} value={cat} className="mt-3">
+                  <TabsContent key={cat.code} value={cat.code} className="mt-3">
                     {items.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">등록된 증서 유형이 없습니다</div> : (
                       <div className="rounded-md border">
                         <Table>
@@ -212,7 +277,7 @@ export default function CertificateTypeManagementPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleCategoryDragEnd(cat, e)}>
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleCategoryDragEnd(cat.code, e)}>
                               <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
                                 {items.map(t => (
                                   <SortableTableRow key={t.id} id={t.id} onClick={() => openNewTab(`/certificate-types?id=${t.id}`, `${t.type_name_ko} 수정`)}>
@@ -240,6 +305,56 @@ export default function CertificateTypeManagementPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle className="text-base">증서 카테고리 관리</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2 items-end p-2.5 bg-gray-50 rounded-md">
+              <div className="space-y-1 flex-1">
+                <Label className="text-xs">코드</Label>
+                <Input value={newCatCode} onChange={e => setNewCatCode(e.target.value)} placeholder="예: license" className="h-8 text-sm font-mono" disabled={catSaving} />
+              </div>
+              <div className="space-y-1 flex-1">
+                <Label className="text-xs">이름</Label>
+                <Input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="예: 면허증" className="h-8 text-sm" disabled={catSaving} />
+              </div>
+              <Button size="sm" className="h-8 gap-1" onClick={handleAddCategory} disabled={catSaving}><Plus className="w-3.5 h-3.5" />추가</Button>
+            </div>
+            <div className="rounded-md border divide-y max-h-80 overflow-y-auto">
+              {categories.length === 0 ? (
+                <p className="text-center py-6 text-sm text-gray-400">등록된 카테고리가 없습니다</p>
+              ) : categories.map(c => (
+                <div key={c.id} className="flex items-center justify-between gap-2 p-2 text-sm">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="font-mono text-xs text-gray-400 shrink-0">{c.code}</span>
+                    {editingCatId === c.id ? (
+                      <Input value={editingCatName} onChange={e => setEditingCatName(e.target.value)} className="h-7 text-sm" autoFocus />
+                    ) : (
+                      <span className={`truncate ${!c.is_active ? 'text-gray-400' : ''}`}>{c.name}</span>
+                    )}
+                    {!c.is_active && <Badge variant="outline" className="text-xs shrink-0">비활성</Badge>}
+                  </div>
+                  <div className="flex gap-0.5 shrink-0">
+                    {editingCatId === c.id ? (
+                      <>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => saveEditCategory(c.id)} disabled={catSaving}><Check className="h-3.5 w-3.5" /></Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingCatId(null)}><X className="h-3.5 w-3.5" /></Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleCategoryActive(c)}>{c.is_active ? '비활성화' : '활성화'}</Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEditCategory(c)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteCategory(c)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

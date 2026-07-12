@@ -14,8 +14,10 @@ import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
 import { getNationalities } from '@/services/nationality.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
+import { getCertificateCategories } from '@/services/certificate-category.service';
 import type { Nationality } from '@/types/nationality';
 import type { CertificateType } from '@/types/certificate-type';
+import type { CertificateCategory } from '@/types/certificate-category';
 import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
 import SeaServiceDialog from '@/components/crew/SeaServiceDialog';
 import SeaServiceEvaluationDialog from '@/components/crew/SeaServiceEvaluationDialog';
@@ -66,15 +68,6 @@ interface CrewDetailPanelProps {
   onSaved: (id: string) => void;
   embedded?: boolean;
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  stcw: 'STCW',
-  national: '국가/기국',
-  medical: '건강/의료',
-  safety: '안전',
-  technical: '기술',
-  other: '기타',
-};
 
 const RELATIONSHIPS = ['배우자', '부', '모', '자', '녀', '형', '제', '자매', '친구', '기타'];
 const SHOE_SIZES = ['235','240','245','250','255','260','265','270','275','280','285','290','295','300'];
@@ -152,6 +145,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [previewUrl, setPreviewUrl] = useState('');
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
+  const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
@@ -184,6 +178,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     supabase.from('ranks').select('*').then(({ data }) => { if (data) setRanks(sortRanksByDisplayOrder(data)); });
     getNationalities(true).then(setNationalities).catch(console.error);
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
+    getCertificateCategories(true).then(setCertificateCategories).catch(console.error);
     if (!isNew) loadCrew(id!);
     else {
       setLoading(false);
@@ -866,12 +861,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     if (!grouped[category]) grouped[category] = [];
                     grouped[category].push({ cert, idx });
                   });
-                  const categoryOrder = ['stcw', 'national', 'medical', 'safety', 'technical', 'other', 'custom'];
+                  const categoryOrder = [...certificateCategories.map(c => c.code), 'custom'];
                   return categoryOrder.filter(cat => grouped[cat]?.length > 0).map(category => (
                     <div key={category} className="space-y-1.5">
                       <div className="flex items-center gap-2 pt-2">
                         <Badge variant="outline" className="text-xs font-semibold">
-                          {category === 'custom' ? '직접 입력' : CATEGORY_LABELS[category] || category}
+                          {category === 'custom' ? '직접 입력' : certificateCategories.find(c => c.code === category)?.name || category}
                         </Badge>
                         <div className="flex-1 border-t border-gray-200" />
                       </div>

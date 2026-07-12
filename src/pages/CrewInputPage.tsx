@@ -14,9 +14,11 @@ import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewService } from '@/services/crew.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
+import { getCertificateCategories } from '@/services/certificate-category.service';
 import { getNationalities } from '@/services/nationality.service';
 import type { CrewRecommendationWithDetails, Rank } from '@/types/models';
 import type { CertificateType } from '@/types/certificate-type';
+import type { CertificateCategory } from '@/types/certificate-category';
 import type { Nationality } from '@/types/nationality';
 import { useTabContext } from '@/contexts/TabContext';
 
@@ -30,10 +32,6 @@ interface Certificate {
   file_path?: string;
   file_name?: string;
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  stcw: 'STCW', national: '국가/기국', medical: '건강/의료', safety: '안전', technical: '기술', other: '기타',
-};
 
 export default function CrewInputPage() {
   const location = useLocation();
@@ -70,6 +68,7 @@ export default function CrewInputPage() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
+  const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -115,6 +114,7 @@ export default function CrewInputPage() {
     }
     loadRanks();
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
+    getCertificateCategories(true).then(setCertificateCategories).catch(console.error);
     getNationalities().then(setNationalities).catch(console.error);
     setFormData(prev => ({
       ...prev,
@@ -496,12 +496,12 @@ const addCert = (name?: string) => {
                           if (!grouped[category]) grouped[category] = [];
                           grouped[category].push({ cert, idx });
                         });
-                        const categoryOrder = ['stcw', 'national', 'medical', 'safety', 'technical', 'other', 'custom'];
+                        const categoryOrder = [...certificateCategories.map(c => c.code), 'custom'];
                         return categoryOrder.filter(cat => grouped[cat]?.length > 0).map(category => (
                           <div key={category} className="space-y-1.5">
                             <div className="flex items-center gap-2 pt-2">
                               <Badge variant="outline" className="text-xs font-semibold">
-                                {category === 'custom' ? '직접 입력' : CATEGORY_LABELS[category] || category}
+                                {category === 'custom' ? '직접 입력' : certificateCategories.find(c => c.code === category)?.name || category}
                               </Badge>
                               <div className="flex-1 border-t border-gray-200" />
                             </div>
