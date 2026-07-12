@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Plus, X, Ship, LogIn, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,6 +75,9 @@ export default function RotationPlanFormPage() {
   const { toast } = useToast();
   const { activeTabId, closeTab, openNewTab, tabs } = useTabContext();
   const [searchParams] = useSearchParams();
+  const params = useParams<{ id?: string }>();
+  const editPlanId = params.id;
+  const isEditMode = !!editPlanId;
 
   const [availableCrew, setAvailableCrew] = useState<CrewWithDetails[]>([]);
   const [onboardCrew, setOnboardCrew] = useState<CrewWithDetails[]>([]);
@@ -157,6 +160,58 @@ export default function RotationPlanFormPage() {
     setRanks(ranksData);
     setOwners(ownersData);
     setPorts(portsData);
+
+    // 임시저장(draft) 계획을 다시 열어 수정하는 경우 — 저장된 배정 내용을 그대로 불러와 채운다.
+    if (editPlanId) {
+      const existing = await rotationService.getRotationPlanById(editPlanId);
+      if (!existing) {
+        toast({ title: '교대계획을 찾을 수 없습니다.', variant: 'destructive' });
+        if (activeTabId) closeTab(activeTabId);
+        return;
+      }
+      if (existing.status !== 'draft') {
+        toast({ title: '임시저장 상태의 계획만 수정할 수 있습니다.', description: '이미 결재가 진행중이거나 처리된 계획입니다.', variant: 'destructive' });
+        if (activeTabId) closeTab(activeTabId);
+        return;
+      }
+
+      const [fleetsRes, shipsRes] = await Promise.all([
+        supabase.from('fleets').select('*').eq('owner_id', existing.owner_id).order('name'),
+        supabase.from('ships').select('*').eq('owner_id', existing.owner_id).order('name'),
+      ]);
+      setFleets(fleetsRes.data || []);
+      setShips(shipsRes.data || []);
+      setOwnerId(existing.owner_id);
+      setFleetId(existing.fleet_id || '');
+      setShipId(existing.ship_id);
+      setPlanName(existing.plan_name);
+      setPlanNotes(existing.notes || '');
+      setBaseDepartureDate(existing.base_departure_date || '');
+      if (existing.port_id) {
+        const port = (portsData || []).find(p => p.id === existing.port_id);
+        if (port) { setCountryName(port.country_name); setCityName(port.city_name); }
+      }
+
+      const loadedRows: AssignmentRow[] = existing.assignments.length > 0
+        ? existing.assignments.map(a => makeRow({
+            boardingCrewId: a.on_crew_id,
+            boardingRankId: a.on_rank_id || '',
+            boardingGrade: a.on_rank_grade,
+            departureDate: a.on_departure_date || '',
+            boardingDate: a.embark_date || '',
+            disembarkCrewId: a.off_crew_id,
+            disembarkRankId: a.off_rank_id || '',
+            disembarkGrade: a.off_rank_grade,
+            disembarkDate: a.off_disembark_date || '',
+            returnDate: a.off_return_date || '',
+            contractMonths: a.contract_months != null ? String(a.contract_months) : '',
+            notes: a.notes || '',
+          }))
+        : [makeRow()];
+      setRows(loadedRows);
+      setLoading(false);
+      return;
+    }
 
     // 승선자용 초기 필드: rank 자동, grade는 null (사용자 선택 필수)
     const initBoardingFields = (crewId: string, ownerObj?: Company, shipObj?: ShipType, fleetObj?: Fleet): Partial<AssignmentRow> => {
@@ -262,7 +317,7 @@ export default function RotationPlanFormPage() {
   }, [shipId]);
 
   useEffect(() => {
-    if (!shipId) return;
+    if (!shipId || isEditMode) return;
     const ship = ships.find(s => s.id === shipId);
     if (!ship) return;
     const now = new Date();
@@ -282,6 +337,9 @@ export default function RotationPlanFormPage() {
   }, [shipId, ships]);
 
   useEffect(() => {
+    // 수정 모드에서 기존 계획을 불러올 때는 각 배정 건마다 저장된 개별 일자를 그대로 써야 하므로,
+    // 기준일 하나로 모든 행의 날짜를 일괄 재계산해 덮어쓰지 않는다.
+    if (isEditMode) return;
     setPlanName(prev => prev ? withDateSuffix(prev, baseDepartureDate) : prev);
     if (baseDepartureDate) {
       const dates = cascadeDatesFromBase(baseDepartureDate);
@@ -466,7 +524,7 @@ export default function RotationPlanFormPage() {
         notes: r.notes || null,
       }));
 
-      const plan = await rotationService.createRotationPlan({
+      const planPayload = {
         ship_id: shipId,
         owner_id: ownerId,
         fleet_id: fleetId || null,
@@ -476,10 +534,14 @@ export default function RotationPlanFormPage() {
         base_departure_date: baseDepartureDate || null,
         port_id: portId,
         assignments,
-      });
+      };
+
+      const plan = isEditMode
+        ? await rotationService.updateRotationPlanWithAssignments(editPlanId!, planPayload)
+        : await rotationService.createRotationPlan(planPayload);
 
       if (!plan) throw new Error('저장에 실패했습니다');
-      toast({ title: '작성 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
+      toast({ title: isEditMode ? '수정 완료' : '작성 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
       // 교대발령 목록 탭이 없으면 열어준 뒤 현재 폼 탭을 닫음
       if (!tabs.some(t => t.path === '/crew-rotation')) {
         openNewTab('/crew-rotation', '선원 교대 발령');
@@ -504,9 +566,9 @@ export default function RotationPlanFormPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <Ship className="w-4 h-4" />교대 계획 작성
+              <Ship className="w-4 h-4" />{isEditMode ? '교대 계획 수정 (임시저장)' : '교대 계획 작성'}
             </CardTitle>
-            <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">작성 완료</Button>
+            <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">{isEditMode ? '수정 완료' : '작성 완료'}</Button>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-2.5">

@@ -396,7 +396,13 @@ export function CrewRotationPage() {
                       </TableCell>
                     </TableRow>
                     {group.plans.map(plan => (
-                      <TableRow key={plan.id} className="cursor-pointer" onClick={() => openNewTab(`/crew-rotation/${plan.id}`, plan.plan_name || '교대계획')}>
+                      <TableRow
+                        key={plan.id} className="cursor-pointer"
+                        onClick={() => openNewTab(
+                          plan.status === 'draft' ? `/crew-rotation/${plan.id}/edit` : `/crew-rotation/${plan.id}`,
+                          plan.plan_name || '교대계획'
+                        )}
+                      >
                         <TableCell onClick={e => e.stopPropagation()}>
                           {isAdmin && (
                             <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />

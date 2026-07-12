@@ -280,6 +280,101 @@ export const rotationService = {
   },
 
   /**
+   * 임시저장(draft) 상태인 교대계획의 배정 내용을 통째로 수정한다 — 결재 상신 전까지는
+   * 교대 계획 작성 화면에서 다시 열어 배정 인원/일정을 바꿀 수 있어야 한다.
+   * 기존 배정을 모두 지우고 새로 넣는 방식이라, draft가 아닌 계획에는 사용할 수 없다.
+   */
+  async updateRotationPlanWithAssignments(planId: string, formData: RotationPlanFormData): Promise<CrewRotationPlan | null> {
+    const { data: existingPlan, error: existingError } = await supabase
+      .from('crew_rotation_plans')
+      .select('id, status')
+      .eq('id', planId)
+      .single();
+    if (existingError || !existingPlan) { console.error('Error fetching plan to update:', existingError); return null; }
+    if (existingPlan.status !== 'draft') {
+      throw new Error('임시저장 상태의 계획만 수정할 수 있습니다. 이미 결재가 진행중이거나 처리된 계획입니다.');
+    }
+
+    // 저장 시점 재검증 — 이 계획 자신에게 이미 배정된 선원은 충돌로 보지 않는다.
+    const requestedCrewIds = [...new Set(
+      formData.assignments.flatMap(a => [a.on_crew_id, a.off_crew_id]).filter((id): id is string => !!id)
+    )];
+    if (requestedCrewIds.length > 0) {
+      const { data: conflictRows } = await supabase
+        .from('crew_rotation_assignments')
+        .select('on_crew_id, off_crew_id, rotation_plan_id, plan:crew_rotation_plans!inner(status)')
+        .in('plan.status', ['draft', 'pending_approval', 'approved']);
+      const conflictCrewIds = new Set<string>();
+      for (const row of conflictRows || []) {
+        if (row.rotation_plan_id === planId) continue;
+        if (row.on_crew_id && requestedCrewIds.includes(row.on_crew_id)) conflictCrewIds.add(row.on_crew_id as string);
+        if (row.off_crew_id && requestedCrewIds.includes(row.off_crew_id)) conflictCrewIds.add(row.off_crew_id as string);
+      }
+      if (conflictCrewIds.size > 0) {
+        const { data: crewRows } = await supabase.from('crew_members').select('id, name').in('id', [...conflictCrewIds]);
+        const names = (crewRows || []).map(c => c.name).join(', ') || '선택한 선원';
+        throw new Error(`${names} — 이미 다른 진행중인 교대계획에 배정되어 있습니다. 화면을 새로고침한 뒤 다시 시도해주세요.`);
+      }
+    }
+
+    const { data: plan, error: planError } = await supabase
+      .from('crew_rotation_plans')
+      .update({
+        ship_id: formData.ship_id,
+        owner_id: formData.owner_id,
+        fleet_id: formData.fleet_id,
+        plan_name: formData.plan_name,
+        rotation_date: formData.rotation_date,
+        notes: formData.notes,
+        base_departure_date: formData.base_departure_date,
+        port_id: formData.port_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', planId)
+      .select()
+      .single();
+    if (planError || !plan) { console.error('Error updating rotation plan:', planError); return null; }
+
+    const { error: deleteError } = await supabase.from('crew_rotation_assignments').delete().eq('rotation_plan_id', planId);
+    if (deleteError) { console.error('Error clearing old assignments:', deleteError); return null; }
+
+    if (formData.assignments.length > 0) {
+      const assignments = formData.assignments.map((assignment) => ({
+        rotation_plan_id: planId,
+        off_crew_id: assignment.off_crew_id,
+        off_rank_id: assignment.off_rank_id,
+        off_rank_grade: assignment.off_rank_grade,
+        off_disembark_date: assignment.off_disembark_date,
+        off_return_date: assignment.off_return_date,
+        on_crew_id: assignment.on_crew_id,
+        on_rank_id: assignment.on_rank_id,
+        on_rank_grade: assignment.on_rank_grade,
+        on_departure_date: assignment.on_departure_date,
+        contract_months: assignment.contract_months,
+        salary_template_id: assignment.salary_template_id,
+        salary_amount: assignment.salary_amount,
+        salary_currency: assignment.salary_currency || 'USD',
+        embark_date: assignment.embark_date,
+        notes: assignment.notes,
+      }));
+
+      const { error: assignmentsError } = await supabase.from('crew_rotation_assignments').insert(assignments);
+      if (assignmentsError) { console.error('Error re-creating rotation assignments:', assignmentsError); return null; }
+
+      const boardingIds = formData.assignments.map(a => a.on_crew_id).filter((id): id is string => Boolean(id));
+      if (boardingIds.length > 0) {
+        await supabase
+          .from('crew_members')
+          .update({ status: 'standby', updated_at: new Date().toISOString() })
+          .in('id', boardingIds)
+          .in('status', ['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected']);
+      }
+    }
+
+    return plan;
+  },
+
+  /**
    * Update rotation plan
    */
   async updateRotationPlan(

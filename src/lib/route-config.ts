@@ -75,6 +75,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew', component: CrewManagementPage },
   { path: '/assignments', component: CrewAssignmentPage },
   { path: '/crew-rotation/new', component: RotationPlanFormPage },
+  { path: '/crew-rotation/:id/edit', component: RotationPlanFormPage },
   { path: '/crew-rotation/:id', component: CrewRotationDetailPage },
   { path: '/crew-rotation', component: CrewRotationPage },
   { path: '/crew-dispatch/new', component: DispatchOrderPage },
