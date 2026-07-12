@@ -47,7 +47,7 @@ export default function ApprovalInboxPage() {
   // 선원추천 결재
   const [crewApprovals, setCrewApprovals] = useState<ApprovalWithRecommendation[]>([]);
   const [crewFilter, setCrewFilter] = useState<CrewFilter>('all');
-  const [crewViewMode, setCrewViewMode] = useState<'list' | 'action'>('list');
+  const [crewViewMode, setCrewViewMode] = useState<'list' | 'detail' | 'action'>('list');
   const [selectedCrewApproval, setSelectedCrewApproval] = useState<ApprovalWithRecommendation | null>(null);
   const [crewActionType, setCrewActionType] = useState<'approve' | 'reject' | null>(null);
   const [crewComment, setCrewComment] = useState('');
@@ -57,7 +57,7 @@ export default function ApprovalInboxPage() {
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [referencedDocIds, setReferencedDocIds] = useState<Set<string>>(new Set());
   const [docFilter, setDocFilter] = useState<DocFilter>('all');
-  const [docViewMode, setDocViewMode] = useState<'list' | 'action'>('list');
+  const [docViewMode, setDocViewMode] = useState<'list' | 'detail' | 'action'>('list');
   const [selectedDocument, setSelectedDocument] = useState<ApprovalDocumentWithDetails | null>(null);
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
   const [docComment, setDocComment] = useState('');
@@ -387,6 +387,65 @@ export default function ApprovalInboxPage() {
     );
   };
 
+  const openCrewDetail = (approval: ApprovalWithRecommendation) => { setSelectedCrewApproval(approval); setCrewViewMode('detail'); };
+
+  const renderCrewTable = (list: ApprovalWithRecommendation[]) => (
+    <div className="rounded-md border overflow-hidden overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">선원</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">결재선</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">요청자</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">요청일</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-44">작업</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(approval => {
+            const myTurn = isMyCrewTurn(approval);
+            return (
+              <tr key={approval.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => openCrewDetail(approval)}>
+                <td className="p-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {getStatusBadge(approval.status)}
+                    {myTurn && <Badge className="bg-blue-500 text-xs">내 차례</Badge>}
+                  </div>
+                </td>
+                <td className="p-2 font-medium">{approval.recommendation?.crew_name || '선원 추천'}</td>
+                <td className="p-2 text-gray-500">{approval.approval_line.name}</td>
+                <td className="p-2 text-gray-500">{approval.requester_name}</td>
+                <td className="p-2 text-gray-500">{format(new Date(approval.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
+                <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-end gap-1">
+                    {myTurn && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('approve'); setCrewViewMode('action'); }}>승인</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('reject'); setCrewViewMode('action'); }}>반려</Button>
+                      </>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openCrewDetail(approval)}>보기</Button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderCrewDetail = () => {
+    if (!selectedCrewApproval) return null;
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={crewGoBackToList}><ArrowLeft className="w-4 h-4" />목록</Button>
+        {renderCrewCard(selectedCrewApproval)}
+      </div>
+    );
+  };
+
   const crewMyRequested = crewApprovals.filter(a => a.requester_id === currentUserId);
   const crewPending = crewApprovals.filter(a => a.status === 'pending');
   const crewApproved = crewApprovals.filter(a => a.status === 'approved');
@@ -555,6 +614,66 @@ export default function ApprovalInboxPage() {
     );
   };
 
+  const openDocDetail = (doc: ApprovalDocumentWithDetails) => { setSelectedDocument(doc); setDocViewMode('detail'); };
+
+  const renderDocTable = (list: ApprovalDocumentWithDetails[]) => (
+    <div className="rounded-md border overflow-hidden overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-44">작업</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(doc => {
+            const myTurn = isMyDocTurn(doc);
+            return (
+              <tr key={doc.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => openDocDetail(doc)}>
+                <td className="p-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {getStatusBadge(doc.status)}
+                    {myTurn && <Badge className="bg-blue-500 text-xs">내 차례</Badge>}
+                    {referencedDocIds.has(doc.id) && <Badge variant="outline" className="text-xs">참조</Badge>}
+                  </div>
+                </td>
+                <td className="p-2 font-medium">{doc.title}</td>
+                <td className="p-2 text-gray-500">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
+                <td className="p-2 text-gray-500">{doc.creator_name}</td>
+                <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
+                <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-end gap-1">
+                    {myTurn && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => { setSelectedDocument(doc); setDocActionType('approved'); setDocViewMode('action'); }}>승인</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => { setSelectedDocument(doc); setDocActionType('rejected'); setDocViewMode('action'); }}>반려</Button>
+                      </>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderDocDetail = () => {
+    if (!selectedDocument) return null;
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={docGoBackToList}><ArrowLeft className="w-4 h-4" />목록</Button>
+        {renderDocCard(selectedDocument)}
+      </div>
+    );
+  };
+
   const docMyRequested = documents.filter(d => d.created_by === currentUserId);
   const docPending = documents.filter(d => d.status === 'pending');
   const docReferenced = documents.filter(d => referencedDocIds.has(d.id));
@@ -636,7 +755,7 @@ export default function ApprovalInboxPage() {
         </TabsList>
 
         <TabsContent value="crew" className="mt-4">
-          {crewViewMode === 'action' ? renderCrewAction() : (
+          {crewViewMode === 'action' ? renderCrewAction() : crewViewMode === 'detail' ? renderCrewDetail() : (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-1.5">
                 {FILTER_LABELS.filter(f => f.value !== 'referenced').map(f => (
@@ -650,15 +769,13 @@ export default function ApprovalInboxPage() {
               </div>
               {crewFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재 문서가 없습니다</p></CardContent></Card>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2">{crewFiltered.map(renderCrewCard)}</div>
-              )}
+              ) : renderCrewTable(crewFiltered)}
             </div>
           )}
         </TabsContent>
 
         <TabsContent value="document" className="mt-4">
-          {docViewMode === 'action' ? renderDocAction() : (
+          {docViewMode === 'action' ? renderDocAction() : docViewMode === 'detail' ? renderDocDetail() : (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-1.5">
                 {FILTER_LABELS.map(f => (
@@ -672,9 +789,7 @@ export default function ApprovalInboxPage() {
               </div>
               {docFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 문서가 없습니다</p></CardContent></Card>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2">{docFiltered.map(renderDocCard)}</div>
-              )}
+              ) : renderDocTable(docFiltered)}
             </div>
           )}
         </TabsContent>
