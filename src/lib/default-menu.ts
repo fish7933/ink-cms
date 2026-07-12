@@ -36,15 +36,6 @@ export const defaultMenuStructure: MenuCategory[] = [
         is_active: true,
       },
       {
-        id: 'leave-management',
-        label: '휴가 관리',
-        path: '/leave-management',
-        icon: 'CalendarOff',
-        roles: ['ship_manager', 'manning_agency'],
-        order: 4,
-        is_active: true,
-      },
-      {
         id: 'crew-evaluations',
         label: '선원 평가',
         path: '/crew-evaluations',

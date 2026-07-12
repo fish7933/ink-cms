@@ -46,7 +46,6 @@ const NationalityManagementPage = lazy(() => import('@/pages/NationalityManageme
 const CertificateTypeManagementPage = lazy(() => import('@/pages/CertificateTypeManagementPage'));
 const MenuConfigurationPage = lazy(() => import('@/pages/MenuConfigurationPage'));
 const CertificateExpiryDashboardPage = lazy(() => import('@/pages/CertificateExpiryDashboardPage'));
-const LeaveManagementPage = lazy(() => import('@/pages/LeaveManagementPage'));
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'));
 const CrewEvaluationPage = lazy(() => import('@/pages/CrewEvaluationPage'));
 const AllotmentManagementPage = lazy(() => import('@/pages/AllotmentManagementPage'));
@@ -123,7 +122,6 @@ export const routeConfig: RouteEntry[] = [
   { path: '/certificate-types', component: CertificateTypeManagementPage },
   { path: '/menu-configuration', component: MenuConfigurationPage },
   { path: '/certificate-expiry', component: CertificateExpiryDashboardPage },
-  { path: '/leave-management', component: LeaveManagementPage },
   { path: '/reports', component: ReportsPage },
   { path: '/crew-evaluations', component: CrewEvaluationPage },
   { path: '/allotment-management', component: AllotmentManagementPage },
