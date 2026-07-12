@@ -34,6 +34,7 @@ export default function DocumentDraftPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [formValues, setFormValues] = useState<Record<string, string | number | null>>({});
+  const [ccOrgUnitIds, setCcOrgUnitIds] = useState<string[]>([]);
   const [requesterComment, setRequesterComment] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
@@ -81,7 +82,11 @@ export default function DocumentDraftPage() {
   const selectedType = types.find(t => t.id === documentTypeId) || null;
   const formFields = selectedType?.field_schema || [];
 
-  useEffect(() => { setFormValues({}); }, [documentTypeId]);
+  useEffect(() => {
+    setFormValues({});
+    // 문서유형에 기본 참조부서가 설정되어 있으면 자동으로 반영 (기안 화면에서 개별 조정 가능)
+    setCcOrgUnitIds(selectedType?.default_cc_org_unit_ids || []);
+  }, [documentTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selfStepIndexes = useMemo(
     () => previewChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
@@ -98,6 +103,9 @@ export default function DocumentDraftPage() {
   };
 
   const removeFile = (idx: number) => setUploadedFiles(prev => prev.filter((_, i) => i !== idx));
+
+  const toggleCcUnit = (unitId: string) =>
+    setCcOrgUnitIds(prev => prev.includes(unitId) ? prev.filter(id => id !== unitId) : [...prev, unitId]);
 
   const uploadAttachments = async (files: File[]): Promise<ApprovalDocumentAttachment[]> => {
     const attachments: ApprovalDocumentAttachment[] = [];
@@ -132,6 +140,7 @@ export default function DocumentDraftPage() {
         org_unit_id: orgUnitId,
         created_by: currentUser.id,
         requester_comment: requesterComment.trim() || undefined,
+        ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
       });
       toast({ title: '기안서가 제출되었습니다.' });
       navigate('/documents');
@@ -239,6 +248,20 @@ export default function DocumentDraftPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">참조 부서 <span className="text-gray-400 font-normal">(결재선과 별개로 통보)</span></Label>
+            <div className="flex flex-wrap gap-1.5">
+              {units.map(u => (
+                <button
+                  key={u.id} type="button" onClick={() => toggleCcUnit(u.id)} disabled={submitting}
+                  className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${ccOrgUnitIds.includes(u.id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  {u.name}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="rounded-md border bg-gray-50 p-3">

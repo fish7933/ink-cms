@@ -113,17 +113,17 @@ export const approvalDocumentService = {
     return data || [];
   },
 
-  async createDocumentType(input: { code: string; name: string; field_schema?: DocumentFormField[] | null }): Promise<ApprovalDocumentType> {
+  async createDocumentType(input: { code: string; name: string; field_schema?: DocumentFormField[] | null; default_cc_org_unit_ids?: string[] | null }): Promise<ApprovalDocumentType> {
     const { data, error } = await supabase
       .from('approval_document_types')
-      .insert({ code: input.code, name: input.name, field_schema: input.field_schema || null })
+      .insert({ code: input.code, name: input.name, field_schema: input.field_schema || null, default_cc_org_unit_ids: input.default_cc_org_unit_ids || null })
       .select()
       .single();
     if (error) throw error;
     return data;
   },
 
-  async updateDocumentType(id: string, updates: Partial<Pick<ApprovalDocumentType, 'code' | 'name' | 'is_active' | 'field_schema'>>): Promise<void> {
+  async updateDocumentType(id: string, updates: Partial<Pick<ApprovalDocumentType, 'code' | 'name' | 'is_active' | 'field_schema' | 'default_cc_org_unit_ids'>>): Promise<void> {
     const { error } = await supabase
       .from('approval_document_types')
       .update({ ...updates, updated_at: new Date().toISOString() })

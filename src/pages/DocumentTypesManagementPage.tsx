@@ -12,10 +12,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { getCurrentUser } from '@/lib/store';
 import { getShorePositions } from '@/services/shore-position.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
+import { orgChartService } from '@/services/org-chart.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import DocumentFormFieldsEditor from '@/components/document/DocumentFormFieldsEditor';
 import type { ShorePosition } from '@/types/models';
+import type { OrgUnit } from '@/types/org-chart';
 import type { ApprovalDocumentType, ApprovalAuthorityLimit, DocumentFormField } from '@/types/approval-document';
 
 export default function DocumentTypesManagementPage() {
@@ -24,12 +26,14 @@ export default function DocumentTypesManagementPage() {
   const [types, setTypes] = useState<ApprovalDocumentType[]>([]);
   const [limits, setLimits] = useState<ApprovalAuthorityLimit[]>([]);
   const [positions, setPositions] = useState<ShorePosition[]>([]);
+  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingType, setEditingType] = useState<ApprovalDocumentType | null>(null);
   const [form, setForm] = useState({ code: '', name: '' });
   const [fieldSchema, setFieldSchema] = useState<DocumentFormField[]>([]);
+  const [defaultCcOrgUnitIds, setDefaultCcOrgUnitIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const permissions = usePermissions('document_types');
@@ -50,14 +54,16 @@ export default function DocumentTypesManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [t, l, p] = await Promise.all([
+      const [t, l, p, u] = await Promise.all([
         approvalDocumentService.getDocumentTypes(true),
         approvalDocumentService.getAuthorityLimits(),
         getShorePositions(),
+        orgChartService.getOrgUnits(),
       ]);
       setTypes(t);
       setLimits(l);
       setPositions(p);
+      setOrgUnits(u);
     } catch (e) {
       console.error(e);
       toast({ title: '문서유형을 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -66,8 +72,10 @@ export default function DocumentTypesManagementPage() {
     }
   };
 
-  const openCreate = () => { setEditingType(null); setForm({ code: '', name: '' }); setFieldSchema([]); setDialogOpen(true); };
-  const openEdit = (t: ApprovalDocumentType) => { setEditingType(t); setForm({ code: t.code, name: t.name }); setFieldSchema(t.field_schema || []); setDialogOpen(true); };
+  const openCreate = () => { setEditingType(null); setForm({ code: '', name: '' }); setFieldSchema([]); setDefaultCcOrgUnitIds([]); setDialogOpen(true); };
+  const openEdit = (t: ApprovalDocumentType) => { setEditingType(t); setForm({ code: t.code, name: t.name }); setFieldSchema(t.field_schema || []); setDefaultCcOrgUnitIds(t.default_cc_org_unit_ids || []); setDialogOpen(true); };
+  const toggleDefaultCcUnit = (unitId: string) =>
+    setDefaultCcOrgUnitIds(prev => prev.includes(unitId) ? prev.filter(id => id !== unitId) : [...prev, unitId]);
 
   const handleSave = async () => {
     if (!form.code.trim() || !form.name.trim()) { toast({ title: '코드와 이름을 모두 입력해주세요.', variant: 'destructive' }); return; }
@@ -75,10 +83,11 @@ export default function DocumentTypesManagementPage() {
     try {
       setSaving(true);
       const schema = fieldSchema.length > 0 ? fieldSchema : null;
+      const defaultCc = defaultCcOrgUnitIds.length > 0 ? defaultCcOrgUnitIds : null;
       if (editingType) {
-        await approvalDocumentService.updateDocumentType(editingType.id, { code: form.code.trim(), name: form.name.trim(), field_schema: schema });
+        await approvalDocumentService.updateDocumentType(editingType.id, { code: form.code.trim(), name: form.name.trim(), field_schema: schema, default_cc_org_unit_ids: defaultCc });
       } else {
-        await approvalDocumentService.createDocumentType({ code: form.code.trim(), name: form.name.trim(), field_schema: schema });
+        await approvalDocumentService.createDocumentType({ code: form.code.trim(), name: form.name.trim(), field_schema: schema, default_cc_org_unit_ids: defaultCc });
       }
       setDialogOpen(false);
       await loadData();
@@ -216,6 +225,21 @@ export default function DocumentTypesManagementPage() {
             <div className="space-y-1.5 border-t pt-3">
               <Label className="text-xs">입력 양식 (문서 양식함)</Label>
               <DocumentFormFieldsEditor fields={fieldSchema} onChange={setFieldSchema} disabled={saving} />
+            </div>
+            <div className="space-y-1.5 border-t pt-3">
+              <Label className="text-xs">기본 참조부서 <span className="text-gray-400 font-normal">(이 유형으로 기안하면 자동으로 참조 지정, 예: 지출결의서 → 총무팀)</span></Label>
+              <div className="flex flex-wrap gap-1.5">
+                {orgUnits.length === 0 ? (
+                  <p className="text-xs text-gray-400">등록된 부서가 없습니다</p>
+                ) : orgUnits.map(u => (
+                  <button
+                    key={u.id} type="button" onClick={() => toggleDefaultCcUnit(u.id)} disabled={saving}
+                    className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${defaultCcOrgUnitIds.includes(u.id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    {u.name}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>

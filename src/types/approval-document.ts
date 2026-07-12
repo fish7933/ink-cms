@@ -16,6 +16,8 @@ export interface ApprovalDocumentType {
   is_active: boolean;
   // null/빈 배열이면 자유 서식(제목+본문). 값이 있으면 기안서 작성 화면이 이 스키마대로 동적 입력폼을 보여준다.
   field_schema: DocumentFormField[] | null;
+  // 이 문서유형으로 기안할 때 기본으로 참조(통보) 지정되는 부서 (예: 지출결의서 → 총무팀)
+  default_cc_org_unit_ids: string[] | null;
   created_at: string;
   updated_at: string;
 }
