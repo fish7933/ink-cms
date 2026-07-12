@@ -39,13 +39,15 @@ const RECOMMENDATIONS = [
 ];
 
 interface CrewOption { id: string; name: string; rank: string; }
-interface ShipOption { id: string; name: string; }
+interface ShipOption { id: string; name: string; owner_id: string | null; fleet_id: string | null; }
 
 export default function EvaluationDialog({ open, onOpenChange, record, onSuccess, lockedCrewId, lockedCrewName }: EvaluationDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
+  const [companyNameById, setCompanyNameById] = useState<Map<string, string>>(new Map());
+  const [fleetNameById, setFleetNameById] = useState<Map<string, string>>(new Map());
 
   const [formData, setFormData] = useState({
     crew_member_id: '',
@@ -61,13 +63,21 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
     comments: '',
   });
 
+  // 선주>플릿>선박은 선박정보가 있는 한 항상 세트로 함께 다녀야 하는 정보이므로,
+  // 선박을 고르면 선주/플릿은 그 선박에서 그대로 파생되어 보여지기만 하고 별도로 선택하지 않는다.
+  const selectedShip = shipOptions.find(s => s.id === formData.ship_id);
+  const derivedOwnerName = selectedShip?.owner_id ? companyNameById.get(selectedShip.owner_id) : undefined;
+  const derivedFleetName = selectedShip?.fleet_id ? fleetNameById.get(selectedShip.fleet_id) : undefined;
+
   useEffect(() => {
     supabase.from('crew_members').select('id, name, rank').then(({ data }) => {
       if (data) setCrewOptions(data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '' })));
     });
-    supabase.from('ships').select('id, name').then(({ data }) => {
+    supabase.from('ships').select('id, name, owner_id, fleet_id').then(({ data }) => {
       if (data) setShipOptions(data);
     });
+    supabase.from('companies').select('id, name').then(({ data }) => { if (data) setCompanyNameById(new Map(data.map(c => [c.id, c.name]))); });
+    supabase.from('fleets').select('id, name').then(({ data }) => { if (data) setFleetNameById(new Map(data.map(f => [f.id, f.name]))); });
   }, []);
 
   useEffect(() => {
@@ -148,8 +158,8 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{record ? '선원 평가 수정' : '선원 평가 작성'}</DialogTitle>
-          <DialogDescription className="text-xs">선원의 근무 평가를 {record ? '수정' : '작성'}합니다</DialogDescription>
+          <DialogTitle className="text-base">{record ? '고과 수정' : '고과 작성'}</DialogTitle>
+          <DialogDescription className="text-xs">선원의 근무 고과를 {record ? '수정' : '작성'}합니다</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
@@ -174,6 +184,9 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger>
                   <SelectContent>{shipOptions.map(s => <SelectItem key={s.id} value={s.id} className="text-sm">{s.name}</SelectItem>)}</SelectContent>
                 </Select>
+                {formData.ship_id && (
+                  <p className="text-[11px] text-gray-400">선주사: {derivedOwnerName || '-'} · 플릿: {derivedFleetName || '-'} <span className="text-gray-300">(선박 정보에서 자동으로 가져옴)</span></p>
+                )}
               </div>
             </div>
 

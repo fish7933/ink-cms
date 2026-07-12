@@ -28,7 +28,7 @@ const RECOMMENDATIONS = [{ value: 'highly_recommend', label: '강력 추천' }, 
 const REC_LABELS: Record<string, { label: string; color: string }> = { highly_recommend: { label: '강력 추천', color: 'bg-green-100 text-green-700' }, recommend: { label: '추천', color: 'bg-blue-100 text-blue-700' }, neutral: { label: '보통', color: 'bg-gray-100 text-gray-700' }, not_recommend: { label: '비추천', color: 'bg-red-100 text-red-700' } };
 
 interface CrewOption { id: string; name: string; rank: string; }
-interface ShipOption { id: string; name: string; }
+interface ShipOption { id: string; name: string; owner_id: string | null; fleet_id: string | null; }
 
 export default function CrewEvaluationPage() {
   const { toast } = useToast();
@@ -37,6 +37,8 @@ export default function CrewEvaluationPage() {
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
+  const [companyNameById, setCompanyNameById] = useState<Map<string, string>>(new Map());
+  const [fleetNameById, setFleetNameById] = useState<Map<string, string>>(new Map());
   const [officerRanks, setOfficerRanks] = useState<Rank[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,9 +54,17 @@ export default function CrewEvaluationPage() {
   useEffect(() => {
     loadData();
     supabase.from('crew_members').select('id, name, rank').then(({ data }) => { if (data) setCrewOptions(data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '' }))); });
-    supabase.from('ships').select('id, name').then(({ data }) => { if (data) setShipOptions(data); });
+    supabase.from('ships').select('id, name, owner_id, fleet_id').then(({ data }) => { if (data) setShipOptions(data); });
+    supabase.from('companies').select('id, name').then(({ data }) => { if (data) setCompanyNameById(new Map(data.map(c => [c.id, c.name]))); });
+    supabase.from('fleets').select('id, name').then(({ data }) => { if (data) setFleetNameById(new Map(data.map(f => [f.id, f.name]))); });
     supabase.from('ranks').select('*').eq('rank_category', 'officer').then(({ data }) => setOfficerRanks(sortRanksByDisplayOrder(data || [])));
   }, []);
+
+  // 선주>플릿>선박은 선박정보가 있는 한 항상 세트로 함께 다녀야 하는 정보이므로,
+  // 선박을 고르면 선주/플릿은 그 선박에서 그대로 파생되어 보여지기만 하고 별도로 선택하지 않는다.
+  const selectedShip = shipOptions.find(s => s.id === form.ship_id);
+  const derivedOwnerName = selectedShip?.owner_id ? companyNameById.get(selectedShip.owner_id) : undefined;
+  const derivedFleetName = selectedShip?.fleet_id ? fleetNameById.get(selectedShip.fleet_id) : undefined;
 
   const loadData = async () => { try { setLoading(true); setEvaluations(await getEvaluations()); } catch (e) { console.error(e); } finally { setLoading(false); } };
 
@@ -173,8 +183,8 @@ export default function CrewEvaluationPage() {
             <div className="flex items-center gap-2">
               {formView !== null && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>}
               <div>
-                <CardTitle className="text-base">{formView !== null ? (formView.record ? '평가 수정' : '평가 작성') : '선원 평가'}</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 근무 평가를 작성합니다' : '선원 근무 평가를 관리합니다'}</p>
+                <CardTitle className="text-base">{formView !== null ? (formView.record ? '고과 수정' : '고과 작성') : '고과 관리'}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 근무 고과를 작성합니다' : '선원 근무 고과를 관리합니다'}</p>
               </div>
             </div>
             {formView !== null ? (
@@ -196,7 +206,13 @@ export default function CrewEvaluationPage() {
             <div className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5"><Label className="text-xs">선원 *</Label><Select value={form.crew_member_id} onValueChange={v => setForm({ ...form, crew_member_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 선택" /></SelectTrigger><SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.rank})</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-1.5"><Label className="text-xs">선박</Label><Select value={form.ship_id} onValueChange={v => setForm({ ...form, ship_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger><SelectContent>{shipOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">선박</Label>
+                  <Select value={form.ship_id} onValueChange={v => setForm({ ...form, ship_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger><SelectContent>{shipOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>
+                  {form.ship_id && (
+                    <p className="text-[11px] text-gray-400">선주사: {derivedOwnerName || '-'} · 플릿: {derivedFleetName || '-'} <span className="text-gray-300">(선박 정보에서 자동으로 가져옴)</span></p>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5"><Label className="text-xs">평가 기간 시작 *</Label><Input type="date" value={form.evaluation_period_start} onChange={e => setForm({ ...form, evaluation_period_start: e.target.value })} className="h-9 text-sm" /></div>

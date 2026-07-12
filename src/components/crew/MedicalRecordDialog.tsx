@@ -18,18 +18,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { addMedicalRecord, updateMedicalRecord } from '@/services/crew-extended.service';
+import { addMedicalRecord, updateMedicalRecord, getSeaServiceRecords } from '@/services/crew-extended.service';
 import type { MedicalRecord, SeaServiceRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 import MedicalRecordFollowUp from '@/components/crew/MedicalRecordFollowUp';
+
+interface CrewOption { id: string; name: string; rank: string; }
 
 interface MedicalRecordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  crewId: string;
+  // 특정 선원 문맥(선원 상세 화면)에서 열 때만 지정 — 지정하면 선원 선택란이 숨겨지고 이 값으로 고정된다.
+  // 지정하지 않으면(상병 관리 화면 등) 선원을 직접 선택해야 한다.
+  crewId?: string;
   record?: MedicalRecord;
   onSuccess: () => void;
   // 이 선원의 승선 기록 목록 — 어느 배에 승선 중/승선했을 때 발생한 상병인지 선택할 수 있게 한다 (선택사항).
+  // crewId를 지정한 경우에만 사용하고, 지정하지 않으면 선택된 선원 기준으로 자동으로 불러온다.
   seaServiceRecords?: SeaServiceRecord[];
 }
 
@@ -58,6 +64,25 @@ export default function MedicalRecordDialog({
   const [savedRecordId, setSavedRecordId] = useState<string | undefined>(record?.id);
   const [savedAttachments, setSavedAttachments] = useState(record?.attachments || []);
 
+  // crewId가 지정되지 않은 경우(상병 관리 화면 등)에만 사용 — 선원을 직접 고르고, 고른 선원의 승선 기록을 불러온다.
+  const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
+  const [selectedCrewId, setSelectedCrewId] = useState('');
+  const [selectedCrewSeaServices, setSelectedCrewSeaServices] = useState<SeaServiceRecord[]>([]);
+  const effectiveCrewId = crewId || selectedCrewId;
+  const effectiveSeaServiceRecords = crewId ? seaServiceRecords : selectedCrewSeaServices;
+
+  useEffect(() => {
+    if (crewId || !open) return;
+    supabase.from('crew_members').select('id, name, rank').order('name').then(({ data }) => {
+      if (data) setCrewOptions(data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '' })));
+    });
+  }, [crewId, open]);
+
+  useEffect(() => {
+    if (crewId || !selectedCrewId) { setSelectedCrewSeaServices([]); return; }
+    getSeaServiceRecords(selectedCrewId).then(setSelectedCrewSeaServices).catch(() => setSelectedCrewSeaServices([]));
+  }, [crewId, selectedCrewId]);
+
   const [formData, setFormData] = useState({
     sea_service_record_id: '',
     record_date: '',
@@ -78,6 +103,7 @@ export default function MedicalRecordDialog({
   useEffect(() => {
     setSavedRecordId(record?.id);
     setSavedAttachments(record?.attachments || []);
+    setSelectedCrewId(record?.crew_member_id || '');
     if (record) {
       setFormData({
         sea_service_record_id: record.sea_service_record_id || '',
@@ -116,16 +142,17 @@ export default function MedicalRecordDialog({
   }, [record, open]);
 
   const handleSeaServiceChange = (v: string) => {
-    const linked = v === '_none' ? null : seaServiceRecords.find(s => s.id === v);
+    const linked = v === '_none' ? null : effectiveSeaServiceRecords.find(s => s.id === v);
     setFormData(prev => ({ ...prev, sea_service_record_id: v === '_none' ? '' : v, ship_name: linked ? linked.ship_name : prev.ship_name }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!effectiveCrewId) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
     setLoading(true);
     try {
       const data = {
-        crew_member_id: crewId,
+        crew_member_id: effectiveCrewId,
         sea_service_record_id: formData.sea_service_record_id || undefined,
         record_date: formData.record_date,
         record_type: formData.record_type as MedicalRecord['record_type'],
@@ -171,14 +198,23 @@ export default function MedicalRecordDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
-            {seaServiceRecords.length > 0 && (
+            {!crewId && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">선원 *</Label>
+                <Select value={selectedCrewId} onValueChange={setSelectedCrewId} disabled={!!savedRecordId}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 선택" /></SelectTrigger>
+                  <SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name} ({c.rank})</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            {effectiveSeaServiceRecords.length > 0 && (
               <div className="space-y-1.5">
                 <Label className="text-xs">관련 승선 기록 <span className="text-gray-400 font-normal">(어느 배에 승선 중/승선했을 때 발생했는지 선택, 선택사항)</span></Label>
                 <Select value={formData.sea_service_record_id || '_none'} onValueChange={handleSeaServiceChange}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="승선 기록 선택" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">선택 안함</SelectItem>
-                    {seaServiceRecords.map(s => (
+                    {effectiveSeaServiceRecords.map(s => (
                       <SelectItem key={s.id} value={s.id} className="text-sm">{s.ship_name} ({s.sign_on_date} ~ {s.sign_off_date || '진행중'})</SelectItem>
                     ))}
                   </SelectContent>

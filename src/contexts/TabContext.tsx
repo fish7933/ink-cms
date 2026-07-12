@@ -188,7 +188,7 @@ function getTitleFromPath(path: string): string {
     '/ranks': '직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 유형 관리',
     '/shore-positions': '육상 직원 직급', '/org-chart': '조직도 관리', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
     '/certificate-expiry': '증서 만료 현황', '/reports': '통계 대시보드',
-    '/crew-evaluations': '선원 평가', '/contract-management': '계약 관리', '/ports': '교대지 관리',
+    '/crew-evaluations': '고과 관리', '/crew-medical': '상병 관리', '/contract-management': '계약 관리', '/ports': '교대지 관리',
     '/shore-leave-request': '연차 신청', '/shore-leave-management': '육상 직원 연차 관리',
     '/sick-leave-request': '질병휴가 신청', '/referenced-documents': '결재함', '/homepage-posts': '게시판 관리',
   };
