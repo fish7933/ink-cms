@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText, Trash2 } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText, Trash2, CalendarOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import {
   getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments, getAdminActionLog, deleteAdminActionLog,
 } from '@/services/shore-leave.service';
 import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
+import { getHolidays, addHoliday, deleteHoliday, type Holiday } from '@/services/holiday.service';
 import { formatLeaveHours, formatLeaveDays, getCurrentLeaveYearStart, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -82,6 +83,10 @@ export default function ShoreLeaveManagementPage() {
   const [grantExplainList, setGrantExplainList] = useState<ShoreLeaveAdjustment[]>([]);
   const [grantExplainLoading, setGrantExplainLoading] = useState(false);
 
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [holidayForm, setHolidayForm] = useState({ date: '', name: '' });
+  const [holidaySubmitting, setHolidaySubmitting] = useState(false);
+
   const permissions = usePermissions('shore_leave_management');
 
   useEffect(() => {
@@ -103,18 +108,20 @@ export default function ShoreLeaveManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allUsers, members, sick, leaveRequests, log] = await Promise.all([
+      const [allUsers, members, sick, leaveRequests, log, holidayList] = await Promise.all([
         getUsers(),
         orgChartService.getOrgMembers(),
         getAllSickLeaveRequests(),
         getAllLeaveRequests(),
         getAdminActionLog(),
+        getHolidays(),
       ]);
       const posMap = new Map(members.map(m => [m.id, m.position_name]));
       const posOrderMap = new Map(members.map(m => [m.id, m.position_order]));
       setPositionByUser(posMap);
       setSickRequests(sick);
       setAdminLog(log);
+      setHolidays(holidayList);
       const exemptUserIds = new Set(allUsers.filter(u => u.is_leave_exempt).map(u => u.id));
       setApprovedLeaveRequests(leaveRequests.filter(r => r.status === 'approved' && !exemptUserIds.has(r.user_id)));
 
@@ -148,6 +155,33 @@ export default function ShoreLeaveManagementPage() {
     try {
       await deleteAdminActionLog(log.id);
       setAdminLog(prev => prev.filter(l => l.id !== log.id));
+      toast({ title: '삭제되었습니다.' });
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleAddHoliday = async () => {
+    if (!holidayForm.date) { toast({ title: '날짜를 선택하세요.', variant: 'destructive' }); return; }
+    if (!holidayForm.name.trim()) { toast({ title: '공휴일 이름을 입력하세요.', variant: 'destructive' }); return; }
+    try {
+      setHolidaySubmitting(true);
+      const created = await addHoliday(holidayForm.date, holidayForm.name.trim());
+      setHolidays(prev => [...prev, created].sort((a, b) => a.date.localeCompare(b.date)));
+      setHolidayForm({ date: '', name: '' });
+      toast({ title: '공휴일이 등록되었습니다.' });
+    } catch (e) {
+      toast({ title: '등록 실패', description: e instanceof Error ? e.message : '이미 등록된 날짜일 수 있습니다.', variant: 'destructive' });
+    } finally {
+      setHolidaySubmitting(false);
+    }
+  };
+
+  const handleDeleteHoliday = async (holiday: Holiday) => {
+    if (!confirm(`'${holiday.name}'(${holiday.date})을(를) 삭제하시겠습니까?`)) return;
+    try {
+      await deleteHoliday(holiday.id);
+      setHolidays(prev => prev.filter(h => h.id !== holiday.id));
       toast({ title: '삭제되었습니다.' });
     } catch (e) {
       toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
@@ -269,6 +303,7 @@ export default function ShoreLeaveManagementPage() {
           <TabsTrigger value="annual">연차 관리</TabsTrigger>
           <TabsTrigger value="usage" className="gap-1"><BarChart3 className="w-3.5 h-3.5" />연차 사용 현황</TabsTrigger>
           <TabsTrigger value="sick">질병휴가 현황</TabsTrigger>
+          <TabsTrigger value="holidays" className="gap-1"><CalendarOff className="w-3.5 h-3.5" />공휴일 관리</TabsTrigger>
         </TabsList>
 
         <TabsContent value="annual" className="space-y-4 mt-3">
@@ -502,6 +537,58 @@ export default function ShoreLeaveManagementPage() {
                             </details>
                           ) : <span className="text-gray-300">-</span>}
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="holidays" className="space-y-4 mt-3">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">공휴일 관리</CardTitle>
+              <p className="text-xs text-gray-500 mt-1">여기에 등록된 날짜는 연차/반차 신청 시 주말과 함께 근무일에서 자동 제외됩니다. 설날/추석 등 음력 명절은 매년 날짜가 바뀌므로 연초에 새로 등록해주세요.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {permissions.canCreate && (
+                <div className="flex items-end gap-2 flex-wrap p-3 bg-gray-50 rounded-md">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">날짜</Label>
+                    <Input type="date" className="h-9 text-sm" value={holidayForm.date} onChange={e => setHolidayForm(f => ({ ...f, date: e.target.value }))} disabled={holidaySubmitting} />
+                  </div>
+                  <div className="space-y-1.5 flex-1 min-w-[160px]">
+                    <Label className="text-xs">이름</Label>
+                    <Input className="h-9 text-sm" placeholder="예: 설날, 창립기념일" value={holidayForm.name} onChange={e => setHolidayForm(f => ({ ...f, name: e.target.value }))} disabled={holidaySubmitting} />
+                  </div>
+                  <Button size="sm" className="h-9 gap-1.5" onClick={handleAddHoliday} disabled={holidaySubmitting}><Plus className="w-4 h-4" />추가</Button>
+                </div>
+              )}
+              <div className="border rounded-md overflow-hidden overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left p-2 text-xs font-medium text-gray-600">날짜</th>
+                      <th className="text-left p-2 text-xs font-medium text-gray-600">요일</th>
+                      <th className="text-left p-2 text-xs font-medium text-gray-600">이름</th>
+                      {permissions.canDelete && <th className="text-center p-2 text-xs font-medium text-gray-600 w-16">삭제</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holidays.length === 0 ? (
+                      <tr><td colSpan={4} className="text-center py-8 text-gray-400">등록된 공휴일이 없습니다</td></tr>
+                    ) : holidays.map(h => (
+                      <tr key={h.id} className="border-b hover:bg-gray-50">
+                        <td className="p-2 font-medium">{h.date}</td>
+                        <td className="p-2 text-gray-500">{['일', '월', '화', '수', '목', '금', '토'][new Date(h.date).getDay()]}</td>
+                        <td className="p-2">{h.name}</td>
+                        {permissions.canDelete && (
+                          <td className="p-2 text-center">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" onClick={() => handleDeleteHoliday(h)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

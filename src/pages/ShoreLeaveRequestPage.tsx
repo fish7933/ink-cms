@@ -12,7 +12,8 @@ import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, getLeaveBalance } from '@/services/shore-leave.service';
 import { formatLeaveHours, type LeaveBalance } from '@/lib/leave-calc';
-import { calculateLeaveHours, rangesOverlap } from '@/lib/leave-duration';
+import { calculateLeaveHours, isWorkingDay, rangesOverlap } from '@/lib/leave-duration';
+import { getHolidays, type Holiday } from '@/services/holiday.service';
 import type { OrgUnit, ApprovalChainStep } from '@/types/org-chart';
 import type { ShoreLeaveRequest } from '@/types/shore-leave';
 import type { User } from '@/types/models';
@@ -53,6 +54,7 @@ export default function ShoreLeaveRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [approvalChain, setApprovalChain] = useState<ApprovalChainStep[]>([]);
   const [chainLoading, setChainLoading] = useState(true);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   const [form, setForm] = useState({ start_date: '', end_date: '', leaveType: 'full' as LeaveType, reason: '', ccOrgUnitIds: [] as string[] });
 
@@ -69,15 +71,17 @@ export default function ShoreLeaveRequestPage() {
       setCurrentUser(user);
       if (!user) return;
 
-      const [units, members, requests, bal] = await Promise.all([
+      const [units, members, requests, bal, holidayList] = await Promise.all([
         orgChartService.getOrgUnits(),
         orgChartService.getOrgMembers(),
         getMyLeaveRequests(user.id),
         getLeaveBalance(user.id, user.hire_date || null),
+        getHolidays(),
       ]);
       setOrgUnits(units);
       setMyRequests(requests);
       setBalance(bal);
+      setHolidays(holidayList);
       const me = members.find(m => m.id === user.id);
       const orgUnitId = me?.org_unit_ids[0] || null;
       setMyOrgUnitId(orgUnitId);
@@ -107,10 +111,14 @@ export default function ShoreLeaveRequestPage() {
     }
   };
 
+  const holidayMap = new Map(holidays.map(h => [h.date, h.name]));
+  const holidayDateSet = new Set(holidays.map(h => h.date));
   const isSingleDay = !!form.start_date && form.start_date === form.end_date;
   const effectiveLeaveType: LeaveType = isSingleDay ? form.leaveType : 'full';
   const { start_time, end_time } = LEAVE_TYPE_TIMES[effectiveLeaveType];
-  const totalHours = calculateLeaveHours(form.start_date, start_time, form.end_date, end_time);
+  const totalHours = calculateLeaveHours(form.start_date, start_time, form.end_date, end_time, holidayDateSet);
+  // 하루짜리 연차인데 그 날이 주말/공휴일이면 애초에 신청할 수 없는 날이므로 별도로 안내한다.
+  const singleDayIsNonWorking = isSingleDay && !!form.start_date && !isWorkingDay(form.start_date, holidayDateSet);
   const dayCount = form.start_date && form.end_date
     ? Math.round((new Date(form.end_date).getTime() - new Date(form.start_date).getTime()) / 86400000) + 1
     : 0;
@@ -145,7 +153,8 @@ export default function ShoreLeaveRequestPage() {
     if (!form.start_date || !form.end_date) { toast({ title: '달력에서 휴가 기간을 선택하세요.', variant: 'destructive' }); return; }
     if (isSameDayRequestBlocked) { toast({ title: effectiveLeaveType === 'pm' ? '당일 오후반차는 오후 2시 이전에만 신청할 수 있습니다.' : '당일 연차는 오전 9시 이전에만 신청할 수 있습니다.', variant: 'destructive' }); return; }
     if (isMultiDayTooSoon) { toast({ title: '이틀 이상의 연차는 최소 3일 전에 신청해야 합니다.', variant: 'destructive' }); return; }
-    if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
+    if (singleDayIsNonWorking) { toast({ title: '선택한 날짜는 주말/공휴일이라 연차를 신청할 수 없습니다.', variant: 'destructive' }); return; }
+    if (totalHours <= 0) { toast({ title: '휴가 시간을 확인하세요. (선택한 기간에 근무일이 없거나, 종료 시각이 시작 시각보다 늦어야 합니다)', variant: 'destructive' }); return; }
     if (totalHours > balance.remainingHours) { toast({ title: `잔여 연차(${formatLeaveHours(balance.remainingHours)})를 초과했습니다.`, variant: 'destructive' }); return; }
     if (isMultiDay && !form.reason.trim()) { toast({ title: '2일 이상 신청 시 특별한 사유를 입력해야 합니다.', description: '예: 여름휴가 등', variant: 'destructive' }); return; }
 
@@ -254,6 +263,7 @@ export default function ShoreLeaveRequestPage() {
             <LeaveRangeCalendar
               startDate={form.start_date}
               endDate={form.end_date}
+              holidays={holidayMap}
               onChange={(start_date, end_date) => setForm(prev => ({ ...prev, start_date, end_date, leaveType: start_date === end_date ? prev.leaveType : 'full', reason: start_date === end_date ? '' : prev.reason }))}
             />
             <div className="flex-1 space-y-3">
@@ -263,6 +273,11 @@ export default function ShoreLeaveRequestPage() {
                   {form.start_date && form.end_date ? `${form.start_date} ~ ${form.end_date}` : '달력에서 시작일과 종료일을 클릭하세요'}
                 </p>
               </div>
+              {singleDayIsNonWorking && (
+                <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-md p-2">
+                  선택한 날짜({holidayMap.get(form.start_date) || '주말'})는 근무일이 아니라 연차를 신청할 수 없습니다.
+                </p>
+              )}
               {isSameDayRequestBlocked && (
                 <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-md p-2">
                   {effectiveLeaveType === 'pm' ? '당일 오후반차는 오후 2시 이전에만 신청할 수 있습니다.' : '당일 연차는 오전 9시 이전에만 신청할 수 있습니다.'}
@@ -346,7 +361,7 @@ export default function ShoreLeaveRequestPage() {
           </div>
           {permissions.canCreate && (
             <div className="flex justify-end pt-1">
-              <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting || isSameDayRequestBlocked || isMultiDayTooSoon}>
+              <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting || isSameDayRequestBlocked || isMultiDayTooSoon || singleDayIsNonWorking}>
                 <Send className="w-4 h-4" />{submitting ? '제출 중...' : '결재 상신'}
               </Button>
             </div>

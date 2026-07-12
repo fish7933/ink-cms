@@ -8,11 +8,12 @@ interface LeaveRangeCalendarProps {
   startDate: string; // yyyy-MM-dd
   endDate: string; // yyyy-MM-dd
   onChange: (startDate: string, endDate: string) => void;
+  holidays?: Map<string, string>; // 날짜(yyyy-MM-dd) -> 공휴일 이름
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
-export default function LeaveRangeCalendar({ startDate, endDate, onChange }: LeaveRangeCalendarProps) {
+export default function LeaveRangeCalendar({ startDate, endDate, onChange, holidays }: LeaveRangeCalendarProps) {
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(startDate ? new Date(startDate) : new Date()));
   const [monthInputOpen, setMonthInputOpen] = useState(false);
   // 시작일 클릭 후 종료일을 기다리는 중인지 추적 — 두 번째 클릭이 오면 범위를 완성한다.
@@ -66,19 +67,22 @@ export default function LeaveRangeCalendar({ startDate, endDate, onChange }: Lea
           const inRange = !!startDate && !!endDate && iso >= startDate && iso <= endDate;
           const todayDate = isToday(day);
           const dow = day.getDay();
+          const holidayName = holidays?.get(iso);
           return (
             <button
               type="button"
               key={iso}
+              title={holidayName}
               onClick={() => handleDayClick(iso)}
               className={[
                 'h-8 w-8 mx-auto text-xs flex items-center justify-center relative rounded-md',
                 isEndpoint ? 'bg-blue-600 text-white font-semibold' : inRange ? 'bg-blue-100 text-blue-800' : 'hover:bg-gray-100',
-                !isEndpoint && !inRange ? (!inMonth ? 'text-gray-300' : dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-700') : '',
+                !isEndpoint && !inRange ? (holidayName ? 'text-red-500 font-semibold' : !inMonth ? 'text-gray-300' : dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-700') : '',
                 todayDate && !isEndpoint ? 'ring-1 ring-blue-400' : '',
               ].join(' ')}
             >
               {format(day, 'd')}
+              {holidayName && <span className={`absolute bottom-0.5 w-1 h-1 rounded-full ${isEndpoint ? 'bg-white' : 'bg-red-500'}`} />}
             </button>
           );
         })}
@@ -86,6 +90,9 @@ export default function LeaveRangeCalendar({ startDate, endDate, onChange }: Lea
       <p className="text-[11px] text-gray-400 mt-2 pt-2 border-t">
         {anchor ? '종료일을 클릭하세요.' : '시작일을 클릭하세요. (당일 휴가는 같은 날짜만 클릭)'}
       </p>
+      {holidays && holidays.size > 0 && (
+        <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />공휴일 (주말과 함께 연차 계산에서 제외됩니다)</p>
+      )}
     </div>
   );
 }
