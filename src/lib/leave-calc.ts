@@ -1,4 +1,4 @@
-import { differenceInCalendarMonths, differenceInCalendarYears } from 'date-fns';
+import { differenceInMonths, differenceInYears } from 'date-fns';
 
 // 연차 소진은 시간 단위(반차/시간차)까지 지원하므로, 법정 발생일수(일 단위)를
 // 시간으로 환산해 관리한다. 1일 = 소정근로 8시간 기준.
@@ -13,9 +13,9 @@ export function calculateAccruedLeaveDays(hireDate: string, asOfDate: string = n
   const asOf = new Date(asOfDate);
   if (Number.isNaN(hire.getTime()) || asOf < hire) return 0;
 
-  const fullYears = differenceInCalendarYears(asOf, hire);
+  const fullYears = differenceInYears(asOf, hire);
   if (fullYears < 1) {
-    const fullMonths = differenceInCalendarMonths(asOf, hire);
+    const fullMonths = differenceInMonths(asOf, hire);
     return Math.min(11, Math.max(0, fullMonths));
   }
   return Math.min(25, 15 + Math.floor((fullYears - 1) / 2));
@@ -41,8 +41,8 @@ export function explainAccruedLeaveDays(hireDate: string, asOfDate: string = new
   const hire = new Date(hireDate);
   const asOf = new Date(asOfDate);
   const invalid = Number.isNaN(hire.getTime()) || asOf < hire;
-  const fullYears = invalid ? 0 : differenceInCalendarYears(asOf, hire);
-  const fullMonths = invalid ? 0 : differenceInCalendarMonths(asOf, hire);
+  const fullYears = invalid ? 0 : differenceInYears(asOf, hire);
+  const fullMonths = invalid ? 0 : differenceInMonths(asOf, hire);
 
   if (invalid) {
     return { hireDate, asOfDate, fullYears: 0, fullMonths: 0, days: 0, ruleLabel: '계산 불가', formulaText: '입사일이 등록되어 있지 않거나 기준일보다 이후입니다.', cappedAt: 0 };
