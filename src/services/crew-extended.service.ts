@@ -4,6 +4,7 @@ import type {
   SeaServiceRecord,
   TrainingRecord,
   MedicalRecord,
+  MedicalRecordLog,
   CrewSalaryRecord,
   CrewAssignment,
   CrewBioData
@@ -272,6 +273,50 @@ export async function deleteMedicalRecord(id: string): Promise<void> {
 
   if (error) {
     console.error('Error deleting medical record:', error);
+    throw error;
+  }
+}
+
+// Medical Record Logs — 상병 기록 하나에 대해 치료가 진행되는 동안 계속 남기는 경과 로그
+export async function getMedicalRecordLogs(medicalRecordId: string): Promise<MedicalRecordLog[]> {
+  const { data, error } = await supabase
+    .from('medical_record_logs')
+    .select('*')
+    .eq('medical_record_id', medicalRecordId)
+    .order('log_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching medical record logs:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function addMedicalRecordLog(medicalRecordId: string, logDate: string, note: string): Promise<MedicalRecordLog> {
+  const { data, error } = await supabase
+    .from('medical_record_logs')
+    .insert({ medical_record_id: medicalRecordId, log_date: logDate, note })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding medical record log:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+export async function deleteMedicalRecordLog(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('medical_record_logs')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting medical record log:', error);
     throw error;
   }
 }

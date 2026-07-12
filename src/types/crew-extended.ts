@@ -102,8 +102,17 @@ export interface TrainingRecord {
   updated_at: string;
 }
 
+export interface MedicalAttachment {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 // 상병(부상/질병) 기록 — crew_evaluations(고과)와 동일하게 sea_service_record_id로 어느
 // 승선 기록 중에 발생했는지 연결할 수 있다 (연결하지 않고 ship_name만 직접 입력할 수도 있음).
+// 치료가 진행되는 동안 medical_record_logs로 경과를 계속 기록하고, attachments로 진단서/
+// 청구서/영수증 등 파일을 계속 쌓아나갈 수 있다.
 export interface MedicalRecord {
   id: string;
   crew_member_id: string;
@@ -121,8 +130,17 @@ export interface MedicalRecord {
   follow_up_required?: boolean;
   follow_up_date?: string;
   notes?: string;
+  attachments?: MedicalAttachment[];
   created_at: string;
   updated_at: string;
+}
+
+export interface MedicalRecordLog {
+  id: string;
+  medical_record_id: string;
+  log_date: string;
+  note: string;
+  created_at: string;
 }
 
 export interface MedicalRecordWithDetails extends MedicalRecord {

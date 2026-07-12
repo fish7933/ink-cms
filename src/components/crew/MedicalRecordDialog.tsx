@@ -21,6 +21,7 @@ import {
 import { addMedicalRecord, updateMedicalRecord } from '@/services/crew-extended.service';
 import type { MedicalRecord, SeaServiceRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
+import MedicalRecordFollowUp from '@/components/crew/MedicalRecordFollowUp';
 
 interface MedicalRecordDialogProps {
   open: boolean;
@@ -54,6 +55,8 @@ export default function MedicalRecordDialog({
 }: MedicalRecordDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [savedRecordId, setSavedRecordId] = useState<string | undefined>(record?.id);
+  const [savedAttachments, setSavedAttachments] = useState(record?.attachments || []);
 
   const [formData, setFormData] = useState({
     sea_service_record_id: '',
@@ -73,6 +76,8 @@ export default function MedicalRecordDialog({
   });
 
   useEffect(() => {
+    setSavedRecordId(record?.id);
+    setSavedAttachments(record?.attachments || []);
     if (record) {
       setFormData({
         sea_service_record_id: record.sea_service_record_id || '',
@@ -137,15 +142,18 @@ export default function MedicalRecordDialog({
         notes: formData.notes || undefined,
       };
 
-      if (record) {
-        await updateMedicalRecord(record.id, data);
+      if (savedRecordId) {
+        await updateMedicalRecord(savedRecordId, data);
         toast({ title: '수정 완료', description: '상병 기록이 수정되었습니다.' });
+        onSuccess();
+        onOpenChange(false);
       } else {
-        await addMedicalRecord(data);
-        toast({ title: '추가 완료', description: '상병 기록이 추가되었습니다.' });
+        const created = await addMedicalRecord(data);
+        toast({ title: '추가 완료', description: '이어서 치료 로그나 첨부파일을 등록할 수 있습니다.' });
+        setSavedRecordId(created.id);
+        setSavedAttachments(created.attachments || []);
+        onSuccess();
       }
-      onSuccess();
-      onOpenChange(false);
     } catch (error) {
       console.error(error);
       toast({ title: '저장 실패', description: '상병 기록 저장 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -257,10 +265,20 @@ export default function MedicalRecordDialog({
               <Label className="text-xs">비고</Label>
               <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="추가 정보" rows={3} className="text-sm resize-none" />
             </div>
+
+            {savedRecordId && (
+              <div className="border-t pt-3">
+                <MedicalRecordFollowUp
+                  medicalRecordId={savedRecordId}
+                  attachments={savedAttachments}
+                  onChanged={() => { onSuccess(); }}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">취소</Button>
-            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (record ? '수정' : '추가')}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">{savedRecordId ? '닫기' : '취소'}</Button>
+            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (savedRecordId ? '수정' : '추가')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

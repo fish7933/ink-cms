@@ -13,6 +13,7 @@ import {
 import type { MedicalRecord } from '@/types/crew-extended';
 import type { SeaServiceRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
+import MedicalRecordFollowUp from '@/components/crew/MedicalRecordFollowUp';
 
 const RECORD_TYPES = [{ value: 'injury', label: '부상' }, { value: 'illness', label: '질병' }];
 const RECORD_TYPE_LABELS: Record<string, string> = { injury: '부상', illness: '질병' };
@@ -98,9 +99,16 @@ export default function SeaServiceMedicalDialog({ open, onOpenChange, crewId, re
         follow_up_date: form.follow_up_date || undefined,
         notes: form.notes || undefined,
       };
-      if (formView?.record) { await updateMedicalRecord(formView.record.id, data); toast({ title: '수정 완료' }); }
-      else { await addMedicalRecord(data); toast({ title: '등록 완료' }); }
-      closeForm();
+      if (formView?.record) {
+        await updateMedicalRecord(formView.record.id, data);
+        toast({ title: '수정 완료' });
+        closeForm();
+      } else {
+        const created = await addMedicalRecord(data);
+        toast({ title: '등록 완료', description: '이어서 치료 로그나 첨부파일을 등록할 수 있습니다.' });
+        setFormView({ record: created });
+        onChanged?.();
+      }
     } catch (e) { toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); } finally { setSaving(false); }
   };
 
@@ -196,8 +204,19 @@ export default function SeaServiceMedicalDialog({ open, onOpenChange, crewId, re
               <Label className="text-xs">비고</Label>
               <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className="text-sm resize-none" />
             </div>
+
+            {formView?.record && (
+              <div className="border-t pt-3">
+                <MedicalRecordFollowUp
+                  medicalRecordId={formView.record.id}
+                  attachments={formView.record.attachments || []}
+                  onChanged={onChanged}
+                />
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" className="h-8" onClick={() => setFormView(null)} disabled={saving}>취소</Button>
+              <Button variant="outline" size="sm" className="h-8" onClick={() => setFormView(null)} disabled={saving}>{formView?.record ? '목록으로' : '취소'}</Button>
               <Button size="sm" className="h-8 gap-1.5" onClick={handleSave} disabled={saving}><Save className="w-3.5 h-3.5" />{saving ? '저장 중...' : '저장'}</Button>
             </div>
           </div>
