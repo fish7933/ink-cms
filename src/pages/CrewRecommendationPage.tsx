@@ -208,7 +208,7 @@ export default function CrewRecommendationPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <div className="mb-3">
         <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={finish}>
           <ArrowLeft className="w-4 h-4" />취소

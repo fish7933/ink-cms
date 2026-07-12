@@ -142,7 +142,7 @@ export default function RanksPage() {
   const grouped = { deck: ranks.filter(r => r.department === 'deck'), engine: ranks.filter(r => r.department === 'engine'), catering: ranks.filter(r => r.department === 'catering') };
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <Card>
         <CardHeader className="pb-2">
           <div className="flex justify-between items-center">

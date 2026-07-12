@@ -184,7 +184,7 @@ export default function ProfilePage() {
 
   return (
     <>
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Page Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">프로필 설정</h1>

@@ -174,7 +174,7 @@ export default function SalaryComponentsPage() {
 
   return (
     <ProtectedRoute resource="salary_components">
-      <div className="max-w-5xl mx-auto px-4 py-4 space-y-4">
+      <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
 
         {/* 상단 탭 */}
         <div className="flex border-b">

@@ -60,7 +60,7 @@ export default function SignOffReasonsPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       {formView !== null && (
         <Card>
           <CardHeader className="pb-3">

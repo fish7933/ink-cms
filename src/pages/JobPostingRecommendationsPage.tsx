@@ -115,7 +115,7 @@ export default function JobPostingRecommendationsPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <div className="flex items-center gap-3 mb-4">
         <Button variant="ghost" size="sm" onClick={goToList} className="h-8 px-2">
           <ArrowLeft className="w-4 h-4 mr-1" />목록

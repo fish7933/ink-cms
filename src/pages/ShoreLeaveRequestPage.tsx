@@ -226,7 +226,7 @@ export default function ShoreLeaveRequestPage() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div className="flex items-center gap-2">
         <CalendarDays className="w-6 h-6" />
         <div>

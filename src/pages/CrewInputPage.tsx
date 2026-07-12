@@ -320,7 +320,7 @@ const addCert = (name?: string) => {
 
   return (
     <>
-      <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-6 flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={finish}>
             <ArrowLeft className="w-5 h-5" />

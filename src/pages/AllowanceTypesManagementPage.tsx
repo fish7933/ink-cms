@@ -168,7 +168,7 @@ export default function AllowanceTypesManagementPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Coins className="w-5 h-5 text-muted-foreground" />수당 기준 관리</h1>
         <p className="text-xs text-muted-foreground mt-1">

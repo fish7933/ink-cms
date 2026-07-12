@@ -137,7 +137,7 @@ export default function ApprovalDocumentDetailPage() {
 
   if (!doc) {
     return (
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <Button variant="ghost" size="sm" onClick={goBack} className="h-8 px-2 mb-3"><ArrowLeft className="w-4 h-4 mr-1" />결재함</Button>
         <p className="text-sm text-gray-400 text-center py-12">문서를 찾을 수 없습니다.</p>
       </div>
@@ -148,7 +148,7 @@ export default function ApprovalDocumentDetailPage() {
   const StatusIcon = statusInfo.icon;
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <Button variant="ghost" size="sm" onClick={goBack} className="h-8 px-2"><ArrowLeft className="w-4 h-4 mr-1" />결재함</Button>
 
       <Card className={isMyTurn ? 'border-blue-500 border-2' : ''}>
