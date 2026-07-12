@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { FileText, Upload, X, Archive, Clock, CheckCircle2, XCircle, Ban, PencilLine, Trash2, Sparkles } from 'lucide-react';
+import { FileText, Upload, X, Archive, Clock, CheckCircle2, XCircle, Ban, PencilLine, Trash2, Sparkles, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
 import { msg } from '@/lib/messages';
-import type { OrgUnit } from '@/types/org-chart';
+import type { OrgUnit, OrgMember } from '@/types/org-chart';
 import type { ApprovalDocumentType, ApprovalDocumentAttachment, ApprovalDocumentWithDetails } from '@/types/approval-document';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type { User } from '@/types/models';
@@ -71,6 +71,9 @@ export default function DocumentDraftPage() {
   const [content, setContent] = useState('');
   const [formValues, setFormValues] = useState<Record<string, string | number | null>>({});
   const [ccOrgUnitIds, setCcOrgUnitIds] = useState<string[]>([]);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [ccUserIds, setCcUserIds] = useState<string[]>([]);
+  const [ccUserSearch, setCcUserSearch] = useState('');
   const [requesterComment, setRequesterComment] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<ApprovalDocumentAttachment[]>([]);
@@ -106,6 +109,7 @@ export default function DocumentDraftPage() {
         ]);
         setTypes(t);
         setUnits(u);
+        setMembers(members);
         // 기안 부서는 본인이 소속된 부서만 고를 수 있어야 한다 (다른 부서 명의로 기안하면 안 됨).
         // 단, 관리자는 조직도 담당자 지정 없이 시스템 전체를 관리하므로 예외적으로 전체 부서를 허용한다.
         const me = members.find(m => m.id === user.id);
@@ -223,6 +227,8 @@ export default function DocumentDraftPage() {
     setContent('');
     setFormValues({});
     setCcOrgUnitIds([]);
+    setCcUserIds([]);
+    setCcUserSearch('');
     setRequesterComment('');
     setUploadedFiles([]);
     setExistingAttachments([]);
@@ -266,6 +272,9 @@ export default function DocumentDraftPage() {
 
   const toggleCcUnit = (unitId: string) =>
     setCcOrgUnitIds(prev => prev.includes(unitId) ? prev.filter(id => id !== unitId) : [...prev, unitId]);
+
+  const toggleCcUser = (userId: string) =>
+    setCcUserIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
 
   const uploadAttachments = async (files: File[]): Promise<ApprovalDocumentAttachment[]> => {
     const attachments: ApprovalDocumentAttachment[] = [];
@@ -346,6 +355,7 @@ export default function DocumentDraftPage() {
         created_by: currentUser.id,
         requester_comment: requesterComment.trim() || undefined,
         ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
+        ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
         draftId: draftId || undefined,
       });
       toast({ title: '기안서가 제출되었습니다.' });
@@ -526,6 +536,36 @@ export default function DocumentDraftPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">참조인 <span className="text-gray-400 font-normal">(부서와 별개로 특정 인원에게 개별 통보)</span></Label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Input
+                    value={ccUserSearch} onChange={e => setCcUserSearch(e.target.value)} disabled={submitting}
+                    placeholder="이름으로 검색" className="h-8 text-sm pl-7"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto border rounded-md p-2">
+                  {members.filter(m => !ccUserSearch.trim() || m.name.includes(ccUserSearch.trim())).length === 0 ? (
+                    <p className="text-xs text-gray-400 px-1 py-0.5">검색 결과가 없습니다</p>
+                  ) : members
+                    .filter(m => !ccUserSearch.trim() || m.name.includes(ccUserSearch.trim()))
+                    .map(m => (
+                      <button
+                        key={m.id} type="button" onClick={() => toggleCcUser(m.id)} disabled={submitting}
+                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${ccUserIds.includes(m.id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                      >
+                        {m.name}{m.position_name ? ` · ${m.position_name}` : ''}
+                      </button>
+                    ))}
+                </div>
+                {ccUserIds.length > 0 && (
+                  <p className="text-xs text-gray-500">
+                    선택됨: {ccUserIds.map(id => members.find(m => m.id === id)?.name).filter(Boolean).join(', ')}
+                  </p>
+                )}
               </div>
 
               <div className="rounded-md border bg-gray-50 p-3">
