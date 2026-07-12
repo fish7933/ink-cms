@@ -176,13 +176,13 @@ export default function ShipManagementPage() {
     };
   }, [companies, scopedShips]);
 
-  // Get fleets for selected owner - only show when specific owner is selected
+  // Get fleets in scope — 특정 선주를 고르면 그 선주의 플릿으로 좁혀주고, 아니면 전체 플릿(범위 내)을 보여준다.
   const availableFleets = useMemo(() => {
-    if (selectedOwner === 'all' || selectedOwner === 'none') {
-      return [];
-    }
     const fleetIdsInScope = new Set(scopedShips.map(s => s.fleet_id).filter(Boolean));
-    return fleets.filter(f => f.owner_id === selectedOwner && (currentUser?.role !== 'ship_manager' || fleetIdsInScope.has(f.id)));
+    return fleets.filter(f =>
+      (selectedOwner === 'all' || selectedOwner === 'none' || f.owner_id === selectedOwner) &&
+      (currentUser?.role !== 'ship_manager' || fleetIdsInScope.has(f.id))
+    );
   }, [fleets, selectedOwner, scopedShips, currentUser]);
 
   // Get unique ship types from ALL ships (not filtered) - this keeps all types visible
@@ -196,12 +196,12 @@ export default function ShipManagementPage() {
     return Array.from(types).sort();
   }, [ships]);
 
-  // Reset fleet filter when owner changes
+  // 선주 필터가 바뀌어 현재 선택된 플릿이 더 이상 목록에 없으면 초기화한다.
   useEffect(() => {
-    if (selectedOwner === 'all' || selectedOwner === 'none') {
+    if (selectedFleet !== 'all' && !availableFleets.some(f => f.id === selectedFleet)) {
       setSelectedFleet('all');
     }
-  }, [selectedOwner]);
+  }, [availableFleets, selectedFleet]);
 
   const ownerNameById = useMemo(() => new Map(companies.map(c => [c.id, c.name])), [companies]);
   const fleetNameById = useMemo(() => new Map(fleets.map(f => [f.id, f.name])), [fleets]);
@@ -530,7 +530,7 @@ export default function ShipManagementPage() {
               <>{/* Search and Filters */}
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
-                  {currentUser.role === 'ship_manager' && (
+                  {['ship_manager', 'admin', 'system_admin'].includes(currentUser.role) && (
                     <Select 
                       value={selectedOwner} 
                       onValueChange={setSelectedOwner}
@@ -555,7 +555,7 @@ export default function ShipManagementPage() {
                   <Select 
                     value={selectedFleet} 
                     onValueChange={setSelectedFleet}
-                    disabled={selectedOwner === 'all' || selectedOwner === 'none' || availableFleets.length === 0}
+                    disabled={availableFleets.length === 0}
                   >
                     <SelectTrigger className="w-40 h-9 text-sm">
                       <SelectValue placeholder="플릿 선택" />
