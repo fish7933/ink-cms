@@ -64,6 +64,9 @@ export interface Ship {
   gt?: number;
   fleet_group?: string;
   route?: string;
+  // 교대계획/급여명세서 등을 선박으로 직접 발송할 때 쓰는 연락처
+  phone?: string;
+  email?: string;
   created_at: string;
 }
 

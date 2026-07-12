@@ -37,6 +37,8 @@ interface ShipFormData {
   shipyard: string;
   classification_society: string;
   port_of_registry: string;
+  phone: string;
+  email: string;
   engine_type: string;
   engine_power: string;
   speed_max: string;
@@ -463,6 +465,30 @@ export default function ShipDialog({
                     value={formData.port_of_registry}
                     onChange={(e) => onFormDataChange({...formData, port_of_registry: e.target.value})}
                     placeholder="예: Busan"
+                    className="h-9 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ship_phone" className="text-xs">연락처</Label>
+                  <Input
+                    id="ship_phone"
+                    value={formData.phone}
+                    onChange={(e) => onFormDataChange({...formData, phone: e.target.value})}
+                    placeholder="예: Sat-Phone 번호"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ship_email" className="text-xs">이메일</Label>
+                  <Input
+                    id="ship_email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => onFormDataChange({...formData, email: e.target.value})}
+                    placeholder="예: master@ship.com"
                     className="h-9 text-sm"
                   />
                 </div>
