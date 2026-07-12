@@ -429,7 +429,7 @@ export const rotationService = {
     // 승선경력/계약 자동 생성에 필요한 참조 데이터 일괄 조회
     const rankIds = [...new Set((assignments || []).flatMap(a => [a.on_rank_id, a.off_rank_id]).filter(Boolean))];
     const crewIds = [...new Set((assignments || []).flatMap(a => [a.on_crew_id, a.off_crew_id]).filter(Boolean))];
-    const [{ data: ship }, { data: port }, { data: ranksData }, { data: crewData }, { data: ownerCompany }] = await Promise.all([
+    const [{ data: ship }, { data: port }, { data: ranksData }, { data: crewData }, { data: ownerCompany }, { data: companyInfo }] = await Promise.all([
       supabase.from('ships').select('name, ship_type, flag, gross_tonnage, engine_power').eq('id', plan.ship_id).single(),
       plan.port_id
         ? supabase.from('ports').select('country_name, city_name').eq('id', plan.port_id).single()
@@ -437,12 +437,14 @@ export const rotationService = {
       rankIds.length > 0 ? supabase.from('ranks').select('id, rank_code').in('id', rankIds) : Promise.resolve({ data: [] }),
       crewIds.length > 0 ? supabase.from('crew_members').select('id, nationality, manning_agency_id').in('id', crewIds) : Promise.resolve({ data: [] }),
       supabase.from('companies').select('name').eq('id', plan.owner_id).single(),
+      supabase.from('company_info').select('name').order('created_at').limit(1).maybeSingle(),
     ]);
     const ranksById = new Map((ranksData || []).map(r => [r.id, r.rank_code]));
     const nationalityById = new Map((crewData || []).map(c => [c.id, c.nationality]));
     const manningAgencyIdByCrew = new Map((crewData || []).map(c => [c.id, c.manning_agency_id]));
     const portLabel = port ? `${port.city_name}, ${port.country_name}` : undefined;
     const ownerCompanyName = ownerCompany?.name;
+    const shipManagerCompanyName = companyInfo?.name;
 
     const manningAgencyIds = [...new Set((crewData || []).map(c => c.manning_agency_id).filter(Boolean))];
     const { data: manningAgencies } = manningAgencyIds.length > 0
@@ -549,6 +551,7 @@ export const rotationService = {
             sign_on_date: a.embark_date,
             port_of_sign_on: portLabel,
             owner_company_name: ownerCompanyName,
+            ship_manager_name: shipManagerCompanyName,
             manning_agency_name: crewManningAgencyId ? manningAgencyNameById.get(crewManningAgencyId) : undefined,
           });
         }
