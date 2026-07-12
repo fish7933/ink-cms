@@ -55,9 +55,16 @@ export default function DocumentDraftPage() {
       if (!user || !['ship_manager', 'admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       setCurrentUser(user);
       try {
-        const [t, u] = await Promise.all([approvalDocumentService.getDocumentTypes(), orgChartService.getOrgUnits()]);
+        const [t, u, members] = await Promise.all([
+          approvalDocumentService.getDocumentTypes(),
+          orgChartService.getOrgUnits(),
+          orgChartService.getOrgMembers(),
+        ]);
         setTypes(t);
         setUnits(u);
+        // 대부분 본인 소속 부서로 기안하므로 기본값으로 미리 채워둔다 (필요하면 직접 바꿀 수 있음)
+        const myOrgUnitId = members.find(m => m.id === user.id)?.org_unit_ids[0];
+        if (myOrgUnitId) setOrgUnitId(myOrgUnitId);
       } catch (e) {
         console.error(e);
         toast({ title: '데이터를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
