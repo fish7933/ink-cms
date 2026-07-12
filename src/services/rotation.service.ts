@@ -517,6 +517,7 @@ export const rotationService = {
           await supabase.from('sea_service_records').insert({
             crew_member_id: a.on_crew_id,
             record_type: 'company_assignment',
+            ship_id: plan.ship_id,
             ship_name: ship.name,
             ship_type: ship.ship_type || undefined,
             flag: ship.flag || undefined,
