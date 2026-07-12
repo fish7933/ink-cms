@@ -365,7 +365,7 @@ export default function DocumentDraftPage() {
   );
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+    <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <Tabs value={innerTab} onValueChange={v => setInnerTab(v as 'write' | 'box')}>
         <TabsList>
           <TabsTrigger value="write" className="gap-1.5"><FileText className="w-3.5 h-3.5" />기안서 작성</TabsTrigger>
