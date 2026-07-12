@@ -320,7 +320,7 @@ export default function MyRecommendationsPage() {
                               <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
                             </Button>
                           )}
-                          {(rec.status === 'accepted' || rec.status === 'rejected' || rec.status === 'withdrawn') && permissions.canDelete && (
+                          {(rec.status === 'accepted' || rec.status === 'rejected' || rec.status === 'withdrawn') && (
                             <Button variant="outline" size="sm" onClick={() => handleDelete(rec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
                               <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
                             </Button>
@@ -453,7 +453,7 @@ export default function MyRecommendationsPage() {
                         <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
                       </Button>
                     )}
-                    {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected' || selectedRec.status === 'withdrawn') && permissions.canDelete && (
+                    {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected' || selectedRec.status === 'withdrawn') && (
                       <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
                         <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
                       </Button>
