@@ -2,12 +2,24 @@ import { useState, useEffect } from 'react';
 import { getShips, getCrewMembers, getJobPostings, getJobApplications, getCurrentUser } from '@/lib/store';
 import type { User, Ship, CrewMember, JobPosting, JobApplication } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Ship as ShipIcon, Users, Briefcase, FileText, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Ship as ShipIcon, Users, Briefcase, FileText, AlertTriangle, Inbox, ChevronRight } from 'lucide-react';
 import { UrgentBadge } from '@/components/ui/urgent-badge';
 import { useTabContext } from '@/contexts/TabContext';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
+import { approvalService } from '@/services/approval.service';
+import { approvalDocumentService } from '@/services/approval-document.service';
+import { orgChartService } from '@/services/org-chart.service';
 import type { JobPostingGroupWithDetails, CrewRecommendationWithDetails } from '@/types/models';
+
+interface MyPendingItem {
+  id: string;
+  kind: 'crew' | 'document';
+  title: string;
+  requesterName: string;
+  createdAt: string;
+}
 
 const REC_STATUS_LABELS: Record<string, string> = { pending: '검토 대기', reviewed: '결재중', accepted: '수락', rejected: '거절' };
 const REC_STATUS_COLORS: Record<string, string> = {
@@ -29,6 +41,9 @@ export default function DashboardPage() {
   // 매닝사 대시보드 전용 데이터 — 채용공고 위젯 + 채용과정(내 추천 현황)
   const [postings, setPostings] = useState<JobPostingGroupWithDetails[]>([]);
   const [myRecs, setMyRecs] = useState<CrewRecommendationWithDetails[]>([]);
+
+  // 내 결재함 위젯 — 지금 내 차례인 결재 건 (선원추천 + 일반 문서)
+  const [myPendingApprovals, setMyPendingApprovals] = useState<MyPendingItem[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -58,6 +73,30 @@ export default function DashboardPage() {
           ]);
           setPostings(postingsData.filter(p => p.status === 'active'));
           setMyRecs(recsData);
+        }
+
+        // 결재함에 접근 가능한 역할(default-menu.ts의 approval-inbox roles)만 내 결재함 위젯을 계산한다.
+        if (['ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(user.role)) {
+          const isAdminUser = user.role === 'admin' || user.role === 'system_admin';
+          const members = await orgChartService.getOrgMembers();
+          const myOrgUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
+
+          const [crewApprovals, documents] = await Promise.all([
+            isAdminUser ? approvalService.getAllApprovals() : approvalService.getMyRelatedApprovals(user.id),
+            isAdminUser ? approvalDocumentService.getAllDocuments() : approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
+          ]);
+
+          const myTurnCrew: MyPendingItem[] = crewApprovals
+            .filter(a => a.status === 'pending' && (isAdminUser || a.current_approver?.approver_id === user.id))
+            .map(a => ({ id: a.id, kind: 'crew', title: '선원추천 결재', requesterName: a.requester_name, createdAt: a.created_at }));
+
+          const myTurnDocs: MyPendingItem[] = documents
+            .filter(d => d.status === 'pending' && (isAdminUser || d.steps.some(s => s.step_order === d.current_step && s.approver_id === user.id)))
+            .map(d => ({ id: d.id, kind: 'document', title: d.title, requesterName: d.creator_name, createdAt: d.created_at }));
+
+          setMyPendingApprovals(
+            [...myTurnCrew, ...myTurnDocs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+          );
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -168,6 +207,47 @@ export default function DashboardPage() {
           </h2>
           <p className="text-sm text-gray-600">{getRoleDescription()}</p>
         </div>
+
+        {/* 내 결재함 — 지금 내 차례인 결재 건. 가장 시급한 정보이므로 최상단에 배치 */}
+        {['ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(currentUser.role) && (
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Inbox className="w-4 h-4" />내 결재함 — 결재 대기 ({myPendingApprovals.length})
+                </CardTitle>
+                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => openNewTab('/approval-inbox', '결재함')}>
+                  전체 보기<ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {myPendingApprovals.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">지금 결재할 문서가 없습니다.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {myPendingApprovals.slice(0, 5).map(item => (
+                    <div
+                      key={`${item.kind}-${item.id}`}
+                      className="flex items-center justify-between p-2.5 border rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => openNewTab('/approval-inbox', '결재함')}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {item.kind === 'crew' ? <Users className="w-4 h-4 text-blue-500 shrink-0" /> : <FileText className="w-4 h-4 text-blue-500 shrink-0" />}
+                        <span className="text-sm font-medium truncate">{item.title}</span>
+                        <span className="text-xs text-gray-400 shrink-0">{item.requesterName} 기안</span>
+                      </div>
+                      <span className="text-xs text-gray-400 shrink-0">{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>
+                    </div>
+                  ))}
+                  {myPendingApprovals.length > 5 && (
+                    <p className="text-xs text-gray-400 text-center pt-1">외 {myPendingApprovals.length - 5}건 더 있습니다.</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* 매닝사: 채용공고 위젯 — 가장 중요한 정보이므로 최상단에 배치 */}
         {currentUser.role === 'manning_agency' && (
