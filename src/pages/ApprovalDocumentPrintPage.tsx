@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/store';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
+import { orgChartService } from '@/services/org-chart.service';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
@@ -18,6 +19,7 @@ export default function ApprovalDocumentPrintPage() {
   const [docType, setDocType] = useState<ApprovalDocumentType | null>(null);
   const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [positions, setPositions] = useState<ShorePosition[]>([]);
+  const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
   const [includeAttachments, setIncludeAttachments] = useState(false);
 
   useEffect(() => {
@@ -25,17 +27,19 @@ export default function ApprovalDocumentPrintPage() {
       if (!id) return;
       const user = await getCurrentUser();
       if (!user) { setUnauthorized(true); setLoading(false); return; }
-      const [docs, types, companyInfo, shorePositions] = await Promise.all([
+      const [docs, types, companyInfo, shorePositions, members] = await Promise.all([
         approvalDocumentService.getDocumentDetails([id]),
         approvalDocumentService.getDocumentTypes(true),
         getCompanyInfo().catch(() => null),
         getShorePositions().catch(() => []),
+        orgChartService.getOrgMembers().catch(() => []),
       ]);
       const found = docs[0] || null;
       setDoc(found);
       setDocType(found ? types.find(t => t.id === found.document_type_id) || null : null);
       setCompany(companyInfo);
       setPositions(shorePositions);
+      setCreatorPositionName(found ? members.find(m => m.id === found.created_by)?.position_name || null : null);
       setLoading(false);
     };
     load();
@@ -66,7 +70,7 @@ export default function ApprovalDocumentPrintPage() {
           인쇄 / PDF 저장
         </button>
       </div>
-      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} includeAttachments={includeAttachments} />
+      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} />
     </div>
   );
 }

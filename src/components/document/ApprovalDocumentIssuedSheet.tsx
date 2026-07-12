@@ -8,12 +8,13 @@ interface Props {
   documentType: ApprovalDocumentType | null;
   company: CompanyInfo | null;
   positions: ShorePosition[];
+  creatorPositionName?: string | null;
   includeAttachments?: boolean;
 }
 
 // 결재 완료된 문서(특히 지출결의서 등 구조화 양식)를 총무팀 보관용 "시행문" 형식으로 출력하는 문서 본문.
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
-export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, includeAttachments = false }: Props) {
+export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
   const issuedDate = doc.completed_at ? new Date(doc.completed_at) : new Date(doc.created_at);
   const fields = documentType?.field_schema || [];
@@ -104,7 +105,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         <tbody>
           <tr>
             <td className="sign-cell">
-              <div>{doc.creator_name}</div>
+              <div>{creatorPositionName ? `${creatorPositionName} ` : ''}{doc.creator_name}</div>
               <div style={{ fontSize: 10, color: '#777' }}>{new Date(doc.created_at).toLocaleDateString('ko-KR')}</div>
             </td>
             {doc.steps.map((s, i) => {
