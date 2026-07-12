@@ -171,19 +171,43 @@ export default function DocumentDraftPage() {
     [previewChain, currentUser],
   );
 
-  // 자주 쓰는 문서: 최근에 제출한(임시저장 제외) 문서 중 제목이 겹치지 않는 것들을 최신순으로 보여준다.
+  // 자주 쓰는 문서 목록에서 사용자가 지운 제목들 (브라우저에 사용자별로 저장)
+  const [dismissedFrequentTitles, setDismissedFrequentTitles] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      const raw = localStorage.getItem(`frequent-docs-dismissed:${currentUser.id}`);
+      setDismissedFrequentTitles(new Set(raw ? JSON.parse(raw) : []));
+    } catch {
+      setDismissedFrequentTitles(new Set());
+    }
+  }, [currentUser]);
+
+  const dismissFrequentDoc = (title: string) => {
+    if (!currentUser) return;
+    setDismissedFrequentTitles(prev => {
+      const next = new Set(prev);
+      next.add(title);
+      localStorage.setItem(`frequent-docs-dismissed:${currentUser.id}`, JSON.stringify([...next]));
+      return next;
+    });
+  };
+
+  // 자주 쓰는 문서: 최근에 제출한(임시저장 제외) 문서 중 제목이 겹치지 않고, 사용자가 지우지 않은 것들을 최신순으로 보여준다.
   const frequentDocs = useMemo(() => {
     const seen = new Set<string>();
     const result: ApprovalDocumentWithDetails[] = [];
     for (const d of documents) {
       if (d.status === 'draft') continue;
+      if (dismissedFrequentTitles.has(d.title)) continue;
       if (seen.has(d.title)) continue;
       seen.add(d.title);
       result.push(d);
       if (result.length >= 6) break;
     }
     return result;
-  }, [documents]);
+  }, [documents, dismissedFrequentTitles]);
 
   const resetForm = () => {
     setDraftId(null);
@@ -368,12 +392,23 @@ export default function DocumentDraftPage() {
                   <p className="text-xs font-medium flex items-center gap-1 text-amber-800"><Sparkles className="w-3.5 h-3.5" />자주 쓰는 문서 <span className="text-amber-600 font-normal">(클릭하면 제목/내용을 그대로 불러옵니다)</span></p>
                   <div className="flex flex-wrap gap-1.5">
                     {frequentDocs.map(d => (
-                      <button
-                        key={d.id} type="button" onClick={() => applyTemplate(d)} disabled={submitting || savingDraft}
-                        className="px-2.5 py-1 rounded-md text-xs border bg-white text-gray-700 border-amber-200 hover:bg-amber-100 transition-colors"
+                      <span
+                        key={d.id}
+                        className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-md text-xs border bg-white text-gray-700 border-amber-200 hover:bg-amber-100 transition-colors"
                       >
-                        {d.title}
-                      </button>
+                        <button type="button" onClick={() => applyTemplate(d)} disabled={submitting || savingDraft}>
+                          {d.title}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => dismissFrequentDoc(d.title)}
+                          disabled={submitting || savingDraft}
+                          title="자주 쓰는 목록에서 지우기"
+                          className="text-gray-400 hover:text-red-600 rounded-full p-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
                     ))}
                   </div>
                 </div>
