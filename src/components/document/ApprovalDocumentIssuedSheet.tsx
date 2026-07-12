@@ -34,27 +34,37 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
       <style>{`
         @media print {
           body { margin: 0; }
-          @page { size: A4 portrait; margin: 20mm 18mm; }
+          @page { size: A4 portrait; margin: 14mm 15mm; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
         table.issued-fields { border-collapse: collapse; width: 100%; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
-        table.approval-block { border-collapse: collapse; width: 100%; margin-top: 6px; }
+        table.approval-block { border-collapse: collapse; width: 100%; margin-top: 6px; table-layout: fixed; }
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 12px; padding: 6px 4px; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
         table.approval-block td.sign-cell { height: 46px; vertical-align: middle; }
       `}</style>
 
-      {(company?.name || company?.logo_url) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 32 }} />}
-          <span style={{ fontSize: 14, fontWeight: 600 }}>{company.name}</span>
+      {company && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+          {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 40 }} />}
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{company.name}</div>
+            <div style={{ fontSize: 10.5, color: '#666', marginTop: 2 }}>
+              {[company.address, company.phone && `Tel. ${company.phone}`, company.fax && `Fax. ${company.fax}`].filter(Boolean).join('  ·  ')}
+            </div>
+            {(company.email || company.website) && (
+              <div style={{ fontSize: 10.5, color: '#666' }}>
+                {[company.email, company.website].filter(Boolean).join('  ·  ')}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <div style={{ textAlign: 'center', margin: '18px 0 24px', paddingBottom: 14, borderBottom: '3px solid #1a1a1a' }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: 12, margin: 0 }}>시 행 문</h1>
+      <div style={{ textAlign: 'center', margin: '14px 0 20px', paddingBottom: 12, borderBottom: '3px solid #1a1a1a' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: 12, margin: 0 }}>시 행 문</h1>
       </div>
 
       <table style={{ width: '100%', fontSize: 13, marginBottom: 16 }}>
@@ -67,6 +77,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
             <td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;총무팀 (보존)</td>
             <td style={{ padding: '3px 0', textAlign: 'right' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td>
           </tr>
+          {doc.attachments.length > 0 && (
+            <tr>
+              <td colSpan={2} style={{ padding: '3px 0' }}><b>붙임</b>&nbsp;&nbsp;{doc.attachments.map(a => a.name).join(', ')}</td>
+            </tr>
+          )}
         </tbody>
       </table>
 
@@ -87,17 +102,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         doc.content && <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>
       )}
 
-      {doc.attachments.length > 0 && (
-        <div style={{ fontSize: 12.5, marginTop: 14 }}>
-          <b>붙임</b>&nbsp;&nbsp;{doc.attachments.map(a => a.name).join(', ')}
-        </div>
-      )}
-
       <div style={{ marginTop: 36, marginBottom: 8, fontSize: 12, color: '#555' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 6 }}>({lastStepPositionName} 전결)</span>}</div>
       <table className="approval-block">
         <thead>
           <tr>
-            <th style={{ width: 80 }}>기안</th>
+            <th>기안</th>
             {doc.steps.map(s => <th key={s.id}>{positionOf(s.approver_label) || `${s.step_order}차 결재`}</th>)}
             {isDelegated && <th>{topPosition!.name}</th>}
           </tr>

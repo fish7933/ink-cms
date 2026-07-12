@@ -7,13 +7,15 @@ export interface CompanyInfo {
   address: string | null;
   phone: string | null;
   fax: string | null;
+  email: string | null;
+  website: string | null;
   logo_url: string | null;
 }
 
 export async function getCompanyInfo(): Promise<CompanyInfo | null> {
   const { data, error } = await supabase
     .from('company_info')
-    .select('id, name, address, phone, fax, logo_url')
+    .select('id, name, address, phone, fax, email, website, logo_url')
     .order('created_at')
     .limit(1)
     .maybeSingle();
@@ -23,7 +25,7 @@ export async function getCompanyInfo(): Promise<CompanyInfo | null> {
 
 export async function saveCompanyInfo(
   id: string | null,
-  payload: { name: string; address: string | null; phone: string | null; fax: string | null; logo_url: string | null }
+  payload: { name: string; address: string | null; phone: string | null; fax: string | null; email: string | null; website: string | null; logo_url: string | null }
 ): Promise<void> {
   if (id) {
     const { error } = await supabase

@@ -14,10 +14,12 @@ interface FormState {
   address: string;
   phone: string;
   fax: string;
+  email: string;
+  website: string;
   logo_url: string;
 }
 
-const EMPTY_FORM: FormState = { name: '', address: '', phone: '', fax: '', logo_url: '' };
+const EMPTY_FORM: FormState = { name: '', address: '', phone: '', fax: '', email: '', website: '', logo_url: '' };
 
 export default function CompanyInfoPage() {
   const navigate = useNavigate();
@@ -45,7 +47,7 @@ export default function CompanyInfoPage() {
       const data = await getCompanyInfo();
       if (data) {
         setId(data.id);
-        setForm({ name: data.name, address: data.address || '', phone: data.phone || '', fax: data.fax || '', logo_url: data.logo_url || '' });
+        setForm({ name: data.name, address: data.address || '', phone: data.phone || '', fax: data.fax || '', email: data.email || '', website: data.website || '', logo_url: data.logo_url || '' });
         setPreviewUrl(data.logo_url || '');
       }
     } catch (e) {
@@ -93,6 +95,8 @@ export default function CompanyInfoPage() {
         address: form.address || null,
         phone: form.phone || null,
         fax: form.fax || null,
+        email: form.email || null,
+        website: form.website || null,
         logo_url: logoUrl || null,
       });
       toast({ title: '저장 완료' });
@@ -164,7 +168,17 @@ export default function CompanyInfoPage() {
                   <Input className="h-8 text-sm" value={form.fax} onChange={e => setForm(f => ({ ...f, fax: e.target.value }))} placeholder="팩스번호" />
                 </div>
               </div>
-              <p className="text-xs text-gray-400 pt-1">여기 등록된 회사명은 선원 승선경력의 "회사 배치" 기록에서 선박관리사명으로 자동 사용됩니다.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">이메일</Label>
+                  <Input className="h-8 text-sm" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="예: info@company.com" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">홈페이지</Label>
+                  <Input className="h-8 text-sm" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="예: https://company.com" />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 pt-1">여기 등록된 회사명은 선원 승선경력의 "회사 배치" 기록에서 선박관리사명으로 자동 사용됩니다. 회사 정보는 시행문 레터헤드에도 사용됩니다.</p>
             </div>
           )}
         </CardContent>

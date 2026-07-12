@@ -50,10 +50,11 @@ export default function ApprovalDocumentPrintPage() {
   if (!doc) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>문서를 찾을 수 없습니다.</div>;
 
   return (
-    <div style={{ padding: '28px 36px 48px' }}>
+    <div className="print-page-wrapper" style={{ padding: '28px 36px 48px' }}>
       <style>{`
         @media print {
           .print-actions { display: none !important; }
+          .print-page-wrapper { padding: 0 !important; }
         }
       `}</style>
       <div className="print-actions" style={{ marginBottom: 20, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16 }}>
