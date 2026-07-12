@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Star, Trash2, Edit2, ArrowLeft, Save, Upload, X, Download } from 'lucide-react';
+import { Plus, Search, Star, Trash2, Edit2, ArrowLeft, Save, Upload, X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +53,8 @@ export default function CrewEvaluationPage() {
   const [filterOwner, setFilterOwner] = useState('all');
   const [filterFleet, setFilterFleet] = useState('all');
   const [filterShip, setFilterShip] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
     loadData();
@@ -189,6 +191,11 @@ export default function CrewEvaluationPage() {
       a.crew_name.localeCompare(b.crew_name, 'ko')
     );
   }, [filteredBySelectors]);
+
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterOwner, filterFleet, filterShip]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const goToPage = (p: number) => setCurrentPage(Math.max(1, Math.min(p, totalPages)));
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
@@ -333,13 +340,23 @@ export default function CrewEvaluationPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-gray-500">총 {filtered.length}건</p>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">페이지당:</Label>
+                  <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
               <table className="w-full text-xs">
                 <thead><tr className="border-b bg-gray-50">
                   <th className="w-8 p-2"><Checkbox checked={filtered.length > 0 && filtered.every(e => selectedIds.includes(e.id))} onCheckedChange={checked => toggleSelectAll(!!checked)} /></th>
                   <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">평가 기간</th><th className="text-center p-2">평균점수</th><th className="text-center p-2">추천</th><th className="text-center p-2">작업</th>
                 </tr></thead>
                 <tbody>
-                  {filtered.length === 0 ? <tr><td colSpan={10} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filtered.map(e => (
+                  {paginated.length === 0 ? <tr><td colSpan={10} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : paginated.map(e => (
                     <tr key={e.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openForm(e)}>
                       <td className="p-2" onClick={ev => ev.stopPropagation()}><Checkbox checked={selectedIds.includes(e.id)} onCheckedChange={() => toggleSelect(e.id)} /></td>
                       <td className="p-2 text-gray-600">{e.owner_name || '-'}</td>
@@ -359,7 +376,26 @@ export default function CrewEvaluationPage() {
                   ))}
                 </tbody>
               </table>
-              <p className="text-xs text-gray-400 text-right">총 {filtered.length}건</p>
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 pt-3">
+                  <Button variant="outline" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="h-8">
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const p = totalPages <= 5 ? i + 1
+                      : currentPage <= 3 ? i + 1
+                      : currentPage >= totalPages - 2 ? totalPages - 4 + i
+                      : currentPage - 2 + i;
+                    return (
+                      <Button key={p} variant={currentPage === p ? 'default' : 'outline'} size="sm"
+                        onClick={() => goToPage(p)} className="h-8 w-8 p-0">{p}</Button>
+                    );
+                  })}
+                  <Button variant="outline" size="sm" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="h-8">
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </CardContent>
