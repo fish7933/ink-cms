@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { addMedicalRecord, updateMedicalRecord } from '@/services/crew-extended.service';
-import type { MedicalRecord } from '@/types/crew-extended';
+import type { MedicalRecord, SeaServiceRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
 
 interface MedicalRecordDialogProps {
@@ -28,14 +28,13 @@ interface MedicalRecordDialogProps {
   crewId: string;
   record?: MedicalRecord;
   onSuccess: () => void;
+  // 이 선원의 승선 기록 목록 — 어느 배에 승선 중/승선했을 때 발생한 상병인지 선택할 수 있게 한다 (선택사항).
+  seaServiceRecords?: SeaServiceRecord[];
 }
 
 const RECORD_TYPES = [
-  { value: 'checkup', label: '정기 검진' },
-  { value: 'illness', label: '질병' },
   { value: 'injury', label: '부상' },
-  { value: 'vaccination', label: '예방접종' },
-  { value: 'other', label: '기타' },
+  { value: 'illness', label: '질병' },
 ];
 
 const FITNESS_OPTIONS = [
@@ -51,13 +50,15 @@ export default function MedicalRecordDialog({
   crewId,
   record,
   onSuccess,
+  seaServiceRecords = [],
 }: MedicalRecordDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
+    sea_service_record_id: '',
     record_date: '',
-    record_type: '' as string,
+    record_type: 'injury' as string,
     diagnosis: '',
     treatment: '',
     doctor_name: '',
@@ -74,6 +75,7 @@ export default function MedicalRecordDialog({
   useEffect(() => {
     if (record) {
       setFormData({
+        sea_service_record_id: record.sea_service_record_id || '',
         record_date: record.record_date,
         record_type: record.record_type,
         diagnosis: record.diagnosis,
@@ -90,8 +92,9 @@ export default function MedicalRecordDialog({
       });
     } else {
       setFormData({
+        sea_service_record_id: '',
         record_date: new Date().toISOString().split('T')[0],
-        record_type: '',
+        record_type: 'injury',
         diagnosis: '',
         treatment: '',
         doctor_name: '',
@@ -107,12 +110,18 @@ export default function MedicalRecordDialog({
     }
   }, [record, open]);
 
+  const handleSeaServiceChange = (v: string) => {
+    const linked = v === '_none' ? null : seaServiceRecords.find(s => s.id === v);
+    setFormData(prev => ({ ...prev, sea_service_record_id: v === '_none' ? '' : v, ship_name: linked ? linked.ship_name : prev.ship_name }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const data = {
         crew_member_id: crewId,
+        sea_service_record_id: formData.sea_service_record_id || undefined,
         record_date: formData.record_date,
         record_type: formData.record_type as MedicalRecord['record_type'],
         diagnosis: formData.diagnosis,
@@ -130,16 +139,16 @@ export default function MedicalRecordDialog({
 
       if (record) {
         await updateMedicalRecord(record.id, data);
-        toast({ title: '수정 완료', description: '진료 기록이 수정되었습니다.' });
+        toast({ title: '수정 완료', description: '상병 기록이 수정되었습니다.' });
       } else {
         await addMedicalRecord(data);
-        toast({ title: '추가 완료', description: '진료 기록이 추가되었습니다.' });
+        toast({ title: '추가 완료', description: '상병 기록이 추가되었습니다.' });
       }
       onSuccess();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast({ title: '저장 실패', description: '진료 기록 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: '저장 실패', description: '상병 기록 저장 중 오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -149,14 +158,28 @@ export default function MedicalRecordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{record ? '진료 기록 수정' : '진료 기록 추가'}</DialogTitle>
-          <DialogDescription className="text-xs">선원의 진료/건강 기록을 {record ? '수정' : '등록'}합니다</DialogDescription>
+          <DialogTitle className="text-base">{record ? '상병 기록 수정' : '상병 기록 추가'}</DialogTitle>
+          <DialogDescription className="text-xs">선원의 부상/질병 기록을 {record ? '수정' : '등록'}합니다</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
+            {seaServiceRecords.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">관련 승선 기록 <span className="text-gray-400 font-normal">(어느 배에 승선 중/승선했을 때 발생했는지 선택, 선택사항)</span></Label>
+                <Select value={formData.sea_service_record_id || '_none'} onValueChange={handleSeaServiceChange}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="승선 기록 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">선택 안함</SelectItem>
+                    {seaServiceRecords.map(s => (
+                      <SelectItem key={s.id} value={s.id} className="text-sm">{s.ship_name} ({s.sign_on_date} ~ {s.sign_off_date || '진행중'})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">기록일 *</Label>
+                <Label className="text-xs">발생일 *</Label>
                 <Input type="date" value={formData.record_date} onChange={e => setFormData({ ...formData, record_date: e.target.value })} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
@@ -196,7 +219,10 @@ export default function MedicalRecordDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">당시 승선 선박</Label>
-                <Input value={formData.ship_name} onChange={e => setFormData({ ...formData, ship_name: e.target.value })} placeholder="선박명" className="h-9 text-sm" />
+                <Input
+                  value={formData.ship_name} onChange={e => setFormData({ ...formData, ship_name: e.target.value })}
+                  placeholder="선박명" className="h-9 text-sm" disabled={!!formData.sea_service_record_id}
+                />
               </div>
             </div>
 

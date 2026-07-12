@@ -15,6 +15,9 @@ interface EvaluationDialogProps {
   onOpenChange: (open: boolean) => void;
   record?: CrewEvaluationWithDetails;
   onSuccess: () => void;
+  // 선원 상세 화면 등 특정 선원 문맥에서 열 때 — 선원 선택란을 숨기고 이 값으로 고정한다.
+  lockedCrewId?: string;
+  lockedCrewName?: string;
 }
 
 const CATEGORIES = [
@@ -38,7 +41,7 @@ const RECOMMENDATIONS = [
 interface CrewOption { id: string; name: string; rank: string; }
 interface ShipOption { id: string; name: string; }
 
-export default function EvaluationDialog({ open, onOpenChange, record, onSuccess }: EvaluationDialogProps) {
+export default function EvaluationDialog({ open, onOpenChange, record, onSuccess, lockedCrewId, lockedCrewName }: EvaluationDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
@@ -86,12 +89,12 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
       });
     } else {
       setFormData({
-        crew_member_id: '', evaluation_period_start: '', evaluation_period_end: '',
+        crew_member_id: lockedCrewId || '', evaluation_period_start: '', evaluation_period_end: '',
         ship_id: '', evaluator_name: '', evaluator_rank: '',
         scores: {}, strengths: '', areas_for_improvement: '', recommendation: '', comments: '',
       });
     }
-  }, [record, open]);
+  }, [record, open, lockedCrewId]);
 
   const setScore = (key: string, val: number) => setFormData(prev => ({ ...prev, scores: { ...prev.scores, [key]: val } }));
 
@@ -151,13 +154,20 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">선원 *</Label>
-                <Select value={formData.crew_member_id} onValueChange={v => setFormData({ ...formData, crew_member_id: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 선택" /></SelectTrigger>
-                  <SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name} ({c.rank})</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+              {lockedCrewId ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">선원</Label>
+                  <Input value={lockedCrewName || ''} disabled className="h-9 text-sm" />
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">선원 *</Label>
+                  <Select value={formData.crew_member_id} onValueChange={v => setFormData({ ...formData, crew_member_id: v })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 선택" /></SelectTrigger>
+                    <SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name} ({c.rank})</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-xs">선박</Label>
                 <Select value={formData.ship_id} onValueChange={v => setFormData({ ...formData, ship_id: v })}>

@@ -4,17 +4,31 @@ import type { CrewEvaluation, CrewEvaluationWithDetails } from '@/types/evaluati
 // ships -> companies/fleets 중첩 임베드는 PostgREST 스키마 캐시 문제로 실패할 수 있어
 // (관측된 오류: "Could not find a relationship between 'ships' and 'fleets'"),
 // ship의 owner_id/fleet_id만 평범한 컬럼으로 받아온 뒤 회사/플릿명은 별도 벌크 조회로 채운다.
-const EVALUATION_SELECT = `*, crew_members!crew_member_id(name, rank_id, current_grade, ranks:rank_id(name, rank_code)), ships!ship_id(name, owner_id, fleet_id)`;
+// 승선 기록(sea_service_record_id)에 연결된 고과는 그 기록에 이미 어느 배인지 정보가 있으므로,
+// 고과 자체의 ship_id가 비어 있어도(과거 데이터 등) 승선 기록에서 선박/선주 정보를 보충해온다.
+const EVALUATION_SELECT = `*, crew_members!crew_member_id(name, rank_id, current_grade, ranks:rank_id(name, rank_code)), sea_service_records!sea_service_record_id(ship_id, ship_name, owner_company_name)`;
 
-interface RawShip { name: string; owner_id: string | null; fleet_id: string | null; }
+interface RawSeaService { ship_id: string | null; ship_name: string | null; owner_company_name: string | null; }
+interface RawShipRow { id: string; name: string; owner_id: string | null; fleet_id: string | null; }
 
 async function mapEvaluationRows(rows: Record<string, unknown>[]): Promise<CrewEvaluationWithDetails[]> {
+  const effectiveShipIds = new Set<string>();
+  for (const r of rows) {
+    const seaService = r.sea_service_records as RawSeaService | null;
+    const shipId = (r.ship_id as string | null) || seaService?.ship_id || null;
+    if (shipId) effectiveShipIds.add(shipId);
+  }
+
+  const shipsRes = effectiveShipIds.size > 0
+    ? await supabase.from('ships').select('id, name, owner_id, fleet_id').in('id', [...effectiveShipIds])
+    : { data: [] as RawShipRow[] };
+  const shipById = new Map((shipsRes.data || []).map(s => [s.id, s]));
+
   const ownerIds = new Set<string>();
   const fleetIds = new Set<string>();
-  for (const r of rows) {
-    const ship = r.ships as RawShip | null;
-    if (ship?.owner_id) ownerIds.add(ship.owner_id);
-    if (ship?.fleet_id) fleetIds.add(ship.fleet_id);
+  for (const s of shipsRes.data || []) {
+    if (s.owner_id) ownerIds.add(s.owner_id);
+    if (s.fleet_id) fleetIds.add(s.fleet_id);
   }
 
   const [ownersRes, fleetsRes] = await Promise.all([
@@ -27,15 +41,17 @@ async function mapEvaluationRows(rows: Record<string, unknown>[]): Promise<CrewE
   return rows.map(r => {
     const crew = r.crew_members as Record<string, unknown> | null;
     const ranks = crew?.ranks as Record<string, unknown> | null;
-    const ship = r.ships as RawShip | null;
+    const seaService = r.sea_service_records as RawSeaService | null;
+    const effectiveShipId = (r.ship_id as string | null) || seaService?.ship_id || null;
+    const ship = effectiveShipId ? shipById.get(effectiveShipId) : undefined;
     return {
       ...r,
       crew_name: (crew?.name as string) || '',
       rank_name: (ranks?.name as string) || '',
       rank_code: (ranks?.rank_code as string) || '',
       rank_grade: (crew?.current_grade as string) || undefined,
-      ship_name: ship?.name || undefined,
-      owner_name: ship?.owner_id ? ownerNameById.get(ship.owner_id) : undefined,
+      ship_name: ship?.name || seaService?.ship_name || undefined,
+      owner_name: (ship?.owner_id ? ownerNameById.get(ship.owner_id) : undefined) || seaService?.owner_company_name || undefined,
       fleet_name: ship?.fleet_id ? fleetNameById.get(ship.fleet_id) : undefined,
     } as CrewEvaluationWithDetails;
   });

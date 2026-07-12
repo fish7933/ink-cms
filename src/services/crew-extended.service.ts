@@ -218,6 +218,21 @@ export async function getMedicalRecords(crewMemberId: string): Promise<MedicalRe
   return data || [];
 }
 
+export async function getMedicalRecordsBySeaServiceRecord(seaServiceRecordId: string): Promise<MedicalRecord[]> {
+  const { data, error } = await supabase
+    .from('medical_records')
+    .select('*')
+    .eq('sea_service_record_id', seaServiceRecordId)
+    .order('record_date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching medical records by sea service record:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
 export async function addMedicalRecord(record: Omit<MedicalRecord, 'id' | 'created_at' | 'updated_at'>): Promise<MedicalRecord> {
   const { data, error } = await supabase
     .from('medical_records')

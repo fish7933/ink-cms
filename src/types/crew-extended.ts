@@ -102,11 +102,14 @@ export interface TrainingRecord {
   updated_at: string;
 }
 
+// 상병(부상/질병) 기록 — crew_evaluations(고과)와 동일하게 sea_service_record_id로 어느
+// 승선 기록 중에 발생했는지 연결할 수 있다 (연결하지 않고 ship_name만 직접 입력할 수도 있음).
 export interface MedicalRecord {
   id: string;
   crew_member_id: string;
+  sea_service_record_id?: string | null;
   record_date: string;
-  record_type: 'injury' | 'illness' | 'checkup' | 'vaccination' | 'other';
+  record_type: 'injury' | 'illness';
   diagnosis: string;
   treatment?: string;
   doctor_name?: string;
@@ -120,6 +123,15 @@ export interface MedicalRecord {
   notes?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface MedicalRecordWithDetails extends MedicalRecord {
+  crew_name: string;
+  rank_name: string;
+  rank_code: string;
+  rank_grade?: string;
+  resolved_ship_name?: string;
+  owner_name?: string;
 }
 
 export interface CrewSalaryRecord {

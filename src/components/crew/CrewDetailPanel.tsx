@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText, Edit2, Star } from 'lucide-react';
+import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText, Edit2, Star, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,10 @@ import type { CertificateType } from '@/types/certificate-type';
 import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
 import SeaServiceDialog from '@/components/crew/SeaServiceDialog';
 import SeaServiceEvaluationDialog from '@/components/crew/SeaServiceEvaluationDialog';
-import { getEvaluations } from '@/services/evaluation.service';
+import SeaServiceMedicalDialog from '@/components/crew/SeaServiceMedicalDialog';
+import EvaluationDialog from '@/components/crew/EvaluationDialog';
+import { getEvaluations, deleteEvaluation } from '@/services/evaluation.service';
+import type { CrewEvaluationWithDetails } from '@/types/evaluation';
 import TrainingRecordDialog from '@/components/crew/TrainingRecordDialog';
 import MedicalRecordDialog from '@/components/crew/MedicalRecordDialog';
 import SalaryRecordDialog from '@/components/crew/SalaryRecordDialog';
@@ -30,6 +33,8 @@ import {
   getCrewSalaryRecords, deleteCrewSalaryRecord,
 } from '@/services/crew-extended.service';
 import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord } from '@/types/crew-extended';
+
+const REC_LABELS: Record<string, string> = { highly_recommend: '강력 추천', recommend: '추천', neutral: '보통', not_recommend: '비추천' };
 
 interface EmergencyContact {
   name: string;
@@ -154,13 +159,19 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [formData, setFormData] = useState(EMPTY_FORM);
 
   const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
+  const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
   const [evaluationCounts, setEvaluationCounts] = useState<Record<string, number>>({});
   const [trainingRecords, setTrainingRecords] = useState<TrainingRecord[]>([]);
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [medicalCounts, setMedicalCounts] = useState<Record<string, number>>({});
   const [salaryRecords, setSalaryRecords] = useState<CrewSalaryRecord[]>([]);
   const [seaServiceDialogOpen, setSeaServiceDialogOpen] = useState(false);
   const [evaluationDialogOpen, setEvaluationDialogOpen] = useState(false);
   const [evaluationDialogRecord, setEvaluationDialogRecord] = useState<SeaServiceRecord | null>(null);
+  const [seaServiceMedicalDialogOpen, setSeaServiceMedicalDialogOpen] = useState(false);
+  const [seaServiceMedicalDialogRecord, setSeaServiceMedicalDialogRecord] = useState<SeaServiceRecord | null>(null);
+  const [crewEvaluationDialogOpen, setCrewEvaluationDialogOpen] = useState(false);
+  const [editingCrewEvaluation, setEditingCrewEvaluation] = useState<CrewEvaluationWithDetails | undefined>();
   const [trainingDialogOpen, setTrainingDialogOpen] = useState(false);
   const [medicalDialogOpen, setMedicalDialogOpen] = useState(false);
   const [salaryDialogOpen, setSalaryDialogOpen] = useState(false);
@@ -269,9 +280,13 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setTrainingRecords(train);
       setMedicalRecords(med);
       setSalaryRecords(sal);
+      setEvaluations(evals);
       const counts: Record<string, number> = {};
       evals.forEach(e => { if (e.sea_service_record_id) counts[e.sea_service_record_id] = (counts[e.sea_service_record_id] || 0) + 1; });
       setEvaluationCounts(counts);
+      const medCounts: Record<string, number> = {};
+      med.forEach(m => { if (m.sea_service_record_id) medCounts[m.sea_service_record_id] = (medCounts[m.sea_service_record_id] || 0) + 1; });
+      setMedicalCounts(medCounts);
     } catch (e) {
       console.error('Extended records load error:', e);
     }
@@ -286,8 +301,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     try { await deleteTrainingRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
   };
   const handleDeleteMedical = async (recordId: string) => {
-    if (!confirm('이 진료 기록을 삭제하시겠습니까?')) return;
+    if (!confirm('이 상병 기록을 삭제하시겠습니까?')) return;
     try { await deleteMedicalRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+  };
+  const handleDeleteEvaluation = async (recordId: string) => {
+    if (!confirm('이 고과 기록을 삭제하시겠습니까?')) return;
+    try { await deleteEvaluation(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
   };
   const handleDeleteSalary = async (recordId: string) => {
     if (!confirm('이 급여 기록을 삭제하시겠습니까?')) return;
@@ -509,15 +528,18 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </TabsTrigger>
           </TabsList>
           {!isNew && (
-            <TabsList className="grid w-full grid-cols-4 h-8">
+            <TabsList className="grid w-full grid-cols-5 h-8">
               <TabsTrigger value="sea_service" className="text-xs">
                 승선경력{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="training" className="text-xs">
                 교육이력{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
               </TabsTrigger>
+              <TabsTrigger value="evaluations" className="text-xs">
+                고과{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
+              </TabsTrigger>
               <TabsTrigger value="medical" className="text-xs">
-                진료기록{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
+                상병{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="salary_records" className="text-xs">
                 급여이력{salaryRecords.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{salaryRecords.length}</span>}
@@ -934,7 +956,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">하선사유</th><th className="text-left p-2">유형</th><th className="text-center p-2">고과</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">하선사유</th><th className="text-left p-2">유형</th><th className="text-center p-2">고과</th><th className="text-center p-2">상병</th><th className="text-center p-2">작업</th>
                     </tr></thead>
                     <tbody>
                       {seaServiceRecords.map(r => (
@@ -960,6 +982,17 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                             )}
                           </td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                            {medicalCounts[r.id] ? (
+                              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-orange-700 bg-orange-50 hover:bg-orange-100" onClick={() => { setSeaServiceMedicalDialogRecord(r); setSeaServiceMedicalDialogOpen(true); }}>
+                                <Stethoscope className="h-3 w-3" />상병 {medicalCounts[r.id]}건
+                              </Button>
+                            ) : (
+                              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-gray-400" onClick={() => { setSeaServiceMedicalDialogRecord(r); setSeaServiceMedicalDialogOpen(true); }}>
+                                <Stethoscope className="h-3 w-3" />상병
+                              </Button>
+                            )}
+                          </td>
+                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteSeaService(r.id)}><Trash2 className="h-3 w-3" /></Button>
                           </td>
                         </tr>
@@ -971,6 +1004,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </div>
             <SeaServiceDialog open={seaServiceDialogOpen} onOpenChange={setSeaServiceDialogOpen} crewId={id!} record={editingSeaService} onSuccess={() => loadExtendedRecords(id!)} />
             <SeaServiceEvaluationDialog open={evaluationDialogOpen} onOpenChange={setEvaluationDialogOpen} crewId={id!} record={evaluationDialogRecord} onChanged={() => loadExtendedRecords(id!)} />
+            <SeaServiceMedicalDialog open={seaServiceMedicalDialogOpen} onOpenChange={setSeaServiceMedicalDialogOpen} crewId={id!} record={seaServiceMedicalDialogRecord} onChanged={() => loadExtendedRecords(id!)} />
           </TabsContent>
         )}
 
@@ -1020,27 +1054,73 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           </TabsContent>
         )}
 
-        {/* 진료기록 */}
+        {/* 고과 — 승선경력 탭에서 승선 건별로 작성한 것 포함, 이 선원의 모든 고과를 모아 보여준다 */}
         {!isNew && (
-          <TabsContent value="medical" className="mt-3 data-[state=inactive]:hidden">
+          <TabsContent value="evaluations" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">진료 기록 ({medicalRecords.length}건)</span>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingMedical(undefined); setMedicalDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                <span className="text-sm font-semibold">고과 ({evaluations.length}건)</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingCrewEvaluation(undefined); setCrewEvaluationDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
               </div>
-              {medicalRecords.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">진료 기록을 추가하세요.</div>
+              {evaluations.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">등록된 고과가 없습니다.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">일자</th><th className="text-left p-2">유형</th><th className="text-left p-2">진단</th><th className="text-left p-2">적합성</th><th className="text-left p-2">추적</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">평가 기간</th><th className="text-left p-2">선박</th><th className="text-center p-2">평균점수</th><th className="text-center p-2">추천</th><th className="text-left p-2">평가자</th><th className="text-center p-2">작업</th>
+                    </tr></thead>
+                    <tbody>
+                      {evaluations.map(e => (
+                        <tr key={e.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingCrewEvaluation(e); setCrewEvaluationDialogOpen(true); }}>
+                          <td className="p-2">{e.evaluation_period_start} ~ {e.evaluation_period_end}</td>
+                          <td className="p-2">{e.ship_name || '-'}</td>
+                          <td className="p-2 text-center">{e.overall_rating ? <span className="inline-flex items-center gap-0.5 font-semibold"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{e.overall_rating}</span> : '-'}</td>
+                          <td className="p-2 text-center">{e.recommendation ? <Badge className="text-xs">{REC_LABELS[e.recommendation] || e.recommendation}</Badge> : '-'}</td>
+                          <td className="p-2 text-gray-500">{e.evaluator_rank ? `${e.evaluator_rank} ` : ''}{e.evaluator_name || '-'}</td>
+                          <td className="p-2 text-center" onClick={ev => ev.stopPropagation()}>
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingCrewEvaluation(e); setCrewEvaluationDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteEvaluation(e.id)}><Trash2 className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <EvaluationDialog
+              open={crewEvaluationDialogOpen} onOpenChange={setCrewEvaluationDialogOpen} record={editingCrewEvaluation}
+              lockedCrewId={id} lockedCrewName={formData.name}
+              onSuccess={() => loadExtendedRecords(id!)}
+            />
+          </TabsContent>
+        )}
+
+        {/* 상병(부상/질병) — 승선경력 탭에서 승선 건별로 등록한 것 포함, 이 선원의 모든 상병 기록을 모아 보여준다 */}
+        {!isNew && (
+          <TabsContent value="medical" className="mt-3 data-[state=inactive]:hidden">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">상병 기록 ({medicalRecords.length}건)</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingMedical(undefined); setMedicalDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+              </div>
+              {medicalRecords.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">등록된 상병 기록이 없습니다.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b bg-gray-50">
+                      <th className="text-left p-2">일자</th><th className="text-left p-2">유형</th><th className="text-left p-2">선박</th><th className="text-left p-2">진단</th><th className="text-left p-2">적합성</th><th className="text-left p-2">추적</th><th className="text-center p-2">작업</th>
                     </tr></thead>
                     <tbody>
                       {medicalRecords.map(r => (
-                        <tr key={r.id} className="border-b hover:bg-gray-50">
+                        <tr key={r.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingMedical(r); setMedicalDialogOpen(true); }}>
                           <td className="p-2">{r.record_date}</td>
-                          <td className="p-2">{r.record_type === 'checkup' ? '검진' : r.record_type === 'illness' ? '질병' : r.record_type === 'injury' ? '부상' : r.record_type === 'vaccination' ? '접종' : '기타'}</td>
+                          <td className="p-2">{r.record_type === 'illness' ? '질병' : '부상'}</td>
+                          <td className="p-2">{r.ship_name || '-'}</td>
                           <td className="p-2 font-medium max-w-[200px] truncate">{r.diagnosis}</td>
                           <td className="p-2">
                             {r.fitness_status === 'fit' ? <Badge className="bg-green-100 text-green-700 text-xs">적합</Badge>
@@ -1050,7 +1130,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                               : '-'}
                           </td>
                           <td className="p-2">{r.follow_up_required ? <Badge className="bg-orange-100 text-orange-700 text-xs">필요</Badge> : '-'}</td>
-                          <td className="p-2 text-center">
+                          <td className="p-2 text-center" onClick={ev => ev.stopPropagation()}>
                             <div className="flex justify-center gap-1">
                               <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingMedical(r); setMedicalDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
                               <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteMedical(r.id)}><Trash2 className="h-3 w-3" /></Button>
@@ -1063,7 +1143,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 </div>
               )}
             </div>
-            <MedicalRecordDialog open={medicalDialogOpen} onOpenChange={setMedicalDialogOpen} crewId={id!} record={editingMedical} onSuccess={() => loadExtendedRecords(id!)} />
+            <MedicalRecordDialog open={medicalDialogOpen} onOpenChange={setMedicalDialogOpen} crewId={id!} record={editingMedical} onSuccess={() => loadExtendedRecords(id!)} seaServiceRecords={seaServiceRecords} />
           </TabsContent>
         )}
 

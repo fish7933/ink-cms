@@ -114,7 +114,7 @@ export default function SeaServiceEvaluationDialog({ open, onOpenChange, crewId,
       const data = {
         crew_member_id: crewId,
         sea_service_record_id: record.id,
-        ship_id: undefined,
+        ship_id: record.ship_id || undefined,
         evaluation_period_start: record.sign_on_date,
         evaluation_period_end: record.sign_off_date || record.sign_on_date,
         evaluator_name: form.evaluator_name || undefined,
