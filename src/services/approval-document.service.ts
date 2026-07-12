@@ -174,6 +174,8 @@ export const approvalDocumentService = {
     // 결재선과 별개로 통보만 받을 참조자(개인) / 참조 부서
     ccUserIds?: string[];
     ccOrgUnitIds?: string[];
+    // 임시저장해둔 초안을 정식 제출로 전환할 때 — 새 행을 만들지 않고 이 초안 행을 그대로 갱신한다.
+    draftId?: string;
   }): Promise<ApprovalDocumentWithDetails> {
     const chain = await this.previewChain(input.org_unit_id, input.document_type_id);
     if (chain.length === 0) {
@@ -198,25 +200,25 @@ export const approvalDocumentService = {
     const firstPending = stepRows.find(s => s.status === 'pending');
     const allApproved = !firstPending;
 
-    const { data: doc, error: docError } = await supabase
-      .from('approval_documents')
-      .insert({
-        document_type_id: input.document_type_id,
-        title: input.title,
-        content: input.content || null,
-        form_data: input.form_data || null,
-        attachments: input.attachments || [],
-        org_unit_id: input.org_unit_id,
-        created_by: input.created_by,
-        requester_comment: input.requester_comment || null,
-        reference_type: input.reference_type || null,
-        reference_id: input.reference_id || null,
-        status: allApproved ? 'approved' : 'pending',
-        current_step: allApproved ? stepRows.length : firstPending!.step_order,
-        completed_at: allApproved ? now : null,
-      })
-      .select()
-      .single();
+    const docPayload = {
+      document_type_id: input.document_type_id,
+      title: input.title,
+      content: input.content || null,
+      form_data: input.form_data || null,
+      attachments: input.attachments || [],
+      org_unit_id: input.org_unit_id,
+      created_by: input.created_by,
+      requester_comment: input.requester_comment || null,
+      reference_type: input.reference_type || null,
+      reference_id: input.reference_id || null,
+      status: allApproved ? 'approved' : 'pending',
+      current_step: allApproved ? stepRows.length : firstPending!.step_order,
+      completed_at: allApproved ? now : null,
+    };
+
+    const { data: doc, error: docError } = input.draftId
+      ? await supabase.from('approval_documents').update({ ...docPayload, updated_at: now }).eq('id', input.draftId).select().single()
+      : await supabase.from('approval_documents').insert(docPayload).select().single();
     if (docError) throw docError;
 
     if (allApproved && doc.reference_type) {
@@ -240,6 +242,45 @@ export const approvalDocumentService = {
 
     const [enriched] = await enrichDocuments([doc]);
     return { ...enriched, steps: (steps || []) as ApprovalDocumentStep[] };
+  },
+
+  // 기안서 작성 중 임시저장. draftId가 없으면 새 초안을 만들고, 있으면 그 초안을 그대로 갱신한다.
+  // 결재라인/단계는 만들지 않으며(status='draft'), 정식 제출 전까지 결재함에는 노출되지 않는다.
+  async saveDraft(input: {
+    draftId?: string;
+    document_type_id: string;
+    title: string;
+    content?: string;
+    form_data?: Record<string, string | number | null>;
+    attachments?: ApprovalDocumentAttachment[];
+    org_unit_id?: string;
+    created_by: string;
+    requester_comment?: string;
+  }): Promise<ApprovalDocumentWithDetails> {
+    const payload = {
+      document_type_id: input.document_type_id,
+      title: input.title,
+      content: input.content || null,
+      form_data: input.form_data || null,
+      attachments: input.attachments || [],
+      org_unit_id: input.org_unit_id || null,
+      created_by: input.created_by,
+      requester_comment: input.requester_comment || null,
+      status: 'draft',
+      current_step: 0,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: doc, error } = input.draftId
+      ? await supabase.from('approval_documents').update(payload).eq('id', input.draftId).select().single()
+      : await supabase.from('approval_documents').insert(payload).select().single();
+    if (error) throw error;
+    const [enriched] = await enrichDocuments([doc]);
+    return { ...enriched, steps: [] };
+  },
+
+  async deleteDraft(id: string): Promise<void> {
+    const { error } = await supabase.from('approval_documents').delete().eq('id', id).eq('status', 'draft');
+    if (error) throw error;
   },
 
   async getMyDraftedDocuments(userId: string): Promise<ApprovalDocumentWithDetails[]> {
@@ -295,6 +336,7 @@ export const approvalDocumentService = {
     const { data, error } = await supabase
       .from('approval_documents')
       .select('*')
+      .neq('status', 'draft')
       .order('created_at', { ascending: false });
     if (error) throw error;
     return enrichDocuments(data || []);
@@ -307,7 +349,7 @@ export const approvalDocumentService = {
       ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
       : `user_id.eq.${userId}`;
     const [draftedRes, stepsRes, refsRes] = await Promise.all([
-      supabase.from('approval_documents').select('id').eq('created_by', userId),
+      supabase.from('approval_documents').select('id').eq('created_by', userId).neq('status', 'draft'),
       supabase.from('approval_document_steps').select('document_id').eq('approver_id', userId),
       supabase.from('approval_document_references').select('document_id').or(orFilter),
     ]);

@@ -154,20 +154,11 @@ export const defaultMenuStructure: MenuCategory[] = [
       },
       {
         id: 'document-draft',
-        label: '기안서 작성',
+        label: '기안함',
         path: '/documents/new',
         icon: 'FileText',
-        roles: ['ship_manager'],
-        order: 2,
-        is_active: true,
-      },
-      {
-        id: 'my-documents',
-        label: '내 문서함',
-        path: '/my-documents',
-        icon: 'Archive',
         roles: ['ship_manager', 'admin', 'system_admin'],
-        order: 3,
+        order: 2,
         is_active: true,
       },
       {

@@ -61,7 +61,7 @@ export interface ApprovalDocument {
   reference_type: string | null;
   reference_id: string | null;
   org_unit_id: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
   current_step: number;
   created_by: string;
   requester_comment: string | null;

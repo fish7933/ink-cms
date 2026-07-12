@@ -615,7 +615,7 @@ export default function ShoreLeaveManagementPage() {
                 </div>
                 <div className="p-3 bg-blue-50 rounded-md text-center">
                   <p className="text-xs text-blue-600">결과</p>
-                  <p className="text-lg font-bold text-blue-700">{ex.days}일 = {formatLeaveHours(ex.days * HOURS_PER_DAY)}</p>
+                  <p className="text-lg font-bold text-blue-700">{ex.days}일 ({ex.days * HOURS_PER_DAY}시간)</p>
                 </div>
               </div>
             );
