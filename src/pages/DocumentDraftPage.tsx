@@ -13,6 +13,7 @@ import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTabContext } from '@/contexts/TabContext';
 import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
 import { msg } from '@/lib/messages';
 import type { OrgUnit } from '@/types/org-chart';
@@ -23,6 +24,7 @@ import type { User } from '@/types/models';
 export default function DocumentDraftPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { activeTabId, openTab, closeTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [types, setTypes] = useState<ApprovalDocumentType[]>([]);
   const [units, setUnits] = useState<OrgUnit[]>([]);
@@ -159,7 +161,12 @@ export default function DocumentDraftPage() {
         ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
       });
       toast({ title: '기안서가 제출되었습니다.' });
-      navigate('/documents');
+      // 결재함 탭이 이미 열려 있으면 그 탭으로 전환하며 새로고침하고, 없으면 새로 연다.
+      // 그 다음에 지금 작성 중이던 이 탭을 닫는다 (activeTabId가 이미 결재함으로 바뀐 뒤라
+      // closeTab이 별도로 navigate하지 않고 탭 목록에서만 제거된다).
+      const draftTabId = activeTabId;
+      openTab('/approval-inbox', '결재함');
+      if (draftTabId) closeTab(draftTabId);
     } catch (e) {
       toast({ title: '제출 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
