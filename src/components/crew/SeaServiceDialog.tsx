@@ -39,7 +39,13 @@ interface RegisteredShip {
   name: string;
   owner_id: string;
   fleet_id?: string | null;
+  ship_type?: string | null;
+  flag?: string | null;
+  gross_tonnage?: number | null;
+  engine_power?: number | null;
 }
+
+interface FleetOption { id: string; name: string; owner_id: string; }
 
 interface SeaServiceDialogProps {
   open: boolean;
@@ -63,6 +69,10 @@ export default function SeaServiceDialog({
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [signOffReasons, setSignOffReasons] = useState<SignOffReason[]>([]);
   const [registeredShips, setRegisteredShips] = useState<RegisteredShip[]>([]);
+  const [fleetOptions, setFleetOptions] = useState<FleetOption[]>([]);
+  const [ownerCompanies, setOwnerCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [selectedOwnerId, setSelectedOwnerId] = useState('');
+  const [selectedFleetId, setSelectedFleetId] = useState('');
   const [companiesMap, setCompaniesMap] = useState<Map<string, string>>(new Map());
   const [shipManagerCompanyName, setShipManagerCompanyName] = useState('');
   const [crewManningAgencyName, setCrewManningAgencyName] = useState('');
@@ -94,19 +104,22 @@ export default function SeaServiceDialog({
       getActiveShipFlags(),
       supabase.from('ranks').select('*'),
       getSignOffReasons(),
-      supabase.from('ships').select('id, name, owner_id, fleet_id').order('name'),
+      supabase.from('ships').select('id, name, owner_id, fleet_id, ship_type, flag, gross_tonnage, engine_power').order('name'),
       supabase.from('companies').select('id, name, company_type'),
+      supabase.from('fleets').select('id, name, owner_id').order('name'),
       supabase.from('crew_members').select('manning_agency_id').eq('id', crewId).single(),
       loadShipSalaryRankMaps(),
       getCompanyInfo(),
-    ]).then(([types, flags, ranksRes, reasons, shipsRes, companiesRes, crewRes, salaryMaps, companyInfo]) => {
+    ]).then(([types, flags, ranksRes, reasons, shipsRes, companiesRes, fleetsRes, crewRes, salaryMaps, companyInfo]) => {
       setShipTypes(types);
       setShipFlags(flags);
       setRanks(sortRanksByDisplayOrder(ranksRes.data || []));
       setSignOffReasons(reasons);
       setRegisteredShips(shipsRes.data || []);
+      setFleetOptions(fleetsRes.data || []);
       const cMap = new Map((companiesRes.data || []).map((c: { id: string; name: string }) => [c.id, c.name]));
       setCompaniesMap(cMap);
+      setOwnerCompanies((companiesRes.data || []).filter((c: { company_type?: string }) => c.company_type === 'owner'));
       setShipManagerCompanyName(companyInfo?.name || '');
       const manningId = (crewRes.data as { manning_agency_id?: string } | null)?.manning_agency_id;
       setCrewManningAgencyName(manningId ? (cMap.get(manningId) || '') : '');
@@ -153,16 +166,36 @@ export default function SeaServiceDialog({
         manning_agency_name: '',
         notes: '',
       });
+      setSelectedOwnerId('');
+      setSelectedFleetId('');
     }
   }, [record, open]);
 
-  // 회사 배치: 실제 등록된 선박을 고르면 선주사/선박관리사/매닝사, 직급/등급 선택지를 실제 데이터에서 채운다
+  // 신규 등록시 하선 사유는 "계약만료"를 기본값으로 미리 선택해둔다 (필요하면 직접 변경 가능)
+  useEffect(() => {
+    if (record || !open || formData.sign_off_reason_id || signOffReasons.length === 0) return;
+    const def = signOffReasons.find(r => r.name === '계약만료');
+    if (def) setFormData(prev => ({ ...prev, sign_off_reason_id: def.id }));
+  }, [signOffReasons, open, record]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 수정시: 선택된 선박이 로드되면 그 선박의 선주/플릿으로 상단 셀렉트 캐스케이드를 맞춰준다
+  useEffect(() => {
+    if (!formData.ship_id || registeredShips.length === 0) return;
+    const ship = registeredShips.find(s => s.id === formData.ship_id);
+    if (ship) { setSelectedOwnerId(ship.owner_id); setSelectedFleetId(ship.fleet_id || ''); }
+  }, [formData.ship_id, registeredShips]);
+
+  // 회사 배치: 실제 등록된 선박을 고르면 선주사/선박관리사/매닝사, 선종/선적/톤수, 직급/등급 선택지를 실제 데이터에서 채운다
   const handleShipSelect = (shipId: string) => {
     const ship = registeredShips.find(s => s.id === shipId);
     setFormData(prev => ({
       ...prev,
       ship_id: shipId,
       ship_name: ship?.name || '',
+      ship_type: ship?.ship_type || prev.ship_type,
+      flag: ship?.flag || prev.flag,
+      gross_tonnage: ship?.gross_tonnage != null ? String(ship.gross_tonnage) : prev.gross_tonnage,
+      engine_power: ship?.engine_power != null ? String(ship.engine_power) : prev.engine_power,
       owner_company_name: ship?.owner_id ? (companiesMap.get(ship.owner_id) || '') : '',
       ship_manager_name: shipManagerCompanyName || prev.ship_manager_name,
       manning_agency_name: crewManningAgencyName || prev.manning_agency_name,
@@ -170,6 +203,22 @@ export default function SeaServiceDialog({
       rank_grade: '',
     }));
   };
+
+  // 선주사를 고르면 플릿/선박 선택을 초기화해서 다시 좁혀나가게 한다
+  const handleOwnerSelect = (ownerId: string) => {
+    setSelectedOwnerId(ownerId);
+    setSelectedFleetId('');
+    setFormData(prev => ({ ...prev, ship_id: '', ship_name: '' }));
+  };
+  const handleFleetSelect = (fleetId: string) => {
+    setSelectedFleetId(fleetId);
+    setFormData(prev => ({ ...prev, ship_id: '', ship_name: '' }));
+  };
+
+  const shipsForSelectedOwnerFleet = registeredShips.filter(s =>
+    (!selectedOwnerId || s.owner_id === selectedOwnerId) && (!selectedFleetId || s.fleet_id === selectedFleetId)
+  );
+  const fleetsForSelectedOwner = fleetOptions.filter(f => !selectedOwnerId || f.owner_id === selectedOwnerId);
 
   const isCompanyAssignment = formData.record_type === 'company_assignment';
   const rankOptions = isCompanyAssignment && formData.ship_id ? getRankOptionsForShip(salaryRankMaps, formData.ship_id) : ranks;
@@ -267,17 +316,40 @@ export default function SeaServiceDialog({
               </Select>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 p-3 bg-gray-50 rounded-md">
+            <div className="grid grid-cols-4 gap-3 p-3 bg-gray-50 rounded-md">
               <div className="space-y-1.5">
                 <Label htmlFor="owner_company_name" className="text-xs">선주사</Label>
-                <Input
-                  id="owner_company_name"
-                  value={formData.owner_company_name}
-                  onChange={(e) => setFormData({ ...formData, owner_company_name: e.target.value })}
-                  placeholder="선주사명"
-                  readOnly={isCompanyAssignment && !!formData.ship_id}
-                  className={`h-9 text-sm ${isCompanyAssignment && formData.ship_id ? 'bg-gray-100' : ''}`}
-                />
+                {isCompanyAssignment ? (
+                  <Select value={selectedOwnerId || '_none'} onValueChange={v => v !== '_none' && handleOwnerSelect(v)}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주사 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none" className="text-sm">선주사 선택</SelectItem>
+                      {ownerCompanies.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="owner_company_name"
+                    value={formData.owner_company_name}
+                    onChange={(e) => setFormData({ ...formData, owner_company_name: e.target.value })}
+                    placeholder="선주사명"
+                    className="h-9 text-sm"
+                  />
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="fleet" className="text-xs">플릿</Label>
+                {isCompanyAssignment ? (
+                  <Select value={selectedFleetId || '_none'} onValueChange={v => handleFleetSelect(v === '_none' ? '' : v)} disabled={!selectedOwnerId}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="플릿 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none" className="text-sm">전체 플릿</SelectItem>
+                      {fleetsForSelectedOwner.map(f => <SelectItem key={f.id} value={f.id} className="text-sm">{f.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value="" disabled placeholder="-" className="h-9 text-sm bg-gray-100" />
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ship_manager_name" className="text-xs">선박관리사</Label>
@@ -310,7 +382,7 @@ export default function SeaServiceDialog({
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none" className="text-sm">선박 선택</SelectItem>
-                      {registeredShips.map(s => (
+                      {shipsForSelectedOwnerFleet.map(s => (
                         <SelectItem key={s.id} value={s.id} className="text-sm">{s.name}</SelectItem>
                       ))}
                     </SelectContent>
