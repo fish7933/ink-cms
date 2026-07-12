@@ -63,9 +63,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         </div>
       )}
 
-      <div style={{ textAlign: 'center', margin: '14px 0 20px', paddingBottom: 12, borderBottom: '3px solid #1a1a1a' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: 12, margin: 0 }}>시 행 문</h1>
-      </div>
+      <div style={{ margin: '10px 0 18px', borderBottom: '3px solid #1a1a1a' }} />
 
       <table style={{ width: '100%', fontSize: 13, marginBottom: 16 }}>
         <tbody>
