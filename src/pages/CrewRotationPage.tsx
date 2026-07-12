@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
-import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +53,8 @@ export function CrewRotationPage() {
   const [filterOwner, setFilterOwner] = useState('');
   const [filterFleet, setFilterFleet] = useState('');
   const [filterShip, setFilterShip] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // 계약만료 자동생성 다이얼로그
   const [autoGenOpen, setAutoGenOpen] = useState(false);
@@ -107,10 +109,15 @@ export function CrewRotationPage() {
     return list;
   }, [plans, statusTab, filterOwner, filterFleet, filterShip]);
 
-  // 교대일(rotation_date) 기준 연/월로 묶어서 표시 — 최신 연월이 위로
+  useEffect(() => { setCurrentPage(1); }, [statusTab, filterOwner, filterFleet, filterShip]);
+  const totalPages = Math.max(1, Math.ceil(filteredPlans.length / itemsPerPage));
+  const paginatedPlans = useMemo(() => filteredPlans.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredPlans, currentPage, itemsPerPage]);
+  const goToPage = (p: number) => setCurrentPage(Math.max(1, Math.min(p, totalPages)));
+
+  // 교대일(rotation_date) 기준 연/월로 묶어서 표시 — 최신 연월이 위로 (현재 페이지 분량만 묶는다)
   const groupedPlans = useMemo(() => {
     const groups = new Map<string, CrewRotationPlanWithDetails[]>();
-    for (const p of filteredPlans) {
+    for (const p of paginatedPlans) {
       const d = new Date(p.rotation_date);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (!groups.has(key)) groups.set(key, []);
@@ -122,7 +129,7 @@ export function CrewRotationPage() {
         const [y, m] = key.split('-');
         return { key, label: `${y}년 ${m}월`, plans: list };
       });
-  }, [filteredPlans]);
+  }, [paginatedPlans]);
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
@@ -340,6 +347,13 @@ export function CrewRotationPage() {
               <CardTitle className="text-sm">교대 계획 목록</CardTitle>
               <CardDescription className="text-xs">작성된 선원 교대 계획서 목록입니다</CardDescription>
             </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">페이지당</span>
+              <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
+                <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
             {selectedIds.length > 0 && (
               <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
                 <Trash2 className="h-3.5 w-3.5 mr-1" />선택 삭제 ({selectedIds.length})
@@ -425,6 +439,26 @@ export function CrewRotationPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 py-3">
+              <Button variant="outline" size="sm" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="h-8">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const p = totalPages <= 5 ? i + 1
+                  : currentPage <= 3 ? i + 1
+                  : currentPage >= totalPages - 2 ? totalPages - 4 + i
+                  : currentPage - 2 + i;
+                return (
+                  <Button key={p} variant={currentPage === p ? 'default' : 'outline'} size="sm"
+                    onClick={() => goToPage(p)} className="h-8 w-8 p-0">{p}</Button>
+                );
+              })}
+              <Button variant="outline" size="sm" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="h-8">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
