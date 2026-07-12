@@ -426,11 +426,17 @@ export default function RotationPlanFormPage() {
     const validRows = rows.filter(r => r.boardingCrewId || r.disembarkCrewId);
     if (validRows.length === 0) { toast({ title: '배정 정보를 입력하세요', variant: 'destructive' }); return; }
 
-    // 승선자 직급/등급 필수 검증
-    const missingRankGrade = validRows.filter(r => r.boardingCrewId && (!r.boardingRankId || !r.boardingGrade));
-    if (missingRankGrade.length > 0) {
-      const names = missingRankGrade.map(r => getCrew(r.boardingCrewId)?.name || '?').join(', ');
-      toast({ title: '승선 직급·등급 필수', description: `${names} — 승선 직급과 등급을 모두 선택하세요`, variant: 'destructive' });
+    // 승선자 직급/등급 필수 검증 — 등급은 그 직급의 급여템플릿에 실제로 등급 옵션이 있을 때만 필수
+    const missingRank = validRows.filter(r => r.boardingCrewId && !r.boardingRankId);
+    if (missingRank.length > 0) {
+      const names = missingRank.map(r => getCrew(r.boardingCrewId)?.name || '?').join(', ');
+      toast({ title: '승선 직급 필수', description: `${names} — 승선 직급을 선택하세요`, variant: 'destructive' });
+      return;
+    }
+    const missingGrade = validRows.filter(r => r.boardingCrewId && r.boardingRankId && gradesForRankId(r.boardingRankId).length > 0 && !r.boardingGrade);
+    if (missingGrade.length > 0) {
+      const names = missingGrade.map(r => getCrew(r.boardingCrewId)?.name || '?').join(', ');
+      toast({ title: '승선 등급 필수', description: `${names} — 이 직급은 급여템플릿에 등급이 구분돼 있어 등급을 선택해야 합니다`, variant: 'destructive' });
       return;
     }
 
@@ -660,7 +666,7 @@ export default function RotationPlanFormPage() {
                         </Select>
                       ) : (
                         <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
-                          placeholder="등급 *" className={`h-7 text-xs w-16 shrink-0 ${!row.boardingGrade ? 'border-orange-300' : ''}`} />
+                          placeholder="등급" className="h-7 text-xs w-16 shrink-0" />
                       );
                     })()}
                   </div>
@@ -796,7 +802,9 @@ export default function RotationPlanFormPage() {
                           <span className="font-medium text-emerald-800 truncate">{inCrew.name}</span>
                           {r.boardingGrade
                             ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
-                            : <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>}
+                            : gradesForRankId(r.boardingRankId).length > 0
+                              ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
+                              : null}
                           {r.boardingDate && <span className="text-[10px] text-gray-400 shrink-0">{r.boardingDate}</span>}
                         </div>
                       ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
