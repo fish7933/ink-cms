@@ -195,7 +195,6 @@ function getTitleFromPath(path: string): string {
   if (map[path]) return map[path];
   const basePath = path.split('?')[0];
   if (map[basePath]) return map[basePath];
-  if (basePath.match(/^\/crew\/[^/]+\/resume$/)) return '이력서';
   if (basePath.match(/^\/salary\/templates\/[^/]+\/edit$/)) return '급여 템플릿 수정';
   if (basePath.match(/^\/salary\/templates\/[^/]+$/)) return '급여 템플릿 상세';
   if (basePath.match(/^\/crew\/[^/]+$/)) return '선원 정보';

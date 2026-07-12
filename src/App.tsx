@@ -5,6 +5,7 @@ import LoginPage from '@/pages/LoginPage';
 import AuthCallback from '@/pages/AuthCallback';
 import SalaryTemplatePrintPage from '@/pages/SalaryTemplatePrintPage';
 import ApprovalDocumentPrintPage from '@/pages/ApprovalDocumentPrintPage';
+import CrewResumePage from '@/pages/CrewResumePage';
 import Layout from '@/components/Layout';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -20,6 +21,7 @@ function App() {
           {/* 사이드바/헤더/탭바를 완전히 우회하는 순수 인쇄 문서 라우트 (Layout 밖) */}
           <Route path="/print/salary-templates/:id" element={<SalaryTemplatePrintPage />} />
           <Route path="/print/documents/:id" element={<ApprovalDocumentPrintPage />} />
+          <Route path="/print/crew/:id/resume" element={<CrewResumePage />} />
           <Route path="*" element={<Layout />} />
         </Routes>
         <Toaster />

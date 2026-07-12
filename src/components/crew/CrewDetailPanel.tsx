@@ -1161,7 +1161,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                   variant="outline"
                   size="sm"
                   className="gap-1.5 h-8 text-blue-700 border-blue-300 hover:bg-blue-50"
-                  onClick={() => window.open(`/crew/${id}/resume`, '_blank')}
+                  onClick={() => window.open(`/print/crew/${id}/resume`, '_blank')}
                 >
                   <FileText className="w-4 h-4" />
                   이력서 출력

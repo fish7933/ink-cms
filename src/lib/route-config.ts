@@ -3,7 +3,6 @@ import { lazy } from 'react';
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const CrewManagementPage = lazy(() => import('@/pages/CrewManagementPage'));
 const CrewDetailPage = lazy(() => import('@/pages/CrewDetailPage'));
-const CrewResumePage = lazy(() => import('@/pages/CrewResumePage'));
 const CrewInputPage = lazy(() => import('@/pages/CrewInputPage'));
 const CrewAssignmentPage = lazy(() => import('@/pages/CrewAssignmentPage'));
 const CrewRotationPage = lazy(() => import('@/pages/CrewRotationPage').then(m => ({ default: m.CrewRotationPage })));
@@ -71,7 +70,6 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew/input/:recommendationId', component: CrewInputPage },
   { path: '/crew/input', component: CrewInputPage },
   { path: '/crew/new', component: CrewDetailPage },
-  { path: '/crew/:id/resume', component: CrewResumePage },
   { path: '/crew/:id', component: CrewDetailPage },
   { path: '/crew', component: CrewManagementPage },
   { path: '/assignments', component: CrewAssignmentPage },
