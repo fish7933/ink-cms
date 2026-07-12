@@ -27,6 +27,7 @@ export default function DocumentDraftPage() {
   const [types, setTypes] = useState<ApprovalDocumentType[]>([]);
   const [units, setUnits] = useState<OrgUnit[]>([]);
   const [myOrgUnitIds, setMyOrgUnitIds] = useState<string[]>([]);
+  const [myPositionName, setMyPositionName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,9 +66,11 @@ export default function DocumentDraftPage() {
         setUnits(u);
         // 기안 부서는 본인이 소속된 부서만 고를 수 있어야 한다 (다른 부서 명의로 기안하면 안 됨).
         // 단, 관리자는 조직도 담당자 지정 없이 시스템 전체를 관리하므로 예외적으로 전체 부서를 허용한다.
-        const myUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
+        const me = members.find(m => m.id === user.id);
+        const myUnitIds = me?.org_unit_ids || [];
         const isAdminRole = user.role === 'admin' || user.role === 'system_admin';
         setMyOrgUnitIds(isAdminRole ? u.map(x => x.id) : myUnitIds);
+        setMyPositionName(me?.position_name || null);
         // 대부분 본인 소속 부서로 기안하므로 기본값으로 미리 채워둔다 (필요하면 직접 바꿀 수 있음)
         if (myUnitIds[0]) setOrgUnitId(myUnitIds[0]);
       } catch (e) {
@@ -288,8 +291,10 @@ export default function DocumentDraftPage() {
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="px-2.5 py-1.5 rounded border bg-purple-50 border-purple-300 text-xs">
-                  <div className="font-medium">기안자</div>
-                  <div className="text-gray-500">{currentUser?.name}</div>
+                  <div className="font-medium">기안자 · {currentUser?.name}</div>
+                  <div className="text-gray-500">
+                    {[units.find(u => u.id === orgUnitId)?.name, myPositionName].filter(Boolean).join(' · ') || '-'}
+                  </div>
                 </div>
                 {previewChain.length > 0 && <span className="text-gray-400">→</span>}
                 {previewChain.map((c, i) => {
