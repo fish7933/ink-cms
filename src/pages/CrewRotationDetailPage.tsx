@@ -5,10 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { rotationService } from '@/services/rotation.service';
+import { approvalService } from '@/services/approval.service';
+import { getCurrentUser } from '@/lib/store';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
+import type { ApprovalLineWithSteps } from '@/types/approval';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,6 +33,13 @@ export default function CrewRotationDetailPage() {
   const [plan, setPlan] = useState<CrewRotationPlanWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 배승 결재 상신 다이얼로그 — 채용 결재와 동일하게 결재선을 직접 선택
+  const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [submitLineId, setSubmitLineId] = useState('');
+  const [submitComment, setSubmitComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const loadPlan = async () => {
     if (!id) return;
     setLoading(true);
@@ -37,13 +50,22 @@ export default function CrewRotationDetailPage() {
   };
 
   useEffect(() => { loadPlan(); }, [id]);
+  useEffect(() => { getCurrentUser().then(u => { if (u) approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines); }); }, []);
+
+  const openSubmitDialog = () => { setSubmitLineId(''); setSubmitComment(''); setSubmitDialogOpen(true); };
 
   const handleSubmitApproval = async () => {
-    if (!plan || !confirm('결재 상신하시겠습니까? 작성자 소속 부서를 기준으로 결재라인이 자동 구성됩니다.')) return;
-    const result = await rotationService.submitRotationPlanForApproval(plan.id);
-    if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
-    toast({ title: '결재 상신 완료', description: '내 결재함(일반 문서)에서 진행 상황을 확인할 수 있습니다.' });
-    loadPlan();
+    if (!plan || !submitLineId) return;
+    try {
+      setSubmitting(true);
+      const result = await rotationService.submitRotationPlanForApproval(plan.id, submitLineId, submitComment || undefined);
+      if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
+      toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
+      setSubmitDialogOpen(false);
+      loadPlan();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleExecute = async () => {
@@ -87,7 +109,7 @@ export default function CrewRotationDetailPage() {
             <div className="flex items-center gap-2">
               <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
               {plan.status === 'draft' && (
-                <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={handleSubmitApproval}>결재 상신</Button>
+                <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openSubmitDialog}>결재 상신</Button>
               )}
               {plan.status === 'approved' && (
                 <Button size="sm" className="h-8" onClick={handleExecute}>발령 실행</Button>
@@ -171,6 +193,37 @@ export default function CrewRotationDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={submitDialogOpen} onOpenChange={o => !submitting && setSubmitDialogOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>배승 결재 상신</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <Select value={submitLineId} onValueChange={setSubmitLineId}>
+                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectContent>
+                  {approvalLines.length === 0
+                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)} disabled={submitting}>취소</Button>
+            <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
+              {submitting ? '처리 중...' : '결재 상신'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

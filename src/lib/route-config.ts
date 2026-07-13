@@ -22,6 +22,8 @@ const MyRecommendationsPage = lazy(() => import('@/pages/MyRecommendationsPage')
 const RecommendationReviewPage = lazy(() => import('@/pages/RecommendationReviewPage'));
 const ApprovalLineManagementPage = lazy(() => import('@/pages/ApprovalLineManagementPage'));
 const ApprovalInboxPage = lazy(() => import('@/pages/ApprovalInboxPage'));
+const DispatchApprovalInboxPage = lazy(() => import('@/pages/DispatchApprovalInboxPage'));
+const GroupwareSettingsPage = lazy(() => import('@/pages/GroupwareSettingsPage'));
 const ApprovalDocumentDetailPage = lazy(() => import('@/pages/ApprovalDocumentDetailPage'));
 const SupervisorManagementPage = lazy(() => import('@/pages/SupervisorManagementPage'));
 const RanksPage = lazy(() => import('@/pages/RanksPage'));
@@ -91,6 +93,8 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew-recommendations', component: CrewRecommendationsPage },
   { path: '/my-recommendations', component: MyRecommendationsPage },
   { path: '/recommendation-review', component: RecommendationReviewPage },
+  { path: '/dispatch-approval-inbox', component: DispatchApprovalInboxPage },
+  { path: '/groupware-settings', component: GroupwareSettingsPage },
   { path: '/approval-lines', component: ApprovalLineManagementPage },
   { path: '/approval-inbox', component: ApprovalInboxPage },
   // 결재함/기안함/참조함/완료문서함/결재캐비닛을 결재함(ApprovalInboxPage) 하나로 통합 —

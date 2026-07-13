@@ -3,29 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
-  CheckCircle2, XCircle, Clock, FileText, User, Ship, Calendar, ArrowLeft,
-  Trash2, Ban, Inbox, Plus,
+  CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
-import { approvalService } from '@/services/approval.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
-import type { CrewRecommendationApprovalWithDetails } from '@/types/approval';
-import type { CrewRecommendation } from '@/types/crew-recommendation';
+import { supabase } from '@/lib/supabase';
 import type { ApprovalDocumentWithDetails } from '@/types/approval-document';
 
-type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & { recommendation?: CrewRecommendation };
-type CrewFilter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
 type DocFilter = 'all' | 'mine' | 'pending' | 'referenced' | 'approved' | 'rejected';
 
 const DRAFT_ROLES = ['ship_manager', 'admin', 'system_admin'];
@@ -37,21 +30,10 @@ export default function ApprovalInboxPage() {
 
   const [initializing, setInitializing] = useState(true);
   const [currentUserId, setCurrentUserId] = useState('');
-  const [currentUserName, setCurrentUserName] = useState('');
   const [currentUserRole, setCurrentUserRole] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [myOrgUnitIds, setMyOrgUnitIds] = useState<string[]>([]);
 
-  // 선원추천 결재
-  const [crewApprovals, setCrewApprovals] = useState<ApprovalWithRecommendation[]>([]);
-  const [crewFilter, setCrewFilter] = useState<CrewFilter>('all');
-  const [crewViewMode, setCrewViewMode] = useState<'list' | 'detail' | 'action'>('list');
-  const [selectedCrewApproval, setSelectedCrewApproval] = useState<ApprovalWithRecommendation | null>(null);
-  const [crewActionType, setCrewActionType] = useState<'approve' | 'reject' | null>(null);
-  const [crewComment, setCrewComment] = useState('');
-  const [crewProcessing, setCrewProcessing] = useState(false);
-
-  // 일반 문서(기안서) 결재
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [referencedDocIds, setReferencedDocIds] = useState<Set<string>>(new Set());
   const [docFilter, setDocFilter] = useState<DocFilter>('all');
@@ -64,8 +46,6 @@ export default function ApprovalInboxPage() {
   const permissions = usePermissions('approval_inbox');
 
   // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우 접근을 차단한다. loading 중에는 판단하지 않는다.
-  // 참고: isAdmin은 결재 워크플로우상의 권한(전체 문서 조회 등)이고, 이 canView는 완전히 별개인
-  // "이 메뉴 자체에 접근 가능한지"를 다루는 상위 레벨 권한이다.
   useEffect(() => {
     if (!permissions.loading && !permissions.canView) navigate('/dashboard');
   }, [permissions.loading, permissions.canView, navigate]);
@@ -87,7 +67,6 @@ export default function ApprovalInboxPage() {
 
       const admin = currentUser.role === 'admin' || currentUser.role === 'system_admin';
       setCurrentUserId(currentUser.id);
-      setCurrentUserName(currentUser.name ?? '');
       setCurrentUserRole(currentUser.role ?? '');
       setIsAdmin(admin);
 
@@ -95,40 +74,11 @@ export default function ApprovalInboxPage() {
       const orgUnitIds = members.find(m => m.id === currentUser.id)?.org_unit_ids || [];
       setMyOrgUnitIds(orgUnitIds);
 
-      await Promise.all([
-        loadCrewApprovals(currentUser.id, admin),
-        loadDocuments(currentUser.id, admin, orgUnitIds),
-      ]);
+      await loadDocuments(currentUser.id, admin, orgUnitIds);
     } finally {
       setInitializing(false);
     }
   };
-
-  // --- 선원추천 결재: 데이터 로딩 ---
-
-  const loadCrewApprovals = async (userId: string, admin: boolean) => {
-    try {
-      const approvals = admin
-        ? await approvalService.getAllApprovals()
-        : await approvalService.getMyRelatedApprovals(userId);
-      if (approvals.length === 0) { setCrewApprovals([]); return; }
-
-      const crewRecIds = [...new Set(approvals.map(a => a.crew_recommendation_id))];
-      const { data: crewRecs, error } = await supabase.from('crew_recommendations').select('*').in('id', crewRecIds);
-      if (error) throw error;
-      const crewRecsMap = new Map((crewRecs || []).map((cr: { id: string }) => [cr.id, cr]));
-
-      const merged: ApprovalWithRecommendation[] = approvals
-        .map(a => ({ ...a, recommendation: crewRecsMap.get(a.crew_recommendation_id) }))
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      setCrewApprovals(merged);
-    } catch (e) {
-      console.error(e);
-      toast({ title: '오류', description: '선원추천 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
-    }
-  };
-
-  // --- 일반 문서: 데이터 로딩 ---
 
   const loadDocuments = async (userId: string, admin: boolean, orgUnitIds: string[]) => {
     try {
@@ -152,60 +102,6 @@ export default function ApprovalInboxPage() {
     if (error) throw error;
     return new Set((data || []).map((r: { document_id: string }) => r.document_id));
   };
-
-  // --- 선원추천 결재: 액션 ---
-
-  const isMyCrewTurn = (approval: ApprovalWithRecommendation) => {
-    if (approval.status !== 'pending') return false;
-    if (isAdmin) return true;
-    return approval.current_approver?.approver_id === currentUserId;
-  };
-
-  const canDeleteCrew = (approval: ApprovalWithRecommendation) =>
-    approval.status !== 'pending' && (approval.requester_id === currentUserId || isAdmin);
-
-  const crewGoBackToList = () => {
-    setCrewViewMode('list'); setSelectedCrewApproval(null); setCrewActionType(null); setCrewComment('');
-  };
-
-  const handleDeleteCrew = async (approval: ApprovalWithRecommendation) => {
-    if (!confirm('이 결재 이력을 삭제하시겠습니까? 이미 등록된 선원 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다. (추천/결재 히스토리는 별도로 영구 보관됩니다)')) return;
-    try {
-      await approvalService.deleteApproval(approval, approval.recommendation?.crew_name || '알 수 없음', currentUserId, currentUserName);
-      toast({ title: '삭제되었습니다.' });
-      await loadCrewApprovals(currentUserId, isAdmin);
-    } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
-    }
-  };
-
-  const handleCrewAction = async () => {
-    if (!selectedCrewApproval || !crewActionType) return;
-    if (crewActionType === 'reject' && !crewComment.trim()) {
-      toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' });
-      return;
-    }
-    try {
-      setCrewProcessing(true);
-      if (isAdmin) {
-        if (crewActionType === 'reject') await approvalService.adminForceReject(selectedCrewApproval.id, currentUserId, crewComment);
-        else await approvalService.adminForceApprove(selectedCrewApproval.id, currentUserId, crewComment || undefined);
-      } else {
-        if (crewActionType === 'reject') await approvalService.rejectStep(selectedCrewApproval.id, currentUserId, crewComment);
-        else await approvalService.approveStep(selectedCrewApproval.id, currentUserId, crewComment || undefined);
-      }
-      toast({ title: '성공', description: crewActionType === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
-      crewGoBackToList();
-      await loadCrewApprovals(currentUserId, isAdmin);
-    } catch (e) {
-      console.error(e);
-      toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
-    } finally {
-      setCrewProcessing(false);
-    }
-  };
-
-  // --- 일반 문서: 액션 ---
 
   const isMyDocTurn = (doc: ApprovalDocumentWithDetails) => {
     if (doc.status !== 'pending') return false;
@@ -243,218 +139,14 @@ export default function ApprovalInboxPage() {
     }
   };
 
-  // --- 공통 표시 헬퍼 ---
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending': return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200"><Clock className="w-3 h-3 mr-1" />결재중</Badge>;
       case 'approved': return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200"><CheckCircle2 className="w-3 h-3 mr-1" />승인</Badge>;
       case 'rejected': return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><XCircle className="w-3 h-3 mr-1" />반려</Badge>;
-      case 'cancelled': return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200"><Ban className="w-3 h-3 mr-1" />취소</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
-
-  // --- 선원추천 결재: 렌더링 ---
-
-  const renderCrewProgress = (approval: ApprovalWithRecommendation) => (
-    <div>
-      <h4 className="text-sm font-semibold mb-2">결재 진행</h4>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-blue-100 text-blue-700">기안</div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-blue-500 font-medium">신청자</span>
-              <span className="font-medium">{approval.requester_name}</span>
-              <span className="text-sm text-gray-500">{approval.requester_role}</span>
-              <CheckCircle2 className="w-4 h-4 text-blue-600" />
-            </div>
-            <p className="text-xs text-gray-400 mt-1">{format(new Date(approval.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</p>
-          </div>
-        </div>
-        {approval.approval_line.steps.map((step, index) => {
-          const action = approval.actions.find(a => a.step_order === step.step_order);
-          const isCurrent = approval.current_step === step.step_order && approval.status === 'pending';
-          const isFinal = index === approval.approval_line.steps.length - 1;
-          return (
-            <div key={step.id} className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                action?.action === 'approved' ? 'bg-green-100 text-green-700'
-                : action?.action === 'rejected' ? 'bg-red-100 text-red-700'
-                : isCurrent ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'
-              }`}>{index + 1}</div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500 font-medium">{isFinal ? '최종결재자' : '중간결재자'}</span>
-                  <span className="font-medium">{step.approver_name}</span>
-                  <span className="text-sm text-gray-500">{step.approver_role}</span>
-                  {action?.action === 'approved' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                  {action?.action === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
-                  {isCurrent && <Badge variant="outline" className="text-xs">대기중</Badge>}
-                </div>
-                {action?.comment && <p className="text-sm text-gray-600 mt-1">{action.comment}</p>}
-                {action?.created_at && <p className="text-xs text-gray-400 mt-1">{format(new Date(action.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</p>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  const renderCrewCard = (approval: ApprovalWithRecommendation) => {
-    const myTurn = isMyCrewTurn(approval);
-    const rec = approval.recommendation;
-    return (
-      <Card key={approval.id} className={myTurn ? 'border-blue-500 border-2' : ''}>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <CardTitle className="text-lg">{rec?.crew_name || '선원 추천'}</CardTitle>
-                {myTurn && <Badge className="bg-blue-500">내 차례</Badge>}
-                {getStatusBadge(approval.status)}
-              </div>
-              <CardDescription className="space-y-1">
-                <div className="flex items-center gap-2 text-sm"><FileText className="w-4 h-4" /><span>결재선: {approval.approval_line.name}</span></div>
-                <div className="flex items-center gap-2 text-sm"><User className="w-4 h-4" /><span>요청자: {approval.requester_name} {approval.requester_role}</span></div>
-                {rec && (
-                  <>
-                    <div className="flex items-center gap-2 text-sm"><Ship className="w-4 h-4" /><span>선박: {rec.ship_name}</span></div>
-                    <div className="flex items-center gap-2 text-sm"><Calendar className="w-4 h-4" /><span>승선가능일: {format(new Date(rec.available_date), 'yyyy-MM-dd', { locale: ko })}</span></div>
-                  </>
-                )}
-                <div className="flex items-center gap-2 text-sm"><Clock className="w-4 h-4" /><span>요청일: {format(new Date(approval.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span></div>
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {renderCrewProgress(approval)}
-            {myTurn && (
-              <div className="flex gap-2 pt-4 border-t">
-                <Button onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('approve'); setCrewViewMode('action'); }} className="flex-1">승인</Button>
-                <Button onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('reject'); setCrewViewMode('action'); }} variant="destructive" className="flex-1">반려</Button>
-              </div>
-            )}
-            {canDeleteCrew(approval) && permissions.canDelete && (
-              <div className="flex justify-end pt-4 border-t">
-                <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteCrew(approval)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const openCrewDetail = (approval: ApprovalWithRecommendation) => { setSelectedCrewApproval(approval); setCrewViewMode('detail'); };
-
-  const renderCrewTable = (list: ApprovalWithRecommendation[]) => (
-    <div className="rounded-md border overflow-hidden overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 border-b">
-          <tr>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">선원</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">결재선</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">요청자</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">요청일</th>
-            <th className="text-right p-2 text-xs font-medium text-gray-600 w-44">작업</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map(approval => {
-            const myTurn = isMyCrewTurn(approval);
-            return (
-              <tr key={approval.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => openCrewDetail(approval)}>
-                <td className="p-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {getStatusBadge(approval.status)}
-                    {myTurn && <Badge className="bg-blue-500 text-xs">내 차례</Badge>}
-                  </div>
-                </td>
-                <td className="p-2 font-medium">{approval.recommendation?.crew_name || '선원 추천'}</td>
-                <td className="p-2 text-gray-500">{approval.approval_line.name}</td>
-                <td className="p-2 text-gray-500">{approval.requester_name}</td>
-                <td className="p-2 text-gray-500">{format(new Date(approval.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
-                <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
-                  <div className="flex justify-end gap-1">
-                    {myTurn && (
-                      <>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('approve'); setCrewViewMode('action'); }}>승인</Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => { setSelectedCrewApproval(approval); setCrewActionType('reject'); setCrewViewMode('action'); }}>반려</Button>
-                      </>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openCrewDetail(approval)}>보기</Button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const renderCrewDetail = () => {
-    if (!selectedCrewApproval) return null;
-    return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={crewGoBackToList}><ArrowLeft className="w-4 h-4" />목록</Button>
-        {renderCrewCard(selectedCrewApproval)}
-      </div>
-    );
-  };
-
-  const crewMyRequested = crewApprovals.filter(a => a.requester_id === currentUserId);
-  const crewPending = crewApprovals.filter(a => a.status === 'pending');
-  const crewApproved = crewApprovals.filter(a => a.status === 'approved');
-  const crewRejected = crewApprovals.filter(a => a.status === 'rejected');
-  const crewFiltered = crewFilter === 'mine' ? crewMyRequested
-    : crewFilter === 'pending' ? crewPending
-    : crewFilter === 'approved' ? crewApproved
-    : crewFilter === 'rejected' ? crewRejected
-    : crewApprovals;
-
-  const renderCrewAction = () => {
-    if (!selectedCrewApproval || !crewActionType) return null;
-    const rec = selectedCrewApproval.recommendation;
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={crewGoBackToList}><ArrowLeft className="w-5 h-5" /></Button>
-          <h2 className="text-lg font-bold">{crewActionType === 'approve' ? '결재 승인' : '결재 반려'}</h2>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{rec?.crew_name || '선원 추천'}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>{crewActionType === 'approve' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>
-              <Textarea value={crewComment} onChange={e => setCrewComment(e.target.value)} rows={4} className="mt-2" disabled={crewProcessing} />
-            </div>
-            <div className="flex gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={crewGoBackToList} disabled={crewProcessing} className="flex-1">취소</Button>
-              <Button
-                onClick={handleCrewAction}
-                disabled={crewProcessing || (crewActionType === 'reject' && !crewComment.trim())}
-                variant={crewActionType === 'approve' ? 'default' : 'destructive'}
-                className="flex-1"
-              >
-                {crewProcessing ? '처리 중...' : crewActionType === 'approve' ? '승인' : '반려'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  };
-
-  // --- 일반 문서: 렌더링 ---
 
   const openDocDetail = (doc: ApprovalDocumentWithDetails) => openNewTab(`/documents/${doc.id}`, doc.title);
 
@@ -553,11 +245,9 @@ export default function ApprovalInboxPage() {
     );
   };
 
-  // --- 최상위 렌더링 ---
-
   if (initializing) return <div className="container mx-auto px-4 py-8 text-center">로딩 중...</div>;
 
-  const FILTER_LABELS: { value: CrewFilter | DocFilter; label: string }[] = [
+  const FILTER_LABELS: { value: DocFilter; label: string }[] = [
     { value: 'all', label: '전체' },
     { value: 'mine', label: '내가 요청한' },
     { value: 'pending', label: '결재중' },
@@ -580,52 +270,23 @@ export default function ApprovalInboxPage() {
         )}
       </div>
 
-      <Tabs defaultValue="crew">
-        <TabsList>
-          <TabsTrigger value="crew">선원추천 결재 ({crewApprovals.length})</TabsTrigger>
-          <TabsTrigger value="document">일반 문서 ({documents.length})</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="crew" className="mt-4">
-          {crewViewMode === 'action' ? renderCrewAction() : crewViewMode === 'detail' ? renderCrewDetail() : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-1.5">
-                {FILTER_LABELS.filter(f => f.value !== 'referenced').map(f => (
-                  <button
-                    key={f.value} type="button" onClick={() => setCrewFilter(f.value as CrewFilter)}
-                    className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${crewFilter === f.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-              {crewFiltered.length === 0 ? (
-                <Card><CardContent className="py-12 text-center"><Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재 문서가 없습니다</p></CardContent></Card>
-              ) : renderCrewTable(crewFiltered)}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="document" className="mt-4">
-          {docViewMode === 'action' ? renderDocAction() : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-1.5">
-                {FILTER_LABELS.map(f => (
-                  <button
-                    key={f.value} type="button" onClick={() => setDocFilter(f.value as DocFilter)}
-                    className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${docFilter === f.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-              {docFiltered.length === 0 ? (
-                <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 문서가 없습니다</p></CardContent></Card>
-              ) : renderDocTable(docFiltered)}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+      {docViewMode === 'action' ? renderDocAction() : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-1.5">
+            {FILTER_LABELS.map(f => (
+              <button
+                key={f.value} type="button" onClick={() => setDocFilter(f.value)}
+                className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${docFilter === f.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {docFiltered.length === 0 ? (
+            <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 문서가 없습니다</p></CardContent></Card>
+          ) : renderDocTable(docFiltered)}
+        </div>
+      )}
     </div>
   );
 }

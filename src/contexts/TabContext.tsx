@@ -181,6 +181,7 @@ function getTitleFromPath(path: string): string {
     '/assignments': '발령 관리', '/crew-rotation': '선원 교대 발령',
     '/ships': '선박 목록', '/ship-types': '선종/분류 관리', '/ship-flags': '선적국 관리', '/fleet-management': '플릿 관리',
     '/job-postings': '구인 공고', '/my-recommendations': '내 추천 선원', '/recommendation-review': '추천 검토',
+    '/dispatch-approval-inbox': '발령 결재함', '/groupware-settings': '그룹웨어 설정',
     '/approval-inbox': '결재함', '/approval-archive': '결재함', '/approval-management': '결재함', '/approval-lines': '결재선 관리',
     '/documents/new': '기안함', '/documents': '결재함', '/document-types': '문서유형/전결규정 관리', '/my-documents': '기안함',
     '/salary/templates': '급여 템플릿', '/salary/templates/new': '급여 템플릿 추가', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',

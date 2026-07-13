@@ -1,7 +1,7 @@
 import { addMonths, format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
-import { approvalDocumentService } from '@/services/approval-document.service';
+import { rotationApprovalService } from '@/services/rotation-approval.service';
 import type {
   CrewRotationPlan,
   CrewRotationPlanWithDetails,
@@ -13,8 +13,6 @@ import type {
   RotationPlanStatus,
 } from '@/types/rotation';
 import type { CrewMember } from '@/types/models';
-
-const ROTATION_PLAN_DOCUMENT_TYPE_CODE = 'rotation_plan';
 
 export const rotationService = {
   /**
@@ -406,11 +404,10 @@ export const rotationService = {
   },
 
   /**
-   * 교대계획을 범용 결재 엔진(approval_documents)으로 상신한다.
-   * 기안자(작성자)가 소속된 부서를 기준으로 결재라인을 자동 구성 — 선원채용 승인,
-   * 기안서와 동일한 조직도 기반 결재 로직을 그대로 재사용한다.
+   * 교대계획을 발령 결재(rotation_plan_approvals)로 상신한다 — 채용 결재와 동일하게
+   * 결재선을 직접 선택하는 방식(조직도 소속 부서 기반 자동 구성은 더 이상 쓰지 않음).
    */
-  async submitRotationPlanForApproval(planId: string): Promise<{ ok: boolean; message?: string }> {
+  async submitRotationPlanForApproval(planId: string, approvalLineId: string, comment?: string): Promise<{ ok: boolean; message?: string }> {
     const currentUser = await getCurrentUser();
     if (!currentUser) return { ok: false, message: '로그인 정보를 확인할 수 없습니다.' };
 
@@ -421,40 +418,12 @@ export const rotationService = {
       .single();
     if (planError || !plan) return { ok: false, message: '교대계획을 찾을 수 없습니다.' };
 
-    const { data: membership } = await supabase
-      .from('org_unit_members')
-      .select('org_unit_id')
-      .eq('user_id', plan.created_by)
-      .limit(1)
-      .maybeSingle();
-    if (!membership) {
-      return { ok: false, message: '작성자가 소속된 부서가 없습니다. 조직도에서 소속 부서를 먼저 지정해주세요.' };
-    }
-
-    const { data: docType } = await supabase
-      .from('approval_document_types')
-      .select('id')
-      .eq('code', ROTATION_PLAN_DOCUMENT_TYPE_CODE)
-      .single();
-    if (!docType) return { ok: false, message: '교대계획 결재 문서유형이 설정되어 있지 않습니다.' };
-
     try {
-      const doc = await approvalDocumentService.createDocument({
-        document_type_id: docType.id,
-        title: plan.plan_name || '교대계획',
-        org_unit_id: membership.org_unit_id,
-        created_by: plan.created_by,
-        reference_type: 'crew_rotation_plan',
-        reference_id: plan.id,
-      });
+      await rotationApprovalService.createApproval(planId, approvalLineId, plan.created_by, comment);
 
       await supabase
         .from('crew_rotation_plans')
-        .update({
-          approval_document_id: doc.id,
-          status: doc.status === 'approved' ? 'approved' : 'pending_approval',
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: 'pending_approval', updated_at: new Date().toISOString() })
         .eq('id', planId);
 
       return { ok: true };
@@ -475,28 +444,6 @@ export const rotationService = {
 
     if (error) {
       console.error('Error deleting rotation plan:', error);
-      return false;
-    }
-
-    return true;
-  },
-
-  /**
-   * Submit rotation plan for approval
-   */
-  async submitForApproval(planId: string, approvalLineId: string): Promise<boolean> {
-    // This will be integrated with the approval system
-    // For now, just update the status
-    const { error } = await supabase
-      .from('crew_rotation_plans')
-      .update({
-        status: 'pending_approval',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', planId);
-
-    if (error) {
-      console.error('Error submitting rotation plan for approval:', error);
       return false;
     }
 
@@ -651,7 +598,8 @@ export const rotationService = {
           });
         }
 
-        // 계약 자동 생성 — 승선/하선(예정)일, 선주/플릿/선박/국적/직급 포함
+        // 계약 자동 생성 — 승선/하선(예정)일, 선주/플릿/선박/국적/직급 포함.
+        // 결재 전이므로 draft로 생성 — 발령 결재함에서 계약 결재가 승인되어야 active로 전환된다.
         const { data: newContract } = await supabase.from('crew_contracts').insert({
           crew_member_id: a.on_crew_id,
           ship_id: plan.ship_id,
@@ -665,7 +613,7 @@ export const rotationService = {
           duration_months: a.contract_months,
           salary_amount: a.salary_amount,
           salary_currency: a.salary_currency || 'USD',
-          status: 'active',
+          status: 'draft',
         }).select('id').single();
 
         // 직급별 수당 기준(재고용수당 등)이 있으면 계약에 자동으로 붙여준다

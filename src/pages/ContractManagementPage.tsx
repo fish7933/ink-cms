@@ -11,10 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getContracts, addContract, updateContract, deleteContract } from '@/services/contract.service';
 import { allowanceService } from '@/services/allowance.service';
+import { approvalService } from '@/services/approval.service';
+import { contractApprovalService } from '@/services/contract-approval.service';
+import { getCurrentUser } from '@/lib/store';
 import type { CrewContractWithDetails } from '@/types/contract';
 import type { AllowanceType, AllowancePaymentBasis, AllowancePaymentMethod, CrewContractAllowanceWithDetails } from '@/types/allowance';
+import type { ApprovalLineWithSteps } from '@/types/approval';
 import { buildContractChains, getEffectiveStatus, EFFECTIVE_STATUS_CONFIG, DISEMBARK_NEEDED_THRESHOLD_MONTHS, type ContractChain, type EffectiveStatus } from '@/utils/contract-chain';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -51,14 +56,41 @@ export default function ContractManagementPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  // 계약 결재 상신 다이얼로그 — 채용 결재와 동일하게 결재선을 직접 선택
+  const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
+  const [submitDialogContract, setSubmitDialogContract] = useState<CrewContractWithDetails | null>(null);
+  const [submitLineId, setSubmitLineId] = useState('');
+  const [submitComment, setSubmitComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     Promise.all([supabase.from('crew_members').select('id, name, rank, rank_id'), supabase.from('ships').select('id, name')]).then(([crew, ships]) => {
       if (crew.data) setCrewOptions(crew.data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '', rank_id: c.rank_id || '' })));
       if (ships.data) setShipOptions(ships.data);
     });
     allowanceService.getTypes().then(setAllowanceTypes);
+    getCurrentUser().then(u => { if (u) approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines); });
     loadData();
   }, []);
+
+  const openSubmitDialog = (c: CrewContractWithDetails) => { setSubmitDialogContract(c); setSubmitLineId(''); setSubmitComment(''); };
+
+  const handleSubmitApproval = async () => {
+    if (!submitDialogContract || !submitLineId) return;
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return;
+    try {
+      setSubmitting(true);
+      await contractApprovalService.createApproval(submitDialogContract.id, submitLineId, currentUser.id, submitComment || undefined);
+      toast({ title: '결재 상신 완료', description: '발령 결재함(계약)에서 진행 상황을 확인할 수 있습니다.' });
+      setSubmitDialogContract(null);
+      loadData();
+    } catch (e) {
+      toast({ title: '결재 상신 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const loadContractAllowances = async (contractId: string) => {
     setContractAllowances(await allowanceService.getContractAllowances(contractId));
@@ -331,12 +363,13 @@ export default function ContractManagementPage() {
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="h-8">
                   <TabsTrigger value="all" className="text-xs h-7">전체 ({getCount('all')})</TabsTrigger>
+                  <TabsTrigger value="draft" className="text-xs h-7">결재대기 ({getCount('draft')})</TabsTrigger>
                   <TabsTrigger value="valid" className="text-xs h-7">유효 ({getCount('valid')})</TabsTrigger>
                   <TabsTrigger value="expired" className="text-xs h-7">만료 ({getCount('expired')})</TabsTrigger>
                   <TabsTrigger value="completed" className="text-xs h-7">완료 ({getCount('completed')})</TabsTrigger>
                   <TabsTrigger value="terminated" className="text-xs h-7">해지 ({getCount('terminated')})</TabsTrigger>
                 </TabsList>
-                {['all','valid','expired','completed','terminated'].map(tab => (
+                {['all','draft','valid','expired','completed','terminated'].map(tab => (
                   <TabsContent key={tab} value={tab} className="mt-2">
                     <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50">
                       <th className="w-8 p-2"><Checkbox checked={filteredChains.length > 0 && filteredChains.every(c => selectedIds.includes(c.latest.id))} onCheckedChange={checked => toggleSelectAll(!!checked, filteredChains)} /></th>
@@ -368,6 +401,9 @@ export default function ContractManagementPage() {
                           <td className="p-2 text-center"><Badge className={`text-xs ${EFFECTIVE_STATUS_CONFIG[status].color}`}>{EFFECTIVE_STATUS_CONFIG[status].label}</Badge></td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-center gap-1">
+                              {status === 'draft' && permissions.canEdit && (
+                                <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(c)}>결재 상신</Button>
+                              )}
                               {status === 'expired' && permissions.canCreate && (
                                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="갱신" onClick={() => openRenewForm(chain)}><RefreshCw className="h-3 w-3" /></Button>
                               )}
@@ -399,6 +435,44 @@ export default function ContractManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!submitDialogContract} onOpenChange={o => !submitting && setSubmitDialogContract(o ? submitDialogContract : null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>계약 결재 상신</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {submitDialogContract && (
+              <div className="p-3 bg-gray-50 rounded-md text-sm space-y-1">
+                <div><span className="font-medium">선원:</span> {submitDialogContract.crew_name}</div>
+                <div><span className="font-medium">직급:</span> {submitDialogContract.rank_code || submitDialogContract.rank}</div>
+                <div><span className="font-medium">선박:</span> {submitDialogContract.ship_name || '-'}</div>
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <Select value={submitLineId} onValueChange={setSubmitLineId}>
+                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectContent>
+                  {approvalLines.length === 0
+                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitDialogContract(null)} disabled={submitting}>취소</Button>
+            <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
+              {submitting ? '처리 중...' : '결재 상신'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

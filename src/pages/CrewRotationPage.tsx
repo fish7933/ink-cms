@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -16,6 +17,8 @@ import { rotationService } from '@/services/rotation.service';
 import type { ContractExpiryInfo } from '@/services/rotation.service';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Company, Fleet, Ship as ShipType, User } from '@/types/models';
+import { approvalService } from '@/services/approval.service';
+import type { ApprovalLineWithSteps } from '@/types/approval';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -63,7 +66,14 @@ export function CrewRotationPage() {
   const [expiryLoading, setExpiryLoading] = useState(false);
   const [autoGenLoading, setAutoGenLoading] = useState(false);
 
-  useEffect(() => { loadPlans(); loadOwners(); getCurrentUser().then(setCurrentUser); }, []);
+  // 결재 상신 다이얼로그 (배승 결재 — 채용 결재와 동일하게 결재선을 직접 선택)
+  const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
+  const [submitDialogPlanId, setSubmitDialogPlanId] = useState<string | null>(null);
+  const [submitLineId, setSubmitLineId] = useState('');
+  const [submitComment, setSubmitComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { loadPlans(); loadOwners(); getCurrentUser().then(u => { setCurrentUser(u); if (u) approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines); }); }, []);
 
   // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
   // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
@@ -156,12 +166,24 @@ export function CrewRotationPage() {
     loadPlans();
   };
 
-  const handleSubmitApproval = async (planId: string) => {
-    if (!confirm('결재 상신하시겠습니까? 작성자 소속 부서를 기준으로 결재라인이 자동 구성됩니다.')) return;
-    const result = await rotationService.submitRotationPlanForApproval(planId);
-    if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
-    toast({ title: '결재 상신 완료', description: '내 결재함(일반 문서)에서 진행 상황을 확인할 수 있습니다.' });
-    loadPlans();
+  const openSubmitDialog = (planId: string) => {
+    setSubmitDialogPlanId(planId);
+    setSubmitLineId('');
+    setSubmitComment('');
+  };
+
+  const handleSubmitApproval = async () => {
+    if (!submitDialogPlanId || !submitLineId) return;
+    try {
+      setSubmitting(true);
+      const result = await rotationService.submitRotationPlanForApproval(submitDialogPlanId, submitLineId, submitComment || undefined);
+      if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
+      toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
+      setSubmitDialogPlanId(null);
+      loadPlans();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleExecute = async (planId: string) => {
@@ -429,7 +451,7 @@ export function CrewRotationPage() {
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
                             {plan.status === 'draft' && (
-                              <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => handleSubmitApproval(plan.id)}>결재 상신</Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(plan.id)}>결재 상신</Button>
                             )}
                             {isAdmin && (
                               <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
@@ -537,6 +559,38 @@ export function CrewRotationPage() {
               className="bg-orange-600 hover:bg-orange-700"
             >
               {autoGenLoading ? '생성 중...' : `${new Set(expiryFiltered.map(e => e.ship_id)).size}개 선박 하선계획 초안 생성`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 배승 결재 상신 다이얼로그 */}
+      <Dialog open={!!submitDialogPlanId} onOpenChange={o => !submitting && setSubmitDialogPlanId(o ? submitDialogPlanId : null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>배승 결재 상신</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <Select value={submitLineId} onValueChange={setSubmitLineId}>
+                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectContent>
+                  {approvalLines.length === 0
+                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitDialogPlanId(null)} disabled={submitting}>취소</Button>
+            <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
+              {submitting ? '처리 중...' : '결재 상신'}
             </Button>
           </DialogFooter>
         </DialogContent>
