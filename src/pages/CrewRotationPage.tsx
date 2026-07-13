@@ -72,8 +72,19 @@ export function CrewRotationPage() {
   const [submitLineId, setSubmitLineId] = useState('');
   const [submitComment, setSubmitComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [defaultLineId, setDefaultLineId] = useState('');
+  const [saveLineDefault, setSaveLineDefault] = useState(false);
 
-  useEffect(() => { loadPlans(); loadOwners(); getCurrentUser().then(u => { setCurrentUser(u); if (u) approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines); }); }, []);
+  useEffect(() => {
+    loadPlans(); loadOwners();
+    getCurrentUser().then(async u => {
+      setCurrentUser(u);
+      if (!u) return;
+      approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines);
+      const { data: pref } = await supabase.from('users').select('default_approval_line_id').eq('id', u.id).single();
+      if (pref?.default_approval_line_id) setDefaultLineId(pref.default_approval_line_id);
+    });
+  }, []);
 
   // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
   // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
@@ -168,14 +179,19 @@ export function CrewRotationPage() {
 
   const openSubmitDialog = (planId: string) => {
     setSubmitDialogPlanId(planId);
-    setSubmitLineId('');
+    setSubmitLineId(defaultLineId || '');
     setSubmitComment('');
+    setSaveLineDefault(false);
   };
 
   const handleSubmitApproval = async () => {
-    if (!submitDialogPlanId || !submitLineId) return;
+    if (!submitDialogPlanId || !submitLineId || !currentUser) return;
     try {
       setSubmitting(true);
+      if (saveLineDefault) {
+        await supabase.from('users').update({ default_approval_line_id: submitLineId }).eq('id', currentUser.id);
+        setDefaultLineId(submitLineId);
+      }
       const result = await rotationService.submitRotationPlanForApproval(submitDialogPlanId, submitLineId, submitComment || undefined);
       if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
       toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
@@ -581,6 +597,12 @@ export function CrewRotationPage() {
                     : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
                 </SelectContent>
               </Select>
+              {submitLineId && (
+                <div className="flex items-center space-x-2 mt-2">
+                  <Checkbox id="save-line-default-rotation" checked={saveLineDefault} onCheckedChange={c => setSaveLineDefault(c as boolean)} />
+                  <label htmlFor="save-line-default-rotation" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                </div>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>

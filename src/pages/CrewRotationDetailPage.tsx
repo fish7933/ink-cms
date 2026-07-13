@@ -8,11 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { rotationService } from '@/services/rotation.service';
 import { approvalService } from '@/services/approval.service';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
+import type { User } from '@/types/models';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import { useTabContext } from '@/contexts/TabContext';
@@ -39,6 +42,9 @@ export default function CrewRotationDetailPage() {
   const [submitLineId, setSubmitLineId] = useState('');
   const [submitComment, setSubmitComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [defaultLineId, setDefaultLineId] = useState('');
+  const [saveLineDefault, setSaveLineDefault] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const loadPlan = async () => {
     if (!id) return;
@@ -50,14 +56,26 @@ export default function CrewRotationDetailPage() {
   };
 
   useEffect(() => { loadPlan(); }, [id]);
-  useEffect(() => { getCurrentUser().then(u => { if (u) approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines); }); }, []);
+  useEffect(() => {
+    getCurrentUser().then(async u => {
+      setCurrentUser(u);
+      if (!u) return;
+      approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines);
+      const { data: pref } = await supabase.from('users').select('default_approval_line_id').eq('id', u.id).single();
+      if (pref?.default_approval_line_id) setDefaultLineId(pref.default_approval_line_id);
+    });
+  }, []);
 
-  const openSubmitDialog = () => { setSubmitLineId(''); setSubmitComment(''); setSubmitDialogOpen(true); };
+  const openSubmitDialog = () => { setSubmitLineId(defaultLineId || ''); setSubmitComment(''); setSaveLineDefault(false); setSubmitDialogOpen(true); };
 
   const handleSubmitApproval = async () => {
-    if (!plan || !submitLineId) return;
+    if (!plan || !submitLineId || !currentUser) return;
     try {
       setSubmitting(true);
+      if (saveLineDefault) {
+        await supabase.from('users').update({ default_approval_line_id: submitLineId }).eq('id', currentUser.id);
+        setDefaultLineId(submitLineId);
+      }
       const result = await rotationService.submitRotationPlanForApproval(plan.id, submitLineId, submitComment || undefined);
       if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
       toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
@@ -210,6 +228,12 @@ export default function CrewRotationDetailPage() {
                     : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
                 </SelectContent>
               </Select>
+              {submitLineId && (
+                <div className="flex items-center space-x-2 mt-2">
+                  <Checkbox id="save-line-default-rotation-detail" checked={saveLineDefault} onCheckedChange={c => setSaveLineDefault(c as boolean)} />
+                  <label htmlFor="save-line-default-rotation-detail" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                </div>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
