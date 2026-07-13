@@ -140,7 +140,10 @@ export default function CertificateTypeManagementPage() {
       else await addCertificateType(payload);
       window.dispatchEvent(new CustomEvent('certtype-data-changed'));
       closeTab(activeTabId!);
-    } catch { alert('저장 중 오류가 발생했습니다.'); }
+    } catch (e) {
+      console.error(e);
+      alert(`저장 중 오류가 발생했습니다.${e instanceof Error ? `\n(${e.message})` : ''}`);
+    }
     finally { setSaving(false); }
   };
 
