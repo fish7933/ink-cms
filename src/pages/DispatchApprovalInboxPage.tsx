@@ -257,12 +257,32 @@ export default function DispatchApprovalInboxPage() {
       const approvals = admin ? await approvalService.getAllApprovals() : await approvalService.getMyRelatedApprovals(userId);
       if (approvals.length === 0) { setCrewApprovals([]); return; }
       const crewRecIds = [...new Set(approvals.map(a => a.crew_recommendation_id))];
+      // crew_recommendations는 company_id/fleet_id/ship_id에 FK 제약이 없어 PostgREST 임베드
+      // 구문(owner:companies!company_id(...))으로는 조인이 안 됨 — 별도 조회 후 직접 맵으로 합친다.
       const { data: crewRecs, error } = await supabase
         .from('crew_recommendations')
-        .select('*, ranks:rank_id(rank_code), ships:ship_id(name), owner:companies!company_id(name), fleet:fleets!fleet_id(name)')
+        .select('*, ranks:rank_id(rank_code)')
         .in('id', crewRecIds);
       if (error) throw error;
-      const crewRecsMap = new Map((crewRecs || []).map((cr: Record<string, unknown>) => [cr.id as string, cr]));
+
+      const shipIds = [...new Set((crewRecs || []).map((cr: Record<string, unknown>) => cr.ship_id as string).filter(Boolean))];
+      const ownerIds = [...new Set((crewRecs || []).map((cr: Record<string, unknown>) => cr.company_id as string).filter(Boolean))];
+      const fleetIds = [...new Set((crewRecs || []).map((cr: Record<string, unknown>) => cr.fleet_id as string).filter(Boolean))];
+      const [shipsRes, ownersRes, fleetsRes] = await Promise.all([
+        shipIds.length > 0 ? supabase.from('ships').select('id, name').in('id', shipIds) : Promise.resolve({ data: [] }),
+        ownerIds.length > 0 ? supabase.from('companies').select('id, name').in('id', ownerIds) : Promise.resolve({ data: [] }),
+        fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : Promise.resolve({ data: [] }),
+      ]);
+      const shipMap = new Map((shipsRes.data || []).map((s: { id: string; name: string }) => [s.id, s.name]));
+      const ownerMap = new Map((ownersRes.data || []).map((o: { id: string; name: string }) => [o.id, o.name]));
+      const fleetMap = new Map((fleetsRes.data || []).map((f: { id: string; name: string }) => [f.id, f.name]));
+
+      const crewRecsMap = new Map((crewRecs || []).map((cr: Record<string, unknown>) => [cr.id as string, {
+        ...cr,
+        ships: { name: shipMap.get(cr.ship_id as string) },
+        owner: { name: ownerMap.get(cr.company_id as string) },
+        fleet: { name: fleetMap.get(cr.fleet_id as string) },
+      }]));
       const merged = approvals
         .map(a => ({ ...a, recommendation: crewRecsMap.get(a.crew_recommendation_id) }))
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -349,17 +369,26 @@ export default function DispatchApprovalInboxPage() {
       const approvals = admin ? await dispatchOrderApprovalService.getAllApprovals() : await dispatchOrderApprovalService.getMyRelatedApprovals(userId);
       if (approvals.length === 0) { setDispatchApprovals([]); return; }
       const orderIds = [...new Set(approvals.map(a => a.crew_dispatch_order_id as string))];
+      // ships.fleet_id에는 FK 제약이 없어 PostgREST 임베드(fleet:fleets!fleet_id(...))로는 조인이 안 됨
+      // — 선박은 owner만 임베드하고 플릿은 별도 조회 후 직접 맵으로 합친다.
       const { data: orders, error } = await supabase
         .from('crew_dispatch_orders')
         .select(`
           id, dispatch_type, previous_grade, new_grade,
           crew_members:crew_member_id(name),
-          ships:ship_id(name, owner:companies!owner_id(name), fleet:fleets!fleet_id(name)),
+          ships:ship_id(name, fleet_id, owner:companies!owner_id(name)),
           previous_rank:ranks!crew_dispatch_orders_previous_rank_id_fkey(rank_code),
           new_rank:ranks!crew_dispatch_orders_new_rank_id_fkey(rank_code)
         `)
         .in('id', orderIds);
       if (error) throw error;
+
+      const fleetIds = [...new Set((orders || []).map((o: Record<string, unknown>) => (o.ships as Record<string, unknown> | null)?.fleet_id as string).filter(Boolean))];
+      const { data: fleetsData } = fleetIds.length > 0
+        ? await supabase.from('fleets').select('id, name').in('id', fleetIds)
+        : { data: [] as { id: string; name: string }[] };
+      const fleetMap = new Map((fleetsData || []).map((f: { id: string; name: string }) => [f.id, f.name]));
+
       const orderMap = new Map((orders || []).map((o: Record<string, unknown>) => [o.id as string, o]));
       const merged = approvals
         .map(a => {
@@ -367,7 +396,7 @@ export default function DispatchApprovalInboxPage() {
           const crew = o?.crew_members as Record<string, unknown> | null;
           const ship = o?.ships as Record<string, unknown> | null;
           const owner = ship?.owner as Record<string, unknown> | null;
-          const fleet = ship?.fleet as Record<string, unknown> | null;
+          const fleetName = ship?.fleet_id ? fleetMap.get(ship.fleet_id as string) : undefined;
           const prevRank = o?.previous_rank as Record<string, unknown> | null;
           const newRank = o?.new_rank as Record<string, unknown> | null;
           return {
@@ -380,7 +409,7 @@ export default function DispatchApprovalInboxPage() {
             new_grade: (o?.new_grade as string) || null,
             ship_name: (ship?.name as string) || '-',
             owner_name: (owner?.name as string) || '',
-            fleet_name: (fleet?.name as string) || '',
+            fleet_name: fleetName || '',
           };
         })
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
