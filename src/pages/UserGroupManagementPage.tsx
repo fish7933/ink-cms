@@ -45,13 +45,19 @@ export default function UserGroupManagementPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   const permissions = usePermissions('user_groups');
+
+  // 시스템관리자(system_admin)는 슈퍼관리자(admin) 계정을 수정/삭제할 수 없다
+  const isProtectedFromCurrentUser = (target: User) =>
+    currentUserRole === 'system_admin' && target.role === 'admin';
 
   useEffect(() => {
     const init = async () => {
       const user = await getCurrentUser();
       if (!user || !['ship_manager', 'admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
+      setCurrentUserRole(user.role ?? null);
       await loadData();
     };
     init();
@@ -86,6 +92,7 @@ export default function UserGroupManagementPage() {
   };
 
   const openEdit = (u: User) => {
+    if (isProtectedFromCurrentUser(u)) return;
     const eu = u as User & { username?: string; position_id?: string; crew_member_id?: string };
     setEditId(u.id);
     setFormError('');
@@ -150,6 +157,8 @@ export default function UserGroupManagementPage() {
   };
 
   const handleDelete = async (id: string) => {
+    const target = users.find(u => u.id === id);
+    if (target && isProtectedFromCurrentUser(target)) return;
     if (!confirm('이 사용자를 삭제하시겠습니까?')) return;
     try {
       await deleteUser(id);
@@ -199,18 +208,24 @@ export default function UserGroupManagementPage() {
                   {roleUsers.map(u => {
                     const eu = u as User & { username?: string };
                     const company = companies.find(c => c.id === u.company_id);
+                    const protectedRow = isProtectedFromCurrentUser(u);
+                    const canEditRow = permissions.canEdit && !protectedRow;
+                    const canDeleteRow = permissions.canDelete && !protectedRow;
                     return (
-                      <TableRow key={u.id} className={`hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openEdit(u)}>
+                      <TableRow key={u.id} className={`hover:bg-gray-50 ${canEditRow ? 'cursor-pointer' : ''}`} onClick={() => canEditRow && openEdit(u)}>
                         <TableCell className="font-medium text-sm">{eu.username || '-'}</TableCell>
                         <TableCell className="text-sm">{u.name}</TableCell>
                         <TableCell className="text-sm">{u.email}</TableCell>
                         <TableCell className="text-sm">{company ? company.name : (['ship_manager','admin'].includes(role) ? 'INK' : '-')}</TableCell>
                         <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-500'}`}>{ROLE_LABELS[u.role] || u.role}</Badge></TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                          {permissions.canDelete && (
+                          {canDeleteRow && (
                             <Button size="sm" variant="ghost" onClick={() => handleDelete(u.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
                               <Trash2 className="w-3 h-3" />
                             </Button>
+                          )}
+                          {protectedRow && (permissions.canEdit || permissions.canDelete) && (
+                            <span className="text-xs text-gray-400">수정 불가</span>
                           )}
                         </TableCell>
                       </TableRow>
