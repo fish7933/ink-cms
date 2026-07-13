@@ -200,6 +200,25 @@ export function CrewRotationPage() {
     await Promise.all(selectedIds.map(id => rotationService.deleteRotationPlan(id, currentUser.id)));
     setSelectedIds([]);
     loadPlans();
+    if (viewingDeleted) loadDeletedPlans();
+  };
+
+  // 삭제된 교대 발령함 — 관리자 전용, 영구 삭제 가능
+  const [viewingDeleted, setViewingDeleted] = useState(false);
+  const [deletedPlans, setDeletedPlans] = useState<(CrewRotationPlanWithDetails & { deleter_name?: string })[]>([]);
+  const [deletedLoading, setDeletedLoading] = useState(false);
+
+  const loadDeletedPlans = async () => {
+    setDeletedLoading(true);
+    setDeletedPlans(await rotationService.getDeletedRotationPlans());
+    setDeletedLoading(false);
+  };
+
+  const openDeletedView = () => { setViewingDeleted(true); loadDeletedPlans(); };
+
+  const handlePermanentDelete = async (planId: string) => {
+    if (!confirm('이 교대 계획서를 영구 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+    if (await rotationService.permanentlyDeleteRotationPlan(planId)) loadDeletedPlans();
   };
 
   const openSubmitDialog = (planId: string) => {
@@ -381,6 +400,11 @@ export function CrewRotationPage() {
           <p className="text-xs text-muted-foreground mt-1">선원 승선/하선 교대 계획을 작성하고 결재를 진행합니다</p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={viewingDeleted ? () => setViewingDeleted(false) : openDeletedView} className="h-8 text-xs gap-1.5 text-red-600 border-red-300 hover:bg-red-50">
+              <Trash2 className="h-3.5 w-3.5" />{viewingDeleted ? '목록으로' : '삭제된 교대 발령'}
+            </Button>
+          )}
           {permissions.canCreate && (
             <>
               <Button variant="outline" size="sm" onClick={openAutoGen} className="h-8 text-xs gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50">
@@ -393,6 +417,55 @@ export function CrewRotationPage() {
           )}
         </div>
       </div>
+
+      {viewingDeleted ? (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm">삭제된 교대 발령 ({deletedPlans.length}건)</CardTitle>
+            <CardDescription className="text-xs">삭제된 교대 계획서 목록입니다. 영구 삭제하면 되돌릴 수 없습니다.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {deletedLoading ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">로딩 중...</div>
+            ) : deletedPlans.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">삭제된 교대 계획이 없습니다</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">계획명</TableHead>
+                    <TableHead className="text-xs">선주사</TableHead>
+                    <TableHead className="text-xs">선박</TableHead>
+                    <TableHead className="text-xs">교대일</TableHead>
+                    <TableHead className="text-xs">삭제자</TableHead>
+                    <TableHead className="text-xs">삭제일시</TableHead>
+                    <TableHead className="text-right text-xs">작업</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deletedPlans.map(plan => (
+                    <TableRow key={plan.id}>
+                      <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
+                      <TableCell className="text-xs">{plan.ship_name}{plan.fleet_name ? ` (${plan.fleet_name})` : ''}</TableCell>
+                      <TableCell className="text-xs">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</TableCell>
+                      <TableCell className="text-xs">{plan.deleter_name || '-'}</TableCell>
+                      <TableCell className="text-xs">{plan.deleted_at ? format(new Date(plan.deleted_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => handlePermanentDelete(plan.id)}>
+                          영구 삭제
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+      <>
+      {/* 원래 목록 화면 시작 */}
 
       {/* 요약 카드 */}
       <div className="grid gap-3 md:grid-cols-5">
@@ -595,6 +668,8 @@ export function CrewRotationPage() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* 계약만료 하선계획 자동생성 다이얼로그 */}
       <Dialog open={autoGenOpen} onOpenChange={setAutoGenOpen}>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Ship, Users } from 'lucide-react';
+import { Ship, Users, Download, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { rotationService } from '@/services/rotation.service';
 import { approvalService } from '@/services/approval.service';
+import { getPorts } from '@/services/port.service';
+import { exportRotationPlanToExcel } from '@/utils/rotation-plan-export';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@/types/models';
@@ -35,6 +37,8 @@ export default function CrewRotationDetailPage() {
   const { toast } = useToast();
   const [plan, setPlan] = useState<CrewRotationPlanWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [portLabel, setPortLabel] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   // 배승 결재 상신 다이얼로그 — 채용 결재와 동일하게 결재선을 직접 선택
   const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
@@ -49,10 +53,29 @@ export default function CrewRotationDetailPage() {
   const loadPlan = async () => {
     if (!id) return;
     setLoading(true);
-    const data = await rotationService.getRotationPlanById(id);
+    const [data, ports] = await Promise.all([rotationService.getRotationPlanById(id), getPorts()]);
     setPlan(data);
+    if (data?.port_id) {
+      const port = ports.find(p => p.id === data.port_id);
+      if (port) setPortLabel(`${port.country_name} ${port.city_name}`);
+    }
     if (activeTabId && data) updateTab(activeTabId, { title: data.plan_name || '교대계획' });
     setLoading(false);
+  };
+
+  const handleExportExcel = async () => {
+    if (!plan) return;
+    setExporting(true);
+    try {
+      await exportRotationPlanToExcel(plan, portLabel);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handlePrint = () => {
+    if (!plan) return;
+    window.open(`/print/rotation-plans/${plan.id}`, '_blank');
   };
 
   useEffect(() => { loadPlan(); }, [id]);
@@ -126,6 +149,12 @@ export default function CrewRotationDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
+              <Button size="sm" variant="outline" className="h-8" onClick={handleExportExcel} disabled={exporting}>
+                <Download className="w-3.5 h-3.5 mr-1" />{exporting ? '내보내는 중...' : '엑셀 다운로드'}
+              </Button>
+              <Button size="sm" variant="outline" className="h-8" onClick={handlePrint}>
+                <Printer className="w-3.5 h-3.5 mr-1" />PDF 출력
+              </Button>
               {plan.status === 'draft' && (
                 <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openSubmitDialog}>결재 상신</Button>
               )}

@@ -87,6 +87,7 @@ export interface CrewRotationPlanWithDetails extends CrewRotationPlan {
   owner_name: string;
   fleet_name: string | null;
   created_by_name: string;
+  creator_name?: string;
   assignments: CrewRotationAssignmentWithDetails[];
 }
 

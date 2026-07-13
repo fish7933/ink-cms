@@ -571,6 +571,51 @@ export const rotationService = {
   },
 
   /**
+   * 삭제된(soft-deleted) 교대 계획 목록 — 삭제된 교대 발령함에서 조회/영구삭제용
+   */
+  async getDeletedRotationPlans(): Promise<CrewRotationPlanWithDetails[]> {
+    const { data, error } = await supabase
+      .from('crew_rotation_plans')
+      .select(`
+        *,
+        ship:ships!crew_rotation_plans_ship_id_fkey(id, name),
+        owner:companies!crew_rotation_plans_owner_id_fkey(id, name),
+        fleet:fleets!crew_rotation_plans_fleet_id_fkey(id, name),
+        creator:users!crew_rotation_plans_created_by_fkey(id, name),
+        deleter:users!crew_rotation_plans_deleted_by_fkey(id, name)
+      `)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching deleted rotation plans:', error);
+      return [];
+    }
+
+    return (data || []).map((plan: Record<string, unknown>) => ({
+      ...plan,
+      ship_name: (plan.ship as { name?: string } | null)?.name || '',
+      owner_name: (plan.owner as { name?: string } | null)?.name || '',
+      fleet_name: (plan.fleet as { name?: string } | null)?.name || null,
+      creator_name: (plan.creator as { name?: string } | null)?.name || '',
+      deleter_name: (plan.deleter as { name?: string } | null)?.name || '',
+      assignments: [],
+    })) as unknown as CrewRotationPlanWithDetails[];
+  },
+
+  /**
+   * 삭제된 교대 발령함에서 영구 삭제 (하드 삭제, 되돌릴 수 없음). 시스템관리자 이상 전용 — UI에서 게이팅.
+   */
+  async permanentlyDeleteRotationPlan(id: string): Promise<boolean> {
+    const { error } = await supabase.from('crew_rotation_plans').delete().eq('id', id).not('deleted_at', 'is', null);
+    if (error) {
+      console.error('Error permanently deleting rotation plan:', error);
+      return false;
+    }
+    return true;
+  },
+
+  /**
    * Execute approved rotation plan
    * 승선자 → onboard, 하선자 → standby, 계획 → executed
    */
