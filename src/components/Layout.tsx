@@ -54,8 +54,10 @@ export default function Layout() {
         if (!item.path) return false;
         const itemPath = item.path.split('?')[0];
         const base = '/' + itemPath.split('/').filter(Boolean)[0];
+        // startsWith(base)만 쓰면 "/crew"가 "/crew-rotation"의 문자열 접두사라는 이유만으로
+        // 잘못 매칭된다 — 반드시 "/crew" 또는 "/crew/..." 처럼 경로 구분자(슬래시) 경계까지 맞아야 함.
         return location.pathname === itemPath ||
-          (base.length > 1 && location.pathname.startsWith(base));
+          (base.length > 1 && (location.pathname === base || location.pathname.startsWith(base + '/')));
       })
     );
     if (found) setSelectedCategoryId(found.id);

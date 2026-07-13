@@ -38,7 +38,8 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
     }
     if (location.pathname === itemPath) return true;
     const base = '/' + itemPath.split('/').filter(Boolean)[0];
-    return base.length > 1 && location.pathname.startsWith(base);
+    // "/crew"가 "/crew-rotation"의 문자열 접두사라는 이유만으로 잘못 매칭되지 않도록 경로 구분자 경계까지 확인
+    return base.length > 1 && (location.pathname === base || location.pathname.startsWith(base + '/'));
   };
 
   const filterItemsByRole = (items: MenuItem[]) =>
@@ -56,7 +57,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
       c.items.some(item => {
         if (!item.path) return false;
         const base = '/' + item.path.split('/').filter(Boolean)[0];
-        return base.length > 1 && location.pathname.startsWith(base);
+        return base.length > 1 && (location.pathname === base || location.pathname.startsWith(base + '/'));
       })
     );
 
