@@ -536,17 +536,70 @@ export default function DispatchApprovalInboxPage() {
 
   // --- 다중 선택 일괄 승인/반려 ---
 
+  // 결재 이력 삭제 가능 여부 — 대기중이 아니고(승인/반려/취소로 종결), 본인이 요청했거나 관리자이며, 삭제 권한이 있어야 함
+  const isDeletable = (a: ApprovalLike) => a.status !== 'pending' && (a.requester_id === currentUserId || isAdmin) && permissions.canDelete;
+
   const domainConfig = (domain: Domain): {
     service: ApprovalActionService;
     approvals: ApprovalLike[];
     selectedIds: string[];
     setSelectedIds: (ids: string[]) => void;
     load: () => Promise<void>;
+    deleteOne: (a: ApprovalLike) => Promise<void>;
   } => {
-    if (domain === 'crew') return { service: approvalService, approvals: crewApprovals, selectedIds: crewSelectedIds, setSelectedIds: setCrewSelectedIds, load: () => loadCrewApprovals(currentUserId, isAdmin) };
-    if (domain === 'rotation') return { service: rotationApprovalService, approvals: rotationApprovals, selectedIds: rotationSelectedIds, setSelectedIds: setRotationSelectedIds, load: () => loadRotationApprovals(currentUserId, isAdmin) };
-    if (domain === 'contract') return { service: contractApprovalService, approvals: contractApprovals, selectedIds: contractSelectedIds, setSelectedIds: setContractSelectedIds, load: () => loadContractApprovals(currentUserId, isAdmin) };
-    return { service: dispatchOrderApprovalService, approvals: dispatchApprovals, selectedIds: dispatchSelectedIds, setSelectedIds: setDispatchSelectedIds, load: () => loadDispatchApprovals(currentUserId, isAdmin) };
+    if (domain === 'crew') return {
+      service: approvalService, approvals: crewApprovals, selectedIds: crewSelectedIds, setSelectedIds: setCrewSelectedIds,
+      load: () => loadCrewApprovals(currentUserId, isAdmin),
+      deleteOne: (a) => {
+        const rec = a as ApprovalWithRecommendation;
+        return approvalService.deleteApproval(rec, rec.recommendation?.crew_name || '알 수 없음', currentUserId, currentUserName);
+      },
+    };
+    if (domain === 'rotation') return {
+      service: rotationApprovalService, approvals: rotationApprovals, selectedIds: rotationSelectedIds, setSelectedIds: setRotationSelectedIds,
+      load: () => loadRotationApprovals(currentUserId, isAdmin),
+      deleteOne: (a) => {
+        const r = a as RotationApprovalWithPlan;
+        return rotationApprovalService.deleteApproval(r, `${r.plan_name || '교대계획'} (${r.ship_name || '-'})`, currentUserId, currentUserName);
+      },
+    };
+    if (domain === 'contract') return {
+      service: contractApprovalService, approvals: contractApprovals, selectedIds: contractSelectedIds, setSelectedIds: setContractSelectedIds,
+      load: () => loadContractApprovals(currentUserId, isAdmin),
+      deleteOne: (a) => {
+        const c = a as ContractApprovalWithContract;
+        return contractApprovalService.deleteApproval(c, `${c.crew_name || '-'} (${c.rank_code || '-'})`, currentUserId, currentUserName);
+      },
+    };
+    return {
+      service: dispatchOrderApprovalService, approvals: dispatchApprovals, selectedIds: dispatchSelectedIds, setSelectedIds: setDispatchSelectedIds,
+      load: () => loadDispatchApprovals(currentUserId, isAdmin),
+      deleteOne: (a) => {
+        const d = a as DispatchApprovalWithOrder;
+        return dispatchOrderApprovalService.deleteApproval(d, `${d.crew_name || '-'} (${d.dispatch_type === 'promotion' ? '승진' : '강등'})`, currentUserId, currentUserName);
+      },
+    };
+  };
+
+  const [bulkDeleteProcessing, setBulkDeleteProcessing] = useState(false);
+
+  const submitBulkDelete = async (domain: Domain) => {
+    const cfg = domainConfig(domain);
+    const targets = cfg.approvals.filter(a => cfg.selectedIds.includes(a.id) && isDeletable(a));
+    if (targets.length === 0) return;
+    if (!confirm(`선택한 결재 이력 ${targets.length}건을 삭제하시겠습니까? 실제 반영된 데이터는 유지되며, 결재 이력만 삭제 이력함으로 이관되어 되돌릴 수 없습니다.`)) return;
+    setBulkDeleteProcessing(true);
+    try {
+      await Promise.all(targets.map(a => cfg.deleteOne(a)));
+      toast({ title: '삭제되었습니다.', description: `${targets.length}건이 삭제 이력함으로 이관되었습니다.` });
+      cfg.setSelectedIds([]);
+      await cfg.load();
+      await loadDeletionLogs();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkDeleteProcessing(false);
+    }
   };
 
   const openBulkDialog = (domain: Domain, action: 'approve' | 'reject') => {
@@ -588,6 +641,66 @@ export default function DispatchApprovalInboxPage() {
   };
 
   // --- 공통 렌더링 ---
+
+  // 목록에서 결재 현황을 한눈에 보여주는 압축된 체인: 요청자 → 중간결재자(들) → 최종결재자.
+  // 결재중인 단계는 파란색으로 강조하고, 이미 승인/반려된 단계는 각각 초록/빨강으로 표시한다.
+  const renderChainCompact = (approval: ApprovalLike) => (
+    <div className="flex items-center gap-1 flex-wrap text-xs">
+      <span className="text-gray-500">{approval.requester_name}<span className="text-[10px] text-gray-400 ml-0.5">(요청)</span></span>
+      {approval.approval_line.steps.map((step, i) => {
+        const action = approval.actions.find(a => a.step_order === step.step_order);
+        const isCurrent = approval.status === 'pending' && approval.current_step === step.step_order;
+        const isFinal = i === approval.approval_line.steps.length - 1;
+        return (
+          <span key={step.id} className="flex items-center gap-1">
+            <span className="text-gray-300">→</span>
+            <span className={
+              action?.action === 'approved' ? 'text-green-600'
+              : action?.action === 'rejected' ? 'text-red-600 font-medium'
+              : isCurrent ? 'text-blue-600 font-semibold'
+              : 'text-gray-400'
+            }>
+              {step.approver_name}
+              <span className="text-[10px] ml-0.5">({isFinal ? '최종' : '중간'}{isCurrent ? '·결재중' : ''})</span>
+            </span>
+          </span>
+        );
+      })}
+    </div>
+  );
+
+  // "보기" 상세를 목록을 가리는 전체화면 대신 모달로 띄운다.
+  const renderViewDialog = (
+    approval: ApprovalLike | null,
+    onClose: () => void,
+    icon: React.ReactNode,
+    title: React.ReactNode,
+    description: React.ReactNode,
+    canDeleteThis: boolean,
+    onDelete: () => void,
+  ) => {
+    if (!approval) return null;
+    return (
+      <Dialog open onOpenChange={o => !o && onClose()}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <DialogTitle className="flex items-center gap-2">{icon}{title}</DialogTitle>
+                <p className="text-sm text-muted-foreground mt-1">{description}</p>
+              </div>
+              {canDeleteThis && (
+                <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1 shrink-0" onClick={onDelete}>
+                  <Trash2 className="w-3.5 h-3.5" />삭제
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+          <div className="pt-2">{renderProgress(approval)}</div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   const renderProgress = (approval: ApprovalLike) => (
     <div>
@@ -645,7 +758,7 @@ export default function DispatchApprovalInboxPage() {
     selectedIds: string[],
     setSelectedIds: (ids: string[]) => void,
   ) => {
-    const selectableIds = list.filter(a => isMyTurn(a)).map(a => a.id);
+    const selectableIds = list.filter(a => isMyTurn(a) || isDeletable(a)).map(a => a.id);
     const toggleOne = (id: string) => setSelectedIds(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
     const toggleAll = (checked: boolean) => setSelectedIds(checked ? selectableIds : []);
     return (
@@ -662,19 +775,19 @@ export default function DispatchApprovalInboxPage() {
             </th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">대상</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">결재선</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">요청자</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">결재 현황</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">요청일</th>
-            <th className="text-right p-2 text-xs font-medium text-gray-600 w-44">작업</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-24">작업</th>
           </tr>
         </thead>
         <tbody>
           {list.map(approval => {
             const myTurn = isMyTurn(approval);
+            const deletable = isDeletable(approval);
             return (
               <tr key={approval.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => onView(approval)}>
                 <td className="p-2" onClick={e => e.stopPropagation()}>
-                  {myTurn && <Checkbox checked={selectedIds.includes(approval.id)} onCheckedChange={() => toggleOne(approval.id)} />}
+                  {(myTurn || deletable) && <Checkbox checked={selectedIds.includes(approval.id)} onCheckedChange={() => toggleOne(approval.id)} />}
                 </td>
                 <td className="p-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -683,19 +796,15 @@ export default function DispatchApprovalInboxPage() {
                   </div>
                 </td>
                 <td className="p-2 font-medium">{subjectLabel(approval)}<div className="text-xs text-gray-400 font-normal">{subLabel(approval)}</div></td>
-                <td className="p-2 text-gray-500">{approval.approval_line.name}</td>
-                <td className="p-2 text-gray-500">{approval.requester_name}</td>
+                <td className="p-2">{renderChainCompact(approval)}</td>
                 <td className="p-2 text-gray-500">{format(new Date(approval.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
                 <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
-                  <div className="flex justify-end gap-1">
-                    {myTurn && (
-                      <>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => onApprove(approval)}>승인</Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => onReject(approval)}>반려</Button>
-                      </>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onView(approval)}>보기</Button>
-                  </div>
+                  {myTurn && (
+                    <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => onApprove(approval)}>승인</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => onReject(approval)}>반려</Button>
+                    </div>
+                  )}
                 </td>
               </tr>
             );
@@ -743,13 +852,22 @@ export default function DispatchApprovalInboxPage() {
   };
 
   const renderBulkBar = (domain: Domain, selectedIds: string[]) => {
-    if (selectedIds.length === 0 || !permissions.canEdit) return null;
+    if (selectedIds.length === 0) return null;
+    const cfg = domainConfig(domain);
+    const approvableCount = permissions.canEdit ? cfg.approvals.filter(a => selectedIds.includes(a.id) && isMyTurn(a)).length : 0;
+    const deletableCount = cfg.approvals.filter(a => selectedIds.includes(a.id) && isDeletable(a)).length;
+    if (approvableCount === 0 && deletableCount === 0) return null;
     return (
       <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
         <span className="text-xs text-blue-800">{selectedIds.length}건 선택됨</span>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50" onClick={() => openBulkDialog(domain, 'approve')}>일괄 승인</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => openBulkDialog(domain, 'reject')}>일괄 반려</Button>
+          {approvableCount > 0 && <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50" onClick={() => openBulkDialog(domain, 'approve')}>일괄 승인 ({approvableCount})</Button>}
+          {approvableCount > 0 && <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => openBulkDialog(domain, 'reject')}>일괄 반려 ({approvableCount})</Button>}
+          {deletableCount > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs text-gray-600 border-gray-300 hover:bg-gray-50" onClick={() => submitBulkDelete(domain)} disabled={bulkDeleteProcessing}>
+              <Trash2 className="w-3.5 h-3.5 mr-1" />{bulkDeleteProcessing ? '삭제 중...' : `선택 삭제 (${deletableCount})`}
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -839,24 +957,12 @@ export default function DispatchApprovalInboxPage() {
               )}
             </div>
           )}
-          {crewViewMode === 'list' && selectedCrew && (
-            <div className="mt-4 space-y-4">
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedCrew(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4" />{selectedCrew.recommendation?.crew_name || '선원 추천'}</CardTitle>
-                      <CardDescription>{selectedCrew.recommendation?.ship_name} · 요청자: {selectedCrew.requester_name}</CardDescription>
-                    </div>
-                    {selectedCrew.status !== 'pending' && (selectedCrew.requester_id === currentUserId || isAdmin) && permissions.canDelete && (
-                      <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteCrew(selectedCrew)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>{renderProgress(selectedCrew)}</CardContent>
-              </Card>
-            </div>
+          {crewViewMode === 'list' && renderViewDialog(
+            selectedCrew, () => setSelectedCrew(null),
+            <User className="w-4 h-4" />, selectedCrew?.recommendation?.crew_name || '선원 추천',
+            `${selectedCrew?.recommendation?.ship_name || ''} · 요청자: ${selectedCrew?.requester_name || ''}`,
+            !!selectedCrew && selectedCrew.status !== 'pending' && (selectedCrew.requester_id === currentUserId || isAdmin) && permissions.canDelete,
+            () => selectedCrew && handleDeleteCrew(selectedCrew),
           )}
         </TabsContent>
 
@@ -887,24 +993,12 @@ export default function DispatchApprovalInboxPage() {
               )}
             </div>
           )}
-          {rotationViewMode === 'list' && selectedRotation && (
-            <div className="mt-4 space-y-4">
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedRotation(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2"><ShipIcon className="w-4 h-4" />{selectedRotation.plan_name}</CardTitle>
-                      <CardDescription>{selectedRotation.ship_name} · 요청자: {selectedRotation.requester_name}</CardDescription>
-                    </div>
-                    {selectedRotation.status !== 'pending' && (selectedRotation.requester_id === currentUserId || isAdmin) && permissions.canDelete && (
-                      <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteRotation(selectedRotation)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>{renderProgress(selectedRotation)}</CardContent>
-              </Card>
-            </div>
+          {rotationViewMode === 'list' && renderViewDialog(
+            selectedRotation, () => setSelectedRotation(null),
+            <ShipIcon className="w-4 h-4" />, selectedRotation?.plan_name || '교대계획',
+            `${selectedRotation?.ship_name || ''} · 요청자: ${selectedRotation?.requester_name || ''}`,
+            !!selectedRotation && selectedRotation.status !== 'pending' && (selectedRotation.requester_id === currentUserId || isAdmin) && permissions.canDelete,
+            () => selectedRotation && handleDeleteRotation(selectedRotation),
           )}
         </TabsContent>
 
@@ -935,24 +1029,12 @@ export default function DispatchApprovalInboxPage() {
               )}
             </div>
           )}
-          {contractViewMode === 'list' && selectedContract && (
-            <div className="mt-4 space-y-4">
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedContract(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4" />{selectedContract.crew_name} ({selectedContract.rank_code})</CardTitle>
-                      <CardDescription>{selectedContract.ship_name} · 요청자: {selectedContract.requester_name}</CardDescription>
-                    </div>
-                    {selectedContract.status !== 'pending' && (selectedContract.requester_id === currentUserId || isAdmin) && permissions.canDelete && (
-                      <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteContract(selectedContract)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>{renderProgress(selectedContract)}</CardContent>
-              </Card>
-            </div>
+          {contractViewMode === 'list' && renderViewDialog(
+            selectedContract, () => setSelectedContract(null),
+            <User className="w-4 h-4" />, `${selectedContract?.crew_name || ''} (${selectedContract?.rank_code || '-'})`,
+            `${selectedContract?.ship_name || ''} · 요청자: ${selectedContract?.requester_name || ''}`,
+            !!selectedContract && selectedContract.status !== 'pending' && (selectedContract.requester_id === currentUserId || isAdmin) && permissions.canDelete,
+            () => selectedContract && handleDeleteContract(selectedContract),
           )}
         </TabsContent>
 
@@ -984,26 +1066,13 @@ export default function DispatchApprovalInboxPage() {
               )}
             </div>
           )}
-          {dispatchViewMode === 'list' && selectedDispatch && (
-            <div className="mt-4 space-y-4">
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedDispatch(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <User className="w-4 h-4" />{selectedDispatch.crew_name} — {selectedDispatch.previous_rank_code}{selectedDispatch.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → {selectedDispatch.new_rank_code}{selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''}
-                      </CardTitle>
-                      <CardDescription>{selectedDispatch.ship_name} · 요청자: {selectedDispatch.requester_name}</CardDescription>
-                    </div>
-                    {selectedDispatch.status !== 'pending' && (selectedDispatch.requester_id === currentUserId || isAdmin) && permissions.canDelete && (
-                      <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteDispatch(selectedDispatch)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>{renderProgress(selectedDispatch)}</CardContent>
-              </Card>
-            </div>
+          {dispatchViewMode === 'list' && renderViewDialog(
+            selectedDispatch, () => setSelectedDispatch(null),
+            <User className="w-4 h-4" />,
+            `${selectedDispatch?.crew_name || ''} — ${selectedDispatch?.previous_rank_code || ''}${selectedDispatch?.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → ${selectedDispatch?.new_rank_code || ''}${selectedDispatch?.new_grade ? `(${selectedDispatch.new_grade})` : ''}`,
+            `${selectedDispatch?.ship_name || ''} · 요청자: ${selectedDispatch?.requester_name || ''}`,
+            !!selectedDispatch && selectedDispatch.status !== 'pending' && (selectedDispatch.requester_id === currentUserId || isAdmin) && permissions.canDelete,
+            () => selectedDispatch && handleDeleteDispatch(selectedDispatch),
           )}
         </TabsContent>
 
