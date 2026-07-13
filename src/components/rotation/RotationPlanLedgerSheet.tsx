@@ -67,8 +67,8 @@ export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, titl
               <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#bbb' }}>해당하는 교대 계획이 없습니다</td></tr>
             ) : rows.map((r, i) => (
               <tr key={i}>
-                {r.groupStart && <td className="owner-ship" rowSpan={r.groupSize}>{r.ownerName}</td>}
-                {r.groupStart && <td className="owner-ship" rowSpan={r.groupSize}>{r.shipName}</td>}
+                {r.ownerGroupStart && <td className="owner-ship" rowSpan={r.ownerGroupSize}>{r.ownerName}</td>}
+                {r.shipGroupStart && <td className="owner-ship" rowSpan={r.shipGroupSize}>{r.shipName}</td>}
                 <td className="center">{r.no}</td>
                 <td>{r.boarding}</td>
                 <td>{r.disembark}</td>

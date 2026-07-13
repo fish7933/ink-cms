@@ -187,8 +187,10 @@ export interface LedgerRow {
   rotationDate: string;
   portLabel: string;
   notes: string;
-  groupStart: boolean; // 이 행이 (선주,선박) 그룹의 첫 행인지
-  groupSize: number;   // groupStart일 때만 의미 있음 — 이 그룹에 속한 행 수
+  ownerGroupStart: boolean; // 이 행이 선주 그룹(선박이 달라도 선주가 같으면 이어짐)의 첫 행인지
+  ownerGroupSize: number;   // ownerGroupStart일 때만 의미 있음
+  shipGroupStart: boolean;  // 이 행이 (선주,선박) 그룹의 첫 행인지
+  shipGroupSize: number;    // shipGroupStart일 때만 의미 있음
 }
 
 // plans(계획 단위)를 선주>선박>교대일 순으로 정렬한 뒤, 계획별 배정(승선/하선 쌍)을 한 행씩 펼친다.
@@ -202,7 +204,7 @@ export function buildRotationPlanLedgerRows(
     a.rotation_date.localeCompare(b.rotation_date)
   );
 
-  const flat: Omit<LedgerRow, 'groupStart' | 'groupSize'>[] = [];
+  const flat: Omit<LedgerRow, 'ownerGroupStart' | 'ownerGroupSize' | 'shipGroupStart' | 'shipGroupSize'>[] = [];
   let no = 1;
   for (const plan of sorted) {
     const portLabel = portLabelByPlanId.get(plan.id) || '-';
@@ -218,22 +220,36 @@ export function buildRotationPlanLedgerRows(
         disembark,
         rotationDate: plan.rotation_date,
         portLabel,
-        notes: a?.notes || plan.notes || '',
+        notes: a?.notes || '',
       });
     }
   }
 
-  // (선주,선박) 연속 그룹 계산
+  // 선주 연속 그룹(선박이 달라도 선주가 같으면 이어짐) + 그 안의 (선주,선박) 연속 그룹을 각각 계산
   const rows: LedgerRow[] = [];
   let i = 0;
   while (i < flat.length) {
-    let j = i + 1;
-    while (j < flat.length && flat[j].ownerName === flat[i].ownerName && flat[j].shipName === flat[i].shipName) j++;
-    const groupSize = j - i;
-    for (let k = i; k < j; k++) {
-      rows.push({ ...flat[k], groupStart: k === i, groupSize: k === i ? groupSize : 0 });
+    let oj = i + 1;
+    while (oj < flat.length && flat[oj].ownerName === flat[i].ownerName) oj++;
+    const ownerGroupSize = oj - i;
+
+    let k = i;
+    while (k < oj) {
+      let sj = k + 1;
+      while (sj < oj && flat[sj].shipName === flat[k].shipName) sj++;
+      const shipGroupSize = sj - k;
+      for (let m = k; m < sj; m++) {
+        rows.push({
+          ...flat[m],
+          ownerGroupStart: m === i,
+          ownerGroupSize: m === i ? ownerGroupSize : 0,
+          shipGroupStart: m === k,
+          shipGroupSize: m === k ? shipGroupSize : 0,
+        });
+      }
+      k = sj;
     }
-    i = j;
+    i = oj;
   }
   return rows;
 }
@@ -265,11 +281,11 @@ export async function exportRotationPlansLedgerToExcel(
     border: border({ thickTop: true, thickBottom: true }),
   })));
 
-  // 그룹(선박)별로 교차 음영 — 같은 선박 안에서는 동일한 색으로 이어지도록 개별 행이 아닌 그룹 인덱스 기준
-  let groupIndex = -1;
+  // 선주 그룹별로 교차 음영 — 같은 선주 안에서는(선박이 달라도) 동일한 색으로 이어지도록 그룹 인덱스 기준
+  let ownerGroupIndex = -1;
   ledgerRows.forEach((r, i) => {
-    if (r.groupStart) groupIndex++;
-    const zebraFill = groupIndex % 2 === 1 ? { fgColor: { rgb: ZEBRA_BG } } : undefined;
+    if (r.ownerGroupStart) ownerGroupIndex++;
+    const zebraFill = ownerGroupIndex % 2 === 1 ? { fgColor: { rgb: ZEBRA_BG } } : undefined;
     const isLastRow = i === ledgerRows.length - 1;
     const values: (string | number)[] = [r.ownerName, r.shipName, r.no, r.boarding, r.disembark, r.rotationDate, r.portLabel, r.notes];
     rows.push(values.map((v, c) => cell(v, {
@@ -285,23 +301,14 @@ export async function exportRotationPlansLedgerToExcel(
 
   const DATA_START = 3; // 제목(0) + 빈줄(1) + 헤더(2) 다음부터 데이터
   const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }];
-  let groupStartIdx = 0;
   ledgerRows.forEach((r, i) => {
-    if (r.groupStart && i > 0) {
-      // 이전 그룹 병합 확정
-      const prevSize = ledgerRows[groupStartIdx].groupSize;
-      if (prevSize > 1) {
-        merges.push({ s: { r: DATA_START + groupStartIdx, c: 0 }, e: { r: DATA_START + groupStartIdx + prevSize - 1, c: 0 } });
-        merges.push({ s: { r: DATA_START + groupStartIdx, c: 1 }, e: { r: DATA_START + groupStartIdx + prevSize - 1, c: 1 } });
-      }
-      groupStartIdx = i;
+    if (r.ownerGroupStart && r.ownerGroupSize > 1) {
+      merges.push({ s: { r: DATA_START + i, c: 0 }, e: { r: DATA_START + i + r.ownerGroupSize - 1, c: 0 } });
+    }
+    if (r.shipGroupStart && r.shipGroupSize > 1) {
+      merges.push({ s: { r: DATA_START + i, c: 1 }, e: { r: DATA_START + i + r.shipGroupSize - 1, c: 1 } });
     }
   });
-  const lastSize = ledgerRows[groupStartIdx].groupSize;
-  if (lastSize > 1) {
-    merges.push({ s: { r: DATA_START + groupStartIdx, c: 0 }, e: { r: DATA_START + groupStartIdx + lastSize - 1, c: 0 } });
-    merges.push({ s: { r: DATA_START + groupStartIdx, c: 1 }, e: { r: DATA_START + groupStartIdx + lastSize - 1, c: 1 } });
-  }
   worksheet['!merges'] = merges;
 
   const workbook = XLSX.utils.book_new();
