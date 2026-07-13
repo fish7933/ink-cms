@@ -18,6 +18,7 @@ import {
   deleteSalaryTemplate,
   renewSalaryTemplate,
   copySalaryTemplate,
+  getTemplateAssignmentSummary,
   type SalaryTemplate,
 } from '@/lib/salary-store';
 import { useTabContext } from '@/contexts/TabContext';
@@ -46,6 +47,9 @@ export default function SalaryTemplatesPage() {
   const PAGE_SIZE = 20;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [deleteChecking, setDeleteChecking] = useState(false);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[] | null>(null);
+  const [deleteWarning, setDeleteWarning] = useState<{ shipCount: number; fleetCount: number; ownerCount: number } | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -84,26 +88,48 @@ export default function SalaryTemplatesPage() {
     return () => window.removeEventListener('salary-template-data-changed', loadData);
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('삭제하시겠습니까?')) return;
-    await deleteSalaryTemplate(id);
+  const performDelete = async (ids: string[]) => {
+    await Promise.all(ids.map(id => deleteSalaryTemplate(id)));
+    toast({ title: '삭제 완료', description: ids.length > 1 ? `${ids.length}개 템플릿이 삭제되었습니다.` : '삭제되었습니다.' });
+    setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    setPendingDeleteIds(null);
+    setDeleteWarning(null);
     await loadData();
   };
+
+  const requestDelete = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setDeleteChecking(true);
+    try {
+      const summary = await getTemplateAssignmentSummary(ids);
+      if (summary.total === 0) {
+        if (!confirm(ids.length > 1 ? `선택한 ${ids.length}개 템플릿을 삭제하시겠습니까?` : '삭제하시겠습니까?')) return;
+        await performDelete(ids);
+        return;
+      }
+      setPendingDeleteIds(ids);
+      setDeleteWarning(summary);
+    } finally {
+      setDeleteChecking(false);
+    }
+  };
+
+  const handleDelete = (id: string) => requestDelete([id]);
 
   useEffect(() => { setSelectedIds([]); }, [page]);
 
   const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    if (!confirm(`선택한 ${selectedIds.length}개 템플릿을 삭제하시겠습니까?`)) return;
     setBulkDeleting(true);
     try {
-      await Promise.all(selectedIds.map(id => deleteSalaryTemplate(id)));
-      toast({ title: '삭제 완료', description: `${selectedIds.length}개 템플릿이 삭제되었습니다.` });
-      setSelectedIds([]);
-      await loadData();
+      await requestDelete(selectedIds);
     } finally {
       setBulkDeleting(false);
     }
+  };
+
+  const confirmDeleteAnyway = async () => {
+    if (!pendingDeleteIds) return;
+    await performDelete(pendingDeleteIds);
   };
 
   const openRenew = (t: SalaryTemplate) => {
@@ -193,9 +219,9 @@ export default function SalaryTemplatesPage() {
                       <Button
                         size="sm" variant="outline"
                         className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50"
-                        onClick={handleBulkDelete} disabled={bulkDeleting}
+                        onClick={handleBulkDelete} disabled={bulkDeleting || deleteChecking}
                       >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting ? '삭제 중...' : '선택 삭제'}
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting || deleteChecking ? '확인 중...' : '선택 삭제'}
                       </Button>
                     </div>
                   )}
@@ -378,6 +404,30 @@ export default function SalaryTemplatesPage() {
             <Button size="sm" onClick={handleCopy} disabled={copying || !copyName.trim()}>
               {copying ? '복사 중...' : '복사'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 삭제 전 할당 현황 경고 다이얼로그 */}
+      <Dialog open={pendingDeleteIds !== null} onOpenChange={open => { if (!open) { setPendingDeleteIds(null); setDeleteWarning(null); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base text-red-600">할당된 선박/플릿/선주가 있습니다</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-gray-700">
+              {pendingDeleteIds && pendingDeleteIds.length > 1 ? `선택한 ${pendingDeleteIds.length}개 템플릿 중` : '삭제하려는 템플릿이'} 아래 대상에 할당되어 있습니다. 삭제해도 배정 자체는 그대로 남아 계속 이 템플릿을 참조하게 되므로, 미리 배정을 해제하는 것을 권장합니다.
+            </p>
+            <ul className="text-sm bg-red-50 border border-red-200 rounded-md p-3 space-y-1">
+              {deleteWarning && deleteWarning.shipCount > 0 && <li>선박 <span className="font-medium">{deleteWarning.shipCount}건</span></li>}
+              {deleteWarning && deleteWarning.fleetCount > 0 && <li>플릿 <span className="font-medium">{deleteWarning.fleetCount}건</span></li>}
+              {deleteWarning && deleteWarning.ownerCount > 0 && <li>선주 <span className="font-medium">{deleteWarning.ownerCount}건</span></li>}
+            </ul>
+            <p className="text-xs text-gray-500">그래도 삭제하시겠습니까?</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setPendingDeleteIds(null); setDeleteWarning(null); }}>취소</Button>
+            <Button size="sm" variant="destructive" onClick={confirmDeleteAnyway}>그래도 삭제</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

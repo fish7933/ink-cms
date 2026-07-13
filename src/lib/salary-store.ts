@@ -463,6 +463,21 @@ export async function deleteSalaryTemplate(id: string): Promise<boolean> {
   return true;
 }
 
+// 삭제하려는 템플릿(들)이 선박/플릿/선주에 할당되어 있는지 미리 확인 — 삭제해도 배정 행 자체는
+// 남아있어 조용히 비활성 템플릿을 계속 참조하게 되므로, 삭제 전에 경고를 보여주기 위해 사용한다.
+export async function getTemplateAssignmentSummary(templateIds: string[]): Promise<{ shipCount: number; fleetCount: number; ownerCount: number; total: number }> {
+  if (templateIds.length === 0) return { shipCount: 0, fleetCount: 0, ownerCount: 0, total: 0 };
+  const [ship, fleet, owner] = await Promise.all([
+    supabase.from('ship_salary_assignments').select('id', { count: 'exact', head: true }).in('template_id', templateIds),
+    supabase.from('fleet_salary_assignments').select('id', { count: 'exact', head: true }).in('template_id', templateIds),
+    supabase.from('owner_salary_assignments').select('id', { count: 'exact', head: true }).in('template_id', templateIds),
+  ]);
+  const shipCount = ship.count || 0;
+  const fleetCount = fleet.count || 0;
+  const ownerCount = owner.count || 0;
+  return { shipCount, fleetCount, ownerCount, total: shipCount + fleetCount + ownerCount };
+}
+
 // 특정 템플릿(어느 버전이든)의 전체 이력(원본 + 갱신된 모든 버전)을 최신순으로 조회
 export async function getSalaryTemplateHistory(templateId: string): Promise<SalaryTemplate[]> {
   const { data: current, error: currentError } = await supabase
