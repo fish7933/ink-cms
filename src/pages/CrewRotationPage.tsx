@@ -253,6 +253,13 @@ export function CrewRotationPage() {
     [expiryInfo, expiryThreshold]
   );
 
+  // 하선예정일(기준) 하루 전/뒤로 출국일/귀국일을 계산 — RotationPlanFormPage의 cascadeDatesFromBase와 동일한 규칙
+  const addDays = (iso: string, n: number) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    const date = new Date(y, m - 1, d + n);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
   const handleAutoGenerate = async () => {
     if (expiryFiltered.length === 0) return;
     setAutoGenLoading(true);
@@ -287,11 +294,11 @@ export function CrewRotationPage() {
             off_rank_id: c.rank_id || null,
             off_rank_grade: null,
             off_disembark_date: c.expiry_date,
-            off_return_date: null,
+            off_return_date: addDays(c.expiry_date, 1),
             on_crew_id: null,
             on_rank_id: null,
             on_rank_grade: null,
-            on_departure_date: null,
+            on_departure_date: addDays(c.expiry_date, -1),
             contract_months: null,
             salary_template_id: null,
             salary_amount: null,
