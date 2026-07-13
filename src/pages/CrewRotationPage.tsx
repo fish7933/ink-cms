@@ -658,33 +658,36 @@ export function CrewRotationPage() {
                 <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            {draftSelectedIds.length > 0 && (
-              <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openBulkSubmitDialog}>
-                일괄 결재 상신 ({draftSelectedIds.length})
-              </Button>
-            )}
-            {approvedSelectedIds.length > 0 && (
-              <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkExecute} disabled={bulkExecuting}>
-                <CheckCircle className="h-3.5 w-3.5" />{bulkExecuting ? '실행 중...' : `일괄 발령실행 (${approvedSelectedIds.length})`}
-              </Button>
-            )}
-            {selectedIds.length > 0 && (
-              <>
-                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleExportSelectedExcel} disabled={monthExporting === 'selected'}>
-                  {monthExporting === 'selected' ? '내보내는 중...' : `선택 엑셀 (${selectedIds.length})`}
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handlePrintSelected}>
-                  선택 PDF ({selectedIds.length})
-                </Button>
-              </>
-            )}
-            {isAdmin && selectedIds.length > 0 && (
-              <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
-                <Trash2 className="h-3.5 w-3.5 mr-1" />선택 삭제 ({selectedIds.length})
-              </Button>
-            )}
           </div>
         </CardHeader>
+        {selectedIds.length > 0 && (
+          <div className="flex items-center justify-between gap-2 flex-wrap bg-blue-50 border-y border-blue-200 px-4 py-2">
+            <span className="text-xs font-medium text-blue-800">{selectedIds.length}건 선택됨</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {draftSelectedIds.length > 0 && (
+                <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 bg-white hover:bg-blue-50" onClick={openBulkSubmitDialog}>
+                  일괄 결재 상신 ({draftSelectedIds.length})
+                </Button>
+              )}
+              {approvedSelectedIds.length > 0 && (
+                <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkExecute} disabled={bulkExecuting}>
+                  <CheckCircle className="h-3.5 w-3.5" />{bulkExecuting ? '실행 중...' : `일괄 발령실행 (${approvedSelectedIds.length})`}
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="h-7 text-xs bg-white gap-1" onClick={handleExportSelectedExcel} disabled={monthExporting === 'selected'}>
+                {monthExporting === 'selected' ? '내보내는 중...' : `선택 엑셀 (${selectedIds.length})`}
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs bg-white gap-1" onClick={handlePrintSelected}>
+                선택 PDF ({selectedIds.length})
+              </Button>
+              {isAdmin && (
+                <Button variant="outline" size="sm" className="h-7 text-xs bg-white text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />선택 삭제 ({selectedIds.length})
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
         <CardContent className="p-0">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground text-sm">로딩 중...</div>
