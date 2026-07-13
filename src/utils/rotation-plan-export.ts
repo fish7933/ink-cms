@@ -33,7 +33,7 @@ const border = (opts: { thickTop?: boolean; thickBottom?: boolean; thickLeft?: b
 const COL_LABELS = ['No.', '직급', '성명', '출국일', '승선일', '직급', '성명', '하선일', '귀국일'];
 const COL_ALIGN: ('center' | 'left')[] = ['center', 'center', 'left', 'center', 'center', 'center', 'left', 'center', 'center'];
 
-// 배승계획서 한 건의 워크시트를 만든다 — 좌: 신규 승선(IN), 우: 기존 하선(OUT). 단건/월별 내보내기 공용.
+// 배승계획서 한 건의 워크시트를 만든다 — 좌: 신규 승선(IN), 우: 기존 하선(OUT). 단건 내보내기 전용.
 function buildRotationPlanWorksheet(plan: CrewRotationPlanWithDetails & { creator_name?: string }, portLabel?: string) {
   const colCount = COL_LABELS.length;
   const rows: ReturnType<typeof cell>[][] = [];
@@ -163,7 +163,7 @@ async function writeWorkbook(workbook: XLSX.WorkBook, fileName: string): Promise
   XLSX.writeFile(workbook, fileName);
 }
 
-// 배승계획서 엑셀 내보내기(단건) — 좌: 신규 승선(IN), 우: 기존 하선(OUT)
+// 배승계획서 엑셀 내보내기(단건, 계획 상세 화면 전용) — 좌: 신규 승선(IN), 우: 기존 하선(OUT)
 export async function exportRotationPlanToExcel(
   plan: CrewRotationPlanWithDetails & { creator_name?: string },
   portLabel?: string
@@ -174,36 +174,137 @@ export async function exportRotationPlanToExcel(
   await writeWorkbook(workbook, `${plan.ship_name}_배승계획서_${plan.rotation_date}.xlsx`);
 }
 
-// Excel 시트명 제약(31자, \ / * ? : [ ] 금지)에 맞춰 정리하고, 중복되면 번호를 붙인다
-function sanitizeSheetName(name: string, usedNames: Set<string>): string {
-  let base = name.replace(/[\\/*?:[\]]/g, '').slice(0, 28) || '계획';
-  let candidate = base;
-  let n = 2;
-  while (usedNames.has(candidate)) {
-    candidate = `${base}(${n})`;
-    n++;
-  }
-  usedNames.add(candidate);
-  return candidate;
+// ── 배승 계획 목록(여러 건을 한 표로) ──────────────────────────────────────
+// 여러 달을 고르거나 목록에서 직접 선택한 계획들을 하나의 표로 내보낼 때 쓰는 형태.
+// 선주/선박 기준으로 묶어 같은 선박끼리는 셀을 병합한다.
+
+export interface LedgerRow {
+  ownerName: string;
+  shipName: string;
+  no: number;
+  boarding: string;
+  disembark: string;
+  rotationDate: string;
+  portLabel: string;
+  notes: string;
+  groupStart: boolean; // 이 행이 (선주,선박) 그룹의 첫 행인지
+  groupSize: number;   // groupStart일 때만 의미 있음 — 이 그룹에 속한 행 수
 }
 
-// 월별 배승계획서 엑셀 내보내기 — 해당 월에 교대일이 속한 모든 선박의 계획을 한 워크북에
-// 선박(계획)별 시트로 담는다. 각 시트 내용/서식은 단건 내보내기와 동일하다.
-export async function exportMonthlyRotationPlansToExcel(
-  plans: (CrewRotationPlanWithDetails & { creator_name?: string })[],
-  month: string, // 'YYYY-MM'
+// plans(계획 단위)를 선주>선박>교대일 순으로 정렬한 뒤, 계획별 배정(승선/하선 쌍)을 한 행씩 펼친다.
+export function buildRotationPlanLedgerRows(
+  plans: CrewRotationPlanWithDetails[],
   portLabelByPlanId: Map<string, string>
-): Promise<void> {
-  if (plans.length === 0) return;
-  const workbook = XLSX.utils.book_new();
-  const usedNames = new Set<string>();
-  // 선박명 기준 정렬 후 시트로 추가
-  const sorted = [...plans].sort((a, b) => a.ship_name.localeCompare(b.ship_name));
+): LedgerRow[] {
+  const sorted = [...plans].sort((a, b) =>
+    a.owner_name.localeCompare(b.owner_name) ||
+    a.ship_name.localeCompare(b.ship_name) ||
+    a.rotation_date.localeCompare(b.rotation_date)
+  );
+
+  const flat: Omit<LedgerRow, 'groupStart' | 'groupSize'>[] = [];
+  let no = 1;
   for (const plan of sorted) {
-    const worksheet = buildRotationPlanWorksheet(plan, portLabelByPlanId.get(plan.id));
-    const sheetName = sanitizeSheetName(plan.ship_name || plan.plan_name, usedNames);
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    const portLabel = portLabelByPlanId.get(plan.id) || '-';
+    const assignments = plan.assignments.length > 0 ? plan.assignments : [null];
+    for (const a of assignments) {
+      const boarding = a?.on_crew_id ? `${a.on_rank_code || ''}${a.on_rank_grade ? `(${a.on_rank_grade})` : ''} ${a.on_crew_name || ''}`.trim() : '-';
+      const disembark = a?.off_crew_id ? `${a.off_rank_code || ''}${a.off_rank_grade ? `(${a.off_rank_grade})` : ''} ${a.off_crew_name || ''}`.trim() : '-';
+      flat.push({
+        ownerName: plan.owner_name,
+        shipName: plan.ship_name,
+        no: no++,
+        boarding,
+        disembark,
+        rotationDate: plan.rotation_date,
+        portLabel,
+        notes: a?.notes || plan.notes || '',
+      });
+    }
   }
-  const [y, m] = month.split('-');
-  await writeWorkbook(workbook, `${y}년${m}월_배승계획서_전체.xlsx`);
+
+  // (선주,선박) 연속 그룹 계산
+  const rows: LedgerRow[] = [];
+  let i = 0;
+  while (i < flat.length) {
+    let j = i + 1;
+    while (j < flat.length && flat[j].ownerName === flat[i].ownerName && flat[j].shipName === flat[i].shipName) j++;
+    const groupSize = j - i;
+    for (let k = i; k < j; k++) {
+      rows.push({ ...flat[k], groupStart: k === i, groupSize: k === i ? groupSize : 0 });
+    }
+    i = j;
+  }
+  return rows;
+}
+
+// 배승 계획 목록 엑셀 내보내기 — 선주/선박/번호/승선자/하선자/교대일/교대국가·도시(항구)/비고,
+// 같은 선박끼리는 선주/선박 셀을 병합한다.
+export async function exportRotationPlansLedgerToExcel(
+  plans: CrewRotationPlanWithDetails[],
+  portLabelByPlanId: Map<string, string>,
+  fileNameHint: string
+): Promise<void> {
+  const ledgerRows = buildRotationPlanLedgerRows(plans, portLabelByPlanId);
+  if (ledgerRows.length === 0) return;
+
+  const LABELS = ['선주', '선박', '번호', '승선자', '하선자', '교대일', '교대국가/도시(항구)', '비고'];
+  const colCount = LABELS.length;
+  const rows: ReturnType<typeof cell>[][] = [];
+
+  rows.push([
+    cell('배승 계획 목록', { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }),
+    ...Array.from({ length: colCount - 1 }, () => cell('', {})),
+  ]);
+  rows.push(Array.from({ length: colCount }, () => cell('', {})));
+
+  rows.push(LABELS.map(label => cell(label, {
+    font: { bold: true, sz: BASE_SZ, color: { rgb: '333333' } },
+    fill: { fgColor: { rgb: 'F3F4F6' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: border({ thickTop: true, thickBottom: true }),
+  })));
+
+  // 그룹(선박)별로 교차 음영 — 같은 선박 안에서는 동일한 색으로 이어지도록 개별 행이 아닌 그룹 인덱스 기준
+  let groupIndex = -1;
+  ledgerRows.forEach((r, i) => {
+    if (r.groupStart) groupIndex++;
+    const zebraFill = groupIndex % 2 === 1 ? { fgColor: { rgb: ZEBRA_BG } } : undefined;
+    const isLastRow = i === ledgerRows.length - 1;
+    const values: (string | number)[] = [r.ownerName, r.shipName, r.no, r.boarding, r.disembark, r.rotationDate, r.portLabel, r.notes];
+    rows.push(values.map((v, c) => cell(v, {
+      font: { sz: BASE_SZ, bold: c === 3 || c === 4 },
+      fill: zebraFill,
+      alignment: { horizontal: c === 2 ? 'center' : c <= 1 ? 'center' : c === 5 ? 'center' : 'left', vertical: 'center' },
+      border: border({ thickBottom: isLastRow }),
+    })));
+  });
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 6 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 24 }];
+
+  const DATA_START = 3; // 제목(0) + 빈줄(1) + 헤더(2) 다음부터 데이터
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }];
+  let groupStartIdx = 0;
+  ledgerRows.forEach((r, i) => {
+    if (r.groupStart && i > 0) {
+      // 이전 그룹 병합 확정
+      const prevSize = ledgerRows[groupStartIdx].groupSize;
+      if (prevSize > 1) {
+        merges.push({ s: { r: DATA_START + groupStartIdx, c: 0 }, e: { r: DATA_START + groupStartIdx + prevSize - 1, c: 0 } });
+        merges.push({ s: { r: DATA_START + groupStartIdx, c: 1 }, e: { r: DATA_START + groupStartIdx + prevSize - 1, c: 1 } });
+      }
+      groupStartIdx = i;
+    }
+  });
+  const lastSize = ledgerRows[groupStartIdx].groupSize;
+  if (lastSize > 1) {
+    merges.push({ s: { r: DATA_START + groupStartIdx, c: 0 }, e: { r: DATA_START + groupStartIdx + lastSize - 1, c: 0 } });
+    merges.push({ s: { r: DATA_START + groupStartIdx, c: 1 }, e: { r: DATA_START + groupStartIdx + lastSize - 1, c: 1 } });
+  }
+  worksheet['!merges'] = merges;
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '배승계획목록');
+  await writeWorkbook(workbook, `${fileNameHint}_배승계획목록.xlsx`);
 }

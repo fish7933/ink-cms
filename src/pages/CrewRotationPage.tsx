@@ -16,7 +16,7 @@ import { getCurrentUser } from '@/lib/store';
 import { rotationService } from '@/services/rotation.service';
 import type { ContractExpiryInfo } from '@/services/rotation.service';
 import { getPorts } from '@/services/port.service';
-import { exportMonthlyRotationPlansToExcel } from '@/utils/rotation-plan-export';
+import { exportRotationPlansLedgerToExcel } from '@/utils/rotation-plan-export';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Company, Fleet, Ship as ShipType, User } from '@/types/models';
 import { approvalService } from '@/services/approval.service';
@@ -177,36 +177,63 @@ export function CrewRotationPage() {
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
-  // 월별 배승계획서 — 상단에서 원하는 월을 골라 그 달에 교대일이 속한 모든 선박의 계획을 내보낸다
-  // (현재 필터는 적용하되 페이지네이션과는 무관하게 해당 월 전체 대상)
-  const [exportMonthValue, setExportMonthValue] = useState(() => {
+  // 배승 계획 목록 엑셀/PDF — ① 상단에서 원하는 달을 여러 개 골라 그 달들에 교대일이 속한 모든 선박의
+  // 계획을 내보내거나, ② 목록에서 체크박스로 직접 고른 계획만 내보낸다. 둘 다 선주/선박/번호/승선자/
+  // 하선자/교대일/교대국가·도시/비고 형태의 한 표로 나가며, 같은 선박끼리는 셀이 병합된다.
+  const [monthPicker, setMonthPicker] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [pickedMonths, setPickedMonths] = useState<string[]>([]);
+
+  const addPickedMonth = () => {
+    if (!monthPicker || pickedMonths.includes(monthPicker)) return;
+    setPickedMonths(prev => [...prev, monthPicker].sort());
+  };
+  const removePickedMonth = (m: string) => setPickedMonths(prev => prev.filter(x => x !== m));
 
   // 선박/선주/플릿 필터와 무관하게 "모든 선박"을 대상으로 하므로 filteredPlans가 아닌 전체 plans 기준
-  const plansForMonth = (monthKey: string) => plans.filter(p => {
-    const d = new Date(p.rotation_date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return key === monthKey;
-  });
+  const plansForMonths = (months: string[]) => {
+    const monthSet = new Set(months);
+    return plans.filter(p => monthSet.has(p.rotation_date.slice(0, 7)));
+  };
 
-  const handleExportMonthExcel = async () => {
-    const monthPlans = plansForMonth(exportMonthValue);
-    if (monthPlans.length === 0) { toast({ title: '해당 월에 교대계획이 없습니다', variant: 'destructive' }); return; }
-    setMonthExporting(exportMonthValue);
+  const portLabelMapFor = (targetPlans: CrewRotationPlanWithDetails[]) =>
+    new Map(targetPlans.map(p => [p.id, p.port_id ? portLabelById.get(p.port_id) || '-' : '-']));
+
+  const handleExportMonthsExcel = async () => {
+    if (pickedMonths.length === 0) { toast({ title: '달을 하나 이상 골라주세요', variant: 'destructive' }); return; }
+    const monthPlans = plansForMonths(pickedMonths);
+    if (monthPlans.length === 0) { toast({ title: '선택한 달에 교대계획이 없습니다', variant: 'destructive' }); return; }
+    setMonthExporting('months');
     try {
-      const portLabelByPlanId = new Map(monthPlans.map(p => [p.id, p.port_id ? portLabelById.get(p.port_id) || '' : '']));
-      await exportMonthlyRotationPlansToExcel(monthPlans, exportMonthValue, portLabelByPlanId);
+      await exportRotationPlansLedgerToExcel(monthPlans, portLabelMapFor(monthPlans), pickedMonths.join('_'));
     } finally {
       setMonthExporting(null);
     }
   };
 
-  const handlePrintMonth = () => {
-    const monthPlans = plansForMonth(exportMonthValue);
-    if (monthPlans.length === 0) { toast({ title: '해당 월에 교대계획이 없습니다', variant: 'destructive' }); return; }
-    window.open(`/print/rotation-plans/month/${exportMonthValue}`, '_blank');
+  const handlePrintMonths = () => {
+    if (pickedMonths.length === 0) { toast({ title: '달을 하나 이상 골라주세요', variant: 'destructive' }); return; }
+    const monthPlans = plansForMonths(pickedMonths);
+    if (monthPlans.length === 0) { toast({ title: '선택한 달에 교대계획이 없습니다', variant: 'destructive' }); return; }
+    window.open(`/print/rotation-plans-ledger?months=${pickedMonths.join(',')}`, '_blank');
+  };
+
+  const handleExportSelectedExcel = async () => {
+    const targetPlans = plans.filter(p => selectedIds.includes(p.id));
+    if (targetPlans.length === 0) return;
+    setMonthExporting('selected');
+    try {
+      await exportRotationPlansLedgerToExcel(targetPlans, portLabelMapFor(targetPlans), '선택계획');
+    } finally {
+      setMonthExporting(null);
+    }
+  };
+
+  const handlePrintSelected = () => {
+    if (selectedIds.length === 0) return;
+    window.open(`/print/rotation-plans-ledger?ids=${selectedIds.join(',')}`, '_blank');
   };
 
   // 삭제(발령 완료 포함 전 상태)는 시스템관리자 이상만 가능. 삭제해도 실제 선원 상태/계약/
@@ -543,22 +570,32 @@ export function CrewRotationPage() {
       <>
       {/* 원래 목록 화면 시작 */}
 
-      {/* 월별 배승계획서 일괄 출력 — 선박/선주 필터와 무관하게 해당 월 전체 선박 대상 */}
+      {/* 배승 계획 목록 엑셀/PDF — 여러 달을 골라서(선주/선박 필터 무관 전체 선박) 내보낸다 */}
       <div className="flex items-center gap-2 rounded-md border bg-gray-50 px-3 py-2 flex-wrap">
-        <span className="text-xs font-medium text-gray-600">월별 배승계획서</span>
+        <span className="text-xs font-medium text-gray-600">배승 계획 목록</span>
         <input
           type="month"
-          value={exportMonthValue}
-          onChange={e => setExportMonthValue(e.target.value)}
+          value={monthPicker}
+          onChange={e => setMonthPicker(e.target.value)}
           className="h-8 rounded-md border border-input bg-white px-2 text-xs"
         />
-        <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExportMonthExcel} disabled={monthExporting === exportMonthValue}>
-          {monthExporting === exportMonthValue ? '내보내는 중...' : '엑셀 다운로드'}
+        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={addPickedMonth}>+ 달 추가</Button>
+        {pickedMonths.length > 0 && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {pickedMonths.map(m => (
+              <span key={m} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                {m}
+                <button type="button" onClick={() => removePickedMonth(m)} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExportMonthsExcel} disabled={monthExporting === 'months'}>
+          {monthExporting === 'months' ? '내보내는 중...' : '엑셀 다운로드'}
         </Button>
-        <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handlePrintMonth}>
+        <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handlePrintMonths}>
           PDF 출력
         </Button>
-        <span className="text-xs text-gray-400">({plansForMonth(exportMonthValue).length}건 해당)</span>
       </div>
 
       {/* 요약 카드 */}
@@ -647,6 +684,16 @@ export function CrewRotationPage() {
               <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkExecute} disabled={bulkExecuting}>
                 <CheckCircle className="h-3.5 w-3.5" />{bulkExecuting ? '실행 중...' : `일괄 발령실행 (${approvedSelectedIds.length})`}
               </Button>
+            )}
+            {selectedIds.length > 0 && (
+              <>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleExportSelectedExcel} disabled={monthExporting === 'selected'}>
+                  {monthExporting === 'selected' ? '내보내는 중...' : `선택 엑셀 (${selectedIds.length})`}
+                </Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handlePrintSelected}>
+                  선택 PDF ({selectedIds.length})
+                </Button>
+              </>
             )}
             {isAdmin && selectedIds.length > 0 && (
               <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
