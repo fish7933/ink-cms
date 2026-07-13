@@ -59,9 +59,9 @@ export default function ContractManagementPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // 계약 결재 상신 다이얼로그 — 채용 결재와 동일하게 결재선을 직접 선택
+  // 계약 결재 상신 다이얼로그 — 채용 결재와 동일하게 결재선을 직접 선택. 단건/일괄 공용으로 배열을 쓴다.
   const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
-  const [submitDialogContract, setSubmitDialogContract] = useState<CrewContractWithDetails | null>(null);
+  const [submitDialogContracts, setSubmitDialogContracts] = useState<CrewContractWithDetails[]>([]);
   const [submitLineId, setSubmitLineId] = useState('');
   const [submitComment, setSubmitComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -76,20 +76,42 @@ export default function ContractManagementPage() {
     loadData();
   }, []);
 
-  const openSubmitDialog = (c: CrewContractWithDetails) => { setSubmitDialogContract(c); setSubmitLineId(''); setSubmitComment(''); };
+  const openSubmitDialog = (c: CrewContractWithDetails) => { setSubmitDialogContracts([c]); setSubmitLineId(''); setSubmitComment(''); };
+
+  const openBulkSubmitDialog = () => {
+    const targets = filteredChains
+      .filter(chain => selectedIds.includes(chain.latest.id) && chainStatus(chain) === 'draft')
+      .map(chain => chain.latest);
+    if (targets.length === 0) return;
+    setSubmitDialogContracts(targets);
+    setSubmitLineId('');
+    setSubmitComment('');
+  };
 
   const handleSubmitApproval = async () => {
-    if (!submitDialogContract || !submitLineId) return;
+    if (submitDialogContracts.length === 0 || !submitLineId) return;
     const currentUser = await getCurrentUser();
     if (!currentUser) return;
     try {
       setSubmitting(true);
-      await contractApprovalService.createApproval(submitDialogContract.id, submitLineId, currentUser.id, submitComment || undefined);
-      toast({ title: '결재 상신 완료', description: '발령 결재함(계약)에서 진행 상황을 확인할 수 있습니다.' });
-      setSubmitDialogContract(null);
+      const results = await Promise.allSettled(
+        submitDialogContracts.map(c => contractApprovalService.createApproval(c.id, submitLineId, currentUser.id, submitComment || undefined))
+      );
+      const failCount = results.filter(r => r.status === 'rejected').length;
+      if (submitDialogContracts.length === 1) {
+        if (failCount > 0) { toast({ title: '결재 상신 실패', variant: 'destructive' }); return; }
+        toast({ title: '결재 상신 완료', description: '발령 결재함(계약)에서 진행 상황을 확인할 수 있습니다.' });
+      } else {
+        const successCount = submitDialogContracts.length - failCount;
+        toast({
+          title: failCount === 0 ? '일괄 결재 상신 완료' : '일부만 처리됨',
+          description: `${successCount}/${submitDialogContracts.length}건 상신되었습니다.`,
+          variant: failCount === 0 ? undefined : 'destructive',
+        });
+      }
+      setSubmitDialogContracts([]);
+      setSelectedIds([]);
       loadData();
-    } catch (e) {
-      toast({ title: '결재 상신 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -247,6 +269,10 @@ export default function ContractManagementPage() {
   const chains = useMemo(() => buildContractChains(contracts), [contracts]);
   const chainStatus = (chain: ContractChain): EffectiveStatus => getEffectiveStatus(chain.latest);
   const getCount = (s: string) => s === 'all' ? chains.length : chains.filter(c => chainStatus(c) === s).length;
+  const draftSelectedCount = useMemo(
+    () => chains.filter(chain => selectedIds.includes(chain.latest.id) && chainStatus(chain) === 'draft').length,
+    [chains, selectedIds] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // 검색: 선원명/선박명/선주사/플릿/직급 대상
   const filteredChains = useMemo(() => {
@@ -374,6 +400,9 @@ export default function ContractManagementPage() {
             <>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 선주사, 플릿, 선박, 직급으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
+                {draftSelectedCount > 0 && permissions.canEdit && (
+                  <Button size="sm" variant="outline" className="gap-1.5 h-9 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openBulkSubmitDialog}>일괄 결재 상신 ({draftSelectedCount})</Button>
+                )}
                 {selectedIds.length > 0 && permissions.canDelete && (
                   <Button size="sm" variant="destructive" className="gap-1.5 h-9" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4" />선택 삭제 ({selectedIds.length})</Button>
                 )}
@@ -455,17 +484,26 @@ export default function ContractManagementPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!submitDialogContract} onOpenChange={o => !submitting && setSubmitDialogContract(o ? submitDialogContract : null)}>
+      <Dialog open={submitDialogContracts.length > 0} onOpenChange={o => !submitting && !o && setSubmitDialogContracts([])}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>계약 결재 상신</DialogTitle>
+            <DialogTitle>{submitDialogContracts.length > 1 ? `계약 결재 상신 (${submitDialogContracts.length}건 일괄)` : '계약 결재 상신'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {submitDialogContract && (
+            {submitDialogContracts.length === 1 ? (
               <div className="p-3 bg-gray-50 rounded-md text-sm space-y-1">
-                <div><span className="font-medium">선원:</span> {submitDialogContract.crew_name}</div>
-                <div><span className="font-medium">직급:</span> {submitDialogContract.rank_code || submitDialogContract.rank}</div>
-                <div><span className="font-medium">선박:</span> {submitDialogContract.ship_name || '-'}</div>
+                <div><span className="font-medium">선원:</span> {submitDialogContracts[0].crew_name}</div>
+                <div><span className="font-medium">직급:</span> {submitDialogContracts[0].rank_code || submitDialogContracts[0].rank}</div>
+                <div><span className="font-medium">선박:</span> {submitDialogContracts[0].ship_name || '-'}</div>
+              </div>
+            ) : submitDialogContracts.length > 1 && (
+              <div className="p-3 bg-gray-50 rounded-md text-sm">
+                <div className="font-medium mb-1">대상 {submitDialogContracts.length}건</div>
+                <div className="text-xs text-gray-600 max-h-24 overflow-y-auto space-y-0.5">
+                  {submitDialogContracts.map(c => (
+                    <div key={c.id}>{c.crew_name} ({c.rank_code || c.rank}) · {c.ship_name || '-'}</div>
+                  ))}
+                </div>
               </div>
             )}
             <div>
@@ -485,9 +523,9 @@ export default function ContractManagementPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitDialogContract(null)} disabled={submitting}>취소</Button>
+            <Button variant="outline" onClick={() => setSubmitDialogContracts([])} disabled={submitting}>취소</Button>
             <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
-              {submitting ? '처리 중...' : '결재 상신'}
+              {submitting ? '처리 중...' : submitDialogContracts.length > 1 ? `${submitDialogContracts.length}건 결재 상신` : '결재 상신'}
             </Button>
           </DialogFooter>
         </DialogContent>
