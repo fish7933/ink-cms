@@ -293,7 +293,9 @@ export function CrewManagementPage() {
   };
   const getDateCol2 = (c: CrewWithDetails) => {
     if (category === 'standby' || category === 'onboard') return c.disembark_forecast_date || '';
-    if (category === 'disembarked') return c.recommended_available_date || '';
+    // 하선 선원의 승선가능일은 과거 추천 당시 입력된 값(recommended_available_date)을 보여주면 안 됨 —
+    // 이번 하선과 무관한 옛 데이터라 오해를 준다. 선원 면담에서 새로 입력하기 전까지는 비워둔다.
+    if (category === 'disembarked') return '';
     if (category === 'all') return c.is_active_onboard ? (c.disembark_forecast_date || '') : (c.latest_disembark_date || '');
     return '';
   };
@@ -719,7 +721,7 @@ export function CrewManagementPage() {
                               {cat === 'disembarked' && (
                                 <>
                                   <td className="px-2 py-1.5"><span className="text-gray-500">{c.latest_disembark_date || '-'}</span></td>
-                                  <td className="px-2 py-1.5"><span className="text-gray-500">{c.recommended_available_date || '-'}</span></td>
+                                  <td className="px-2 py-1.5"><span className="text-gray-500">-</span></td>
                                 </>
                               )}
                               {cat === 'all' && (
