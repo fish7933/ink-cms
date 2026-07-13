@@ -691,7 +691,7 @@ export function CrewRotationPage() {
           ) : filteredPlans.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">교대 계획이 없습니다</div>
           ) : (
-            <Table className="table-fixed">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8">
@@ -701,22 +701,22 @@ export function CrewRotationPage() {
                       disabled={allSelectableIds.length === 0}
                     />
                   </TableHead>
-                  <TableHead className="text-xs w-16">년월</TableHead>
-                  <TableHead className="text-xs w-40">계획명</TableHead>
-                  <TableHead className="text-xs w-24">선주사</TableHead>
-                  <TableHead className="text-xs w-28">선박</TableHead>
-                  <TableHead className="text-xs w-20">교대일</TableHead>
-                  <TableHead className="text-xs w-16">교대인원</TableHead>
-                  <TableHead className="text-xs w-16">상태</TableHead>
-                  <TableHead className="text-xs">결재 현황</TableHead>
-                  <TableHead className="text-xs w-28">작성일</TableHead>
-                  <TableHead className="text-right text-xs w-32">작업</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">년월</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">계획명</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">선주사</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">선박</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">교대일</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">교대인원</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">상태</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">결재 현황</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">작성일</TableHead>
+                  <TableHead className="text-right text-xs whitespace-nowrap">작업</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedPlans.map(plan => (
                       <TableRow
-                        key={plan.id} className="cursor-pointer"
+                        key={plan.id} className="cursor-pointer whitespace-nowrap"
                         onClick={() => openNewTab(
                           plan.status === 'draft' ? `/crew-rotation/${plan.id}/edit` : `/crew-rotation/${plan.id}`,
                           plan.plan_name || '교대계획'
@@ -725,13 +725,13 @@ export function CrewRotationPage() {
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
                         </TableCell>
-                        <TableCell className="text-xs text-gray-500 truncate">{format(new Date(plan.rotation_date), 'yyyy-MM', { locale: ko })}</TableCell>
-                        <TableCell className="font-medium text-xs truncate" title={plan.plan_name}>{plan.plan_name}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground truncate" title={plan.owner_name}>{plan.owner_name}</TableCell>
-                        <TableCell className="text-xs truncate" title={plan.ship_name}>
+                        <TableCell className="text-xs text-gray-500">{format(new Date(plan.rotation_date), 'yyyy-MM', { locale: ko })}</TableCell>
+                        <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
+                        <TableCell className="text-xs">
                           <div className="flex items-center gap-1.5">
                             <Ship className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="truncate">{plan.ship_name}</span>
+                            {plan.ship_name}
                           </div>
                         </TableCell>
                         <TableCell className="text-xs">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</TableCell>
