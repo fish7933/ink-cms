@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -41,7 +43,16 @@ interface ApprovalLike {
 }
 
 type Filter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
+type Domain = 'crew' | 'rotation' | 'contract';
 const PAGE_SIZE = 20;
+
+// approvalService / rotationApprovalService / contractApprovalService가 공통으로 갖는 결재 액션 메서드
+interface ApprovalActionService {
+  approveStep(id: string, approverId: string, comment?: string): Promise<void>;
+  rejectStep(id: string, approverId: string, comment: string): Promise<void>;
+  adminForceApprove(id: string, adminId: string, comment?: string): Promise<void>;
+  adminForceReject(id: string, adminId: string, comment: string): Promise<void>;
+}
 
 const FILTER_LABELS: { value: Filter; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -105,9 +116,17 @@ export default function DispatchApprovalInboxPage() {
   const [contractComment, setContractComment] = useState('');
   const [contractProcessing, setContractProcessing] = useState(false);
 
-  useEffect(() => { setCrewPage(1); }, [crewFilter]);
-  useEffect(() => { setRotationPage(1); }, [rotationFilter]);
-  useEffect(() => { setContractPage(1); }, [contractFilter]);
+  // 다중 선택 일괄 승인/반려
+  const [crewSelectedIds, setCrewSelectedIds] = useState<string[]>([]);
+  const [rotationSelectedIds, setRotationSelectedIds] = useState<string[]>([]);
+  const [contractSelectedIds, setContractSelectedIds] = useState<string[]>([]);
+  const [bulkDialog, setBulkDialog] = useState<{ domain: Domain; action: 'approve' | 'reject' } | null>(null);
+  const [bulkComment, setBulkComment] = useState('');
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  useEffect(() => { setCrewPage(1); setCrewSelectedIds([]); }, [crewFilter]);
+  useEffect(() => { setRotationPage(1); setRotationSelectedIds([]); }, [rotationFilter]);
+  useEffect(() => { setContractPage(1); setContractSelectedIds([]); }, [contractFilter]);
 
   useEffect(() => { init(); }, []);
 
@@ -306,6 +325,57 @@ export default function DispatchApprovalInboxPage() {
     }
   };
 
+  // --- 다중 선택 일괄 승인/반려 ---
+
+  const domainConfig = (domain: Domain): {
+    service: ApprovalActionService;
+    approvals: ApprovalLike[];
+    selectedIds: string[];
+    setSelectedIds: (ids: string[]) => void;
+    load: () => Promise<void>;
+  } => {
+    if (domain === 'crew') return { service: approvalService, approvals: crewApprovals, selectedIds: crewSelectedIds, setSelectedIds: setCrewSelectedIds, load: () => loadCrewApprovals(currentUserId, isAdmin) };
+    if (domain === 'rotation') return { service: rotationApprovalService, approvals: rotationApprovals, selectedIds: rotationSelectedIds, setSelectedIds: setRotationSelectedIds, load: () => loadRotationApprovals(currentUserId, isAdmin) };
+    return { service: contractApprovalService, approvals: contractApprovals, selectedIds: contractSelectedIds, setSelectedIds: setContractSelectedIds, load: () => loadContractApprovals(currentUserId, isAdmin) };
+  };
+
+  const openBulkDialog = (domain: Domain, action: 'approve' | 'reject') => {
+    setBulkComment('');
+    setBulkDialog({ domain, action });
+  };
+
+  const submitBulkAction = async () => {
+    if (!bulkDialog) return;
+    const { domain, action } = bulkDialog;
+    if (action === 'reject' && !bulkComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+    const cfg = domainConfig(domain);
+    const targets = cfg.approvals.filter(a => cfg.selectedIds.includes(a.id) && isMyTurn(a));
+    if (targets.length === 0) return;
+    try {
+      setBulkProcessing(true);
+      await Promise.all(targets.map(a => {
+        if (isAdmin) {
+          return action === 'approve'
+            ? cfg.service.adminForceApprove(a.id, currentUserId, bulkComment || undefined)
+            : cfg.service.adminForceReject(a.id, currentUserId, bulkComment);
+        }
+        return action === 'approve'
+          ? cfg.service.approveStep(a.id, currentUserId, bulkComment || undefined)
+          : cfg.service.rejectStep(a.id, currentUserId, bulkComment);
+      }));
+      toast({ title: '성공', description: `${targets.length}건 ${action === 'approve' ? '승인' : '반려'}되었습니다.` });
+      cfg.setSelectedIds([]);
+      setBulkDialog(null);
+      setBulkComment('');
+      await cfg.load();
+    } catch (e) {
+      console.error(e);
+      toast({ title: '오류', description: '일괄 처리 중 오류가 발생했습니다.', variant: 'destructive' });
+    } finally {
+      setBulkProcessing(false);
+    }
+  };
+
   // --- 공통 렌더링 ---
 
   const renderProgress = (approval: ApprovalLike) => (
@@ -361,11 +431,24 @@ export default function DispatchApprovalInboxPage() {
     onView: (a: T) => void,
     onApprove: (a: T) => void,
     onReject: (a: T) => void,
-  ) => (
+    selectedIds: string[],
+    setSelectedIds: (ids: string[]) => void,
+  ) => {
+    const selectableIds = list.filter(a => isMyTurn(a)).map(a => a.id);
+    const toggleOne = (id: string) => setSelectedIds(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
+    const toggleAll = (checked: boolean) => setSelectedIds(checked ? selectableIds : []);
+    return (
     <div className="rounded-md border overflow-hidden overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-gray-50 border-b">
           <tr>
+            <th className="w-8 p-2">
+              <Checkbox
+                checked={selectableIds.length > 0 && selectableIds.every(id => selectedIds.includes(id))}
+                onCheckedChange={checked => toggleAll(!!checked)}
+                disabled={selectableIds.length === 0}
+              />
+            </th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">대상</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">결재선</th>
@@ -379,6 +462,9 @@ export default function DispatchApprovalInboxPage() {
             const myTurn = isMyTurn(approval);
             return (
               <tr key={approval.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => onView(approval)}>
+                <td className="p-2" onClick={e => e.stopPropagation()}>
+                  {myTurn && <Checkbox checked={selectedIds.includes(approval.id)} onCheckedChange={() => toggleOne(approval.id)} />}
+                </td>
                 <td className="p-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {getStatusBadge(approval.status)}
@@ -406,7 +492,8 @@ export default function DispatchApprovalInboxPage() {
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   const renderFilterBar = (filter: Filter, setFilter: (f: Filter) => void) => (
     <div className="flex flex-wrap gap-1.5">
@@ -440,6 +527,19 @@ export default function DispatchApprovalInboxPage() {
             <PaginationItem><PaginationNext onClick={() => page < totalPages && setPage(page + 1)} className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
           </PaginationContent>
         </Pagination>
+      </div>
+    );
+  };
+
+  const renderBulkBar = (domain: Domain, selectedIds: string[]) => {
+    if (selectedIds.length === 0 || !permissions.canEdit) return null;
+    return (
+      <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
+        <span className="text-xs text-blue-800">{selectedIds.length}건 선택됨</span>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50" onClick={() => openBulkDialog(domain, 'approve')}>일괄 승인</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => openBulkDialog(domain, 'reject')}>일괄 반려</Button>
+        </div>
       </div>
     );
   };
@@ -505,6 +605,7 @@ export default function DispatchApprovalInboxPage() {
           ) : (
             <div className="space-y-4">
               {renderFilterBar(crewFilter, setCrewFilter)}
+              {renderBulkBar('crew', crewSelectedIds)}
               {crewFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
               ) : (
@@ -516,6 +617,7 @@ export default function DispatchApprovalInboxPage() {
                     a => { setSelectedCrew(a); setCrewViewMode('list'); },
                     a => { setSelectedCrew(a); setCrewAction('approve'); setCrewViewMode('action'); setCrewComment(''); },
                     a => { setSelectedCrew(a); setCrewAction('reject'); setCrewViewMode('action'); setCrewComment(''); },
+                    crewSelectedIds, setCrewSelectedIds,
                   )}
                   {renderPagination(crewFiltered.length, crewPage, setCrewPage)}
                 </>
@@ -551,6 +653,7 @@ export default function DispatchApprovalInboxPage() {
           ) : (
             <div className="space-y-4">
               {renderFilterBar(rotationFilter, setRotationFilter)}
+              {renderBulkBar('rotation', rotationSelectedIds)}
               {rotationFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><ShipIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
               ) : (
@@ -562,6 +665,7 @@ export default function DispatchApprovalInboxPage() {
                     a => { setSelectedRotation(a); setRotationViewMode('list'); },
                     a => { setSelectedRotation(a); setRotationAction('approve'); setRotationViewMode('action'); setRotationComment(''); },
                     a => { setSelectedRotation(a); setRotationAction('reject'); setRotationViewMode('action'); setRotationComment(''); },
+                    rotationSelectedIds, setRotationSelectedIds,
                   )}
                   {renderPagination(rotationFiltered.length, rotationPage, setRotationPage)}
                 </>
@@ -590,6 +694,7 @@ export default function DispatchApprovalInboxPage() {
           ) : (
             <div className="space-y-4">
               {renderFilterBar(contractFilter, setContractFilter)}
+              {renderBulkBar('contract', contractSelectedIds)}
               {contractFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
               ) : (
@@ -601,6 +706,7 @@ export default function DispatchApprovalInboxPage() {
                     a => { setSelectedContract(a); setContractViewMode('list'); },
                     a => { setSelectedContract(a); setContractAction('approve'); setContractViewMode('action'); setContractComment(''); },
                     a => { setSelectedContract(a); setContractAction('reject'); setContractViewMode('action'); setContractComment(''); },
+                    contractSelectedIds, setContractSelectedIds,
                   )}
                   {renderPagination(contractFiltered.length, contractPage, setContractPage)}
                 </>
@@ -625,6 +731,33 @@ export default function DispatchApprovalInboxPage() {
           <Card><CardContent className="py-12 text-center text-gray-500">급여지급 결재는 준비중입니다.</CardContent></Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={bulkDialog !== null} onOpenChange={o => !bulkProcessing && !o && setBulkDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{bulkDialog?.action === 'approve' ? '일괄 승인' : '일괄 반려'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              {bulkDialog && domainConfig(bulkDialog.domain).selectedIds.filter(id => domainConfig(bulkDialog.domain).approvals.some(a => a.id === id && isMyTurn(a))).length}건을 {bulkDialog?.action === 'approve' ? '승인' : '반려'}합니다.
+            </p>
+            <div>
+              <label className="text-sm font-medium mb-2 block">{bulkDialog?.action === 'approve' ? '의견 (선택사항)' : '반려 사유 (필수)'}</label>
+              <Textarea value={bulkComment} onChange={e => setBulkComment(e.target.value)} rows={4} disabled={bulkProcessing} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDialog(null)} disabled={bulkProcessing}>취소</Button>
+            <Button
+              onClick={submitBulkAction}
+              disabled={bulkProcessing || (bulkDialog?.action === 'reject' && !bulkComment.trim())}
+              className={bulkDialog?.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+            >
+              {bulkProcessing ? '처리 중...' : bulkDialog?.action === 'approve' ? '일괄 승인' : '일괄 반려'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
