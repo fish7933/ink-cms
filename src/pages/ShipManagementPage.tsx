@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, X, Trash2, RefreshCw, LayoutGrid, ListTree } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,7 @@ export default function ShipManagementPage() {
   const [selectedFleet, setSelectedFleet] = useState<string>('all');
   const [selectedShipType, setSelectedShipType] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('active');
+  const [myShipsOnly, setMyShipsOnly] = useState(false);
 
   // Bulk selection state
   const [selectedShipIds, setSelectedShipIds] = useState<string[]>([]);
@@ -102,8 +104,9 @@ export default function ShipManagementPage() {
           setSelectedOwner(user.company_id);
         }
 
-        // 선박관리사(ship_manager)는 본인이 담당하는 선박만 보이도록 제한 (관리자/시스템관리자는 전체 노출)
-        if (user.role === 'ship_manager') {
+        // 선박관리사(ship_manager)는 본인이 담당하는 선박만 보이도록 강제 제한한다.
+        // 관리자/시스템관리자는 전체를 다 보되, "내 담당 선박만" 필터로 좁혀볼 수 있게 같은 목록을 미리 조회해둔다.
+        if (['ship_manager', 'admin', 'system_admin'].includes(user.role)) {
           const shipIds = await supervisorService.getSupervisedShips(user.id);
           setSupervisedShipIds(new Set(shipIds));
         }
@@ -253,14 +256,17 @@ export default function ShipManagementPage() {
       if (selectedStatus === 'active' && ship.is_active === false) return false;
       if (selectedStatus === 'inactive' && ship.is_active !== false) return false;
 
+      // 내 담당 선박만 (관리자/시스템관리자용 — ship_manager는 이미 scopedShips에서 강제 제한됨)
+      if (myShipsOnly && supervisedShipIds && !supervisedShipIds.has(ship.id)) return false;
+
       return true;
     });
-  }, [scopedShips, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus, ownerNameById, fleetNameById]);
+  }, [scopedShips, currentUser, searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus, myShipsOnly, supervisedShipIds, ownerNameById, fleetNameById]);
 
   // Clear selection when filters change
   useEffect(() => {
     setSelectedShipIds([]);
-  }, [searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus]);
+  }, [searchTerm, selectedOwner, selectedFleet, selectedShipType, selectedStatus, myShipsOnly]);
 
   const totalItems = filteredShips.length;
 
@@ -441,13 +447,15 @@ export default function ShipManagementPage() {
     setSelectedFleet('all');
     setSelectedShipType('all');
     setSelectedStatus('active');
+    setMyShipsOnly(false);
   };
 
   const hasActiveFilters = searchTerm ||
     (selectedOwner !== 'all' && !(currentUser && currentUser.role === 'ship_owner' && selectedOwner === currentUser.company_id)) ||
     selectedFleet !== 'all' ||
     selectedShipType !== 'all' ||
-    selectedStatus !== 'active';
+    selectedStatus !== 'active' ||
+    myShipsOnly;
 
   const getOwnerDisplayName = (ownerId: string) => {
     if (ownerId === 'none') return '선주 없음';
@@ -606,6 +614,13 @@ export default function ShipManagementPage() {
                       <SelectItem value="inactive" className="text-sm">비활성</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {currentUser && ['admin', 'system_admin'].includes(currentUser.role) && (
+                    <div className="flex items-center gap-2 h-9">
+                      <Checkbox id="myShipsOnly" checked={myShipsOnly} onCheckedChange={c => setMyShipsOnly(!!c)} />
+                      <label htmlFor="myShipsOnly" className="text-sm text-gray-700 cursor-pointer select-none">내 담당 선박만</label>
+                    </div>
+                  )}
 
                   {hasActiveFilters && (
                     <Button
