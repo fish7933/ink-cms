@@ -293,6 +293,12 @@ export default function DispatchApprovalInboxPage() {
     return approval.current_approver?.approver_id === currentUserId;
   };
 
+  const myTurnBadge = (count: number) => count === 0 ? null : (
+    <span className="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold">
+      {count}
+    </span>
+  );
+
   const filterList = <T extends ApprovalLike>(list: T[], filter: Filter): T[] => {
     if (filter === 'mine') return list.filter(a => a.requester_id === currentUserId);
     if (filter === 'pending') return list.filter(a => a.status === 'pending');
@@ -687,10 +693,10 @@ export default function DispatchApprovalInboxPage() {
 
       <Tabs defaultValue="crew">
         <TabsList>
-          <TabsTrigger value="crew">채용 ({crewApprovals.length})</TabsTrigger>
-          <TabsTrigger value="rotation">배승 ({rotationApprovals.length})</TabsTrigger>
-          <TabsTrigger value="contract">계약 ({contractApprovals.length})</TabsTrigger>
-          <TabsTrigger value="dispatch">승진/강등 ({dispatchApprovals.length})</TabsTrigger>
+          <TabsTrigger value="crew" className="gap-1.5">채용 ({crewApprovals.length}){myTurnBadge(crewApprovals.filter(isMyTurn).length)}</TabsTrigger>
+          <TabsTrigger value="rotation" className="gap-1.5">배승 ({rotationApprovals.length}){myTurnBadge(rotationApprovals.filter(isMyTurn).length)}</TabsTrigger>
+          <TabsTrigger value="contract" className="gap-1.5">계약 ({contractApprovals.length}){myTurnBadge(contractApprovals.filter(isMyTurn).length)}</TabsTrigger>
+          <TabsTrigger value="dispatch" className="gap-1.5">승진/강등 ({dispatchApprovals.length}){myTurnBadge(dispatchApprovals.filter(isMyTurn).length)}</TabsTrigger>
           <TabsTrigger value="salary" disabled>급여지급 (준비중)</TabsTrigger>
         </TabsList>
 
