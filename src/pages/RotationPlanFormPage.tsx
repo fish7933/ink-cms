@@ -125,15 +125,6 @@ export default function RotationPlanFormPage() {
 
   useEffect(() => { loadData(); }, []);
 
-  useEffect(() => {
-    getCurrentUser().then(async user => {
-      if (!user) return;
-      if (user.role === 'admin' || user.role === 'system_admin') return; // 관리자는 제한 없음
-      const shipIds = await supervisorService.getSupervisedShips(user.id);
-      setSupervisedShipIds(new Set(shipIds));
-    });
-  }, []);
-
   // 관리자가 아니면 본인 담당 선박만 남긴다 (아직 로딩 전이면 그대로 통과시켜 깜빡임 방지)
   const filterSupervisedShips = (list: ShipType[]) =>
     supervisedShipIds ? list.filter(s => supervisedShipIds.has(s.id)) : list;
@@ -163,13 +154,22 @@ export default function RotationPlanFormPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [allCrew, ranksRes, ownersRes, portsData, reservations] = await Promise.all([
+    const [allCrew, ranksRes, ownersRes, portsData, reservations, user] = await Promise.all([
       crewService.getAllWithDetails(),
       supabase.from('ranks').select('*'),
       supabase.from('companies').select('*').eq('type', 'owner').order('name'),
       getPorts(),
       rotationService.getCrewReservations(),
+      getCurrentUser(),
     ]);
+
+    // 관리자가 아니면 본인 담당 선박만 선택/자동배정 가능 — loadData 내에서 동기적으로 먼저 구해서
+    // 아래 자동 선박 선택 로직에서도 즉시 반영되도록 한다(useEffect 경합으로 인한 순간적 미필터 방지).
+    let supervisedIds: Set<string> | null = null;
+    if (user && user.role !== 'admin' && user.role !== 'system_admin') {
+      supervisedIds = new Set(await supervisorService.getSupervisedShips(user.id));
+      setSupervisedShipIds(supervisedIds);
+    }
 
     const ranksData: Rank[] = sortRanksByDisplayOrder(ranksRes.data || []);
     const ownersData: Company[] = ownersRes.data || [];
@@ -281,7 +281,7 @@ export default function RotationPlanFormPage() {
         ? allCrew.find(c => c.id === preBoarding[0] && BOARDING_CANDIDATE_STATUSES.includes(getCrewStatus(c)))
         : undefined;
 
-    if (autoShipRef?.current_ship_id && autoShipRef?.owner_id) {
+    if (autoShipRef?.current_ship_id && autoShipRef?.owner_id && (!supervisedIds || supervisedIds.has(autoShipRef.current_ship_id))) {
       const autoOwnerId = autoShipRef.owner_id;
       const autoFleetId = autoShipRef.fleet_id || '';
       const autoShipId = autoShipRef.current_ship_id;

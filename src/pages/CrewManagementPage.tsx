@@ -20,6 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { rotationService } from '@/services/rotation.service';
 import { getCurrentUser } from '@/lib/store';
+import { supervisorService } from '@/services/supervisor.service';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import type { Rank } from '@/types/models';
@@ -352,13 +353,23 @@ export function CrewManagementPage() {
   // 선박별로 묶어 각 선원의 하선예정일을 기준 교대일로 삼아 바로 임시저장한다
   // (계약만료 하선계획 자동생성과 동일한 방식).
   const createBulkDisembarkDrafts = async () => {
+    const me = await getCurrentUser();
+    if (!me) return;
+    const isAdminRole = me.role === 'admin' || me.role === 'system_admin';
+    const supervisedShipIds = isAdminRole ? null : new Set(await supervisorService.getSupervisedShips(me.id));
+
     const groups = new Map<string, { shipName: string; ownerId: string; fleetId: string | null; members: CrewWithDetails[] }>();
     const unassignable: string[] = [];
+    const notSupervised: string[] = [];
     for (const id of selectedIds) {
       const member = crew.find(c => c.id === id);
       if (!member) continue;
       if (!member.current_ship_id || !member.owner_id || !member.disembark_forecast_date) {
         unassignable.push(member.name);
+        continue;
+      }
+      if (supervisedShipIds && !supervisedShipIds.has(member.current_ship_id)) {
+        notSupervised.push(member.name);
         continue;
       }
       const key = member.current_ship_id;
@@ -369,7 +380,13 @@ export function CrewManagementPage() {
     }
 
     if (groups.size === 0) {
-      toast({ title: '하선 계획을 만들 수 없습니다', description: '선택한 선원 모두 승선 선박 또는 하선예정일 정보가 없습니다.', variant: 'destructive' });
+      toast({
+        title: '하선 계획을 만들 수 없습니다',
+        description: notSupervised.length > 0
+          ? '선택한 선원 모두 본인 담당 선박이 아닙니다.'
+          : '선택한 선원 모두 승선 선박 또는 하선예정일 정보가 없습니다.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -408,11 +425,13 @@ export function CrewManagementPage() {
       if (plan) created++;
     }
 
+    const skipReasons = [
+      unassignable.length > 0 ? `승선 선박/하선예정일 없음: ${unassignable.join(', ')}` : '',
+      notSupervised.length > 0 ? `본인 담당 선박 아님: ${notSupervised.join(', ')}` : '',
+    ].filter(Boolean).join(' / ');
     toast({
       title: `${created}개 선박 하선계획 임시저장 완료`,
-      description: unassignable.length > 0
-        ? `제외됨(승선 선박/하선예정일 없음): ${unassignable.join(', ')}`
-        : '교대계획(선원 발령) 목록에서 확인하세요.',
+      description: skipReasons ? `제외됨 — ${skipReasons}` : '교대계획(선원 발령) 목록에서 확인하세요.',
     });
     setSelectedIds([]);
     await loadData();
