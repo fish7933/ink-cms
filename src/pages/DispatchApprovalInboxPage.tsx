@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -40,6 +41,7 @@ interface ApprovalLike {
 }
 
 type Filter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
+const PAGE_SIZE = 20;
 
 const FILTER_LABELS: { value: Filter; label: string }[] = [
   { value: 'all', label: '전체' },
@@ -76,6 +78,7 @@ export default function DispatchApprovalInboxPage() {
   // 채용
   const [crewApprovals, setCrewApprovals] = useState<ApprovalWithRecommendation[]>([]);
   const [crewFilter, setCrewFilter] = useState<Filter>('all');
+  const [crewPage, setCrewPage] = useState(1);
   const [crewViewMode, setCrewViewMode] = useState<'list' | 'action'>('list');
   const [selectedCrew, setSelectedCrew] = useState<ApprovalWithRecommendation | null>(null);
   const [crewAction, setCrewAction] = useState<'approve' | 'reject' | null>(null);
@@ -85,6 +88,7 @@ export default function DispatchApprovalInboxPage() {
   // 배승
   const [rotationApprovals, setRotationApprovals] = useState<RotationApprovalWithPlan[]>([]);
   const [rotationFilter, setRotationFilter] = useState<Filter>('all');
+  const [rotationPage, setRotationPage] = useState(1);
   const [rotationViewMode, setRotationViewMode] = useState<'list' | 'action'>('list');
   const [selectedRotation, setSelectedRotation] = useState<RotationApprovalWithPlan | null>(null);
   const [rotationAction, setRotationAction] = useState<'approve' | 'reject' | null>(null);
@@ -94,11 +98,16 @@ export default function DispatchApprovalInboxPage() {
   // 계약
   const [contractApprovals, setContractApprovals] = useState<ContractApprovalWithContract[]>([]);
   const [contractFilter, setContractFilter] = useState<Filter>('all');
+  const [contractPage, setContractPage] = useState(1);
   const [contractViewMode, setContractViewMode] = useState<'list' | 'action'>('list');
   const [selectedContract, setSelectedContract] = useState<ContractApprovalWithContract | null>(null);
   const [contractAction, setContractAction] = useState<'approve' | 'reject' | null>(null);
   const [contractComment, setContractComment] = useState('');
   const [contractProcessing, setContractProcessing] = useState(false);
+
+  useEffect(() => { setCrewPage(1); }, [crewFilter]);
+  useEffect(() => { setRotationPage(1); }, [rotationFilter]);
+  useEffect(() => { setContractPage(1); }, [contractFilter]);
 
   useEffect(() => { init(); }, []);
 
@@ -412,6 +421,29 @@ export default function DispatchApprovalInboxPage() {
     </div>
   );
 
+  const renderPagination = (total: number, page: number, setPage: (p: number) => void) => {
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    if (totalPages <= 1) return null;
+    return (
+      <div className="flex justify-center">
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem><PaginationPrevious onClick={() => page > 1 && setPage(page - 1)} className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => {
+              if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+                return <PaginationItem key={p}><PaginationLink onClick={() => setPage(p)} isActive={page === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
+              } else if (p === page - 2 || p === page + 2) {
+                return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
+              }
+              return null;
+            })}
+            <PaginationItem><PaginationNext onClick={() => page < totalPages && setPage(page + 1)} className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
+  };
+
   const renderActionPanel = (
     title: string, subject: string,
     comment: string, setComment: (v: string) => void,
@@ -446,6 +478,9 @@ export default function DispatchApprovalInboxPage() {
   const crewFiltered = filterList(crewApprovals, crewFilter);
   const rotationFiltered = filterList(rotationApprovals, rotationFilter);
   const contractFiltered = filterList(contractApprovals, contractFilter);
+  const crewPageRecs = crewFiltered.slice((crewPage - 1) * PAGE_SIZE, crewPage * PAGE_SIZE);
+  const rotationPageRecs = rotationFiltered.slice((rotationPage - 1) * PAGE_SIZE, rotationPage * PAGE_SIZE);
+  const contractPageRecs = contractFiltered.slice((contractPage - 1) * PAGE_SIZE, contractPage * PAGE_SIZE);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -472,13 +507,18 @@ export default function DispatchApprovalInboxPage() {
               {renderFilterBar(crewFilter, setCrewFilter)}
               {crewFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
-              ) : renderTable(
-                crewFiltered,
-                a => a.recommendation?.crew_name || '선원 추천',
-                a => a.recommendation?.ship_name || '',
-                a => { setSelectedCrew(a); setCrewViewMode('list'); },
-                a => { setSelectedCrew(a); setCrewAction('approve'); setCrewViewMode('action'); setCrewComment(''); },
-                a => { setSelectedCrew(a); setCrewAction('reject'); setCrewViewMode('action'); setCrewComment(''); },
+              ) : (
+                <>
+                  {renderTable(
+                    crewPageRecs,
+                    a => a.recommendation?.crew_name || '선원 추천',
+                    a => a.recommendation?.ship_name || '',
+                    a => { setSelectedCrew(a); setCrewViewMode('list'); },
+                    a => { setSelectedCrew(a); setCrewAction('approve'); setCrewViewMode('action'); setCrewComment(''); },
+                    a => { setSelectedCrew(a); setCrewAction('reject'); setCrewViewMode('action'); setCrewComment(''); },
+                  )}
+                  {renderPagination(crewFiltered.length, crewPage, setCrewPage)}
+                </>
               )}
             </div>
           )}
@@ -513,13 +553,18 @@ export default function DispatchApprovalInboxPage() {
               {renderFilterBar(rotationFilter, setRotationFilter)}
               {rotationFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><ShipIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
-              ) : renderTable(
-                rotationFiltered,
-                a => a.plan_name || '교대계획',
-                a => a.ship_name || '',
-                a => { setSelectedRotation(a); setRotationViewMode('list'); },
-                a => { setSelectedRotation(a); setRotationAction('approve'); setRotationViewMode('action'); setRotationComment(''); },
-                a => { setSelectedRotation(a); setRotationAction('reject'); setRotationViewMode('action'); setRotationComment(''); },
+              ) : (
+                <>
+                  {renderTable(
+                    rotationPageRecs,
+                    a => a.plan_name || '교대계획',
+                    a => a.ship_name || '',
+                    a => { setSelectedRotation(a); setRotationViewMode('list'); },
+                    a => { setSelectedRotation(a); setRotationAction('approve'); setRotationViewMode('action'); setRotationComment(''); },
+                    a => { setSelectedRotation(a); setRotationAction('reject'); setRotationViewMode('action'); setRotationComment(''); },
+                  )}
+                  {renderPagination(rotationFiltered.length, rotationPage, setRotationPage)}
+                </>
               )}
             </div>
           )}
@@ -547,13 +592,18 @@ export default function DispatchApprovalInboxPage() {
               {renderFilterBar(contractFilter, setContractFilter)}
               {contractFiltered.length === 0 ? (
                 <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
-              ) : renderTable(
-                contractFiltered,
-                a => `${a.crew_name} (${a.rank_code})`,
-                a => a.ship_name || '',
-                a => { setSelectedContract(a); setContractViewMode('list'); },
-                a => { setSelectedContract(a); setContractAction('approve'); setContractViewMode('action'); setContractComment(''); },
-                a => { setSelectedContract(a); setContractAction('reject'); setContractViewMode('action'); setContractComment(''); },
+              ) : (
+                <>
+                  {renderTable(
+                    contractPageRecs,
+                    a => `${a.crew_name} (${a.rank_code})`,
+                    a => a.ship_name || '',
+                    a => { setSelectedContract(a); setContractViewMode('list'); },
+                    a => { setSelectedContract(a); setContractAction('approve'); setContractViewMode('action'); setContractComment(''); },
+                    a => { setSelectedContract(a); setContractAction('reject'); setContractViewMode('action'); setContractComment(''); },
+                  )}
+                  {renderPagination(contractFiltered.length, contractPage, setContractPage)}
+                </>
               )}
             </div>
           )}

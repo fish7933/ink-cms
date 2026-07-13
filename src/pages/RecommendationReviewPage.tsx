@@ -100,6 +100,16 @@ export default function RecommendationReviewPage() {
   }, [isDetailMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { applyFilters(); }, [recommendations, search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF, onlyMine, shipSupervisors]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setSelectedIds([]); }, [search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF, onlyMine, page]);
+  // "결재 시작 담당자가 본인인 건만" 체크 여부는 사용자별로 마지막 상태를 기억한다
+  useEffect(() => {
+    if (!loggedUser) return;
+    const saved = localStorage.getItem(`recommendation-review-only-mine:${loggedUser.id}`);
+    if (saved !== null) setOnlyMine(saved === 'true');
+  }, [loggedUser]);
+  useEffect(() => {
+    if (!loggedUser) return;
+    localStorage.setItem(`recommendation-review-only-mine:${loggedUser.id}`, String(onlyMine));
+  }, [onlyMine, loggedUser]);
   useEffect(() => {
     if (ownerF !== 'all') getFleets(ownerF).then(setFleets).catch(console.error);
     else getFleets().then(setFleets).catch(console.error);
