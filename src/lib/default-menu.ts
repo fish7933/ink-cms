@@ -111,7 +111,7 @@ export const defaultMenuStructure: MenuCategory[] = [
   },
   {
     id: 'dispatch',
-    label: '발령',
+    label: '선원 발령',
     icon: 'Send',
     order: 4,
     is_active: true,

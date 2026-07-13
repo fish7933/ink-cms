@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser } from '@/lib/store';
 import { defaultMenuStructure } from '@/lib/default-menu';
-import { getMenuConfig, saveMenuConfig, resetMenuConfig } from '@/services/menu-config.service';
+import { getMenuConfig, saveMenuConfig, resetMenuConfig, getEffectiveMenuStructure } from '@/services/menu-config.service';
 import type { MenuCategory, MenuItem } from '@/types/menu';
 import {
   DndContext,
@@ -27,7 +27,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, ChevronDown, ChevronRight, Edit2, Save, X, ArrowLeft } from 'lucide-react';
+import { GripVertical, ChevronDown, ChevronRight, Edit2, Save, X, ArrowLeft, Plus, Trash2, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -142,6 +142,13 @@ export default function MenuConfigurationPage() {
   const [localUI, setLocalUI] = useState(uiSettings);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
+  const [deletedCategoryIds, setDeletedCategoryIds] = useState<string[]>([]);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryDraftLabel, setCategoryDraftLabel] = useState('');
+  const [categoryDraftIcon, setCategoryDraftIcon] = useState('');
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryLabel, setNewCategoryLabel] = useState('');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -163,9 +170,11 @@ export default function MenuConfigurationPage() {
         return;
       }
       setCurrentUserId(user.id);
-      // 저장된 커스텀 메뉴 구조가 있으면 그걸, 없으면 기본 구조를 보여준다.
-      const saved = await getMenuConfig();
-      if (saved) setMenuStructure(saved);
+      // 편집기에는 실제 사이드바와 동일하게 코드 기본값과 저장된 커스터마이징을 합친 "유효 구조"를 보여준다
+      // (그래야 신규 추가된 메뉴/최신 라벨이 편집기에도 항상 최신으로 보인다).
+      const [effective, saved] = await Promise.all([getEffectiveMenuStructure(), getMenuConfig()]);
+      setMenuStructure(effective);
+      if (saved?.deletedCategoryIds) setDeletedCategoryIds(saved.deletedCategoryIds);
       setLoading(false);
     };
     checkAccess();
@@ -284,7 +293,7 @@ export default function MenuConfigurationPage() {
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      await saveMenuConfig(menuStructure, currentUserId);
+      await saveMenuConfig(menuStructure, deletedCategoryIds, currentUserId);
       toast({
         title: '저장 완료',
         description: 'UI 구성이 저장되었습니다. 모든 사용자의 메뉴에 반영됩니다.',
@@ -301,6 +310,7 @@ export default function MenuConfigurationPage() {
     try {
       await resetMenuConfig();
       setMenuStructure(defaultMenuStructure);
+      setDeletedCategoryIds([]);
       toast({
         title: '초기화 완료',
         description: 'UI 구성이 기본값으로 초기화되었습니다.',
@@ -310,6 +320,47 @@ export default function MenuConfigurationPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const startEditCategory = (cat: MenuCategory) => {
+    setEditingCategoryId(cat.id);
+    setCategoryDraftLabel(cat.label);
+    setCategoryDraftIcon(cat.icon || '');
+  };
+
+  const cancelEditCategory = () => setEditingCategoryId(null);
+
+  const saveEditCategory = () => {
+    if (!editingCategoryId || !categoryDraftLabel.trim()) return;
+    setMenuStructure(prev => prev.map(cat =>
+      cat.id === editingCategoryId ? { ...cat, label: categoryDraftLabel.trim(), icon: categoryDraftIcon.trim() || undefined } : cat
+    ));
+    setEditingCategoryId(null);
+  };
+
+  const handleDeleteCategory = (cat: MenuCategory) => {
+    if (!confirm(`"${cat.label}" 대메뉴를 삭제하시겠습니까? 하위 메뉴 ${cat.items.length}개도 함께 사라집니다.`)) return;
+    setMenuStructure(prev => prev.filter(c => c.id !== cat.id));
+    setDeletedCategoryIds(prev => prev.includes(cat.id) ? prev : [...prev, cat.id]);
+    toast({ title: '삭제됨', description: '저장을 눌러야 실제로 반영됩니다.' });
+  };
+
+  const handleAddCategory = () => {
+    if (!newCategoryLabel.trim()) return;
+    const maxOrder = menuStructure.reduce((max, c) => Math.max(max, c.order), 0);
+    const newCategory: MenuCategory = {
+      id: `custom-${Date.now()}`,
+      label: newCategoryLabel.trim(),
+      icon: newCategoryIcon.trim() || 'Folder',
+      order: maxOrder + 1,
+      is_active: true,
+      items: [],
+    };
+    setMenuStructure(prev => [...prev, newCategory]);
+    setNewCategoryLabel('');
+    setNewCategoryIcon('');
+    setAddingCategory(false);
+    toast({ title: '대메뉴가 추가되었습니다.', description: '하위 메뉴는 없는 빈 대메뉴입니다. 저장을 눌러야 실제로 반영됩니다.' });
   };
 
   if (loading) {
@@ -449,16 +500,35 @@ export default function MenuConfigurationPage() {
         {activeSection === 'menu' && (
           <>
             <div className="mb-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAddingCategory(v => !v)}>
+                <Plus className="w-4 h-4 mr-2" />새 대메뉴 추가
+              </Button>
               <Button variant="outline" onClick={handleReset} disabled={saving}>초기화</Button>
               <Button onClick={handleSaveAll} disabled={saving}>
                 <Save className="w-4 h-4 mr-2" />{saving ? '저장 중...' : '저장'}
               </Button>
             </div>
+            {addingCategory && (
+              <Card className="mb-4 border-blue-300">
+                <CardContent className="pt-6 flex items-end gap-3">
+                  <div className="flex-1">
+                    <Label htmlFor="new-cat-label">대메뉴명</Label>
+                    <Input id="new-cat-label" value={newCategoryLabel} onChange={e => setNewCategoryLabel(e.target.value)} placeholder="예: 마케팅" />
+                  </div>
+                  <div className="flex-1">
+                    <Label htmlFor="new-cat-icon">아이콘 (선택, lucide-react 이름)</Label>
+                    <Input id="new-cat-icon" value={newCategoryIcon} onChange={e => setNewCategoryIcon(e.target.value)} placeholder="예: Folder" />
+                  </div>
+                  <Button onClick={handleAddCategory} disabled={!newCategoryLabel.trim()}>추가</Button>
+                  <Button variant="ghost" onClick={() => { setAddingCategory(false); setNewCategoryLabel(''); setNewCategoryIcon(''); }}>취소</Button>
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>메뉴 구조</CardTitle>
                 <CardDescription>
-                  대메뉴(카테고리)와 소메뉴(항목)를 관리합니다. 드래그하여 순서를 변경하세요.
+                  대메뉴(카테고리)와 소메뉴(항목)를 관리합니다. 드래그하여 순서를 변경하세요. 새로 추가한 대메뉴는 하위 메뉴가 없는 빈 메뉴이며, 실제 화면 연결은 개발자가 추가해야 합니다.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -479,28 +549,43 @@ export default function MenuConfigurationPage() {
                             key={category.id}
                             id={category.id}
                             header={
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => toggleCategory(category.id)}
-                                  className="flex-1 justify-start"
-                                >
-                                  {isExpanded ? (
-                                    <ChevronDown className="w-4 h-4 mr-2" />
-                                  ) : (
-                                    <ChevronRight className="w-4 h-4 mr-2" />
-                                  )}
-                                  <span className="font-semibold text-base">{category.label}</span>
-                                  <span className="ml-2 text-xs text-gray-500">
-                                    ({category.items.length}개 항목)
-                                  </span>
-                                </Button>
-                                <Switch
-                                  checked={category.is_active}
-                                  onCheckedChange={(checked) => handleToggleCategory(category.id, checked)}
-                                />
-                              </>
+                              editingCategoryId === category.id ? (
+                                <div className="flex-1 flex items-center gap-2">
+                                  <Input value={categoryDraftLabel} onChange={e => setCategoryDraftLabel(e.target.value)} placeholder="대메뉴명" className="h-8" />
+                                  <Input value={categoryDraftIcon} onChange={e => setCategoryDraftIcon(e.target.value)} placeholder="아이콘" className="h-8 w-40" />
+                                  <Button size="sm" variant="ghost" onClick={saveEditCategory} disabled={!categoryDraftLabel.trim()}><Check className="w-4 h-4 text-green-600" /></Button>
+                                  <Button size="sm" variant="ghost" onClick={cancelEditCategory}><X className="w-4 h-4 text-gray-500" /></Button>
+                                </div>
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleCategory(category.id)}
+                                    className="flex-1 justify-start"
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="w-4 h-4 mr-2" />
+                                    ) : (
+                                      <ChevronRight className="w-4 h-4 mr-2" />
+                                    )}
+                                    <span className="font-semibold text-base">{category.label}</span>
+                                    <span className="ml-2 text-xs text-gray-500">
+                                      ({category.items.length}개 항목)
+                                    </span>
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => startEditCategory(category)}>
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => handleDeleteCategory(category)}>
+                                    <Trash2 className="w-4 h-4 text-red-500" />
+                                  </Button>
+                                  <Switch
+                                    checked={category.is_active}
+                                    onCheckedChange={(checked) => handleToggleCategory(category.id, checked)}
+                                  />
+                                </>
+                              )
                             }
                           >
                             {isExpanded && (
