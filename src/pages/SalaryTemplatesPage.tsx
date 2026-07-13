@@ -4,6 +4,7 @@ import { Plus, Edit2, Trash2, Eye, RefreshCw, ClipboardList, Copy } from 'lucide
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,8 @@ export default function SalaryTemplatesPage() {
 
   const [activeTab, setActiveTab] = useState('templates');
   const [prefillAssignId, setPrefillAssignId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   useEffect(() => {
     const init = async () => {
@@ -175,7 +178,7 @@ export default function SalaryTemplatesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {templates.map(t => (
+                      {templates.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(t => (
                         <TableRow key={t.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openView(t)}>
                           <TableCell className="font-medium text-sm">{t.name}</TableCell>
                           <TableCell className="text-sm">{t.currency}</TableCell>
@@ -246,6 +249,25 @@ export default function SalaryTemplatesPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  {templates.length > PAGE_SIZE && (
+                    <div className="flex justify-center py-3">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem><PaginationPrevious onClick={() => page > 1 && setPage(page - 1)} className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                          {Array.from({ length: Math.ceil(templates.length / PAGE_SIZE) }, (_, i) => i + 1).map(p => {
+                            const totalPages = Math.ceil(templates.length / PAGE_SIZE);
+                            if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+                              return <PaginationItem key={p}><PaginationLink onClick={() => setPage(p)} isActive={page === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
+                            } else if (p === page - 2 || p === page + 2) {
+                              return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
+                            }
+                            return null;
+                          })}
+                          <PaginationItem><PaginationNext onClick={() => { const totalPages = Math.ceil(templates.length / PAGE_SIZE); page < totalPages && setPage(page + 1); }} className={page === Math.ceil(templates.length / PAGE_SIZE) ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
