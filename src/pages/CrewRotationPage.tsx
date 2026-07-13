@@ -157,11 +157,16 @@ export function CrewRotationPage() {
   // 삭제(발령 완료 포함 전 상태)는 시스템관리자 이상만 가능. 삭제해도 실제 선원 상태/계약/
   // 승선경력 등은 되돌리지 않고, 목록에서만 빠지며 삭제자/삭제일시가 기록된다.
   const deletableIds = useMemo(() => isAdmin ? filteredPlans.map(p => p.id) : [], [filteredPlans, isAdmin]);
+  const allSelectableIds = useMemo(() => filteredPlans.map(p => p.id), [filteredPlans]);
+  const approvedSelectedIds = useMemo(
+    () => selectedIds.filter(id => plans.find(p => p.id === id)?.status === 'approved'),
+    [selectedIds, plans]
+  );
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const toggleSelectAll = (checked: boolean) =>
-    setSelectedIds(checked ? deletableIds : []);
+    setSelectedIds(checked ? allSelectableIds : []);
 
   const handleDelete = async (planId: string) => {
     if (!currentUser) return;
@@ -210,6 +215,28 @@ export function CrewRotationPage() {
       // 선원 목록 탭 열기 (미개방 시 신규, 개방 시 활성화 - 재마운트되며 최신 데이터 로딩)
       openNewTab('/crew/management', '선원 목록');
     } else alert('실행 중 오류가 발생했습니다.');
+  };
+
+  const [bulkExecuting, setBulkExecuting] = useState(false);
+
+  const handleBulkExecute = async () => {
+    if (approvedSelectedIds.length === 0) return;
+    if (!confirm(`선택한 승인된 계획 ${approvedSelectedIds.length}건에 대해 일괄 발령 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.`)) return;
+    setBulkExecuting(true);
+    try {
+      const results = await Promise.all(approvedSelectedIds.map(id => rotationService.executeRotationPlan(id)));
+      const successCount = results.filter(Boolean).length;
+      toast({
+        title: successCount === approvedSelectedIds.length ? '일괄 발령 실행 완료' : '일부만 처리됨',
+        description: `${successCount}/${approvedSelectedIds.length}건 발령이 실행되었습니다.`,
+        variant: successCount === approvedSelectedIds.length ? undefined : 'destructive',
+      });
+      setSelectedIds([]);
+      loadPlans();
+      openNewTab('/crew/management', '선원 목록');
+    } finally {
+      setBulkExecuting(false);
+    }
   };
 
   // 계약만료 하선계획 자동생성
@@ -392,7 +419,12 @@ export function CrewRotationPage() {
                 <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            {selectedIds.length > 0 && (
+            {approvedSelectedIds.length > 0 && (
+              <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkExecute} disabled={bulkExecuting}>
+                <CheckCircle className="h-3.5 w-3.5" />{bulkExecuting ? '실행 중...' : `일괄 발령실행 (${approvedSelectedIds.length})`}
+              </Button>
+            )}
+            {isAdmin && selectedIds.length > 0 && (
               <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
                 <Trash2 className="h-3.5 w-3.5 mr-1" />선택 삭제 ({selectedIds.length})
               </Button>
@@ -410,9 +442,9 @@ export function CrewRotationPage() {
                 <TableRow>
                   <TableHead className="w-8">
                     <Checkbox
-                      checked={deletableIds.length > 0 && deletableIds.every(id => selectedIds.includes(id))}
+                      checked={allSelectableIds.length > 0 && allSelectableIds.every(id => selectedIds.includes(id))}
                       onCheckedChange={checked => toggleSelectAll(!!checked)}
-                      disabled={deletableIds.length === 0}
+                      disabled={allSelectableIds.length === 0}
                     />
                   </TableHead>
                   <TableHead className="text-xs">계획명</TableHead>
@@ -442,9 +474,7 @@ export function CrewRotationPage() {
                         )}
                       >
                         <TableCell onClick={e => e.stopPropagation()}>
-                          {isAdmin && (
-                            <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
-                          )}
+                          <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
                         </TableCell>
                         <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
