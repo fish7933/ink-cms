@@ -12,6 +12,7 @@ import { getPermissionsByUserId } from '@/services/permission.service';
 import { getEffectiveMenuStructure } from '@/services/menu-config.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { routeConfig } from '@/lib/route-config';
+import { useDispatchApprovalPendingCount } from '@/hooks/useDispatchApprovalPendingCount';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function Layout() {
   const [menuStructure, setMenuStructure] = useState<MenuCategory[]>(defaultMenuStructure);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const { tabs, activeTabId, refreshNonces } = useTabContext();
+  const dispatchApprovalPendingCount = useDispatchApprovalPendingCount();
 
   useEffect(() => {
     let isMounted = true;
@@ -89,6 +91,7 @@ export default function Layout() {
           currentRole={currentUser?.role || 'crew'}
           permissions={permissions}
           selectedCategoryId={selectedCategoryId}
+          badgeCounts={{ 'dispatch-approval-inbox': dispatchApprovalPendingCount }}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           <TabBar />

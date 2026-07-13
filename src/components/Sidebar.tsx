@@ -13,9 +13,10 @@ interface SidebarProps {
   currentRole: string;
   permissions?: Permission[];
   selectedCategoryId?: string | null;
+  badgeCounts?: Record<string, number>;
 }
 
-export default function Sidebar({ menuStructure, currentRole, permissions = [], selectedCategoryId }: SidebarProps) {
+export default function Sidebar({ menuStructure, currentRole, permissions = [], selectedCategoryId, badgeCounts = {} }: SidebarProps) {
   const { openTab } = useTabContext();
   const location = useLocation();
 
@@ -84,6 +85,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
               .map(item => {
                 const ItemIcon = getIconComponent(item.icon);
                 const isActive = isItemActive(item);
+                const badgeCount = badgeCounts[item.id] || 0;
                 return (
                   <Button
                     key={item.id}
@@ -97,7 +99,12 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
                     onClick={() => item.path && openTab(item.path, item.label)}
                   >
                     {ItemIcon && <ItemIcon className="h-3.5 w-3.5 mr-2 shrink-0" />}
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate flex-1 text-left">{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="ml-1.5 shrink-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] leading-[1.1rem] text-center font-semibold">
+                        {badgeCount > 99 ? '99+' : badgeCount}
+                      </span>
+                    )}
                   </Button>
                 );
               })

@@ -318,6 +318,7 @@ export default function DispatchApprovalInboxPage() {
       toast({ title: '성공', description: crewAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
       setCrewViewMode('list'); setSelectedCrew(null); setCrewAction(null); setCrewComment('');
       await loadCrewApprovals(currentUserId, isAdmin);
+      window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -355,6 +356,7 @@ export default function DispatchApprovalInboxPage() {
       toast({ title: '성공', description: rotationAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
       setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); setRotationComment('');
       await loadRotationApprovals(currentUserId, isAdmin);
+      window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -380,6 +382,7 @@ export default function DispatchApprovalInboxPage() {
       toast({ title: '성공', description: contractAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
       setContractViewMode('list'); setSelectedContract(null); setContractAction(null); setContractComment('');
       await loadContractApprovals(currentUserId, isAdmin);
+      window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -405,6 +408,7 @@ export default function DispatchApprovalInboxPage() {
       toast({ title: '성공', description: dispatchAction === 'approve' ? '승인되었습니다. 승인 즉시 계약/승선경력에 반영됩니다.' : '반려되었습니다.' });
       setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); setDispatchComment('');
       await loadDispatchApprovals(currentUserId, isAdmin);
+      window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -457,6 +461,7 @@ export default function DispatchApprovalInboxPage() {
       setBulkDialog(null);
       setBulkComment('');
       await cfg.load();
+      window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '일괄 처리 중 오류가 발생했습니다.', variant: 'destructive' });
