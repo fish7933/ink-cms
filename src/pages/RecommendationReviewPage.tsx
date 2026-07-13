@@ -72,6 +72,7 @@ export default function RecommendationReviewPage() {
   const [shipF, setShipF] = useState('all');
   const [rankF, setRankF] = useState('all');
   const [agencyF, setAgencyF] = useState('all');
+  const [onlyMine, setOnlyMine] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const permissions = usePermissions('recommendation_review');
@@ -95,8 +96,8 @@ export default function RecommendationReviewPage() {
     window.addEventListener('recommendation-data-changed', handler);
     return () => window.removeEventListener('recommendation-data-changed', handler);
   }, [isDetailMode]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { applyFilters(); }, [recommendations, search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF]);
-  useEffect(() => { setSelectedIds([]); }, [search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF, page]);
+  useEffect(() => { applyFilters(); }, [recommendations, search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF, onlyMine, shipSupervisors]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setSelectedIds([]); }, [search, stFilter, dateFilter, ownerF, fleetF, shipF, rankF, agencyF, onlyMine, page]);
   useEffect(() => {
     if (ownerF !== 'all') getFleets(ownerF).then(setFleets).catch(console.error);
     else getFleets().then(setFleets).catch(console.error);
@@ -267,6 +268,7 @@ export default function RecommendationReviewPage() {
     if (shipF !== 'all') data = data.filter(r => r.ship_id === shipF);
     if (rankF !== 'all') data = data.filter(r => r.rank_id === rankF);
     if (agencyF !== 'all') data = data.filter(r => r.manning_agency_id === agencyF);
+    if (onlyMine && loggedUser) data = data.filter(r => (shipSupervisors.get(r.ship_id) || []).includes(loggedUser.name));
     if (dateFilter !== 'all') {
       const d = new Date();
       if (dateFilter === 'week') d.setDate(d.getDate() - 7);
@@ -447,6 +449,10 @@ export default function RecommendationReviewPage() {
                 <Select value={agencyF} onValueChange={setAgencyF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="매닝사" /></SelectTrigger><SelectContent><SelectItem value="all">전체 매닝사</SelectItem>{agencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent></Select>
                 <Select value={stFilter} onValueChange={setStFilter}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="상태" /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem><SelectItem value="pending">검토대기</SelectItem><SelectItem value="reviewed">결재중</SelectItem><SelectItem value="accepted">승인</SelectItem><SelectItem value="rejected">거절</SelectItem></SelectContent></Select>
                 <Select value={dateFilter} onValueChange={setDateFilter}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="기간" /></SelectTrigger><SelectContent><SelectItem value="all">전체 기간</SelectItem><SelectItem value="week">최근 1주일</SelectItem><SelectItem value="month">최근 1개월</SelectItem><SelectItem value="quarter">최근 3개월</SelectItem></SelectContent></Select>
+                <div className="flex items-center gap-2 h-9">
+                  <Checkbox id="onlyMine" checked={onlyMine} onCheckedChange={c => setOnlyMine(!!c)} />
+                  <label htmlFor="onlyMine" className="text-sm text-gray-700 cursor-pointer select-none">결재 시작 담당자가 본인인 건만</label>
+                </div>
               </div>
             </div>
 
