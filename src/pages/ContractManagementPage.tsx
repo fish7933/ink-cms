@@ -16,6 +16,8 @@ import { getContracts, addContract, updateContract, deleteContract } from '@/ser
 import { allowanceService } from '@/services/allowance.service';
 import { approvalService } from '@/services/approval.service';
 import { contractApprovalService } from '@/services/contract-approval.service';
+import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
+import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
 import { getCurrentUser } from '@/lib/store';
 import type { CrewContractWithDetails } from '@/types/contract';
 import type { AllowanceType, AllowancePaymentBasis, AllowancePaymentMethod, CrewContractAllowanceWithDetails } from '@/types/allowance';
@@ -37,6 +39,7 @@ export default function ContractManagementPage() {
   const navigate = useNavigate();
   const permissions = usePermissions('contract_management');
   const [contracts, setContracts] = useState<CrewContractWithDetails[]>([]);
+  const [contractApprovalMap, setContractApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +99,22 @@ export default function ContractManagementPage() {
     setContractAllowances(await allowanceService.getContractAllowances(contractId));
   };
 
-  const loadData = async () => { try { setLoading(true); setContracts(await getContracts()); } catch (e) { console.error(e); } finally { setLoading(false); } };
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setContracts(await getContracts());
+      // 결재 현황(요청자/결재선) 표시용 — 대상별 최신 결재 1건만 남긴다(최신순 정렬되어 있음)
+      try {
+        const approvals = await contractApprovalService.getAllApprovals();
+        const amap = new Map<string, ApprovalRequestWithDetails>();
+        for (const a of approvals) {
+          const contractId = a.crew_contract_id as string;
+          if (!amap.has(contractId)) amap.set(contractId, a);
+        }
+        setContractApprovalMap(amap);
+      } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
 
   // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
   // 아직 기본값이라 판단하지 않고 기다린다(정상 권한 사용자가 잠깐 튕겨나가는 걸 방지).
@@ -373,8 +391,8 @@ export default function ContractManagementPage() {
                   <TabsContent key={tab} value={tab} className="mt-2">
                     <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50">
                       <th className="w-8 p-2"><Checkbox checked={filteredChains.length > 0 && filteredChains.every(c => selectedIds.includes(c.latest.id))} onCheckedChange={checked => toggleSelectAll(!!checked, filteredChains)} /></th>
-                      <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">갱신일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-center p-2">작업</th></tr></thead>
-                      <tbody>{filteredChains.length === 0 ? <tr><td colSpan={13} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filteredChains.map(chain => {
+                      <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">갱신일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-left p-2">결재 현황</th><th className="text-center p-2">작업</th></tr></thead>
+                      <tbody>{filteredChains.length === 0 ? <tr><td colSpan={14} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filteredChains.map(chain => {
                         const c = chain.latest;
                         const status = chainStatus(chain);
                         const needsDisembark = chain.totalMonths >= DISEMBARK_NEEDED_THRESHOLD_MONTHS && (status === 'valid' || status === 'expired');
@@ -399,6 +417,7 @@ export default function ContractManagementPage() {
                           <td className="p-2 text-muted-foreground">{c.contract_type === 'renewal' ? c.created_at.slice(0, 10) : '-'}</td>
                           <td className="p-2 text-right font-mono">{c.salary_amount ? `${c.salary_amount.toLocaleString()} ${c.salary_currency}` : '-'}</td>
                           <td className="p-2 text-center"><Badge className={`text-xs ${EFFECTIVE_STATUS_CONFIG[status].color}`}>{EFFECTIVE_STATUS_CONFIG[status].label}</Badge></td>
+                          <td className="p-2"><ApprovalChainCell approval={contractApprovalMap.get(c.id)} /></td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-center gap-1">
                               {status === 'draft' && permissions.canEdit && (

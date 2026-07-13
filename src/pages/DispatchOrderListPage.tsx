@@ -12,6 +12,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { dispatchService } from '@/services/dispatch.service';
 import { approvalService } from '@/services/approval.service';
+import { dispatchOrderApprovalService } from '@/services/dispatch-order-approval.service';
+import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
+import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { useTabContext } from '@/contexts/TabContext';
@@ -38,6 +41,7 @@ export default function DispatchOrderListPage() {
   const permissions = usePermissions('crew_dispatch');
 
   const [orders, setOrders] = useState<CrewDispatchOrderWithDetails[]>([]);
+  const [orderApprovalMap, setOrderApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -68,6 +72,18 @@ export default function DispatchOrderListPage() {
   const loadOrders = async () => {
     setLoading(true);
     setOrders(await dispatchService.getDispatchOrders());
+    // 결재 현황(요청자/결재선) 표시용 — 대상별 최신 결재 1건만 남긴다(최신순 정렬되어 있음)
+    try {
+      const approvals = await dispatchOrderApprovalService.getAllApprovals();
+      const amap = new Map<string, ApprovalRequestWithDetails>();
+      for (const a of approvals) {
+        const orderId = a.crew_dispatch_order_id as string;
+        if (!amap.has(orderId)) amap.set(orderId, a);
+      }
+      setOrderApprovalMap(amap);
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 
@@ -150,6 +166,7 @@ export default function DispatchOrderListPage() {
                         <TableHead className="text-xs">선박</TableHead>
                         <TableHead className="text-xs">발효일</TableHead>
                         <TableHead className="text-xs">상태</TableHead>
+                        <TableHead className="text-xs">결재 현황</TableHead>
                         <TableHead className="text-right text-xs">작업</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -168,6 +185,7 @@ export default function DispatchOrderListPage() {
                           <TableCell className="text-sm text-gray-600">{o.ship_name || '-'}</TableCell>
                           <TableCell className="text-xs text-gray-600">{o.effective_date}</TableCell>
                           <TableCell><Badge variant={STATUS_CONFIG[o.status].variant} className="text-xs">{STATUS_CONFIG[o.status].label}</Badge></TableCell>
+                          <TableCell><ApprovalChainCell approval={orderApprovalMap.get(o.id)} /></TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               {o.status === 'draft' && permissions.canEdit && (

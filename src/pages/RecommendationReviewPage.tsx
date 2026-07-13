@@ -206,11 +206,11 @@ export default function RecommendationReviewPage() {
 
       setRecommendations(enriched as unknown as CrewRecommendationWithDetails[]);
 
-      // 결재 진행 현황
-      const reviewed = recs.filter((r: Record<string, string>) => r.status === 'reviewed');
-      if (reviewed.length > 0) {
+      // 결재 진행 현황 — 결재가 시작된 적 있는 건은 최종 승인/거절된 이후에도 계속 담당자/결재선을 보여준다
+      const started = recs.filter((r: Record<string, string>) => r.status !== 'pending');
+      if (started.length > 0) {
         const amap = new Map<string, CrewRecommendationApprovalWithDetails>();
-        await Promise.all(reviewed.map(async (r: Record<string, string>) => {
+        await Promise.all(started.map(async (r: Record<string, string>) => {
           try {
             const ap = await approvalService.getApprovalsByRecommendation(r.id);
             if (ap.length > 0) amap.set(r.id, ap[0]);
@@ -580,7 +580,7 @@ export default function RecommendationReviewPage() {
                         {new Date(rec.available_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}
                       </TableCell>
                       <TableCell className="py-2">
-                        {rec.status === 'reviewed' ? <ApProgress recId={rec.id} /> : <span className="text-xs text-gray-300">-</span>}
+                        {approvalMap.has(rec.id) ? <ApProgress recId={rec.id} /> : <span className="text-xs text-gray-300">-</span>}
                       </TableCell>
                       <TableCell className="py-2">
                         {rec.status === 'pending' ? (() => {
@@ -595,7 +595,9 @@ export default function RecommendationReviewPage() {
                               ))}
                             </div>
                           );
-                        })() : <span className="text-xs text-gray-300">-</span>}
+                        })() : approvalMap.has(rec.id) ? (
+                          <span className="text-xs text-gray-600">{approvalMap.get(rec.id)!.requester_name}</span>
+                        ) : <span className="text-xs text-gray-300">-</span>}
                       </TableCell>
                       <TableCell className="text-right py-2">
                         <div className="flex justify-end gap-1" onClick={e => e.stopPropagation()}>

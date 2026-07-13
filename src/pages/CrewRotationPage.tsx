@@ -18,7 +18,10 @@ import type { ContractExpiryInfo } from '@/services/rotation.service';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Company, Fleet, Ship as ShipType, User } from '@/types/models';
 import { approvalService } from '@/services/approval.service';
+import { rotationApprovalService } from '@/services/rotation-approval.service';
+import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 import type { ApprovalLineWithSteps } from '@/types/approval';
+import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -43,6 +46,7 @@ export function CrewRotationPage() {
   const permissions = usePermissions('crew_rotation');
 
   const [plans, setPlans] = useState<CrewRotationPlanWithDetails[]>([]);
+  const [planApprovalMap, setPlanApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -113,6 +117,18 @@ export function CrewRotationPage() {
   const loadPlans = async () => {
     setLoading(true);
     setPlans(await rotationService.getRotationPlans());
+    // 결재 현황(요청자/결재선) 표시용 — 대상별 최신 결재 1건만 남긴다(최신순 정렬되어 있음)
+    try {
+      const approvals = await rotationApprovalService.getAllApprovals();
+      const amap = new Map<string, ApprovalRequestWithDetails>();
+      for (const a of approvals) {
+        const planId = a.crew_rotation_plan_id as string;
+        if (!amap.has(planId)) amap.set(planId, a);
+      }
+      setPlanApprovalMap(amap);
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 
@@ -494,6 +510,7 @@ export function CrewRotationPage() {
                   <TableHead className="text-xs">교대일</TableHead>
                   <TableHead className="text-xs">교대인원</TableHead>
                   <TableHead className="text-xs">상태</TableHead>
+                  <TableHead className="text-xs">결재 현황</TableHead>
                   <TableHead className="text-xs">작성일</TableHead>
                   <TableHead className="text-right text-xs">작업</TableHead>
                 </TableRow>
@@ -502,7 +519,7 @@ export function CrewRotationPage() {
                 {groupedPlans.map(group => (
                   <Fragment key={group.key}>
                     <TableRow className="bg-gray-50/80 hover:bg-gray-50/80">
-                      <TableCell colSpan={9} className="text-xs font-semibold text-gray-600 py-1.5">
+                      <TableCell colSpan={10} className="text-xs font-semibold text-gray-600 py-1.5">
                         {group.label} <span className="ml-1 font-normal text-gray-400">({group.plans.length}건)</span>
                       </TableCell>
                     </TableRow>
@@ -534,6 +551,7 @@ export function CrewRotationPage() {
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(plan.status)}</TableCell>
+                        <TableCell><ApprovalChainCell approval={planApprovalMap.get(plan.id)} /></TableCell>
                         <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
