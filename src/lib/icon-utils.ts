@@ -37,6 +37,9 @@ import {
   LogOut,
   Stethoscope,
   Newspaper,
+  Send,
+  ArrowUpCircle,
+  Folder,
   LucideIcon,
 } from 'lucide-react';
 
@@ -79,6 +82,9 @@ const iconMap: Record<string, LucideIcon> = {
   LogOut,
   Stethoscope,
   Newspaper,
+  Send,
+  ArrowUpCircle,
+  Folder,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {
