@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { msg } from '@/lib/messages';
-import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, RefreshCw } from 'lucide-react';
+import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { UrgentBadge } from '@/components/ui/urgent-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -48,6 +49,8 @@ export default function JobPostingsPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -319,6 +322,27 @@ export default function JobPostingsPage() {
     }
   };
 
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleSelectAll = (checked: boolean, ids: string[]) =>
+    setSelectedIds(checked ? ids : []);
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`선택한 ${selectedIds.length}개의 구인 공고를 삭제하시겠습니까?`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all(selectedIds.map(id => jobPostingGroupService.delete(id)));
+      setSelectedIds([]);
+      await loadData();
+    } catch (error) {
+      console.error('Failed to bulk delete job postings:', error);
+      alert('일부 구인 공고 삭제에 실패했습니다.');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
@@ -377,6 +401,7 @@ export default function JobPostingsPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    setSelectedIds([]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -543,11 +568,33 @@ export default function JobPostingsPage() {
               </div>
             </div>
 
+            {!isManningOrCrew && permissions.canDelete && selectedIds.length > 0 && (
+              <div className="flex items-center justify-between gap-2 rounded-md border bg-blue-50 border-blue-200 px-3 py-2 mb-2">
+                <span className="text-xs text-blue-800">{selectedIds.length}개 선택됨</span>
+                <Button
+                  size="sm" variant="outline"
+                  className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50"
+                  onClick={handleBulkDelete} disabled={bulkDeleting}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting ? '삭제 중...' : '선택 삭제'}
+                </Button>
+              </div>
+            )}
+
             {/* Table */}
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
+                    {!isManningOrCrew && permissions.canDelete && (
+                      <TableHead className="w-8 py-2">
+                        <Checkbox
+                          checked={currentPostings.length > 0 && currentPostings.every(p => selectedIds.includes(p.id))}
+                          onCheckedChange={checked => toggleSelectAll(!!checked, currentPostings.map(p => p.id))}
+                          disabled={currentPostings.length === 0}
+                        />
+                      </TableHead>
+                    )}
                     <TableHead className="text-xs py-2">상태</TableHead>
                     <TableHead className="text-xs py-2">선주사</TableHead>
                     <TableHead className="text-xs py-2">선박</TableHead>
@@ -569,6 +616,11 @@ export default function JobPostingsPage() {
                         className="hover:bg-muted/50 cursor-pointer"
                         onClick={() => handleView(posting)}
                       >
+                        {!isManningOrCrew && permissions.canDelete && (
+                          <TableCell className="py-2" onClick={e => e.stopPropagation()}>
+                            <Checkbox checked={selectedIds.includes(posting.id)} onCheckedChange={() => toggleSelect(posting.id)} />
+                          </TableCell>
+                        )}
                         <TableCell className="py-2">
                           <div className="flex gap-1">
                             {getStatusBadge(posting.status)}
