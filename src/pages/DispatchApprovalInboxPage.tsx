@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { approvalService } from '@/services/approval.service';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
 import { contractApprovalService } from '@/services/contract-approval.service';
+import { dispatchOrderApprovalService } from '@/services/dispatch-order-approval.service';
 import { supabase } from '@/lib/supabase';
 import type { CrewRecommendationApprovalWithDetails, ApprovalLineStep, ApprovalAction } from '@/types/approval';
 import type { CrewRecommendation } from '@/types/crew-recommendation';
@@ -26,6 +27,11 @@ import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & { recommendation?: CrewRecommendation & { crew_name?: string; ship_name?: string } };
 type RotationApprovalWithPlan = ApprovalRequestWithDetails & { plan_name?: string; ship_name?: string };
 type ContractApprovalWithContract = ApprovalRequestWithDetails & { crew_name?: string; rank_code?: string; ship_name?: string };
+type DispatchApprovalWithOrder = ApprovalRequestWithDetails & {
+  crew_name?: string; dispatch_type?: 'promotion' | 'demotion';
+  previous_rank_code?: string; previous_grade?: string | null;
+  new_rank_code?: string; new_grade?: string | null; ship_name?: string;
+};
 
 // isMyTurn/filterList/renderTable에서 채용(CrewRecommendationApprovalWithDetails)과
 // 배승/계약(ApprovalRequestWithDetails, 인덱스 시그니처 포함)을 함께 다루기 위한 최소 구조 타입.
@@ -43,7 +49,7 @@ interface ApprovalLike {
 }
 
 type Filter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
-type Domain = 'crew' | 'rotation' | 'contract';
+type Domain = 'crew' | 'rotation' | 'contract' | 'dispatch';
 const PAGE_SIZE = 20;
 
 // approvalService / rotationApprovalService / contractApprovalService가 공통으로 갖는 결재 액션 메서드
@@ -116,10 +122,21 @@ export default function DispatchApprovalInboxPage() {
   const [contractComment, setContractComment] = useState('');
   const [contractProcessing, setContractProcessing] = useState(false);
 
+  // 승진/강등 발령
+  const [dispatchApprovals, setDispatchApprovals] = useState<DispatchApprovalWithOrder[]>([]);
+  const [dispatchFilter, setDispatchFilter] = useState<Filter>('all');
+  const [dispatchPage, setDispatchPage] = useState(1);
+  const [dispatchViewMode, setDispatchViewMode] = useState<'list' | 'action'>('list');
+  const [selectedDispatch, setSelectedDispatch] = useState<DispatchApprovalWithOrder | null>(null);
+  const [dispatchAction, setDispatchAction] = useState<'approve' | 'reject' | null>(null);
+  const [dispatchComment, setDispatchComment] = useState('');
+  const [dispatchProcessing, setDispatchProcessing] = useState(false);
+
   // 다중 선택 일괄 승인/반려
   const [crewSelectedIds, setCrewSelectedIds] = useState<string[]>([]);
   const [rotationSelectedIds, setRotationSelectedIds] = useState<string[]>([]);
   const [contractSelectedIds, setContractSelectedIds] = useState<string[]>([]);
+  const [dispatchSelectedIds, setDispatchSelectedIds] = useState<string[]>([]);
   const [bulkDialog, setBulkDialog] = useState<{ domain: Domain; action: 'approve' | 'reject' } | null>(null);
   const [bulkComment, setBulkComment] = useState('');
   const [bulkProcessing, setBulkProcessing] = useState(false);
@@ -127,6 +144,7 @@ export default function DispatchApprovalInboxPage() {
   useEffect(() => { setCrewPage(1); setCrewSelectedIds([]); }, [crewFilter]);
   useEffect(() => { setRotationPage(1); setRotationSelectedIds([]); }, [rotationFilter]);
   useEffect(() => { setContractPage(1); setContractSelectedIds([]); }, [contractFilter]);
+  useEffect(() => { setDispatchPage(1); setDispatchSelectedIds([]); }, [dispatchFilter]);
 
   useEffect(() => { init(); }, []);
 
@@ -144,6 +162,7 @@ export default function DispatchApprovalInboxPage() {
         loadCrewApprovals(currentUser.id, admin),
         loadRotationApprovals(currentUser.id, admin),
         loadContractApprovals(currentUser.id, admin),
+        loadDispatchApprovals(currentUser.id, admin),
       ]);
     } finally {
       setInitializing(false);
@@ -219,6 +238,50 @@ export default function DispatchApprovalInboxPage() {
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '계약 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+    }
+  };
+
+  // --- 승진/강등 발령: 데이터 로딩 ---
+
+  const loadDispatchApprovals = async (userId: string, admin: boolean) => {
+    try {
+      const approvals = admin ? await dispatchOrderApprovalService.getAllApprovals() : await dispatchOrderApprovalService.getMyRelatedApprovals(userId);
+      if (approvals.length === 0) { setDispatchApprovals([]); return; }
+      const orderIds = [...new Set(approvals.map(a => a.crew_dispatch_order_id as string))];
+      const { data: orders, error } = await supabase
+        .from('crew_dispatch_orders')
+        .select(`
+          id, dispatch_type, previous_grade, new_grade,
+          crew_members:crew_member_id(name), ships:ship_id(name),
+          previous_rank:ranks!crew_dispatch_orders_previous_rank_id_fkey(rank_code),
+          new_rank:ranks!crew_dispatch_orders_new_rank_id_fkey(rank_code)
+        `)
+        .in('id', orderIds);
+      if (error) throw error;
+      const orderMap = new Map((orders || []).map((o: Record<string, unknown>) => [o.id as string, o]));
+      const merged = approvals
+        .map(a => {
+          const o = orderMap.get(a.crew_dispatch_order_id as string) as Record<string, unknown> | undefined;
+          const crew = o?.crew_members as Record<string, unknown> | null;
+          const ship = o?.ships as Record<string, unknown> | null;
+          const prevRank = o?.previous_rank as Record<string, unknown> | null;
+          const newRank = o?.new_rank as Record<string, unknown> | null;
+          return {
+            ...a,
+            crew_name: (crew?.name as string) || '-',
+            dispatch_type: o?.dispatch_type as 'promotion' | 'demotion' | undefined,
+            previous_rank_code: (prevRank?.rank_code as string) || '-',
+            previous_grade: (o?.previous_grade as string) || null,
+            new_rank_code: (newRank?.rank_code as string) || '-',
+            new_grade: (o?.new_grade as string) || null,
+            ship_name: (ship?.name as string) || '-',
+          };
+        })
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setDispatchApprovals(merged);
+    } catch (e) {
+      console.error(e);
+      toast({ title: '오류', description: '승진/강등 발령 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
     }
   };
 
@@ -325,6 +388,31 @@ export default function DispatchApprovalInboxPage() {
     }
   };
 
+  // --- 승진/강등 발령: 액션 ---
+
+  const handleDispatchAction = async () => {
+    if (!selectedDispatch || !dispatchAction) return;
+    if (dispatchAction === 'reject' && !dispatchComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+    try {
+      setDispatchProcessing(true);
+      if (isAdmin) {
+        if (dispatchAction === 'reject') await dispatchOrderApprovalService.adminForceReject(selectedDispatch.id, currentUserId, dispatchComment);
+        else await dispatchOrderApprovalService.adminForceApprove(selectedDispatch.id, currentUserId, dispatchComment || undefined);
+      } else {
+        if (dispatchAction === 'reject') await dispatchOrderApprovalService.rejectStep(selectedDispatch.id, currentUserId, dispatchComment);
+        else await dispatchOrderApprovalService.approveStep(selectedDispatch.id, currentUserId, dispatchComment || undefined);
+      }
+      toast({ title: '성공', description: dispatchAction === 'approve' ? '승인되었습니다. 승인 즉시 계약/승선경력에 반영됩니다.' : '반려되었습니다.' });
+      setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); setDispatchComment('');
+      await loadDispatchApprovals(currentUserId, isAdmin);
+    } catch (e) {
+      console.error(e);
+      toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
+    } finally {
+      setDispatchProcessing(false);
+    }
+  };
+
   // --- 다중 선택 일괄 승인/반려 ---
 
   const domainConfig = (domain: Domain): {
@@ -336,7 +424,8 @@ export default function DispatchApprovalInboxPage() {
   } => {
     if (domain === 'crew') return { service: approvalService, approvals: crewApprovals, selectedIds: crewSelectedIds, setSelectedIds: setCrewSelectedIds, load: () => loadCrewApprovals(currentUserId, isAdmin) };
     if (domain === 'rotation') return { service: rotationApprovalService, approvals: rotationApprovals, selectedIds: rotationSelectedIds, setSelectedIds: setRotationSelectedIds, load: () => loadRotationApprovals(currentUserId, isAdmin) };
-    return { service: contractApprovalService, approvals: contractApprovals, selectedIds: contractSelectedIds, setSelectedIds: setContractSelectedIds, load: () => loadContractApprovals(currentUserId, isAdmin) };
+    if (domain === 'contract') return { service: contractApprovalService, approvals: contractApprovals, selectedIds: contractSelectedIds, setSelectedIds: setContractSelectedIds, load: () => loadContractApprovals(currentUserId, isAdmin) };
+    return { service: dispatchOrderApprovalService, approvals: dispatchApprovals, selectedIds: dispatchSelectedIds, setSelectedIds: setDispatchSelectedIds, load: () => loadDispatchApprovals(currentUserId, isAdmin) };
   };
 
   const openBulkDialog = (domain: Domain, action: 'approve' | 'reject') => {
@@ -578,9 +667,11 @@ export default function DispatchApprovalInboxPage() {
   const crewFiltered = filterList(crewApprovals, crewFilter);
   const rotationFiltered = filterList(rotationApprovals, rotationFilter);
   const contractFiltered = filterList(contractApprovals, contractFilter);
+  const dispatchFiltered = filterList(dispatchApprovals, dispatchFilter);
   const crewPageRecs = crewFiltered.slice((crewPage - 1) * PAGE_SIZE, crewPage * PAGE_SIZE);
   const rotationPageRecs = rotationFiltered.slice((rotationPage - 1) * PAGE_SIZE, rotationPage * PAGE_SIZE);
   const contractPageRecs = contractFiltered.slice((contractPage - 1) * PAGE_SIZE, contractPage * PAGE_SIZE);
+  const dispatchPageRecs = dispatchFiltered.slice((dispatchPage - 1) * PAGE_SIZE, dispatchPage * PAGE_SIZE);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -594,6 +685,7 @@ export default function DispatchApprovalInboxPage() {
           <TabsTrigger value="crew">채용 ({crewApprovals.length})</TabsTrigger>
           <TabsTrigger value="rotation">배승 ({rotationApprovals.length})</TabsTrigger>
           <TabsTrigger value="contract">계약 ({contractApprovals.length})</TabsTrigger>
+          <TabsTrigger value="dispatch">승진/강등 ({dispatchApprovals.length})</TabsTrigger>
           <TabsTrigger value="salary" disabled>급여지급 (준비중)</TabsTrigger>
         </TabsList>
 
@@ -722,6 +814,50 @@ export default function DispatchApprovalInboxPage() {
                   <CardDescription>{selectedContract.ship_name} · 요청자: {selectedContract.requester_name}</CardDescription>
                 </CardHeader>
                 <CardContent>{renderProgress(selectedContract)}</CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="dispatch" className="mt-4">
+          {dispatchViewMode === 'action' && selectedDispatch ? renderActionPanel(
+            `${selectedDispatch.crew_name} — ${selectedDispatch.dispatch_type === 'promotion' ? '승진' : '강등'}`,
+            `결재선: ${selectedDispatch.approval_line.name} · ${selectedDispatch.ship_name}`,
+            dispatchComment, setDispatchComment, dispatchAction, dispatchProcessing,
+            () => { setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); }, handleDispatchAction,
+          ) : (
+            <div className="space-y-4">
+              {renderFilterBar(dispatchFilter, setDispatchFilter)}
+              {renderBulkBar('dispatch', dispatchSelectedIds)}
+              {dispatchFiltered.length === 0 ? (
+                <Card><CardContent className="py-12 text-center"><User className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
+              ) : (
+                <>
+                  {renderTable(
+                    dispatchPageRecs,
+                    a => `${a.crew_name} (${a.dispatch_type === 'promotion' ? '승진' : '강등'})`,
+                    a => `${a.previous_rank_code}${a.previous_grade ? `(${a.previous_grade})` : ''} → ${a.new_rank_code}${a.new_grade ? `(${a.new_grade})` : ''} · ${a.ship_name}`,
+                    a => { setSelectedDispatch(a); setDispatchViewMode('list'); },
+                    a => { setSelectedDispatch(a); setDispatchAction('approve'); setDispatchViewMode('action'); setDispatchComment(''); },
+                    a => { setSelectedDispatch(a); setDispatchAction('reject'); setDispatchViewMode('action'); setDispatchComment(''); },
+                    dispatchSelectedIds, setDispatchSelectedIds,
+                  )}
+                  {renderPagination(dispatchFiltered.length, dispatchPage, setDispatchPage)}
+                </>
+              )}
+            </div>
+          )}
+          {dispatchViewMode === 'list' && selectedDispatch && (
+            <div className="mt-4 space-y-4">
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedDispatch(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <User className="w-4 h-4" />{selectedDispatch.crew_name} — {selectedDispatch.previous_rank_code}{selectedDispatch.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → {selectedDispatch.new_rank_code}{selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''}
+                  </CardTitle>
+                  <CardDescription>{selectedDispatch.ship_name} · 요청자: {selectedDispatch.requester_name}</CardDescription>
+                </CardHeader>
+                <CardContent>{renderProgress(selectedDispatch)}</CardContent>
               </Card>
             </div>
           )}

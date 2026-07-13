@@ -7,12 +7,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { dispatchService } from '@/services/dispatch.service';
+import { approvalService } from '@/services/approval.service';
 import { loadShipSalaryRankMaps, getRankOptionsForShip, getGradeOptionsForShipRank, type ShipSalaryRankMaps } from '@/services/ship-salary-rank.service';
-import type { CrewMember, Rank } from '@/types/models';
+import { getCurrentUser } from '@/lib/store';
+import type { CrewMember, Rank, User } from '@/types/models';
 import type { RankGrade, DispatchType } from '@/types/dispatch';
+import type { ApprovalLineWithSteps } from '@/types/approval';
 import { useToast } from '@/hooks/use-toast';
 import { useTabContext } from '@/contexts/TabContext';
 
@@ -61,9 +67,27 @@ export default function DispatchOrderPage() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // 결재 상신 다이얼로그 — 채용/배승/계약 결재와 동일하게 결재선을 직접 선택
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [submitLineId, setSubmitLineId] = useState('');
+  const [submitComment, setSubmitComment] = useState('');
+  const [defaultLineId, setDefaultLineId] = useState('');
+  const [saveLineDefault, setSaveLineDefault] = useState(false);
+
   const preCrewIds = (searchParams.get('crew') || '').split(',').filter(Boolean);
 
   useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    getCurrentUser().then(async u => {
+      setCurrentUser(u);
+      if (!u) return;
+      approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines);
+      const { data: pref } = await supabase.from('users').select('default_approval_line_id').eq('id', u.id).single();
+      if (pref?.default_approval_line_id) setDefaultLineId(pref.default_approval_line_id);
+    });
+  }, []);
 
   const calcExpiryDate = (embark?: { embark_date: string; contract_months: number | null }): string => {
     if (!embark?.embark_date || !embark.contract_months) return '';
@@ -155,13 +179,14 @@ export default function DispatchOrderPage() {
   const getRankOptions = (shipId: string | null): Rank[] => getRankOptionsForShip(salaryRankMaps, shipId);
   const getGradeOptions = (shipId: string | null, rankId: string): string[] => getGradeOptionsForShipRank(salaryRankMaps, shipId, rankId);
 
-  const handleSubmit = async (asDraft: boolean) => {
-    const validRows = rows.filter(r => r.crewId && (r.newRankId !== r.previousRankId || r.newGrade !== r.previousGrade));
+  const getValidRows = () => rows.filter(r => r.crewId && (r.newRankId !== r.previousRankId || r.newGrade !== r.previousGrade));
+
+  const handleSaveDraft = async () => {
+    const validRows = getValidRows();
     if (validRows.length === 0) {
       toast({ title: '변경사항이 없습니다', description: '직급 또는 Grade를 변경해 주세요', variant: 'destructive' });
       return;
     }
-
     setSubmitting(true);
     try {
       for (const r of validRows) {
@@ -178,13 +203,54 @@ export default function DispatchOrderPage() {
           notes: r.notes || null,
         });
         if (!order) throw new Error(`${r.crewName} 발령 생성 실패`);
-
-        if (!asDraft) {
-          const result = await dispatchService.submitDispatchOrderForApproval(order.id, r.crewName, dispatchType);
-          if (!result.ok) throw new Error(result.message || `${r.crewName} 결재 상신 실패`);
-        }
       }
-      toast({ title: asDraft ? '임시저장 완료' : '결재 상신 완료', description: asDraft ? undefined : '승인이 완료되면 계약/승선경력에 즉시 반영됩니다.' });
+      toast({ title: '임시저장 완료' });
+      if (activeTabId) closeTab(activeTabId);
+    } catch (e) {
+      toast({ title: '오류', description: String(e), variant: 'destructive' });
+    } finally { setSubmitting(false); }
+  };
+
+  const openSubmitDialog = () => {
+    if (getValidRows().length === 0) {
+      toast({ title: '변경사항이 없습니다', description: '직급 또는 Grade를 변경해 주세요', variant: 'destructive' });
+      return;
+    }
+    setSubmitLineId(defaultLineId || '');
+    setSubmitComment('');
+    setSaveLineDefault(false);
+    setSubmitDialogOpen(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!submitLineId || !currentUser) return;
+    const validRows = getValidRows();
+    setSubmitting(true);
+    try {
+      if (saveLineDefault) {
+        await supabase.from('users').update({ default_approval_line_id: submitLineId }).eq('id', currentUser.id);
+        setDefaultLineId(submitLineId);
+      }
+      for (const r of validRows) {
+        const order = await dispatchService.createDispatchOrder({
+          crew_member_id: r.crewId,
+          ship_id: r.shipId,
+          dispatch_type: dispatchType,
+          previous_rank_id: r.previousRankId || null,
+          previous_grade: r.previousGrade,
+          new_rank_id: r.newRankId || null,
+          new_grade: r.newGrade,
+          effective_date: r.effectiveDate || new Date().toISOString().slice(0, 10),
+          expiry_date: r.expiryDate || null,
+          notes: r.notes || null,
+        });
+        if (!order) throw new Error(`${r.crewName} 발령 생성 실패`);
+
+        const result = await dispatchService.submitDispatchOrderForApproval(order.id, submitLineId, submitComment || undefined);
+        if (!result.ok) throw new Error(result.message || `${r.crewName} 결재 상신 실패`);
+      }
+      toast({ title: '결재 상신 완료', description: '승인이 완료되면 계약/승선경력에 즉시 반영됩니다.' });
+      setSubmitDialogOpen(false);
       if (activeTabId) closeTab(activeTabId);
     } catch (e) {
       toast({ title: '오류', description: String(e), variant: 'destructive' });
@@ -211,10 +277,10 @@ export default function DispatchOrderPage() {
               {dispatchType === 'promotion' ? '승진 발령' : '강등 발령'}
             </CardTitle>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleSubmit(true)} disabled={submitting} className="h-8">
+              <Button variant="outline" size="sm" onClick={handleSaveDraft} disabled={submitting} className="h-8">
                 임시저장
               </Button>
-              <Button size="sm" onClick={() => handleSubmit(false)} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">
+              <Button size="sm" onClick={openSubmitDialog} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">
                 결재 상신 →
               </Button>
             </div>
@@ -355,6 +421,44 @@ export default function DispatchOrderPage() {
       <Button variant="outline" size="sm" onClick={addRow} className="w-full h-8 text-xs border-dashed">
         + 발령 대상 추가
       </Button>
+
+      <Dialog open={submitDialogOpen} onOpenChange={o => !submitting && setSubmitDialogOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{dispatchType === 'promotion' ? '승진' : '강등'} 발령 결재 상신</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">{getValidRows().length}건을 결재 상신합니다.</p>
+            <div>
+              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <Select value={submitLineId} onValueChange={setSubmitLineId}>
+                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectContent>
+                  {approvalLines.length === 0
+                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {submitLineId && (
+                <div className="flex items-center space-x-2 mt-2">
+                  <Checkbox id="save-line-default-dispatch" checked={saveLineDefault} onCheckedChange={c => setSaveLineDefault(c as boolean)} />
+                  <label htmlFor="save-line-default-dispatch" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)} disabled={submitting}>취소</Button>
+            <Button onClick={handleConfirmSubmit} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
+              {submitting ? '처리 중...' : '결재 상신'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

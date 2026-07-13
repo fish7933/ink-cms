@@ -9,6 +9,7 @@ const CrewRotationPage = lazy(() => import('@/pages/CrewRotationPage').then(m =>
 const RotationPlanFormPage = lazy(() => import('@/pages/RotationPlanFormPage'));
 const CrewRotationDetailPage = lazy(() => import('@/pages/CrewRotationDetailPage'));
 const DispatchOrderPage = lazy(() => import('@/pages/DispatchOrderPage'));
+const DispatchOrderListPage = lazy(() => import('@/pages/DispatchOrderListPage'));
 const ShipManagementPage = lazy(() => import('@/pages/ShipManagementPage'));
 const ShipTypeManagementPage = lazy(() => import('@/pages/ShipTypeManagementPage'));
 const ShipFlagManagementPage = lazy(() => import('@/pages/ShipFlagManagementPage'));
@@ -81,6 +82,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew-rotation/:id', component: CrewRotationDetailPage },
   { path: '/crew-rotation', component: CrewRotationPage },
   { path: '/crew-dispatch/new', component: DispatchOrderPage },
+  { path: '/crew-dispatch', component: DispatchOrderListPage },
   { path: '/ships', component: ShipManagementPage },
   { path: '/ship-types', component: ShipTypeManagementPage },
   { path: '/ship-flags', component: ShipFlagManagementPage },

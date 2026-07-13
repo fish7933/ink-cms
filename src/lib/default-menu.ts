@@ -152,6 +152,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 4,
         is_active: true,
       },
+      {
+        id: 'crew-dispatch',
+        label: '승진/강등 발령',
+        path: '/crew-dispatch',
+        icon: 'ArrowUpCircle',
+        roles: ['ship_manager'],
+        order: 5,
+        is_active: true,
+      },
     ],
   },
   {
