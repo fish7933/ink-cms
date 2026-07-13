@@ -68,7 +68,7 @@ export function CrewRotationPage() {
 
   // 결재 상신 다이얼로그 (배승 결재 — 채용 결재와 동일하게 결재선을 직접 선택)
   const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
-  const [submitDialogPlanId, setSubmitDialogPlanId] = useState<string | null>(null);
+  const [submitDialogPlanIds, setSubmitDialogPlanIds] = useState<string[]>([]);
   const [submitLineId, setSubmitLineId] = useState('');
   const [submitComment, setSubmitComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -162,6 +162,10 @@ export function CrewRotationPage() {
     () => selectedIds.filter(id => plans.find(p => p.id === id)?.status === 'approved'),
     [selectedIds, plans]
   );
+  const draftSelectedIds = useMemo(
+    () => selectedIds.filter(id => plans.find(p => p.id === id)?.status === 'draft'),
+    [selectedIds, plans]
+  );
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -183,24 +187,45 @@ export function CrewRotationPage() {
   };
 
   const openSubmitDialog = (planId: string) => {
-    setSubmitDialogPlanId(planId);
+    setSubmitDialogPlanIds([planId]);
+    setSubmitLineId(defaultLineId || '');
+    setSubmitComment('');
+    setSaveLineDefault(false);
+  };
+
+  const openBulkSubmitDialog = () => {
+    if (draftSelectedIds.length === 0) return;
+    setSubmitDialogPlanIds(draftSelectedIds);
     setSubmitLineId(defaultLineId || '');
     setSubmitComment('');
     setSaveLineDefault(false);
   };
 
   const handleSubmitApproval = async () => {
-    if (!submitDialogPlanId || !submitLineId || !currentUser) return;
+    if (submitDialogPlanIds.length === 0 || !submitLineId || !currentUser) return;
     try {
       setSubmitting(true);
       if (saveLineDefault) {
         await supabase.from('users').update({ default_approval_line_id: submitLineId }).eq('id', currentUser.id);
         setDefaultLineId(submitLineId);
       }
-      const result = await rotationService.submitRotationPlanForApproval(submitDialogPlanId, submitLineId, submitComment || undefined);
-      if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
-      toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
-      setSubmitDialogPlanId(null);
+      const results = await Promise.all(
+        submitDialogPlanIds.map(id => rotationService.submitRotationPlanForApproval(id, submitLineId, submitComment || undefined))
+      );
+      const failCount = results.filter(r => !r.ok).length;
+      if (submitDialogPlanIds.length === 1) {
+        if (failCount > 0) { toast({ title: '결재 상신 실패', description: results[0].message, variant: 'destructive' }); return; }
+        toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
+      } else {
+        const successCount = submitDialogPlanIds.length - failCount;
+        toast({
+          title: failCount === 0 ? '일괄 결재 상신 완료' : '일부만 처리됨',
+          description: `${successCount}/${submitDialogPlanIds.length}건 상신되었습니다.`,
+          variant: failCount === 0 ? undefined : 'destructive',
+        });
+      }
+      setSubmitDialogPlanIds([]);
+      setSelectedIds([]);
       loadPlans();
     } finally {
       setSubmitting(false);
@@ -430,6 +455,11 @@ export function CrewRotationPage() {
                 <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            {draftSelectedIds.length > 0 && (
+              <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openBulkSubmitDialog}>
+                일괄 결재 상신 ({draftSelectedIds.length})
+              </Button>
+            )}
             {approvedSelectedIds.length > 0 && (
               <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkExecute} disabled={bulkExecuting}>
                 <CheckCircle className="h-3.5 w-3.5" />{bulkExecuting ? '실행 중...' : `일괄 발령실행 (${approvedSelectedIds.length})`}
@@ -622,10 +652,10 @@ export function CrewRotationPage() {
       </Dialog>
 
       {/* 배승 결재 상신 다이얼로그 */}
-      <Dialog open={!!submitDialogPlanId} onOpenChange={o => !submitting && setSubmitDialogPlanId(o ? submitDialogPlanId : null)}>
+      <Dialog open={submitDialogPlanIds.length > 0} onOpenChange={o => !submitting && !o && setSubmitDialogPlanIds([])}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>배승 결재 상신</DialogTitle>
+            <DialogTitle>{submitDialogPlanIds.length > 1 ? `배승 결재 상신 (${submitDialogPlanIds.length}건 일괄)` : '배승 결재 상신'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -651,9 +681,9 @@ export function CrewRotationPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitDialogPlanId(null)} disabled={submitting}>취소</Button>
+            <Button variant="outline" onClick={() => setSubmitDialogPlanIds([])} disabled={submitting}>취소</Button>
             <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
-              {submitting ? '처리 중...' : '결재 상신'}
+              {submitting ? '처리 중...' : submitDialogPlanIds.length > 1 ? `${submitDialogPlanIds.length}건 결재 상신` : '결재 상신'}
             </Button>
           </DialogFooter>
         </DialogContent>
