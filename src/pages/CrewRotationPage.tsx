@@ -276,7 +276,11 @@ export function CrewRotationPage() {
           plan_name: planName,
           rotation_date: crew.map(c => c.expiry_date).sort()[0],
           notes: `계약만료 ${expiryThreshold}일 이내 자동 생성`,
-          base_departure_date: null,
+          // 기준 교대일을 비워두지 않고 가장 빠른 만료일로 채워, 나중에 계획을 열었을 때 "기준 교대일"
+          // 입력란이 비어있지 않게 한다. 각 행의 개별 승선/하선일은 그대로 선원별 실제 만료일을 유지하며,
+          // 이 값은 최초 로드 시에는 재계산을 건너뛰므로(RotationPlanFormPage) 덮어쓰지 않는다 —
+          // 관리자가 기준일을 직접 수정할 때만 전체 행에 일괄 반영된다.
+          base_departure_date: crew.map(c => c.expiry_date).sort()[0],
           port_id: null,
           assignments: crew.map(c => ({
             off_crew_id: c.crew_id,

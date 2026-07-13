@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Plus, X, Ship, LogIn, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -105,6 +105,9 @@ export default function RotationPlanFormPage() {
   const [manualCity, setManualCity] = useState(false);
 
   const [rows, setRows] = useState<AssignmentRow[]>([makeRow()]);
+  // 수정 모드에서 기존 계획을 불러올 때 setBaseDepartureDate가 한 번 호출되는데, 그 초기 로드에서만
+  // 저장된 개별 행 일자를 덮어쓰지 않도록 건너뛴다. 그 이후 사용자가 기준 교대일을 직접 바꾸면 정상적으로 재계산되어야 한다.
+  const skipCascadeOnLoadRef = useRef(false);
   const [boardingDialogOpen, setBoardingDialogOpen] = useState(false);
   const [disembarkDialogOpen, setDisembarkDialogOpen] = useState(false);
   const [rowPicker, setRowPicker] = useState<{ rowId: string; side: 'boarding' | 'disembark' } | null>(null);
@@ -188,6 +191,7 @@ export default function RotationPlanFormPage() {
       setShipId(existing.ship_id);
       setPlanName(existing.plan_name);
       setPlanNotes(existing.notes || '');
+      skipCascadeOnLoadRef.current = true;
       setBaseDepartureDate(existing.base_departure_date || '');
       if (existing.port_id) {
         const port = (portsData || []).find(p => p.id === existing.port_id);
@@ -339,10 +343,11 @@ export default function RotationPlanFormPage() {
   }, [shipId, ships]);
 
   useEffect(() => {
-    // 수정 모드에서 기존 계획을 불러올 때는 각 배정 건마다 저장된 개별 일자를 그대로 써야 하므로,
-    // 기준일 하나로 모든 행의 날짜를 일괄 재계산해 덮어쓰지 않는다.
-    if (isEditMode) return;
-    setPlanName(prev => prev ? withDateSuffix(prev, baseDepartureDate) : prev);
+    // 수정 모드에서 기존 계획을 불러올 때 setBaseDepartureDate가 최초 1회 호출되는데, 그때는 각 배정
+    // 건의 저장된 개별 일자를 그대로 유지해야 하므로 재계산을 건너뛴다. 그 다음부터(사용자가 기준
+    // 교대일을 직접 수정하는 경우) 는 수정 모드에서도 모든 행의 날짜를 기준일에 맞춰 재배열한다.
+    if (skipCascadeOnLoadRef.current) { skipCascadeOnLoadRef.current = false; return; }
+    if (!isEditMode) setPlanName(prev => prev ? withDateSuffix(prev, baseDepartureDate) : prev);
     if (baseDepartureDate) {
       const dates = cascadeDatesFromBase(baseDepartureDate);
       setRows(prev => prev.map(r => ({ ...r, ...dates })));
