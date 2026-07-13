@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
+import { rotationService } from '@/services/rotation.service';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
@@ -340,32 +341,90 @@ export function CrewManagementPage() {
   const toggleAll = (checked: boolean) =>
     setSelectedIds(checked ? paginated.map(c => c.id) : []);
 
+  // 기준 교대일(하선예정일) 하루 전/뒤로 출국일/귀국일을 계산 — 계약만료 하선계획 자동생성과 동일한 규칙
+  const addDays = (iso: string, n: number) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    const date = new Date(y, m - 1, d + n);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
+  // 승선 중인 선원을 선택해 일괄 하선 계획을 만들 때는, 사람이 직접 작성 화면을 거치지 않고
+  // 선박별로 묶어 각 선원의 하선예정일을 기준 교대일로 삼아 바로 임시저장한다
+  // (계약만료 하선계획 자동생성과 동일한 방식).
+  const createBulkDisembarkDrafts = async () => {
+    const groups = new Map<string, { shipName: string; ownerId: string; fleetId: string | null; members: CrewWithDetails[] }>();
+    const unassignable: string[] = [];
+    for (const id of selectedIds) {
+      const member = crew.find(c => c.id === id);
+      if (!member) continue;
+      if (!member.current_ship_id || !member.owner_id || !member.disembark_forecast_date) {
+        unassignable.push(member.name);
+        continue;
+      }
+      const key = member.current_ship_id;
+      if (!groups.has(key)) {
+        groups.set(key, { shipName: member.current_ship_name || '미배정', ownerId: member.owner_id, fleetId: member.fleet_id || null, members: [] });
+      }
+      groups.get(key)!.members.push(member);
+    }
+
+    if (groups.size === 0) {
+      toast({ title: '하선 계획을 만들 수 없습니다', description: '선택한 선원 모두 승선 선박 또는 하선예정일 정보가 없습니다.', variant: 'destructive' });
+      return;
+    }
+
+    let created = 0;
+    const today = new Date();
+    for (const [shipId, group] of groups) {
+      const baseDate = group.members.map(m => m.disembark_forecast_date!).sort()[0];
+      const planName = `${group.shipName} 하선계획 ${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      const plan = await rotationService.createRotationPlan({
+        ship_id: shipId,
+        owner_id: group.ownerId,
+        fleet_id: group.fleetId,
+        plan_name: planName,
+        rotation_date: baseDate,
+        notes: '선원 목록에서 일괄 선택하여 자동 생성',
+        base_departure_date: baseDate,
+        port_id: null,
+        assignments: group.members.map(m => ({
+          off_crew_id: m.id,
+          off_rank_id: m.rank_id || null,
+          off_rank_grade: (m as CrewWithDetails & { current_grade?: string }).current_grade || null,
+          off_disembark_date: m.disembark_forecast_date!,
+          off_return_date: addDays(m.disembark_forecast_date!, 1),
+          on_crew_id: null,
+          on_rank_id: null,
+          on_rank_grade: null,
+          on_departure_date: addDays(m.disembark_forecast_date!, -1),
+          contract_months: null,
+          salary_template_id: null,
+          salary_amount: null,
+          salary_currency: 'USD',
+          embark_date: m.disembark_forecast_date!,
+          notes: `하선예정일: ${m.disembark_forecast_date}`,
+        })),
+      });
+      if (plan) created++;
+    }
+
+    toast({
+      title: `${created}개 선박 하선계획 임시저장 완료`,
+      description: unassignable.length > 0
+        ? `제외됨(승선 선박/하선예정일 없음): ${unassignable.join(', ')}`
+        : '교대계획(선원 발령) 목록에서 확인하세요.',
+    });
+    setSelectedIds([]);
+    await loadData();
+  };
+
   const openRotationPlan = (mode: 'boarding' | 'disembark') => {
     if (selectedIds.length === 0) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
 
     if (mode === 'disembark') {
-      // 선박별로 그룹화 — 선박이 다른 선원은 교대계획을 분리해야 함
-      const groups = new Map<string, { shipName: string; ids: string[] }>();
-      for (const id of selectedIds) {
-        const member = crew.find(c => c.id === id);
-        const key = member?.current_ship_id || '__none__';
-        if (!groups.has(key)) {
-          groups.set(key, { shipName: member?.current_ship_name || '미배정', ids: [] });
-        }
-        groups.get(key)!.ids.push(id);
-      }
-
-      if (groups.size > 1) {
-        // 선박별로 탭 분리 생성
-        for (const { ids } of groups.values()) {
-          openNewTab(`/crew-rotation/new?disembark=${ids.join(',')}`, '교대계획 작성', true);
-        }
-        toast({
-          title: `${groups.size}개 선박으로 분리됨`,
-          description: [...groups.values()].map(g => `${g.shipName} (${g.ids.length}명)`).join(', '),
-        });
-        return;
-      }
+      if (!confirm(`선택한 ${selectedIds.length}명의 하선예정일을 기준 교대일로 하여 승선 선박별로 하선계획을 임시저장하시겠습니까?`)) return;
+      createBulkDisembarkDrafts();
+      return;
     }
 
     openNewTab(`/crew-rotation/new?${mode}=${selectedIds.join(',')}`, '교대계획 작성', true);
