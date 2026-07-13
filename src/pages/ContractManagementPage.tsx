@@ -27,7 +27,9 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
-const TYPE_LABELS: Record<string, string> = { initial: '최초', renewal: '갱신', extension: '연장', transfer: '이적' };
+// 갱신/연장은 시스템상 동일하게 동작해 혼란을 주므로 '연장'으로 통일한다.
+// 기존 데이터에 renewal로 저장된 값도 그대로 '연장'으로 표시하고, extension은 신규 선택지에서 제외한다.
+const TYPE_LABELS: Record<string, string> = { initial: '최초', renewal: '연장', transfer: '이적' };
 const CURRENCIES = ['USD', 'KRW', 'EUR', 'JPY', 'SGD'];
 const BASIS_LABELS: Record<AllowancePaymentBasis, string> = { monthly: '매월 지급', lump_sum: '일시불' };
 const METHOD_LABELS: Record<AllowancePaymentMethod, string> = { ship_direct: '본선 직접지급', owner_billed: '선주 청구' };
@@ -202,7 +204,7 @@ export default function ContractManagementPage() {
         if (created && renewContext) {
           await updateContract(renewContext.previousId, { status: 'renewed' });
         }
-        toast({ title: renewContext ? '갱신 완료' : '등록 완료', description: created ? '이어서 수당을 추가할 수 있습니다.' : undefined });
+        toast({ title: renewContext ? '연장 완료' : '등록 완료', description: created ? '이어서 수당을 추가할 수 있습니다.' : undefined });
         if (created) {
           const list = await getContracts();
           setContracts(list);
@@ -311,7 +313,7 @@ export default function ContractManagementPage() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               {formView !== null && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>}
-              <div><CardTitle className="text-base">{formView !== null ? (renewContext ? '계약 갱신' : formView.record ? '계약 수정' : '계약 등록') : '계약 관리'}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 고용 계약 정보를 입력합니다' : '선원 고용 계약을 관리합니다'}</p></div>
+              <div><CardTitle className="text-base">{formView !== null ? (renewContext ? '계약 연장' : formView.record ? '계약 수정' : '계약 등록') : '계약 관리'}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 고용 계약 정보를 입력합니다' : '선원 고용 계약을 관리합니다'}</p></div>
             </div>
             {formView !== null ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button> : permissions.canCreate && <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />계약 등록</Button>}
           </div>
@@ -420,7 +422,7 @@ export default function ContractManagementPage() {
                   <TabsContent key={tab} value={tab} className="mt-2">
                     <table className="w-full text-xs"><thead><tr className="border-b bg-gray-50">
                       <th className="w-8 p-2"><Checkbox checked={filteredChains.length > 0 && filteredChains.every(c => selectedIds.includes(c.latest.id))} onCheckedChange={checked => toggleSelectAll(!!checked, filteredChains)} /></th>
-                      <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">갱신일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-left p-2">결재 현황</th><th className="text-center p-2">작업</th></tr></thead>
+                      <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">연장일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-left p-2">결재 현황</th><th className="text-center p-2">작업</th></tr></thead>
                       <tbody>{filteredChains.length === 0 ? <tr><td colSpan={14} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filteredChains.map(chain => {
                         const c = chain.latest;
                         const status = chainStatus(chain);
@@ -453,7 +455,7 @@ export default function ContractManagementPage() {
                                 <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(c)}>결재 상신</Button>
                               )}
                               {status === 'expired' && permissions.canCreate && (
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="갱신" onClick={() => openRenewForm(chain)}><RefreshCw className="h-3 w-3" /></Button>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="연장" onClick={() => openRenewForm(chain)}><RefreshCw className="h-3 w-3" /></Button>
                               )}
                               {permissions.canDelete && (
                                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(c.id)}><Trash2 className="h-3 w-3" /></Button>
