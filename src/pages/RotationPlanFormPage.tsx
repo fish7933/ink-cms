@@ -14,6 +14,8 @@ import { getPorts, findOrCreatePort } from '@/services/port.service';
 import { getEffectiveTemplateForShip, type SalaryTemplateWithItems } from '@/lib/salary-store';
 import { calculateContractPeriod } from '@/utils/contract-period';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
+import { supervisorService } from '@/services/supervisor.service';
+import { getCurrentUser } from '@/lib/store';
 import type { Rank, Ship as ShipType, Company, Fleet } from '@/types/models';
 import type { RankGrade } from '@/types/dispatch';
 import type { CrewRotationAssignmentInput } from '@/types/rotation';
@@ -91,6 +93,8 @@ export default function RotationPlanFormPage() {
   const [owners, setOwners] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [ships, setShips] = useState<ShipType[]>([]);
+  // 관리자가 아니면 본인 담당 선박만 배승계획을 만들 수 있도록 제한 (null = 아직 안 불러옴/관리자라 무제한)
+  const [supervisedShipIds, setSupervisedShipIds] = useState<Set<string> | null>(null);
   const [ownerId, setOwnerId] = useState('');
   const [fleetId, setFleetId] = useState('');
   const [shipId, setShipId] = useState('');
@@ -120,6 +124,19 @@ export default function RotationPlanFormPage() {
   const getCrewStatus = (c: CrewWithDetails) => (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    getCurrentUser().then(async user => {
+      if (!user) return;
+      if (user.role === 'admin' || user.role === 'system_admin') return; // 관리자는 제한 없음
+      const shipIds = await supervisorService.getSupervisedShips(user.id);
+      setSupervisedShipIds(new Set(shipIds));
+    });
+  }, []);
+
+  // 관리자가 아니면 본인 담당 선박만 남긴다 (아직 로딩 전이면 그대로 통과시켜 깜빡임 방지)
+  const filterSupervisedShips = (list: ShipType[]) =>
+    supervisedShipIds ? list.filter(s => supervisedShipIds.has(s.id)) : list;
 
   // 선주/선박 선택 후 기존 행의 계약개월을 자동 채움 (빈 행만)
   useEffect(() => {
@@ -311,8 +328,9 @@ export default function RotationPlanFormPage() {
     if (!ownerId) { setShips([]); return; }
     let q = supabase.from('ships').select('*').eq('owner_id', ownerId);
     if (fleetId) q = q.eq('fleet_id', fleetId);
-    q.order('name').then(({ data }) => setShips(data || []));
-  }, [ownerId, fleetId]);
+    // 수정 모드에서는 이미 배정된 선박이 표시에서 사라지지 않도록 담당 선박 제한을 적용하지 않는다.
+    q.order('name').then(({ data }) => setShips(isEditMode ? (data || []) : filterSupervisedShips(data || [])));
+  }, [ownerId, fleetId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOwnerChange = (id: string) => { setOwnerId(id); setFleetId(''); setShipId(''); };
   const handleFleetChange = (id: string) => { setFleetId(id === '_none' ? '' : id); setShipId(''); };
