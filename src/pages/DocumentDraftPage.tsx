@@ -332,6 +332,32 @@ export default function DocumentDraftPage() {
     }
   };
 
+  const handleCancelDocument = async (id: string) => {
+    if (!currentUser) return;
+    if (!confirm('이 기안서를 취소하시겠습니까?')) return;
+    try {
+      await approvalDocumentService.cancelDocument(id);
+      toast({ title: '취소되었습니다.' });
+      window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
+      loadDocuments(currentUser.id);
+    } catch (e) {
+      toast({ title: '취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    if (!currentUser) return;
+    if (!confirm('이 기안서를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+    try {
+      await approvalDocumentService.deleteDocument(id);
+      toast({ title: '삭제되었습니다.' });
+      window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
+      loadDocuments(currentUser.id);
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
   const handleSubmit = async () => {
     if (!currentUser) return;
     if (!documentTypeId) { toast({ title: '문서유형을 선택해주세요.', variant: 'destructive' }); return; }
@@ -664,13 +690,29 @@ export default function DocumentDraftPage() {
                             <td className="p-2 font-medium">{doc.title}</td>
                             <td className="p-2 text-gray-500">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
                             <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
-                            <td className="p-2 text-right">
+                            <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
                               {doc.status === 'draft' && (
                                 <Button
-                                  variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600"
-                                  onClick={e => { e.stopPropagation(); handleDeleteDraft(doc.id); }}
+                                  variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600"
+                                  onClick={() => handleDeleteDraft(doc.id)}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-3.5 w-3.5 mr-1" />삭제
+                                </Button>
+                              )}
+                              {doc.status === 'pending' && (
+                                <Button
+                                  variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-500 hover:text-red-600"
+                                  onClick={() => handleCancelDocument(doc.id)}
+                                >
+                                  기안 취소
+                                </Button>
+                              )}
+                              {(doc.status === 'approved' || doc.status === 'rejected' || doc.status === 'cancelled') && permissions.canDelete && (
+                                <Button
+                                  variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600"
+                                  onClick={() => handleDeleteDocument(doc.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-1" />삭제
                                 </Button>
                               )}
                             </td>

@@ -113,6 +113,31 @@ export default function ApprovalInboxPage() {
     setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment('');
   };
 
+  const canCancelDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && (doc.created_by === currentUserId || isAdmin);
+  const canDeleteDoc = (doc: ApprovalDocumentWithDetails) => doc.status !== 'pending' && (doc.created_by === currentUserId || isAdmin) && permissions.canDelete;
+
+  const handleCancelDoc = async (doc: ApprovalDocumentWithDetails) => {
+    if (!confirm('이 기안서를 취소하시겠습니까?')) return;
+    try {
+      await approvalDocumentService.cancelDocument(doc.id);
+      toast({ title: '취소되었습니다.' });
+      window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
+    } catch (e) {
+      toast({ title: '취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteDoc = async (doc: ApprovalDocumentWithDetails) => {
+    if (!confirm('이 기안서를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+    try {
+      await approvalDocumentService.deleteDocument(doc.id);
+      toast({ title: '삭제되었습니다.' });
+      window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
   const handleDocAction = async () => {
     if (!selectedDocument || !docActionType) return;
     if (docActionType === 'rejected' && !docComment.trim()) {
@@ -160,7 +185,7 @@ export default function ApprovalInboxPage() {
             <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안일</th>
-            <th className="text-right p-2 text-xs font-medium text-gray-600 w-44">작업</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-60">작업</th>
           </tr>
         </thead>
         <tbody>
@@ -187,6 +212,8 @@ export default function ApprovalInboxPage() {
                         <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => { setSelectedDocument(doc); setDocActionType('rejected'); setDocViewMode('action'); }}>반려</Button>
                       </>
                     )}
+                    {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
+                    {canDeleteDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
                   </div>
                 </td>
