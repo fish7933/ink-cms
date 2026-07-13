@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { CheckCircle2, XCircle, Clock, User, ArrowLeft, Trash2, FileText, Ship as ShipIcon, Send } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, User, ArrowLeft, Trash2, FileText, Ship as ShipIcon, Send, Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
@@ -19,6 +20,7 @@ import { approvalService } from '@/services/approval.service';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
 import { contractApprovalService } from '@/services/contract-approval.service';
 import { dispatchOrderApprovalService } from '@/services/dispatch-order-approval.service';
+import { dispatchApprovalLogService } from '@/services/dispatch-approval-log.service';
 import { supabase } from '@/lib/supabase';
 import type { CrewRecommendationApprovalWithDetails, ApprovalLineStep, ApprovalAction } from '@/types/approval';
 import type { CrewRecommendation } from '@/types/crew-recommendation';
@@ -51,6 +53,23 @@ interface ApprovalLike {
 type Filter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
 type Domain = 'crew' | 'rotation' | 'contract' | 'dispatch';
 const PAGE_SIZE = 20;
+
+const DOMAIN_LABEL: Record<Domain, string> = { crew: '채용', rotation: '배승', contract: '계약', dispatch: '승진/강등' };
+
+// 삭제 이력함: 채용(crew_recommendation_approval_log)과 배승/계약/승진강등(공용
+// dispatch_approval_deletion_log)의 구조가 달라 화면에 보여줄 최소 공통 형태로 합친다.
+interface UnifiedDeletionLog {
+  id: string;
+  domain: Domain;
+  subjectLabel: string;
+  requester_name: string;
+  approval_line_name?: string;
+  final_status: string;
+  actions: { step_order: number; approver_name?: string; action: string; comment?: string; created_at: string }[];
+  completed_at?: string;
+  deleted_by_name: string;
+  deleted_at: string;
+}
 
 // approvalService / rotationApprovalService / contractApprovalService가 공통으로 갖는 결재 액션 메서드
 interface ApprovalActionService {
@@ -141,6 +160,10 @@ export default function DispatchApprovalInboxPage() {
   const [bulkComment, setBulkComment] = useState('');
   const [bulkProcessing, setBulkProcessing] = useState(false);
 
+  // 삭제 이력함
+  const [deletionLogs, setDeletionLogs] = useState<UnifiedDeletionLog[]>([]);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+
   useEffect(() => { setCrewPage(1); setCrewSelectedIds([]); }, [crewFilter]);
   useEffect(() => { setRotationPage(1); setRotationSelectedIds([]); }, [rotationFilter]);
   useEffect(() => { setContractPage(1); setContractSelectedIds([]); }, [contractFilter]);
@@ -163,9 +186,51 @@ export default function DispatchApprovalInboxPage() {
         loadRotationApprovals(currentUser.id, admin),
         loadContractApprovals(currentUser.id, admin),
         loadDispatchApprovals(currentUser.id, admin),
+        loadDeletionLogs(),
       ]);
     } finally {
       setInitializing(false);
+    }
+  };
+
+  // --- 삭제 이력함 ---
+
+  const loadDeletionLogs = async () => {
+    try {
+      const [crewLogs, sharedLogs] = await Promise.all([
+        approvalService.getApprovalDeletionLogs(),
+        dispatchApprovalLogService.getDeletionLogs(),
+      ]);
+      const merged: UnifiedDeletionLog[] = [
+        ...crewLogs.map(l => ({
+          id: l.id, domain: 'crew' as const, subjectLabel: l.crew_name,
+          requester_name: l.requester_name, approval_line_name: l.approval_line_name,
+          final_status: l.final_status, actions: l.actions, completed_at: l.completed_at,
+          deleted_by_name: l.deleted_by_name, deleted_at: l.deleted_at,
+        })),
+        ...sharedLogs.map(l => ({
+          id: l.id, domain: l.domain, subjectLabel: l.subject_label,
+          requester_name: l.requester_name, approval_line_name: l.approval_line_name,
+          final_status: l.final_status, actions: l.actions, completed_at: l.completed_at,
+          deleted_by_name: l.deleted_by_name, deleted_at: l.deleted_at,
+        })),
+      ].sort((a, b) => new Date(b.deleted_at).getTime() - new Date(a.deleted_at).getTime());
+      setDeletionLogs(merged);
+    } catch (e) {
+      console.error(e);
+      toast({ title: '오류', description: '삭제 이력을 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+    }
+  };
+
+  const handlePurgeLog = async (log: UnifiedDeletionLog) => {
+    if (!confirm(`"${log.subjectLabel}" 이력을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    try {
+      if (log.domain === 'crew') await approvalService.deleteApprovalDeletionLog(log.id);
+      else await dispatchApprovalLogService.deleteDeletionLog(log.id);
+      toast({ title: '삭제되었습니다.' });
+      await loadDeletionLogs();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -340,6 +405,7 @@ export default function DispatchApprovalInboxPage() {
       toast({ title: '삭제되었습니다.' });
       setSelectedCrew(null);
       await loadCrewApprovals(currentUserId, isAdmin);
+      await loadDeletionLogs();
     } catch (e) {
       toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
@@ -420,6 +486,51 @@ export default function DispatchApprovalInboxPage() {
       toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setDispatchProcessing(false);
+    }
+  };
+
+  // --- 결재 이력 삭제 (승인/반려로 종결된 건만) ---
+
+  const handleDeleteRotation = async (approval: RotationApprovalWithPlan) => {
+    if (!confirm('이 배승 결재 이력을 삭제하시겠습니까? 이미 반영된 교대계획/승선기록 등은 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
+    try {
+      await rotationApprovalService.deleteApproval(approval, `${approval.plan_name || '교대계획'} (${approval.ship_name || '-'})`, currentUserId, currentUserName);
+      toast({ title: '삭제되었습니다.' });
+      setSelectedRotation(null);
+      await loadRotationApprovals(currentUserId, isAdmin);
+      await loadDeletionLogs();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteContract = async (approval: ContractApprovalWithContract) => {
+    if (!confirm('이 계약 결재 이력을 삭제하시겠습니까? 이미 반영된 계약 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
+    try {
+      await contractApprovalService.deleteApproval(approval, `${approval.crew_name || '-'} (${approval.rank_code || '-'})`, currentUserId, currentUserName);
+      toast({ title: '삭제되었습니다.' });
+      setSelectedContract(null);
+      await loadContractApprovals(currentUserId, isAdmin);
+      await loadDeletionLogs();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteDispatch = async (approval: DispatchApprovalWithOrder) => {
+    if (!confirm('이 승진/강등 발령 결재 이력을 삭제하시겠습니까? 이미 반영된 계약/승선경력 등은 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
+    try {
+      await dispatchOrderApprovalService.deleteApproval(
+        approval,
+        `${approval.crew_name || '-'} (${approval.dispatch_type === 'promotion' ? '승진' : '강등'})`,
+        currentUserId, currentUserName
+      );
+      toast({ title: '삭제되었습니다.' });
+      setSelectedDispatch(null);
+      await loadDispatchApprovals(currentUserId, isAdmin);
+      await loadDeletionLogs();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -698,6 +809,7 @@ export default function DispatchApprovalInboxPage() {
           <TabsTrigger value="contract" className="gap-1.5">계약 ({contractApprovals.length}){myTurnBadge(contractApprovals.filter(isMyTurn).length)}</TabsTrigger>
           <TabsTrigger value="dispatch" className="gap-1.5">승진/강등 ({dispatchApprovals.length}){myTurnBadge(dispatchApprovals.filter(isMyTurn).length)}</TabsTrigger>
           <TabsTrigger value="salary" disabled>급여지급 (준비중)</TabsTrigger>
+          <TabsTrigger value="deletion-log" className="gap-1.5"><Archive className="w-3.5 h-3.5" />삭제 이력 ({deletionLogs.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="crew" className="mt-4">
@@ -780,8 +892,15 @@ export default function DispatchApprovalInboxPage() {
               <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedRotation(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2"><ShipIcon className="w-4 h-4" />{selectedRotation.plan_name}</CardTitle>
-                  <CardDescription>{selectedRotation.ship_name} · 요청자: {selectedRotation.requester_name}</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2"><ShipIcon className="w-4 h-4" />{selectedRotation.plan_name}</CardTitle>
+                      <CardDescription>{selectedRotation.ship_name} · 요청자: {selectedRotation.requester_name}</CardDescription>
+                    </div>
+                    {selectedRotation.status !== 'pending' && (selectedRotation.requester_id === currentUserId || isAdmin) && permissions.canDelete && (
+                      <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteRotation(selectedRotation)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>{renderProgress(selectedRotation)}</CardContent>
               </Card>
@@ -821,8 +940,15 @@ export default function DispatchApprovalInboxPage() {
               <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedContract(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4" />{selectedContract.crew_name} ({selectedContract.rank_code})</CardTitle>
-                  <CardDescription>{selectedContract.ship_name} · 요청자: {selectedContract.requester_name}</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2"><User className="w-4 h-4" />{selectedContract.crew_name} ({selectedContract.rank_code})</CardTitle>
+                      <CardDescription>{selectedContract.ship_name} · 요청자: {selectedContract.requester_name}</CardDescription>
+                    </div>
+                    {selectedContract.status !== 'pending' && (selectedContract.requester_id === currentUserId || isAdmin) && permissions.canDelete && (
+                      <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteContract(selectedContract)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>{renderProgress(selectedContract)}</CardContent>
               </Card>
@@ -863,10 +989,17 @@ export default function DispatchApprovalInboxPage() {
               <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setSelectedDispatch(null)}><ArrowLeft className="w-4 h-4" />목록</Button>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <User className="w-4 h-4" />{selectedDispatch.crew_name} — {selectedDispatch.previous_rank_code}{selectedDispatch.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → {selectedDispatch.new_rank_code}{selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''}
-                  </CardTitle>
-                  <CardDescription>{selectedDispatch.ship_name} · 요청자: {selectedDispatch.requester_name}</CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <User className="w-4 h-4" />{selectedDispatch.crew_name} — {selectedDispatch.previous_rank_code}{selectedDispatch.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → {selectedDispatch.new_rank_code}{selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''}
+                      </CardTitle>
+                      <CardDescription>{selectedDispatch.ship_name} · 요청자: {selectedDispatch.requester_name}</CardDescription>
+                    </div>
+                    {selectedDispatch.status !== 'pending' && (selectedDispatch.requester_id === currentUserId || isAdmin) && permissions.canDelete && (
+                      <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1" onClick={() => handleDeleteDispatch(selectedDispatch)}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>{renderProgress(selectedDispatch)}</CardContent>
               </Card>
@@ -876,6 +1009,91 @@ export default function DispatchApprovalInboxPage() {
 
         <TabsContent value="salary" className="mt-4">
           <Card><CardContent className="py-12 text-center text-gray-500">급여지급 결재는 준비중입니다.</CardContent></Card>
+        </TabsContent>
+
+        <TabsContent value="deletion-log" className="mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">삭제 이력함</CardTitle>
+              <CardDescription className="text-xs mt-1">
+                채용/배승/계약/승진강등 결재함에서 삭제된 건의 요청자/결재선/결재자별 승인·반려 이력을 영구 보관합니다.
+                실제 반영된 데이터와는 별개이며, 이 목록 자체는 시스템관리자 이상만 완전히 삭제할 수 있습니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {deletionLogs.length === 0 ? (
+                <div className="text-center py-8 text-sm text-gray-400">삭제된 이력이 없습니다.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs w-6" />
+                      <TableHead className="text-xs">구분</TableHead>
+                      <TableHead className="text-xs">대상</TableHead>
+                      <TableHead className="text-xs">요청자</TableHead>
+                      <TableHead className="text-xs">결재선</TableHead>
+                      <TableHead className="text-xs">최종 상태</TableHead>
+                      <TableHead className="text-xs">완료일</TableHead>
+                      <TableHead className="text-xs">삭제한 사람</TableHead>
+                      <TableHead className="text-xs">삭제일</TableHead>
+                      {isAdmin && <TableHead className="text-right text-xs w-16">작업</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deletionLogs.map(log => {
+                      const status = getStatusBadge(log.final_status);
+                      const expanded = expandedLogId === log.id;
+                      return (
+                        <Fragment key={log.id}>
+                          <TableRow className="cursor-pointer hover:bg-gray-50" onClick={() => setExpandedLogId(expanded ? null : log.id)}>
+                            <TableCell>{expanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}</TableCell>
+                            <TableCell><Badge variant="outline" className="text-xs">{DOMAIN_LABEL[log.domain]}</Badge></TableCell>
+                            <TableCell className="font-medium text-sm">{log.subjectLabel}</TableCell>
+                            <TableCell className="text-sm">{log.requester_name}</TableCell>
+                            <TableCell className="text-sm">{log.approval_line_name || '-'}</TableCell>
+                            <TableCell>{status}</TableCell>
+                            <TableCell className="text-sm">{log.completed_at ? format(new Date(log.completed_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</TableCell>
+                            <TableCell className="text-sm">{log.deleted_by_name}</TableCell>
+                            <TableCell className="text-sm">{format(new Date(log.deleted_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
+                            {isAdmin && (
+                              <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handlePurgeLog(log)}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                          {expanded && (
+                            <TableRow className="bg-gray-50/60">
+                              <TableCell colSpan={isAdmin ? 10 : 9} className="text-xs">
+                                {log.actions.length === 0 ? (
+                                  <div className="text-gray-400 py-2">결재 진행 이력이 없습니다.</div>
+                                ) : (
+                                  <div className="py-2 space-y-1.5">
+                                    {[...log.actions].sort((a, b) => a.step_order - b.step_order).map((a, i) => (
+                                      <div key={i} className="flex items-center gap-2">
+                                        <span className="text-gray-400 w-10">{a.step_order}단계</span>
+                                        <span className="font-medium">{a.approver_name || '알 수 없음'}</span>
+                                        <Badge variant="outline" className={a.action === 'approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}>
+                                          {a.action === 'approved' ? '승인' : '반려'}
+                                        </Badge>
+                                        {a.comment && <span className="text-gray-500">"{a.comment}"</span>}
+                                        <span className="text-gray-400 ml-auto">{format(new Date(a.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

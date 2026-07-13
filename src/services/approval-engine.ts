@@ -35,12 +35,14 @@ export interface ApprovalEngineConfig {
   requestTable: string;
   actionTable: string;
   targetIdColumn: string;
+  // 결재 이력 삭제 시 dispatch_approval_deletion_log에 domain 구분값으로 함께 기록한다.
+  domain: 'rotation' | 'contract' | 'dispatch';
   onFinalApproved: (targetId: string) => Promise<void>;
   onRejected: (targetId: string) => Promise<void>;
 }
 
 export function createApprovalEngine(config: ApprovalEngineConfig) {
-  const { requestTable, actionTable, targetIdColumn, onFinalApproved, onRejected } = config;
+  const { requestTable, actionTable, targetIdColumn, domain, onFinalApproved, onRejected } = config;
 
   async function enrichDetails(approvals: ApprovalRequest[]): Promise<ApprovalRequestWithDetails[]> {
     if (approvals.length === 0) return [];
@@ -267,6 +269,40 @@ export function createApprovalEngine(config: ApprovalEngineConfig) {
       if (updateError) throw updateError;
 
       await onRejected(approval[targetIdColumn] as string);
+    },
+
+    // 결재 이력만 삭제 (승인/반려로 이미 반영된 파생 데이터는 건드리지 않음).
+    // 삭제 전에 결재선/결재자별 이력을 공용 로그 dispatch_approval_deletion_log에 영구 기록한다.
+    async deleteApproval(
+      approval: ApprovalRequestWithDetails,
+      subjectLabel: string,
+      deletedBy: string,
+      deletedByName: string
+    ): Promise<void> {
+      const { error: logError } = await supabase.from('dispatch_approval_deletion_log').insert({
+        domain,
+        target_id: approval[targetIdColumn] as string,
+        subject_label: subjectLabel,
+        requester_id: approval.requester_id,
+        requester_name: approval.requester_name,
+        approval_line_name: approval.approval_line?.name,
+        final_status: approval.status,
+        actions: approval.actions.map(a => ({
+          step_order: a.step_order,
+          approver_name: a.approver_name,
+          action: a.action,
+          comment: a.comment,
+          created_at: a.created_at,
+        })),
+        requested_at: approval.created_at,
+        completed_at: approval.completed_at,
+        deleted_by: deletedBy,
+        deleted_by_name: deletedByName,
+      });
+      if (logError) throw logError;
+
+      const { error } = await supabase.from(requestTable).delete().eq('id', approval.id);
+      if (error) throw error;
     },
   };
 }
