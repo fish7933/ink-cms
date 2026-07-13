@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
@@ -81,6 +82,10 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
+
+  const [selectedOwnerIds, setSelectedOwnerIds] = useState<Set<string>>(new Set());
+  const [selectedFleetIds, setSelectedFleetIds] = useState<Set<string>>(new Set());
+  const [selectedShipIds, setSelectedShipIds] = useState<Set<string>>(new Set());
 
   const [formView, setFormView] = useState<{} | null>(null);
   const [assignTarget, setAssignTarget] = useState<AssignTarget>('ship');
@@ -257,6 +262,33 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
     else alert('해제에 실패했습니다.');
   };
 
+  const handleBulkUnassignOwner = async () => {
+    if (selectedOwnerIds.size === 0) return;
+    if (!confirm(`선택한 선주 할당 ${selectedOwnerIds.size}건을 해제하시겠습니까?`)) return;
+    const rows = ownerAssignments.filter(a => selectedOwnerIds.has(a.id));
+    await Promise.all(rows.map(a => unassignTemplateFromOwner(String(a.owner_id), String(a.template_id))));
+    setSelectedOwnerIds(new Set());
+    await loadData();
+  };
+
+  const handleBulkUnassignFleet = async () => {
+    if (selectedFleetIds.size === 0) return;
+    if (!confirm(`선택한 플릿 할당 ${selectedFleetIds.size}건을 해제하시겠습니까?`)) return;
+    const rows = fleetAssignments.filter(a => selectedFleetIds.has(a.id));
+    await Promise.all(rows.map(a => unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id))));
+    setSelectedFleetIds(new Set());
+    await loadData();
+  };
+
+  const handleBulkUnassignShip = async () => {
+    if (selectedShipIds.size === 0) return;
+    if (!confirm(`선택한 선박 할당 ${selectedShipIds.size}건을 해제하시겠습니까?`)) return;
+    const rows = shipAssignments.filter(a => selectedShipIds.has(a.id));
+    await Promise.all(rows.map(a => unassignTemplateFromShip(String(a.ship_id), String(a.template_id))));
+    setSelectedShipIds(new Set());
+    await loadData();
+  };
+
   const filteredOwner = selectedTemplate === 'all' ? ownerAssignments : ownerAssignments.filter(a => String(a.template_id) === selectedTemplate);
   const filteredFleet = selectedTemplate === 'all' ? fleetAssignments : fleetAssignments.filter(a => String(a.template_id) === selectedTemplate);
   const filteredShip = selectedTemplate === 'all' ? shipAssignments : shipAssignments.filter(a => String(a.template_id) === selectedTemplate);
@@ -264,6 +296,9 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
   const ownerCompanies = companies.filter(c => c.type === 'owner');
 
   useEffect(() => { setOwnerPage(1); setFleetPage(1); setShipPage(1); }, [selectedTemplate]);
+  useEffect(() => { setSelectedOwnerIds(new Set()); }, [ownerPage, selectedTemplate]);
+  useEffect(() => { setSelectedFleetIds(new Set()); }, [fleetPage, selectedTemplate]);
+  useEffect(() => { setSelectedShipIds(new Set()); }, [shipPage, selectedTemplate]);
 
   const pageOwner = filteredOwner.slice((ownerPage - 1) * PAGE_SIZE, ownerPage * PAGE_SIZE);
   const pageFleet = filteredFleet.slice((fleetPage - 1) * PAGE_SIZE, fleetPage * PAGE_SIZE);
@@ -319,6 +354,111 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
       </div>
     );
   };
+
+  const bulkBar = (count: number, onUnassign: () => void) => count === 0 ? null : (
+    <div className="flex items-center justify-between gap-2 rounded-md border bg-blue-50 border-blue-200 px-3 py-2 mb-2">
+      <span className="text-xs text-blue-800">{count}건 선택됨</span>
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={onUnassign}>
+        <Trash2 className="h-3.5 w-3.5 mr-1" />선택 해제
+      </Button>
+    </div>
+  );
+
+  const headerCheckbox = (rows: { id: string }[], selected: Set<string>, setSelected: (s: Set<string>) => void) => (
+    <TableHead className="w-8">
+      <Checkbox
+        checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
+        onCheckedChange={checked => setSelected(checked ? new Set(rows.map(r => r.id)) : new Set())}
+        disabled={rows.length === 0}
+      />
+    </TableHead>
+  );
+
+  const rowCheckbox = (id: string, selected: Set<string>, setSelected: (s: Set<string>) => void) => (
+    <TableCell onClick={e => e.stopPropagation()}>
+      <Checkbox
+        checked={selected.has(id)}
+        onCheckedChange={() => setSelected(new Set(selected.has(id) ? [...selected].filter(x => x !== id) : [...selected, id]))}
+      />
+    </TableCell>
+  );
+
+  const renderOwnerTable = (rows: OwnerAssignmentRow[], keyPrefix: string) => (
+    <>
+      {bulkBar(selectedOwnerIds.size, handleBulkUnassignOwner)}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader><TableRow>
+            {headerCheckbox(rows, selectedOwnerIds, setSelectedOwnerIds)}
+            <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">템플릿</TableHead>
+            <TableHead className="text-xs">적용 범위</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{rows.map(a => (
+            <TableRow key={`${keyPrefix}-${a.id}`}>
+              {rowCheckbox(a.id, selectedOwnerIds, setSelectedOwnerIds)}
+              <TableCell className="font-medium text-sm">{a.owner_name}</TableCell>
+              <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
+              <TableCell>{renderShipBadges(ownerEffectiveShips(a))}</TableCell>
+              <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
+              <TableCell>{unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}</TableCell>
+            </TableRow>
+          ))}</TableBody>
+        </Table>
+      </div>
+    </>
+  );
+
+  const renderFleetTable = (rows: FleetAssignmentRow[], keyPrefix: string) => (
+    <>
+      {bulkBar(selectedFleetIds.size, handleBulkUnassignFleet)}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader><TableRow>
+            {headerCheckbox(rows, selectedFleetIds, setSelectedFleetIds)}
+            <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">플릿</TableHead><TableHead className="text-xs">템플릿</TableHead>
+            <TableHead className="text-xs">소속 선박</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{rows.map(a => (
+            <TableRow key={`${keyPrefix}-${a.id}`}>
+              {rowCheckbox(a.id, selectedFleetIds, setSelectedFleetIds)}
+              <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
+              <TableCell className="font-medium text-sm">{a.fleet_name}</TableCell>
+              <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
+              <TableCell>{renderShipBadges(fleetEffectiveShips(a))}</TableCell>
+              <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
+              <TableCell>{unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}</TableCell>
+            </TableRow>
+          ))}</TableBody>
+        </Table>
+      </div>
+    </>
+  );
+
+  const renderShipTable = (rows: ShipAssignmentRow[], keyPrefix: string) => (
+    <>
+      {bulkBar(selectedShipIds.size, handleBulkUnassignShip)}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader><TableRow>
+            {headerCheckbox(rows, selectedShipIds, setSelectedShipIds)}
+            <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">플릿</TableHead><TableHead className="text-xs">선박</TableHead>
+            <TableHead className="text-xs">템플릿</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{rows.map(a => (
+            <TableRow key={`${keyPrefix}-${a.id}`}>
+              {rowCheckbox(a.id, selectedShipIds, setSelectedShipIds)}
+              <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
+              <TableCell className="text-sm text-gray-600">{a.fleet_name || '-'}</TableCell>
+              <TableCell className="font-medium text-sm">{a.ship_name}</TableCell>
+              <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
+              <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
+              <TableCell>{unassignBtn(() => handleUnassignShip(String(a.ship_id), String(a.template_id)))}</TableCell>
+            </TableRow>
+          ))}</TableBody>
+        </Table>
+      </div>
+    </>
+  );
 
   if (loading) {
     return (
@@ -488,71 +628,21 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                         {filteredOwner.length > 0 && (
                           <div>
                             <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><Building2 className="h-3 w-3" />선주 레벨</h3>
-                            <div className="rounded-md border">
-                              <Table>
-                                <TableHeader><TableRow>
-                                  <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">템플릿</TableHead>
-                                  <TableHead className="text-xs">적용 범위</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
-                                </TableRow></TableHeader>
-                                <TableBody>{pageOwner.map(a => (
-                                  <TableRow key={`o-${a.id}`}>
-                                    <TableCell className="font-medium text-sm">{a.owner_name}</TableCell>
-                                    <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                    <TableCell>{renderShipBadges(ownerEffectiveShips(a))}</TableCell>
-                                    <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
-                                    <TableCell>{unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}</TableCell>
-                                  </TableRow>
-                                ))}</TableBody>
-                              </Table>
-                            </div>
+                            {renderOwnerTable(pageOwner, 'o')}
                             {renderPager(filteredOwner.length, ownerPage, setOwnerPage)}
                           </div>
                         )}
                         {filteredFleet.length > 0 && (
                           <div>
                             <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><Layers className="h-3 w-3" />플릿 레벨</h3>
-                            <div className="rounded-md border">
-                              <Table>
-                                <TableHeader><TableRow>
-                                  <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">플릿</TableHead><TableHead className="text-xs">템플릿</TableHead>
-                                  <TableHead className="text-xs">소속 선박</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
-                                </TableRow></TableHeader>
-                                <TableBody>{pageFleet.map(a => (
-                                  <TableRow key={`f-${a.id}`}>
-                                    <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
-                                    <TableCell className="font-medium text-sm">{a.fleet_name}</TableCell>
-                                    <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                    <TableCell>{renderShipBadges(fleetEffectiveShips(a))}</TableCell>
-                                    <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
-                                    <TableCell>{unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}</TableCell>
-                                  </TableRow>
-                                ))}</TableBody>
-                              </Table>
-                            </div>
+                            {renderFleetTable(pageFleet, 'f')}
                             {renderPager(filteredFleet.length, fleetPage, setFleetPage)}
                           </div>
                         )}
                         {filteredShip.length > 0 && (
                           <div>
                             <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><ShipIcon className="h-3 w-3" />선박 레벨</h3>
-                            <div className="rounded-md border">
-                              <Table>
-                                <TableHeader><TableRow>
-                                  <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">플릿</TableHead><TableHead className="text-xs">선박</TableHead>
-                                  <TableHead className="text-xs">템플릿</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
-                                </TableRow></TableHeader>
-                                <TableBody>{pageShip.map(a => (
-                                  <TableRow key={`s-${a.id}`}>
-                                    <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
-                                    <TableCell className="text-sm text-gray-600">{a.fleet_name || '-'}</TableCell>
-                                    <TableCell className="font-medium text-sm">{a.ship_name}</TableCell>
-                                    <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                    <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
-                                    <TableCell>{unassignBtn(() => handleUnassignShip(String(a.ship_id), String(a.template_id)))}</TableCell>
-                                  </TableRow>
-                                ))}</TableBody>
-                              </Table>
-                            </div>
+                            {renderShipTable(pageShip, 's')}
                             {renderPager(filteredShip.length, shipPage, setShipPage)}
                           </div>
                         )}
@@ -564,23 +654,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                   <TabsContent value="owner" className="mt-3">
                     {filteredOwner.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">선주 레벨에 할당된 템플릿이 없습니다.</div> : (
                       <>
-                        <div className="rounded-md border">
-                          <Table>
-                            <TableHeader><TableRow>
-                              <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">템플릿</TableHead>
-                              <TableHead className="text-xs">적용 범위</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
-                            </TableRow></TableHeader>
-                            <TableBody>{pageOwner.map(a => (
-                              <TableRow key={`o2-${a.id}`}>
-                                <TableCell className="font-medium text-sm">{a.owner_name}</TableCell>
-                                <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                <TableCell>{renderShipBadges(ownerEffectiveShips(a))}</TableCell>
-                                <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
-                                <TableCell>{unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}</TableCell>
-                              </TableRow>
-                            ))}</TableBody>
-                          </Table>
-                        </div>
+                        {renderOwnerTable(pageOwner, 'o2')}
                         {renderPager(filteredOwner.length, ownerPage, setOwnerPage)}
                       </>
                     )}
@@ -590,24 +664,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                   <TabsContent value="fleet" className="mt-3">
                     {filteredFleet.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">플릿 레벨에 할당된 템플릿이 없습니다.</div> : (
                       <>
-                        <div className="rounded-md border">
-                          <Table>
-                            <TableHeader><TableRow>
-                              <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">플릿</TableHead><TableHead className="text-xs">템플릿</TableHead>
-                              <TableHead className="text-xs">소속 선박</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
-                            </TableRow></TableHeader>
-                            <TableBody>{pageFleet.map(a => (
-                              <TableRow key={`f2-${a.id}`}>
-                                <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
-                                <TableCell className="font-medium text-sm">{a.fleet_name}</TableCell>
-                                <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                <TableCell>{renderShipBadges(fleetEffectiveShips(a))}</TableCell>
-                                <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
-                                <TableCell>{unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}</TableCell>
-                              </TableRow>
-                            ))}</TableBody>
-                          </Table>
-                        </div>
+                        {renderFleetTable(pageFleet, 'f2')}
                         {renderPager(filteredFleet.length, fleetPage, setFleetPage)}
                       </>
                     )}
@@ -617,24 +674,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                   <TabsContent value="ship" className="mt-3">
                     {filteredShip.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">선박 레벨에 할당된 템플릿이 없습니다.</div> : (
                       <>
-                        <div className="rounded-md border">
-                          <Table>
-                            <TableHeader><TableRow>
-                              <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">플릿</TableHead><TableHead className="text-xs">선박</TableHead>
-                              <TableHead className="text-xs">템플릿</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
-                            </TableRow></TableHeader>
-                            <TableBody>{pageShip.map(a => (
-                              <TableRow key={`s2-${a.id}`}>
-                                <TableCell className="text-sm text-gray-600">{a.owner_name}</TableCell>
-                                <TableCell className="text-sm text-gray-600">{a.fleet_name || '-'}</TableCell>
-                                <TableCell className="font-medium text-sm">{a.ship_name}</TableCell>
-                                <TableCell><Badge variant="default" className="text-xs">{a.template_name}</Badge></TableCell>
-                                <TableCell className="text-xs text-gray-600">{formatDate(a.assigned_at)}</TableCell>
-                                <TableCell>{unassignBtn(() => handleUnassignShip(String(a.ship_id), String(a.template_id)))}</TableCell>
-                              </TableRow>
-                            ))}</TableBody>
-                          </Table>
-                        </div>
+                        {renderShipTable(pageShip, 's2')}
                         {renderPager(filteredShip.length, shipPage, setShipPage)}
                       </>
                     )}
