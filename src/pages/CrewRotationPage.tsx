@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -157,23 +157,6 @@ export function CrewRotationPage() {
   const totalPages = Math.max(1, Math.ceil(filteredPlans.length / itemsPerPage));
   const paginatedPlans = useMemo(() => filteredPlans.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredPlans, currentPage, itemsPerPage]);
   const goToPage = (p: number) => setCurrentPage(Math.max(1, Math.min(p, totalPages)));
-
-  // 교대일(rotation_date) 기준 연/월로 묶어서 표시 — 최신 연월이 위로 (현재 페이지 분량만 묶는다)
-  const groupedPlans = useMemo(() => {
-    const groups = new Map<string, CrewRotationPlanWithDetails[]>();
-    for (const p of paginatedPlans) {
-      const d = new Date(p.rotation_date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(p);
-    }
-    return [...groups.entries()]
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([key, list]) => {
-        const [y, m] = key.split('-');
-        return { key, label: `${y}년 ${m}월`, plans: list };
-      });
-  }, [paginatedPlans]);
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
@@ -718,6 +701,7 @@ export function CrewRotationPage() {
                       disabled={allSelectableIds.length === 0}
                     />
                   </TableHead>
+                  <TableHead className="text-xs">년월</TableHead>
                   <TableHead className="text-xs">계획명</TableHead>
                   <TableHead className="text-xs">선주사</TableHead>
                   <TableHead className="text-xs">선박</TableHead>
@@ -730,14 +714,7 @@ export function CrewRotationPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedPlans.map(group => (
-                  <Fragment key={group.key}>
-                    <TableRow className="bg-gray-50/80 hover:bg-gray-50/80">
-                      <TableCell colSpan={10} className="text-xs font-semibold text-gray-600 py-1.5">
-                        {group.label} <span className="ml-1 font-normal text-gray-400">({group.plans.length}건)</span>
-                      </TableCell>
-                    </TableRow>
-                    {group.plans.map(plan => (
+                {paginatedPlans.map(plan => (
                       <TableRow
                         key={plan.id} className="cursor-pointer"
                         onClick={() => openNewTab(
@@ -748,6 +725,7 @@ export function CrewRotationPage() {
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
                         </TableCell>
+                        <TableCell className="text-xs text-gray-500 whitespace-nowrap">{format(new Date(plan.rotation_date), 'yyyy-MM', { locale: ko })}</TableCell>
                         <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
                         <TableCell className="text-xs">
@@ -781,8 +759,6 @@ export function CrewRotationPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </Fragment>
                 ))}
               </TableBody>
             </Table>
