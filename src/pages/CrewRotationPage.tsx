@@ -148,7 +148,9 @@ export function CrewRotationPage() {
     if (filterOwner) list = list.filter(p => p.owner_id === filterOwner);
     if (filterFleet) list = list.filter(p => p.fleet_id === filterFleet);
     if (filterShip) list = list.filter(p => p.ship_id === filterShip);
-    return list;
+    // 목록/페이지네이션이 교대일(월) 기준 최신순으로 이어지도록 정렬 — 그래야 페이지가 바뀌어도
+    // 월 그룹이 뒤섞이지 않고 최근월 → 과거월 순으로 차례대로 나온다.
+    return [...list].sort((a, b) => b.rotation_date.localeCompare(a.rotation_date));
   }, [plans, statusTab, filterOwner, filterFleet, filterShip]);
 
   useEffect(() => { setCurrentPage(1); }, [statusTab, filterOwner, filterFleet, filterShip]);
@@ -175,21 +177,36 @@ export function CrewRotationPage() {
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
-  // 월별 배승계획서 — 화면에 표시된 그룹(현재 필터 적용, 페이지네이션은 무시하고 해당 월 전체)을 내보낸다
-  const exportMonth = async (monthKey: string) => {
-    const monthPlans = filteredPlans.filter(p => {
-      const d = new Date(p.rotation_date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      return key === monthKey;
-    });
-    if (monthPlans.length === 0) return;
-    setMonthExporting(monthKey);
+  // 월별 배승계획서 — 상단에서 원하는 월을 골라 그 달에 교대일이 속한 모든 선박의 계획을 내보낸다
+  // (현재 필터는 적용하되 페이지네이션과는 무관하게 해당 월 전체 대상)
+  const [exportMonthValue, setExportMonthValue] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  // 선박/선주/플릿 필터와 무관하게 "모든 선박"을 대상으로 하므로 filteredPlans가 아닌 전체 plans 기준
+  const plansForMonth = (monthKey: string) => plans.filter(p => {
+    const d = new Date(p.rotation_date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return key === monthKey;
+  });
+
+  const handleExportMonthExcel = async () => {
+    const monthPlans = plansForMonth(exportMonthValue);
+    if (monthPlans.length === 0) { toast({ title: '해당 월에 교대계획이 없습니다', variant: 'destructive' }); return; }
+    setMonthExporting(exportMonthValue);
     try {
       const portLabelByPlanId = new Map(monthPlans.map(p => [p.id, p.port_id ? portLabelById.get(p.port_id) || '' : '']));
-      await exportMonthlyRotationPlansToExcel(monthPlans, monthKey, portLabelByPlanId);
+      await exportMonthlyRotationPlansToExcel(monthPlans, exportMonthValue, portLabelByPlanId);
     } finally {
       setMonthExporting(null);
     }
+  };
+
+  const handlePrintMonth = () => {
+    const monthPlans = plansForMonth(exportMonthValue);
+    if (monthPlans.length === 0) { toast({ title: '해당 월에 교대계획이 없습니다', variant: 'destructive' }); return; }
+    window.open(`/print/rotation-plans/month/${exportMonthValue}`, '_blank');
   };
 
   // 삭제(발령 완료 포함 전 상태)는 시스템관리자 이상만 가능. 삭제해도 실제 선원 상태/계약/
@@ -526,6 +543,24 @@ export function CrewRotationPage() {
       <>
       {/* 원래 목록 화면 시작 */}
 
+      {/* 월별 배승계획서 일괄 출력 — 선박/선주 필터와 무관하게 해당 월 전체 선박 대상 */}
+      <div className="flex items-center gap-2 rounded-md border bg-gray-50 px-3 py-2 flex-wrap">
+        <span className="text-xs font-medium text-gray-600">월별 배승계획서</span>
+        <input
+          type="month"
+          value={exportMonthValue}
+          onChange={e => setExportMonthValue(e.target.value)}
+          className="h-8 rounded-md border border-input bg-white px-2 text-xs"
+        />
+        <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExportMonthExcel} disabled={monthExporting === exportMonthValue}>
+          {monthExporting === exportMonthValue ? '내보내는 중...' : '엑셀 다운로드'}
+        </Button>
+        <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handlePrintMonth}>
+          PDF 출력
+        </Button>
+        <span className="text-xs text-gray-400">({plansForMonth(exportMonthValue).length}건 해당)</span>
+      </div>
+
       {/* 요약 카드 */}
       <div className="grid gap-3 md:grid-cols-5">
         {(['all','draft','pending_approval','approved','executed'] as StatusTab[]).map(s => (
@@ -652,16 +687,7 @@ export function CrewRotationPage() {
                   <Fragment key={group.key}>
                     <TableRow className="bg-gray-50/80 hover:bg-gray-50/80">
                       <TableCell colSpan={10} className="text-xs font-semibold text-gray-600 py-1.5">
-                        <div className="flex items-center justify-between">
-                          <span>{group.label} <span className="ml-1 font-normal text-gray-400">({group.plans.length}건)</span></span>
-                          <Button
-                            variant="outline" size="sm" className="h-6 px-2 text-xs gap-1 font-normal"
-                            onClick={e => { e.stopPropagation(); exportMonth(group.key); }}
-                            disabled={monthExporting === group.key}
-                          >
-                            {monthExporting === group.key ? '내보내는 중...' : '이 달 전체 배승계획서 엑셀'}
-                          </Button>
-                        </div>
+                        {group.label} <span className="ml-1 font-normal text-gray-400">({group.plans.length}건)</span>
                       </TableCell>
                     </TableRow>
                     {group.plans.map(plan => (

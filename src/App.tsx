@@ -7,6 +7,7 @@ import SalaryTemplatePrintPage from '@/pages/SalaryTemplatePrintPage';
 import ApprovalDocumentPrintPage from '@/pages/ApprovalDocumentPrintPage';
 import CrewResumePage from '@/pages/CrewResumePage';
 import RotationPlanPrintPage from '@/pages/RotationPlanPrintPage';
+import RotationPlanMonthPrintPage from '@/pages/RotationPlanMonthPrintPage';
 import Layout from '@/components/Layout';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -24,6 +25,7 @@ function App() {
           <Route path="/print/documents/:id" element={<ApprovalDocumentPrintPage />} />
           <Route path="/print/crew/:id/resume" element={<CrewResumePage />} />
           <Route path="/print/rotation-plans/:id" element={<RotationPlanPrintPage />} />
+          <Route path="/print/rotation-plans/month/:month" element={<RotationPlanMonthPrintPage />} />
           <Route path="*" element={<Layout />} />
         </Routes>
         <Toaster />
