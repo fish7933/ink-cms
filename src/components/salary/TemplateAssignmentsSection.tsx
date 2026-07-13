@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { msg } from '@/lib/messages';
-import { Plus, Trash2, Filter, Building2, Layers, Ship as ShipIcon, ArrowLeft, Save } from 'lucide-react';
+import { Plus, Trash2, Filter, Building2, Layers, Ship as ShipIcon, ArrowLeft, Save, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -73,6 +73,14 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
   const [fleetPage, setFleetPage] = useState(1);
   const [shipPage, setShipPage] = useState(1);
   const [templatePage, setTemplatePage] = useState(1);
+  // 템플릿별 탭에서 선주/플릿/선박 레벨 섹션 펼침 상태 ("{templateId}-owner" 등 키로 관리, 기본은 접힘)
+  const [expandedLevelSections, setExpandedLevelSections] = useState<Set<string>>(new Set());
+  const toggleLevelSection = (key: string) =>
+    setExpandedLevelSections(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
 
   const [formView, setFormView] = useState<{} | null>(null);
   const [assignTarget, setAssignTarget] = useState<AssignTarget>('ship');
@@ -673,9 +681,11 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                               {/* 선주 레벨 */}
                               {tOwner.length > 0 && (
                                 <div className="px-4 py-3">
-                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2">
+                                  <button type="button" onClick={() => toggleLevelSection(`${t.id}-owner`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
+                                    {expandedLevelSections.has(`${t.id}-owner`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                                     <Building2 className="h-3.5 w-3.5" />선주 레벨 ({tOwner.length})
-                                  </div>
+                                  </button>
+                                  {expandedLevelSections.has(`${t.id}-owner`) && (
                                   <div className="space-y-1.5">
                                     {tOwner.map(a => (
                                       <div key={a.id} className="flex items-center justify-between bg-blue-50 rounded px-3 py-2">
@@ -691,14 +701,17 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                                       </div>
                                     ))}
                                   </div>
+                                  )}
                                 </div>
                               )}
                               {/* 플릿 레벨 */}
                               {tFleet.length > 0 && (
                                 <div className="px-4 py-3">
-                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2">
+                                  <button type="button" onClick={() => toggleLevelSection(`${t.id}-fleet`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
+                                    {expandedLevelSections.has(`${t.id}-fleet`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                                     <Layers className="h-3.5 w-3.5" />플릿 레벨 ({tFleet.length})
-                                  </div>
+                                  </button>
+                                  {expandedLevelSections.has(`${t.id}-fleet`) && (
                                   <div className="space-y-1.5">
                                     {tFleet.map(a => (
                                       <div key={a.id} className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
@@ -716,14 +729,17 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                                       </div>
                                     ))}
                                   </div>
+                                  )}
                                 </div>
                               )}
                               {/* 선박 레벨 */}
                               {tShip.length > 0 && (
                                 <div className="px-4 py-3">
-                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2">
+                                  <button type="button" onClick={() => toggleLevelSection(`${t.id}-ship`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
+                                    {expandedLevelSections.has(`${t.id}-ship`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                                     <ShipIcon className="h-3.5 w-3.5" />선박 레벨 ({tShip.length})
-                                  </div>
+                                  </button>
+                                  {expandedLevelSections.has(`${t.id}-ship`) && (
                                   <div className="space-y-1.5">
                                     {tShip.map(a => (
                                       <div key={a.id} className="flex items-center justify-between bg-orange-50 rounded px-3 py-2">
@@ -741,6 +757,7 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
                                       </div>
                                     ))}
                                   </div>
+                                  )}
                                 </div>
                               )}
                             </div>
