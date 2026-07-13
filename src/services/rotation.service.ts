@@ -14,6 +14,31 @@ import type {
 } from '@/types/rotation';
 import type { CrewMember } from '@/types/models';
 
+export interface CrewReservation {
+  crewId: string;
+  planId: string;
+  planName: string;
+  status: 'draft' | 'pending_approval' | 'approved';
+  shipName?: string;
+  role: 'on' | 'off';
+  salaryAmount?: number | null;
+  salaryCurrency?: string;
+}
+
+export interface CrewMoveNotice {
+  crewName: string;
+  fromPlanName: string;
+}
+
+interface DraftConflictRow {
+  assignmentId: string;
+  onCrewId: string | null;
+  offCrewId: string | null;
+  matchedOn: boolean;
+  matchedOff: boolean;
+  planName: string;
+}
+
 export const rotationService = {
   /**
    * Get all rotation plans with filters
@@ -149,33 +174,145 @@ export const rotationService = {
 
   /**
    * 아직 반려되지 않은(임시저장/결재대기/승인) 교대 계획에 승선자 또는 하선자로 이미 배정된
-   * 선원 id 목록. 새 교대 계획 작성 시 같은 선원이 다른 계획에 중복으로 들어가지 않도록
-   * 후보 목록에서 제외하는 데 사용. (반려된 계획은 무효이므로 제외 대상 아님. 실행완료된
-   * 계획은 crew_members.status가 이미 실제 상태로 바뀌어 자연히 걸러지므로 별도 제외 불필요.)
+   * 선원별 예약 정보 — 어느 계획(이름/상태/선박)에, 승선/하선 어느 쪽으로, 어떤 급여로 들어가
+   * 있는지. 새 교대 계획 작성 시 중복 배정 경고, 선원 목록/상세의 "현재 배정된 계획" 표시에 쓴다.
+   * (반려된 계획은 무효이므로 제외. 실행완료된 계획은 crew_members.status가 이미 실제 상태로
+   * 바뀌어 자연히 걸러지므로 별도 제외 불필요.)
    */
-  async getActivelyReservedCrewIds(): Promise<Set<string>> {
+  async getCrewReservations(): Promise<CrewReservation[]> {
     const { data, error } = await supabase
       .from('crew_rotation_assignments')
-      .select('on_crew_id, off_crew_id, plan:crew_rotation_plans!inner(status)')
+      .select(`
+        rotation_plan_id, on_crew_id, off_crew_id, salary_amount, salary_currency,
+        plan:crew_rotation_plans!inner(status, plan_name, ship:ships(name))
+      `)
       .in('plan.status', ['draft', 'pending_approval', 'approved']);
 
     if (error) {
-      console.error('Error fetching reserved crew ids:', error);
-      return new Set();
+      console.error('Error fetching crew reservations:', error);
+      return [];
     }
 
-    const ids = new Set<string>();
-    for (const row of data || []) {
-      if (row.on_crew_id) ids.add(row.on_crew_id as string);
-      if (row.off_crew_id) ids.add(row.off_crew_id as string);
+    const reservations: CrewReservation[] = [];
+    for (const row of (data || []) as unknown as Array<{
+      rotation_plan_id: string; on_crew_id: string | null; off_crew_id: string | null;
+      salary_amount: number | null; salary_currency: string;
+      plan: { status: CrewReservation['status']; plan_name: string; ship: { name: string } | null };
+    }>) {
+      const base = {
+        planId: row.rotation_plan_id,
+        planName: row.plan.plan_name,
+        status: row.plan.status,
+        shipName: row.plan.ship?.name,
+      };
+      if (row.on_crew_id) reservations.push({ ...base, crewId: row.on_crew_id, role: 'on', salaryAmount: row.salary_amount, salaryCurrency: row.salary_currency });
+      if (row.off_crew_id) reservations.push({ ...base, crewId: row.off_crew_id, role: 'off', salaryAmount: null, salaryCurrency: row.salary_currency });
     }
-    return ids;
+    return reservations;
+  },
+
+  /** getCrewReservations()에서 특정 선원 id들만 골라 crewId -> 예약 목록 맵으로 변환 */
+  async getCrewReservationsByIds(crewIds: string[]): Promise<Map<string, CrewReservation[]>> {
+    if (crewIds.length === 0) return new Map();
+    const all = await this.getCrewReservations();
+    const idSet = new Set(crewIds);
+    const map = new Map<string, CrewReservation[]>();
+    for (const r of all) {
+      if (!idSet.has(r.crewId)) continue;
+      const arr = map.get(r.crewId) || [];
+      arr.push(r);
+      map.set(r.crewId, arr);
+    }
+    return map;
+  },
+
+  /**
+   * 요청된 선원들이 다른 draft가 아닌(결재중/승인된) 계획에 이미 배정돼 있으면 하드 충돌로 이름을 반환.
+   * draft 상태 계획에 배정돼 있는 경우는 충돌로 보지 않고 draftConflictRows로 반환 — 저장이 성공하면
+   * applyDraftSteal()로 그 draft 계획에서 해당 선원을 자동으로 빼준다(다른 draft 계획에 동시에 있을 수 없으므로).
+   */
+  async checkCrewConflicts(requestedCrewIds: string[], selfPlanId: string | null): Promise<{
+    hardConflictNames: string[];
+    draftConflictRows: DraftConflictRow[];
+  }> {
+    if (requestedCrewIds.length === 0) return { hardConflictNames: [], draftConflictRows: [] };
+
+    const { data: conflictRows } = await supabase
+      .from('crew_rotation_assignments')
+      .select('id, on_crew_id, off_crew_id, rotation_plan_id, plan:crew_rotation_plans!inner(status, plan_name)')
+      .in('plan.status', ['draft', 'pending_approval', 'approved']);
+
+    const hardConflictCrewIds = new Set<string>();
+    const draftConflictRows: DraftConflictRow[] = [];
+
+    for (const row of (conflictRows || []) as unknown as Array<{
+      id: string; on_crew_id: string | null; off_crew_id: string | null; rotation_plan_id: string;
+      plan: { status: string; plan_name: string };
+    }>) {
+      if (selfPlanId && row.rotation_plan_id === selfPlanId) continue;
+      const matchedOn = !!row.on_crew_id && requestedCrewIds.includes(row.on_crew_id);
+      const matchedOff = !!row.off_crew_id && requestedCrewIds.includes(row.off_crew_id);
+      if (!matchedOn && !matchedOff) continue;
+
+      if (row.plan.status !== 'draft') {
+        if (matchedOn) hardConflictCrewIds.add(row.on_crew_id as string);
+        if (matchedOff) hardConflictCrewIds.add(row.off_crew_id as string);
+      } else {
+        draftConflictRows.push({
+          assignmentId: row.id,
+          onCrewId: row.on_crew_id,
+          offCrewId: row.off_crew_id,
+          matchedOn, matchedOff,
+          planName: row.plan.plan_name,
+        });
+      }
+    }
+
+    let hardConflictNames: string[] = [];
+    if (hardConflictCrewIds.size > 0) {
+      const { data: crewRows } = await supabase.from('crew_members').select('id, name').in('id', [...hardConflictCrewIds]);
+      hardConflictNames = (crewRows || []).map(c => c.name);
+    }
+    return { hardConflictNames, draftConflictRows };
+  },
+
+  /**
+   * checkCrewConflicts()가 찾아둔 draft 충돌 배정에서 해당 선원 슬롯을 비운다(양쪽 다 비면 행 자체 삭제).
+   * 새 계획 저장이 성공한 뒤에만 호출 — 실패 시 다른 draft 계획을 건드리지 않기 위해서다.
+   */
+  async applyDraftSteal(draftConflictRows: DraftConflictRow[]): Promise<CrewMoveNotice[]> {
+    if (draftConflictRows.length === 0) return [];
+
+    const movedCrewIds = [...new Set(draftConflictRows.flatMap(r => [
+      r.matchedOn ? r.onCrewId : null,
+      r.matchedOff ? r.offCrewId : null,
+    ].filter((id): id is string => !!id)))];
+    const { data: crewRows } = await supabase.from('crew_members').select('id, name').in('id', movedCrewIds);
+    const crewNameById = new Map((crewRows || []).map(c => [c.id, c.name]));
+
+    const moved: CrewMoveNotice[] = [];
+    for (const row of draftConflictRows) {
+      if (row.matchedOn) moved.push({ crewName: crewNameById.get(row.onCrewId!) || '선원', fromPlanName: row.planName });
+      if (row.matchedOff) moved.push({ crewName: crewNameById.get(row.offCrewId!) || '선원', fromPlanName: row.planName });
+
+      const remainingOn = row.matchedOn ? null : row.onCrewId;
+      const remainingOff = row.matchedOff ? null : row.offCrewId;
+      if (!remainingOn && !remainingOff) {
+        await supabase.from('crew_rotation_assignments').delete().eq('id', row.assignmentId);
+      } else {
+        const updates: Record<string, null> = {};
+        if (row.matchedOn) updates.on_crew_id = null;
+        if (row.matchedOff) updates.off_crew_id = null;
+        await supabase.from('crew_rotation_assignments').update(updates).eq('id', row.assignmentId);
+      }
+    }
+    return moved;
   },
 
   /**
    * Create a new rotation plan
    */
-  async createRotationPlan(formData: RotationPlanFormData): Promise<CrewRotationPlan | null> {
+  async createRotationPlan(formData: RotationPlanFormData): Promise<{ plan: CrewRotationPlan; moved: CrewMoveNotice[] } | null> {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       console.error('No current user');
@@ -184,24 +321,13 @@ export const rotationService = {
 
     // 저장 시점에 다시 한번 다른 활성 계획에 이미 배정된 선원이 없는지 확인한다. 화면의 후보
     // 목록은 폼을 열었을 때의 스냅샷이라, 그 사이 다른 계획(다른 탭/사용자)에 먼저 배정됐을 수 있다.
+    // draft 상태 계획과의 충돌은 차단하지 않고, 저장 성공 후 그 계획에서 자동으로 빼준다(steal).
     const requestedCrewIds = [...new Set(
       formData.assignments.flatMap(a => [a.on_crew_id, a.off_crew_id]).filter((id): id is string => !!id)
     )];
-    if (requestedCrewIds.length > 0) {
-      const { data: conflictRows } = await supabase
-        .from('crew_rotation_assignments')
-        .select('on_crew_id, off_crew_id, plan:crew_rotation_plans!inner(status)')
-        .in('plan.status', ['draft', 'pending_approval', 'approved']);
-      const conflictCrewIds = new Set<string>();
-      for (const row of conflictRows || []) {
-        if (row.on_crew_id && requestedCrewIds.includes(row.on_crew_id)) conflictCrewIds.add(row.on_crew_id as string);
-        if (row.off_crew_id && requestedCrewIds.includes(row.off_crew_id)) conflictCrewIds.add(row.off_crew_id as string);
-      }
-      if (conflictCrewIds.size > 0) {
-        const { data: crewRows } = await supabase.from('crew_members').select('id, name').in('id', [...conflictCrewIds]);
-        const names = (crewRows || []).map(c => c.name).join(', ') || '선택한 선원';
-        throw new Error(`${names} — 이미 다른 진행중인 교대계획에 배정되어 있습니다. 화면을 새로고침한 뒤 다시 시도해주세요.`);
-      }
+    const { hardConflictNames, draftConflictRows } = await this.checkCrewConflicts(requestedCrewIds, null);
+    if (hardConflictNames.length > 0) {
+      throw new Error(`${hardConflictNames.join(', ')} — 이미 다른 결재중/승인된 교대계획에 배정되어 있습니다. 화면을 새로고침한 뒤 다시 시도해주세요.`);
     }
 
     // Create the plan
@@ -274,7 +400,10 @@ export const rotationService = {
       }
     }
 
-    return plan;
+    // 계획 저장이 성공했으니 draft 충돌이 있던 선원은 그 이전 draft 계획에서 뺀다
+    const moved = await this.applyDraftSteal(draftConflictRows);
+
+    return { plan, moved };
   },
 
   /**
@@ -282,7 +411,7 @@ export const rotationService = {
    * 교대 계획 작성 화면에서 다시 열어 배정 인원/일정을 바꿀 수 있어야 한다.
    * 기존 배정을 모두 지우고 새로 넣는 방식이라, draft가 아닌 계획에는 사용할 수 없다.
    */
-  async updateRotationPlanWithAssignments(planId: string, formData: RotationPlanFormData): Promise<CrewRotationPlan | null> {
+  async updateRotationPlanWithAssignments(planId: string, formData: RotationPlanFormData): Promise<{ plan: CrewRotationPlan; moved: CrewMoveNotice[] } | null> {
     const { data: existingPlan, error: existingError } = await supabase
       .from('crew_rotation_plans')
       .select('id, status')
@@ -294,25 +423,13 @@ export const rotationService = {
     }
 
     // 저장 시점 재검증 — 이 계획 자신에게 이미 배정된 선원은 충돌로 보지 않는다.
+    // draft 상태 다른 계획과의 충돌은 차단하지 않고, 저장 성공 후 그 계획에서 자동으로 빼준다(steal).
     const requestedCrewIds = [...new Set(
       formData.assignments.flatMap(a => [a.on_crew_id, a.off_crew_id]).filter((id): id is string => !!id)
     )];
-    if (requestedCrewIds.length > 0) {
-      const { data: conflictRows } = await supabase
-        .from('crew_rotation_assignments')
-        .select('on_crew_id, off_crew_id, rotation_plan_id, plan:crew_rotation_plans!inner(status)')
-        .in('plan.status', ['draft', 'pending_approval', 'approved']);
-      const conflictCrewIds = new Set<string>();
-      for (const row of conflictRows || []) {
-        if (row.rotation_plan_id === planId) continue;
-        if (row.on_crew_id && requestedCrewIds.includes(row.on_crew_id)) conflictCrewIds.add(row.on_crew_id as string);
-        if (row.off_crew_id && requestedCrewIds.includes(row.off_crew_id)) conflictCrewIds.add(row.off_crew_id as string);
-      }
-      if (conflictCrewIds.size > 0) {
-        const { data: crewRows } = await supabase.from('crew_members').select('id, name').in('id', [...conflictCrewIds]);
-        const names = (crewRows || []).map(c => c.name).join(', ') || '선택한 선원';
-        throw new Error(`${names} — 이미 다른 진행중인 교대계획에 배정되어 있습니다. 화면을 새로고침한 뒤 다시 시도해주세요.`);
-      }
+    const { hardConflictNames, draftConflictRows } = await this.checkCrewConflicts(requestedCrewIds, planId);
+    if (hardConflictNames.length > 0) {
+      throw new Error(`${hardConflictNames.join(', ')} — 이미 다른 결재중/승인된 교대계획에 배정되어 있습니다. 화면을 새로고침한 뒤 다시 시도해주세요.`);
     }
 
     const { data: plan, error: planError } = await supabase
@@ -369,7 +486,10 @@ export const rotationService = {
       }
     }
 
-    return plan;
+    // 계획 저장이 성공했으니 draft 충돌이 있던 선원은 그 이전 draft 계획에서 뺀다
+    const moved = await this.applyDraftSteal(draftConflictRows);
+
+    return { plan, moved };
   },
 
   /**

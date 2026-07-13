@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
-import { rotationService } from '@/services/rotation.service';
+import { rotationService, type CrewReservation } from '@/services/rotation.service';
 import { getPorts, findOrCreatePort } from '@/services/port.service';
 import { getEffectiveTemplateForShip, type SalaryTemplateWithItems } from '@/lib/salary-store';
 import { calculateContractPeriod } from '@/utils/contract-period';
@@ -81,7 +81,9 @@ export default function RotationPlanFormPage() {
 
   const [availableCrew, setAvailableCrew] = useState<CrewWithDetails[]>([]);
   const [onboardCrew, setOnboardCrew] = useState<CrewWithDetails[]>([]);
-  const [reservedCrewIds, setReservedCrewIds] = useState<Set<string>>(new Set());
+  // 다른 활성(임시저장/결재중/승인) 교대계획에 이미 배정된 선원 — draft 배정은 후보에서 빼지 않고
+  // 경고만 표시한다(저장 시 그 draft 계획에서 자동으로 제외됨). draft가 아니면 후보에서 제외.
+  const [crewReservations, setCrewReservations] = useState<Map<string, CrewReservation>>(new Map());
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,12 +143,12 @@ export default function RotationPlanFormPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [allCrew, ranksRes, ownersRes, portsData, reserved] = await Promise.all([
+    const [allCrew, ranksRes, ownersRes, portsData, reservations] = await Promise.all([
       crewService.getAllWithDetails(),
       supabase.from('ranks').select('*'),
       supabase.from('companies').select('*').eq('type', 'owner').order('name'),
       getPorts(),
-      rotationService.getActivelyReservedCrewIds(),
+      rotationService.getCrewReservations(),
     ]);
 
     const ranksData: Rank[] = sortRanksByDisplayOrder(ranksRes.data || []);
@@ -156,7 +158,7 @@ export default function RotationPlanFormPage() {
 
     setAvailableCrew(allCrew.filter(c => BOARDING_CANDIDATE_STATUSES.includes(getCrewStatus(c))).sort((a, b) => (a.name || '').localeCompare(b.name || '')));
     setOnboardCrew(allCrew.filter(c => getCrewStatus(c) === 'onboard').sort((a, b) => (a.name || '').localeCompare(b.name || '')));
-    setReservedCrewIds(reserved);
+    setCrewReservations(new Map(reservations.map(r => [r.crewId, r])));
     setRanks(ranksData);
     setOwners(ownersData);
     setPorts(portsData);
@@ -390,8 +392,24 @@ export default function RotationPlanFormPage() {
   const usedBoardingIds = rows.map(r => r.boardingCrewId).filter(Boolean) as string[];
   const usedDisembarkIds = rows.map(r => r.disembarkCrewId).filter(Boolean) as string[];
 
-  const boardingCandidates = availableCrew.filter(c => !usedBoardingIds.includes(c.id) && !reservedCrewIds.has(c.id));
-  const disembarkCandidates = onboardCrew.filter(c => !usedDisembarkIds.includes(c.id) && c.current_ship_id === shipId && !reservedCrewIds.has(c.id));
+  // 결재중/승인된 다른 계획에 배정된 선원만 후보에서 제외한다 — 임시저장(draft) 계획에 있는 선원은
+  // 후보로 남겨두고 경고만 표시한다(저장 시 그 draft 계획에서 자동으로 빠짐).
+  const isHardReserved = (crewId: string) => {
+    const r = crewReservations.get(crewId);
+    if (!r) return false;
+    if (isEditMode && r.planId === editPlanId) return false;
+    return r.status !== 'draft';
+  };
+  const draftReservationFor = (crewId: string | null): CrewReservation | null => {
+    if (!crewId) return null;
+    const r = crewReservations.get(crewId);
+    if (!r) return null;
+    if (isEditMode && r.planId === editPlanId) return null;
+    return r.status === 'draft' ? r : null;
+  };
+
+  const boardingCandidates = availableCrew.filter(c => !usedBoardingIds.includes(c.id) && !isHardReserved(c.id));
+  const disembarkCandidates = onboardCrew.filter(c => !usedDisembarkIds.includes(c.id) && c.current_ship_id === shipId && !isHardReserved(c.id));
 
   const addBoardingCrewIdsAsRows = (ids: string[]) => {
     const seed = cascadeDatesFromBase(baseDepartureDate);
@@ -425,9 +443,9 @@ export default function RotationPlanFormPage() {
     if (!rowPicker) return [];
     const row = rows.find(r => r.id === rowPicker.rowId);
     if (rowPicker.side === 'boarding') {
-      return availableCrew.filter(c => c.id === row?.boardingCrewId || (!usedBoardingIds.includes(c.id) && !reservedCrewIds.has(c.id)));
+      return availableCrew.filter(c => c.id === row?.boardingCrewId || (!usedBoardingIds.includes(c.id) && !isHardReserved(c.id)));
     }
-    return onboardCrew.filter(c => c.id === row?.disembarkCrewId || (c.current_ship_id === shipId && !usedDisembarkIds.includes(c.id) && !reservedCrewIds.has(c.id)));
+    return onboardCrew.filter(c => c.id === row?.disembarkCrewId || (c.current_ship_id === shipId && !usedDisembarkIds.includes(c.id) && !isHardReserved(c.id)));
   };
 
   const handleRowPickerConfirm = (ids: string[]) => {
@@ -536,12 +554,18 @@ export default function RotationPlanFormPage() {
         assignments,
       };
 
-      const plan = isEditMode
+      const result = isEditMode
         ? await rotationService.updateRotationPlanWithAssignments(editPlanId!, planPayload)
         : await rotationService.createRotationPlan(planPayload);
 
-      if (!plan) throw new Error('저장에 실패했습니다');
-      toast({ title: isEditMode ? '수정 완료' : '작성 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
+      if (!result) throw new Error('저장에 실패했습니다');
+      const { moved } = result;
+      if (moved.length > 0) {
+        const summary = moved.map(m => `${m.crewName}(${m.fromPlanName})`).join(', ');
+        toast({ title: isEditMode ? '수정 완료' : '작성 완료', description: `${summary} — 이전 임시저장 계획에서 제외되고 이 계획에 포함되었습니다.` });
+      } else {
+        toast({ title: isEditMode ? '수정 완료' : '작성 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
+      }
       // 교대발령 목록 탭이 없으면 열어준 뒤 현재 폼 탭을 닫음
       if (!tabs.some(t => t.path === '/crew-rotation')) {
         openNewTab('/crew-rotation', '선원 교대 발령');
@@ -732,6 +756,11 @@ export default function RotationPlanFormPage() {
                       );
                     })()}
                   </div>
+                  {draftReservationFor(row.boardingCrewId) && (
+                    <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                      ⚠ 임시저장 계획 "{draftReservationFor(row.boardingCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-1">
                     <div className="relative">
                       <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-xs pr-1" />
@@ -782,6 +811,11 @@ export default function RotationPlanFormPage() {
                       );
                     })()}
                   </div>
+                  {draftReservationFor(row.disembarkCrewId) && (
+                    <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                      ⚠ 임시저장 계획 "{draftReservationFor(row.disembarkCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 gap-1">
                     <div className="relative">
                       <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-xs pr-1" />
@@ -885,6 +919,7 @@ export default function RotationPlanFormPage() {
         mode="boarding"
         candidates={boardingCandidates}
         onConfirm={addBoardingCrewIdsAsRows}
+        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
       />
       <CrewCandidateSelectDialog
         open={disembarkDialogOpen}
@@ -892,6 +927,7 @@ export default function RotationPlanFormPage() {
         mode="disembark"
         candidates={disembarkCandidates}
         onConfirm={addDisembarkCrewIdsAsRows}
+        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
       />
       <CrewCandidateSelectDialog
         open={rowPicker !== null}
@@ -900,6 +936,7 @@ export default function RotationPlanFormPage() {
         candidates={rowPickerCandidates()}
         onConfirm={handleRowPickerConfirm}
         selectionMode="single"
+        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
       />
     </div>
   );

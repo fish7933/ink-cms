@@ -27,6 +27,8 @@ interface CrewCandidateSelectDialogProps {
   onConfirm: (selectedCrewIds: string[]) => void;
   /** 'single' — 행 하나의 선원을 고르는 경우, 클릭 즉시 확정 (체크박스 없음). 기본은 'multi'. */
   selectionMode?: 'single' | 'multi';
+  /** 해당 선원이 다른 임시저장 교대계획에도 포함돼 있으면 경고 문구를 반환 (없으면 null) */
+  getReservationNote?: (crew: CrewWithDetails) => string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -39,7 +41,7 @@ const STATUS_LABELS: Record<string, string> = {
 // 실제 최신 상태는 status 컬럼 (CrewManagementPage / RotationPlanFormPage와 동일한 우회 패턴).
 const getCrewStatus = (c: CrewWithDetails) => (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
 
-export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi' }: CrewCandidateSelectDialogProps) {
+export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote }: CrewCandidateSelectDialogProps) {
   const isSingle = selectionMode === 'single';
 
   const [search, setSearch] = useState('');
@@ -224,7 +226,12 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                   )}
                   <td className="px-3 py-2 text-xs text-gray-500">{affiliationOf(c)}</td>
                   <td className="px-3 py-2 text-gray-700">{c.rank_code || '-'}</td>
-                  <td className="px-3 py-2 font-medium">{c.name}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {c.name}
+                    {getReservationNote?.(c) && (
+                      <div className="text-[10px] text-amber-600 font-normal mt-0.5">⚠ {getReservationNote(c)}</div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-xs text-gray-500">{STATUS_LABELS[getCrewStatus(c)] || getCrewStatus(c) || '-'}</td>
                 </tr>
               ))}
