@@ -664,11 +664,16 @@ export function CrewManagementPage() {
                                     ? <span className="text-violet-500">{c.pending_fleet_name}</span>
                                     : <span className="text-gray-500">{crewExt.fleet_name || '-'}</span>}
                               </td>
-                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.current_ship_name : (c.pending_ship_name || crewExt.current_ship_name)}>
+                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.current_ship_name : (c.pending_ship_name ? `${c.pending_plan_name || '교대계획'}${c.pending_salary_amount ? ` · ${c.pending_salary_currency} ${c.pending_salary_amount.toLocaleString()}` : ''}` : crewExt.current_ship_name)}>
                                 {c.is_active_onboard
                                   ? <span className="font-medium">{crewExt.current_ship_name || '-'}</span>
                                   : c.pending_ship_name
-                                    ? <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
+                                    ? (
+                                      <div>
+                                        <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
+                                        {c.pending_plan_name && <div className="text-[10px] text-violet-400 truncate">{c.pending_plan_name}</div>}
+                                      </div>
+                                    )
                                     : <span className="font-medium">{crewExt.current_ship_name || '-'}</span>}
                               </td>
                               <td className="px-2 py-1.5 max-w-[80px] truncate text-gray-500" title={crewExt.manning_agency_name}>

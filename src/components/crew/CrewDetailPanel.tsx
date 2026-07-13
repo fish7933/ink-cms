@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
+import { rotationService, type CrewReservation } from '@/services/rotation.service';
 import { getNationalities } from '@/services/nationality.service';
 import { getCertificateTypes } from '@/services/certificate-type.service';
 import { getCertificateCategories } from '@/services/certificate-category.service';
@@ -150,6 +151,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
   const [crewStatus, setCrewStatus] = useState('registered');
+  // 이 선원이 현재 배정되어 있는 활성(임시저장/결재중/승인) 교대계획 — 승선 예정/하선 예정 모두 포함
+  const [crewReservations, setCrewReservations] = useState<CrewReservation[]>([]);
   const [formData, setFormData] = useState(EMPTY_FORM);
 
   const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
@@ -198,6 +201,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       if (!data) { toast({ title: '선원을 찾을 수 없습니다.', variant: 'destructive' }); onBack(); return; }
 
       setCrewStatus(data.current_status || data.status || 'registered');
+      rotationService.getCrewReservationsByIds([crewId]).then(map => setCrewReservations(map.get(crewId) || []));
       setFormData({
         name: data.name || '',
         name_english: data.name_english || '',
@@ -1190,6 +1194,23 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     </>
   );
 
+  const reservationBanner = crewReservations.length > 0 && (
+    <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 space-y-1">
+      {crewReservations.map((r, i) => (
+        <div key={i} className="flex items-center justify-between text-xs gap-2">
+          <span className="text-violet-700">
+            <span className="font-medium">{r.role === 'on' ? '승선 예정' : '하선 예정'}</span>
+            {' — '}{r.planName} ({r.status === 'draft' ? '임시저장' : r.status === 'pending_approval' ? '결재중' : '승인됨'})
+            {r.shipName ? ` · ${r.shipName}` : ''}
+          </span>
+          {r.role === 'on' && r.salaryAmount != null && (
+            <span className="text-violet-600 font-mono shrink-0">{r.salaryCurrency} {r.salaryAmount.toLocaleString()}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
   if (embedded) {
     return (
       <div ref={panelRef} className="space-y-4 pt-3 border-t">
@@ -1206,6 +1227,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             {saving ? '저장 중...' : isNew ? '등록' : '저장'}
           </Button>
         </div>
+        {reservationBanner}
         {formBody}
       </div>
     );
@@ -1249,7 +1271,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 space-y-3">
+          {reservationBanner}
           {formBody}
         </CardContent>
       </Card>

@@ -78,6 +78,9 @@ export interface CrewWithDetails extends CrewMember {
   pending_owner_id?: string;
   pending_fleet_id?: string;
   pending_rank_id?: string;
+  pending_plan_name?: string;
+  pending_salary_amount?: number | null;
+  pending_salary_currency?: string;
   // 승선(예정)일 + 계약 개월수로 계산한 하선예정일 (대기/승선중 공통 — 승선 시점 값이 그대로 이어짐)
   disembark_forecast_date?: string;
   // 매닝사 추천 시 입력한 승선가능일 (crew_recommendations.available_date, 등록/하선 선원용)
@@ -199,7 +202,7 @@ export const crewService = {
         .lt('expiry_date', todayStr)
         .not('expiry_date', 'is', null),
       supabase.from('crew_rotation_assignments')
-        .select('on_crew_id, on_rank_id, on_rank_grade, embark_date, salary_template_id, contract_months, crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status)')
+        .select('on_crew_id, on_rank_id, on_rank_grade, embark_date, salary_template_id, salary_amount, salary_currency, contract_months, crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status, plan_name)')
         .not('on_crew_id', 'is', null),
       supabase.from('salary_templates')
         .select('ship_id')
@@ -240,6 +243,7 @@ export const crewService = {
       on_rank_id?: string; on_rank_grade?: string | null;
       embark_date?: string; salary_template_id?: string | null;
       contract_months?: number | null;
+      plan_name?: string; salary_amount?: number | null; salary_currency?: string;
     }>();
     for (const a of (pendingAssignData || [])) {
       if (!a.on_crew_id) continue;
@@ -255,6 +259,9 @@ export const crewService = {
           embark_date: a.embark_date,
           salary_template_id: a.salary_template_id,
           contract_months: a.contract_months,
+          plan_name: plan.plan_name,
+          salary_amount: a.salary_amount,
+          salary_currency: a.salary_currency,
         });
       }
     }
@@ -343,6 +350,9 @@ export const crewService = {
       let pendingOwnerId: string | undefined;
       let pendingFleetId: string | undefined;
       let pendingRankId: string | undefined;
+      let pendingPlanName: string | undefined;
+      let pendingSalaryAmount: number | null | undefined;
+      let pendingSalaryCurrency: string | undefined;
       if (pendingAssign) {
         const pShip = pendingAssign.ship_id ? shipsMap.get(pendingAssign.ship_id) : undefined;
         const pOwnerId = pendingAssign.owner_id || pShip?.owner_id;
@@ -356,6 +366,9 @@ export const crewService = {
         pendingOwnerId = pOwnerId;
         pendingFleetId = pFleetId;
         pendingRankId = pendingAssign.on_rank_id;
+        pendingPlanName = pendingAssign.plan_name;
+        pendingSalaryAmount = pendingAssign.salary_amount;
+        pendingSalaryCurrency = pendingAssign.salary_currency;
       }
 
       // 하선예정일: 승선 중이면 활성 승선기록의 승선일+계약개월, 대기 중이면 예정 배정의 승선예정일+계약개월
@@ -440,6 +453,9 @@ export const crewService = {
         pending_owner_id: pendingOwnerId,
         pending_fleet_id: pendingFleetId,
         pending_rank_id: pendingRankId,
+        pending_plan_name: pendingPlanName,
+        pending_salary_amount: pendingSalaryAmount,
+        pending_salary_currency: pendingSalaryCurrency,
         disembark_forecast_date: disembarkForecastDate,
         recommended_available_date: recommendationAvailableMap.get(item.id),
         recommended_salary_amount: recommendedSalary?.amount,
