@@ -26,13 +26,25 @@ import type { CrewRecommendationApprovalWithDetails, ApprovalLineStep, ApprovalA
 import type { CrewRecommendation } from '@/types/crew-recommendation';
 import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 
-type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & { recommendation?: CrewRecommendation & { crew_name?: string; ship_name?: string } };
+type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & {
+  recommendation?: CrewRecommendation & {
+    crew_name?: string;
+    ranks?: { rank_code?: string } | null;
+    ships?: { name?: string } | null;
+    owner?: { name?: string } | null;
+    fleet?: { name?: string } | null;
+  };
+};
 type RotationApprovalWithPlan = ApprovalRequestWithDetails & { plan_name?: string; ship_name?: string };
-type ContractApprovalWithContract = ApprovalRequestWithDetails & { crew_name?: string; rank_code?: string; ship_name?: string };
+type ContractApprovalWithContract = ApprovalRequestWithDetails & {
+  crew_name?: string; rank_code?: string; rank_grade?: string | null; ship_name?: string;
+  owner_name?: string; fleet_name?: string;
+};
 type DispatchApprovalWithOrder = ApprovalRequestWithDetails & {
   crew_name?: string; dispatch_type?: 'promotion' | 'demotion';
   previous_rank_code?: string; previous_grade?: string | null;
   new_rank_code?: string; new_grade?: string | null; ship_name?: string;
+  owner_name?: string; fleet_name?: string;
 };
 
 // isMyTurn/filterList/renderTable에서 채용(CrewRecommendationApprovalWithDetails)과
@@ -86,6 +98,10 @@ const FILTER_LABELS: { value: Filter; label: string }[] = [
   { value: 'approved', label: '승인' },
   { value: 'rejected', label: '반려' },
 ];
+
+// 선주 > 플릿 > 선박 계층을 하나의 문자열로 압축 표시
+const hierarchyLabel = (owner?: string, fleet?: string, ship?: string) =>
+  [owner, fleet, ship].filter(Boolean).join(' > ') || '-';
 
 const getStatusBadge = (status: string) => {
   switch (status) {
@@ -241,13 +257,16 @@ export default function DispatchApprovalInboxPage() {
       const approvals = admin ? await approvalService.getAllApprovals() : await approvalService.getMyRelatedApprovals(userId);
       if (approvals.length === 0) { setCrewApprovals([]); return; }
       const crewRecIds = [...new Set(approvals.map(a => a.crew_recommendation_id))];
-      const { data: crewRecs, error } = await supabase.from('crew_recommendations').select('*').in('id', crewRecIds);
+      const { data: crewRecs, error } = await supabase
+        .from('crew_recommendations')
+        .select('*, ranks:rank_id(rank_code), ships:ship_id(name), owner:companies!company_id(name), fleet:fleets!fleet_id(name)')
+        .in('id', crewRecIds);
       if (error) throw error;
-      const crewRecsMap = new Map((crewRecs || []).map((cr: { id: string }) => [cr.id, cr]));
+      const crewRecsMap = new Map((crewRecs || []).map((cr: Record<string, unknown>) => [cr.id as string, cr]));
       const merged = approvals
         .map(a => ({ ...a, recommendation: crewRecsMap.get(a.crew_recommendation_id) }))
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      setCrewApprovals(merged as ApprovalWithRecommendation[]);
+      setCrewApprovals(merged as unknown as ApprovalWithRecommendation[]);
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '채용 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -287,7 +306,13 @@ export default function DispatchApprovalInboxPage() {
       const contractIds = [...new Set(approvals.map(a => a.crew_contract_id as string))];
       const { data: contracts, error } = await supabase
         .from('crew_contracts')
-        .select('id, rank, crew_members:crew_member_id(name), ships:ship_id(name)')
+        .select(`
+          id, rank,
+          crew_members:crew_member_id(name, current_grade, ranks:rank_id(rank_code)),
+          ships:ship_id(name),
+          owner:companies!owner_id(name),
+          fleet:fleets!fleet_id(name)
+        `)
         .in('id', contractIds);
       if (error) throw error;
       const contractMap = new Map((contracts || []).map((c: Record<string, unknown>) => [c.id as string, c]));
@@ -295,8 +320,19 @@ export default function DispatchApprovalInboxPage() {
         .map(a => {
           const c = contractMap.get(a.crew_contract_id as string) as Record<string, unknown> | undefined;
           const crew = c?.crew_members as Record<string, unknown> | null;
+          const ranks = crew?.ranks as Record<string, unknown> | null;
           const ship = c?.ships as Record<string, unknown> | null;
-          return { ...a, crew_name: (crew?.name as string) || '-', rank_code: (c?.rank as string) || '-', ship_name: (ship?.name as string) || '-' };
+          const owner = c?.owner as Record<string, unknown> | null;
+          const fleet = c?.fleet as Record<string, unknown> | null;
+          return {
+            ...a,
+            crew_name: (crew?.name as string) || '-',
+            rank_code: (ranks?.rank_code as string) || (c?.rank as string) || '-',
+            rank_grade: (crew?.current_grade as string) || null,
+            ship_name: (ship?.name as string) || '-',
+            owner_name: (owner?.name as string) || '',
+            fleet_name: (fleet?.name as string) || '',
+          };
         })
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setContractApprovals(merged);
@@ -317,7 +353,8 @@ export default function DispatchApprovalInboxPage() {
         .from('crew_dispatch_orders')
         .select(`
           id, dispatch_type, previous_grade, new_grade,
-          crew_members:crew_member_id(name), ships:ship_id(name),
+          crew_members:crew_member_id(name),
+          ships:ship_id(name, owner:companies!owner_id(name), fleet:fleets!fleet_id(name)),
           previous_rank:ranks!crew_dispatch_orders_previous_rank_id_fkey(rank_code),
           new_rank:ranks!crew_dispatch_orders_new_rank_id_fkey(rank_code)
         `)
@@ -329,6 +366,8 @@ export default function DispatchApprovalInboxPage() {
           const o = orderMap.get(a.crew_dispatch_order_id as string) as Record<string, unknown> | undefined;
           const crew = o?.crew_members as Record<string, unknown> | null;
           const ship = o?.ships as Record<string, unknown> | null;
+          const owner = ship?.owner as Record<string, unknown> | null;
+          const fleet = ship?.fleet as Record<string, unknown> | null;
           const prevRank = o?.previous_rank as Record<string, unknown> | null;
           const newRank = o?.new_rank as Record<string, unknown> | null;
           return {
@@ -340,6 +379,8 @@ export default function DispatchApprovalInboxPage() {
             new_rank_code: (newRank?.rank_code as string) || '-',
             new_grade: (o?.new_grade as string) || null,
             ship_name: (ship?.name as string) || '-',
+            owner_name: (owner?.name as string) || '',
+            fleet_name: (fleet?.name as string) || '',
           };
         })
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -945,8 +986,8 @@ export default function DispatchApprovalInboxPage() {
                 <>
                   {renderTable(
                     crewPageRecs,
-                    a => a.recommendation?.crew_name || '선원 추천',
-                    a => a.recommendation?.ship_name || '',
+                    a => `${a.recommendation?.ranks?.rank_code ? `${a.recommendation.ranks.rank_code} ` : ''}${a.recommendation?.crew_name || '선원 추천'}`,
+                    a => hierarchyLabel(a.recommendation?.owner?.name, a.recommendation?.fleet?.name, a.recommendation?.ships?.name),
                     a => { setSelectedCrew(a); setCrewViewMode('list'); },
                     a => { setSelectedCrew(a); setCrewAction('approve'); setCrewViewMode('action'); setCrewComment(''); },
                     a => { setSelectedCrew(a); setCrewAction('reject'); setCrewViewMode('action'); setCrewComment(''); },
@@ -959,8 +1000,8 @@ export default function DispatchApprovalInboxPage() {
           )}
           {crewViewMode === 'list' && renderViewDialog(
             selectedCrew, () => setSelectedCrew(null),
-            <User className="w-4 h-4" />, selectedCrew?.recommendation?.crew_name || '선원 추천',
-            `${selectedCrew?.recommendation?.ship_name || ''} · 요청자: ${selectedCrew?.requester_name || ''}`,
+            <User className="w-4 h-4" />, `${selectedCrew?.recommendation?.ranks?.rank_code ? `${selectedCrew.recommendation.ranks.rank_code} ` : ''}${selectedCrew?.recommendation?.crew_name || '선원 추천'}`,
+            `${hierarchyLabel(selectedCrew?.recommendation?.owner?.name, selectedCrew?.recommendation?.fleet?.name, selectedCrew?.recommendation?.ships?.name)} · 요청자: ${selectedCrew?.requester_name || ''}`,
             !!selectedCrew && selectedCrew.status !== 'pending' && (selectedCrew.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedCrew && handleDeleteCrew(selectedCrew),
           )}
@@ -1004,7 +1045,8 @@ export default function DispatchApprovalInboxPage() {
 
         <TabsContent value="contract" className="mt-4">
           {contractViewMode === 'action' && selectedContract ? renderActionPanel(
-            `${selectedContract.crew_name} (${selectedContract.rank_code})`, `결재선: ${selectedContract.approval_line.name} · ${selectedContract.ship_name}`,
+            `${selectedContract.rank_code || ''}${selectedContract.rank_grade ? `(${selectedContract.rank_grade})` : ''} ${selectedContract.crew_name || '-'}`,
+            `결재선: ${selectedContract.approval_line.name} · ${hierarchyLabel(selectedContract.owner_name, selectedContract.fleet_name, selectedContract.ship_name)}`,
             contractComment, setContractComment, contractAction, contractProcessing,
             () => { setContractViewMode('list'); setSelectedContract(null); setContractAction(null); }, handleContractAction,
           ) : (
@@ -1017,8 +1059,8 @@ export default function DispatchApprovalInboxPage() {
                 <>
                   {renderTable(
                     contractPageRecs,
-                    a => `${a.crew_name} (${a.rank_code})`,
-                    a => a.ship_name || '',
+                    a => `${a.rank_code || ''}${a.rank_grade ? `(${a.rank_grade})` : ''} ${a.crew_name || '-'}`,
+                    a => hierarchyLabel(a.owner_name, a.fleet_name, a.ship_name),
                     a => { setSelectedContract(a); setContractViewMode('list'); },
                     a => { setSelectedContract(a); setContractAction('approve'); setContractViewMode('action'); setContractComment(''); },
                     a => { setSelectedContract(a); setContractAction('reject'); setContractViewMode('action'); setContractComment(''); },
@@ -1031,8 +1073,8 @@ export default function DispatchApprovalInboxPage() {
           )}
           {contractViewMode === 'list' && renderViewDialog(
             selectedContract, () => setSelectedContract(null),
-            <User className="w-4 h-4" />, `${selectedContract?.crew_name || ''} (${selectedContract?.rank_code || '-'})`,
-            `${selectedContract?.ship_name || ''} · 요청자: ${selectedContract?.requester_name || ''}`,
+            <User className="w-4 h-4" />, `${selectedContract?.rank_code || ''}${selectedContract?.rank_grade ? `(${selectedContract.rank_grade})` : ''} ${selectedContract?.crew_name || '-'}`,
+            `${hierarchyLabel(selectedContract?.owner_name, selectedContract?.fleet_name, selectedContract?.ship_name)} · 요청자: ${selectedContract?.requester_name || ''}`,
             !!selectedContract && selectedContract.status !== 'pending' && (selectedContract.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedContract && handleDeleteContract(selectedContract),
           )}
@@ -1040,8 +1082,8 @@ export default function DispatchApprovalInboxPage() {
 
         <TabsContent value="dispatch" className="mt-4">
           {dispatchViewMode === 'action' && selectedDispatch ? renderActionPanel(
-            `${selectedDispatch.crew_name} — ${selectedDispatch.dispatch_type === 'promotion' ? '승진' : '강등'}`,
-            `결재선: ${selectedDispatch.approval_line.name} · ${selectedDispatch.ship_name}`,
+            `${selectedDispatch.new_rank_code || ''}${selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''} ${selectedDispatch.crew_name} — ${selectedDispatch.dispatch_type === 'promotion' ? '승진' : '강등'}`,
+            `결재선: ${selectedDispatch.approval_line.name} · ${hierarchyLabel(selectedDispatch.owner_name, selectedDispatch.fleet_name, selectedDispatch.ship_name)}`,
             dispatchComment, setDispatchComment, dispatchAction, dispatchProcessing,
             () => { setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); }, handleDispatchAction,
           ) : (
@@ -1054,8 +1096,8 @@ export default function DispatchApprovalInboxPage() {
                 <>
                   {renderTable(
                     dispatchPageRecs,
-                    a => `${a.crew_name} (${a.dispatch_type === 'promotion' ? '승진' : '강등'})`,
-                    a => `${a.previous_rank_code}${a.previous_grade ? `(${a.previous_grade})` : ''} → ${a.new_rank_code}${a.new_grade ? `(${a.new_grade})` : ''} · ${a.ship_name}`,
+                    a => `${a.new_rank_code || ''}${a.new_grade ? `(${a.new_grade})` : ''} ${a.crew_name || '-'} (${a.dispatch_type === 'promotion' ? '승진' : '강등'})`,
+                    a => `${hierarchyLabel(a.owner_name, a.fleet_name, a.ship_name)} · ${a.previous_rank_code}${a.previous_grade ? `(${a.previous_grade})` : ''} → ${a.new_rank_code}${a.new_grade ? `(${a.new_grade})` : ''}`,
                     a => { setSelectedDispatch(a); setDispatchViewMode('list'); },
                     a => { setSelectedDispatch(a); setDispatchAction('approve'); setDispatchViewMode('action'); setDispatchComment(''); },
                     a => { setSelectedDispatch(a); setDispatchAction('reject'); setDispatchViewMode('action'); setDispatchComment(''); },
@@ -1069,8 +1111,8 @@ export default function DispatchApprovalInboxPage() {
           {dispatchViewMode === 'list' && renderViewDialog(
             selectedDispatch, () => setSelectedDispatch(null),
             <User className="w-4 h-4" />,
-            `${selectedDispatch?.crew_name || ''} — ${selectedDispatch?.previous_rank_code || ''}${selectedDispatch?.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → ${selectedDispatch?.new_rank_code || ''}${selectedDispatch?.new_grade ? `(${selectedDispatch.new_grade})` : ''}`,
-            `${selectedDispatch?.ship_name || ''} · 요청자: ${selectedDispatch?.requester_name || ''}`,
+            `${selectedDispatch?.new_rank_code || ''}${selectedDispatch?.new_grade ? `(${selectedDispatch.new_grade})` : ''} ${selectedDispatch?.crew_name || ''} — ${selectedDispatch?.previous_rank_code || ''}${selectedDispatch?.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → ${selectedDispatch?.new_rank_code || ''}${selectedDispatch?.new_grade ? `(${selectedDispatch.new_grade})` : ''}`,
+            `${hierarchyLabel(selectedDispatch?.owner_name, selectedDispatch?.fleet_name, selectedDispatch?.ship_name)} · 요청자: ${selectedDispatch?.requester_name || ''}`,
             !!selectedDispatch && selectedDispatch.status !== 'pending' && (selectedDispatch.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedDispatch && handleDeleteDispatch(selectedDispatch),
           )}
