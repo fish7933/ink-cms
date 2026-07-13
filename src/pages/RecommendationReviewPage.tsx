@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Textarea } from '@/components/ui/textarea';
@@ -74,6 +75,7 @@ export default function RecommendationReviewPage() {
   const [agencyF, setAgencyF] = useState('all');
   const [onlyMine, setOnlyMine] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkApprovalOpen, setBulkApprovalOpen] = useState(false);
 
   const permissions = usePermissions('recommendation_review');
 
@@ -304,10 +306,11 @@ export default function RecommendationReviewPage() {
     setSelectedIds(checked ? ids : []);
 
   const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    if (!confirm(`선택한 ${selectedIds.length}건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    const targetIds = selectedIds.filter(id => recommendations.find(r => r.id === id)?.status !== 'pending');
+    if (targetIds.length === 0) return;
+    if (!confirm(`선택한 ${targetIds.length}건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
     try {
-      await Promise.all(selectedIds.map(id => crewRecommendationService.delete(id)));
+      await Promise.all(targetIds.map(id => crewRecommendationService.delete(id)));
       setSelectedIds([]);
       await loadAll();
     } catch (e) {
@@ -344,6 +347,39 @@ export default function RecommendationReviewPage() {
       if (isDetailMode) { backToList(); return; }
       await loadAll();
       setViewMode('list'); setSelectedRec(null); setApprovalAction(null); setApprovalComment(''); setSaveLineDefault(false);
+    } catch (e) { console.error(e); alert('결재 처리에 실패했습니다.'); }
+    finally { setSubmitting(false); }
+  };
+
+  const bulkApprovableRecs = () =>
+    recommendations.filter(r => selectedIds.includes(r.id) && r.status === 'pending' && canAp(r));
+
+  const openBulkApproval = () => {
+    setApprovalComment('');
+    setSaveLineDefault(false);
+    setSelectedLine(defaultLineId || '');
+    setBulkApprovalOpen(true);
+  };
+
+  const submitBulkApproval = async () => {
+    const targets = bulkApprovableRecs();
+    if (targets.length === 0 || !loggedUser) return;
+    if (!selectedLine) { alert('결재 라인을 선택해주세요.'); return; }
+    try {
+      setSubmitting(true);
+      if (saveLineDefault) {
+        await supabase.from('users').update({ default_approval_line_id: selectedLine }).eq('id', loggedUser.id);
+        setDefaultLineId(selectedLine);
+      }
+      await Promise.all(targets.map(async r => {
+        await approvalService.createApproval(r.id, selectedLine, loggedUser.id, approvalComment);
+        await crewRecommendationService.updateStatus(r.id, 'reviewed');
+      }));
+      alert(`${targets.length}건의 채용 결재가 요청되었습니다.`);
+      window.dispatchEvent(new CustomEvent('recommendation-data-changed'));
+      setBulkApprovalOpen(false);
+      setSelectedIds([]);
+      await loadAll();
     } catch (e) { console.error(e); alert('결재 처리에 실패했습니다.'); }
     finally { setSubmitting(false); }
   };
@@ -410,6 +446,10 @@ export default function RecommendationReviewPage() {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const pageRecs = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
   const pageDeletableIds = pageRecs.filter(r => r.status !== 'pending').map(r => r.id);
+  const pageApprovableIds = pageRecs.filter(r => r.status === 'pending' && canAp(r)).map(r => r.id);
+  const pageSelectableIds = [...pageDeletableIds, ...pageApprovableIds];
+  const selectedDeletableCount = selectedIds.filter(id => recommendations.find(r => r.id === id)?.status !== 'pending').length;
+  const selectedApprovableCount = bulkApprovableRecs().length;
 
   if (loading) return <><div className="p-8 text-sm text-gray-500">로딩 중...</div></>;
   if (isDetailMode && !selectedRec) {
@@ -456,12 +496,21 @@ export default function RecommendationReviewPage() {
               </div>
             </div>
 
-            {selectedIds.length > 0 && permissions.canDelete && (
+            {selectedIds.length > 0 && (permissions.canDelete || permissions.canEdit) && (
               <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-3">
                 <span className="text-xs text-blue-800">{selectedIds.length}건 선택됨</span>
-                <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-7 text-xs gap-1">
-                  <Trash2 className="w-3.5 h-3.5" />선택 삭제
-                </Button>
+                <div className="flex items-center gap-2">
+                  {permissions.canEdit && selectedApprovableCount > 0 && (
+                    <Button variant="outline" size="sm" onClick={openBulkApproval} className="h-7 text-xs gap-1 text-blue-600 hover:bg-blue-50">
+                      <Send className="w-3.5 h-3.5" />일괄 결재 요청 ({selectedApprovableCount})
+                    </Button>
+                  )}
+                  {permissions.canDelete && selectedDeletableCount > 0 && (
+                    <Button variant="destructive" size="sm" onClick={handleBulkDelete} className="h-7 text-xs gap-1">
+                      <Trash2 className="w-3.5 h-3.5" />선택 삭제 ({selectedDeletableCount})
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -472,9 +521,9 @@ export default function RecommendationReviewPage() {
                   <TableRow className="bg-gray-50">
                     <TableHead className="w-8 py-2">
                       <Checkbox
-                        checked={pageDeletableIds.length > 0 && pageDeletableIds.every(id => selectedIds.includes(id))}
-                        onCheckedChange={checked => toggleSelectAll(pageDeletableIds, !!checked)}
-                        disabled={pageDeletableIds.length === 0}
+                        checked={pageSelectableIds.length > 0 && pageSelectableIds.every(id => selectedIds.includes(id))}
+                        onCheckedChange={checked => toggleSelectAll(pageSelectableIds, !!checked)}
+                        disabled={pageSelectableIds.length === 0}
                       />
                     </TableHead>
                     <TableHead className="text-xs py-2 w-20">상태</TableHead>
@@ -494,7 +543,7 @@ export default function RecommendationReviewPage() {
                   {pageRecs.map(rec => (
                     <TableRow key={rec.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openDetail(rec)}>
                       <TableCell className="py-2" onClick={e => e.stopPropagation()}>
-                        {rec.status !== 'pending' && (
+                        {(rec.status !== 'pending' || canAp(rec)) && (
                           <Checkbox checked={selectedIds.includes(rec.id)} onCheckedChange={() => toggleSelect(rec.id)} />
                         )}
                       </TableCell>
@@ -807,6 +856,61 @@ export default function RecommendationReviewPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={bulkApprovalOpen} onOpenChange={o => !submitting && setBulkApprovalOpen(o)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>일괄 채용 결재 요청</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-gray-50 rounded-md max-h-40 overflow-y-auto space-y-1">
+              {bulkApprovableRecs().map(r => (
+                <div key={r.id} className="text-sm flex justify-between">
+                  <span>{r.crew_name} <span className="text-xs text-gray-500">({r.rank_code})</span></span>
+                  <span className="text-xs text-gray-500">{r.ship_name}</span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <Select value={selectedLine} onValueChange={setSelectedLine}>
+                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectContent>
+                  {approvalLines.length === 0
+                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {selectedLine && lineSteps().length > 0 && (
+                <>
+                  <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                    <p className="text-xs font-medium text-blue-900 mb-1">결재 순서:</p>
+                    {lineSteps().map((s, i) => (
+                      <div key={s.id} className="text-xs text-blue-700">{i + 1}. {s.approver_name} ({s.approver_role || '담당자'})</div>
+                    ))}
+                  </div>
+                  <div className="flex items-center space-x-2 mt-3">
+                    <Checkbox id="bulk-future" checked={saveLineDefault} onCheckedChange={c => setSaveLineDefault(c as boolean)} />
+                    <label htmlFor="bulk-future" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">요청 사유 (선택, 선택된 건 모두에 동일하게 적용)</label>
+              <Textarea value={approvalComment} onChange={e => setApprovalComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkApprovalOpen(false)} disabled={submitting}>취소</Button>
+            <Button onClick={submitBulkApproval} disabled={submitting || !selectedLine || lineSteps().length === 0} className="bg-blue-600 hover:bg-blue-700">
+              {submitting ? '처리 중...' : `${bulkApprovableRecs().length}건 결재 요청`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
