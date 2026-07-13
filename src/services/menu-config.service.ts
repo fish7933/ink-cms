@@ -41,7 +41,15 @@ export async function getEffectiveMenuStructure(): Promise<MenuCategory[]> {
       const savedItemById = new Map(savedCat.items.map(i => [i.id, i]));
       const mergedItems = defaultCat.items.map(defaultItem => {
         const savedItem = savedItemById.get(defaultItem.id);
-        return savedItem ? { ...defaultItem, order: savedItem.order, is_active: savedItem.is_active } : defaultItem;
+        return savedItem
+          ? {
+              ...defaultItem,
+              label: savedItem.label || defaultItem.label,
+              icon: savedItem.icon || defaultItem.icon,
+              order: savedItem.order,
+              is_active: savedItem.is_active,
+            }
+          : defaultItem;
       });
 
       return {

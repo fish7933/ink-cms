@@ -285,8 +285,8 @@ export default function MenuConfigurationPage() {
     setEditingItem(null);
 
     toast({
-      title: '저장 완료',
-      description: '메뉴 항목이 수정되었습니다.',
+      title: '수정 반영됨',
+      description: '메뉴 항목이 수정되었습니다. 목록 상단의 "저장" 버튼을 눌러야 실제로 반영됩니다.',
     });
   };
 
