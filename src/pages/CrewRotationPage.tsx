@@ -15,6 +15,8 @@ import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { rotationService } from '@/services/rotation.service';
 import type { ContractExpiryInfo } from '@/services/rotation.service';
+import { getPorts } from '@/services/port.service';
+import { exportMonthlyRotationPlansToExcel } from '@/utils/rotation-plan-export';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Company, Fleet, Ship as ShipType, User } from '@/types/models';
 import { approvalService } from '@/services/approval.service';
@@ -207,18 +209,38 @@ export function CrewRotationPage() {
   const [viewingDeleted, setViewingDeleted] = useState(false);
   const [deletedPlans, setDeletedPlans] = useState<(CrewRotationPlanWithDetails & { deleter_name?: string })[]>([]);
   const [deletedLoading, setDeletedLoading] = useState(false);
+  const [deletedSelectedIds, setDeletedSelectedIds] = useState<string[]>([]);
+  const [bulkPermanentDeleting, setBulkPermanentDeleting] = useState(false);
 
   const loadDeletedPlans = async () => {
     setDeletedLoading(true);
     setDeletedPlans(await rotationService.getDeletedRotationPlans());
+    setDeletedSelectedIds([]);
     setDeletedLoading(false);
   };
 
   const openDeletedView = () => { setViewingDeleted(true); loadDeletedPlans(); };
 
+  const toggleDeletedSelect = (id: string) =>
+    setDeletedSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleDeletedSelectAll = (checked: boolean) =>
+    setDeletedSelectedIds(checked ? deletedPlans.map(p => p.id) : []);
+
   const handlePermanentDelete = async (planId: string) => {
     if (!confirm('이 교대 계획서를 영구 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
     if (await rotationService.permanentlyDeleteRotationPlan(planId)) loadDeletedPlans();
+  };
+
+  const handleBulkPermanentDelete = async () => {
+    if (deletedSelectedIds.length === 0) return;
+    if (!confirm(`선택한 ${deletedSelectedIds.length}개의 교대 계획서를 영구 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    setBulkPermanentDeleting(true);
+    try {
+      await Promise.all(deletedSelectedIds.map(id => rotationService.permanentlyDeleteRotationPlan(id)));
+      await loadDeletedPlans();
+    } finally {
+      setBulkPermanentDeleting(false);
+    }
   };
 
   const openSubmitDialog = (planId: string) => {
@@ -430,9 +452,24 @@ export function CrewRotationPage() {
             ) : deletedPlans.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-sm">삭제된 교대 계획이 없습니다</div>
             ) : (
+              <>
+              {deletedSelectedIds.length > 0 && (
+                <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-md px-3 py-2 mx-4 mt-3 mb-1">
+                  <span className="text-xs text-red-800">{deletedSelectedIds.length}건 선택됨</span>
+                  <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-100" onClick={handleBulkPermanentDelete} disabled={bulkPermanentDeleting}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkPermanentDeleting ? '삭제 중...' : `선택 영구 삭제 (${deletedSelectedIds.length})`}
+                  </Button>
+                </div>
+              )}
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <Checkbox
+                        checked={deletedPlans.length > 0 && deletedPlans.every(p => deletedSelectedIds.includes(p.id))}
+                        onCheckedChange={checked => toggleDeletedSelectAll(!!checked)}
+                      />
+                    </TableHead>
                     <TableHead className="text-xs">계획명</TableHead>
                     <TableHead className="text-xs">선주사</TableHead>
                     <TableHead className="text-xs">선박</TableHead>
@@ -445,6 +482,7 @@ export function CrewRotationPage() {
                 <TableBody>
                   {deletedPlans.map(plan => (
                     <TableRow key={plan.id}>
+                      <TableCell><Checkbox checked={deletedSelectedIds.includes(plan.id)} onCheckedChange={() => toggleDeletedSelect(plan.id)} /></TableCell>
                       <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
                       <TableCell className="text-xs">{plan.ship_name}{plan.fleet_name ? ` (${plan.fleet_name})` : ''}</TableCell>
@@ -460,6 +498,7 @@ export function CrewRotationPage() {
                   ))}
                 </TableBody>
               </Table>
+              </>
             )}
           </CardContent>
         </Card>

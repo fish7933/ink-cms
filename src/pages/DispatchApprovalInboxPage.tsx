@@ -250,6 +250,32 @@ export default function DispatchApprovalInboxPage() {
     }
   };
 
+  const [logSelectedIds, setLogSelectedIds] = useState<string[]>([]);
+  const [bulkPurging, setBulkPurging] = useState(false);
+  const toggleLogSelect = (id: string) =>
+    setLogSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleLogSelectAll = (checked: boolean) =>
+    setLogSelectedIds(checked ? deletionLogs.map(l => l.id) : []);
+
+  const handleBulkPurgeLogs = async () => {
+    if (logSelectedIds.length === 0) return;
+    if (!confirm(`선택한 ${logSelectedIds.length}건의 삭제 이력을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    setBulkPurging(true);
+    try {
+      const targets = deletionLogs.filter(l => logSelectedIds.includes(l.id));
+      await Promise.all(targets.map(log =>
+        log.domain === 'crew' ? approvalService.deleteApprovalDeletionLog(log.id) : dispatchApprovalLogService.deleteDeletionLog(log.id)
+      ));
+      toast({ title: '삭제되었습니다.' });
+      setLogSelectedIds([]);
+      await loadDeletionLogs();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkPurging(false);
+    }
+  };
+
   // --- 채용: 데이터 로딩 ---
 
   const loadCrewApprovals = async (userId: string, admin: boolean) => {
@@ -1164,10 +1190,27 @@ export default function DispatchApprovalInboxPage() {
               {deletionLogs.length === 0 ? (
                 <div className="text-center py-8 text-sm text-gray-400">삭제된 이력이 없습니다.</div>
               ) : (
+                <>
+                {isAdmin && logSelectedIds.length > 0 && (
+                  <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
+                    <span className="text-xs text-red-800">{logSelectedIds.length}건 선택됨</span>
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-100" onClick={handleBulkPurgeLogs} disabled={bulkPurging}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkPurging ? '삭제 중...' : `선택 영구 삭제 (${logSelectedIds.length})`}
+                    </Button>
+                  </div>
+                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-xs w-6" />
+                      {isAdmin && (
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={deletionLogs.length > 0 && deletionLogs.every(l => logSelectedIds.includes(l.id))}
+                            onCheckedChange={checked => toggleLogSelectAll(!!checked)}
+                          />
+                        </TableHead>
+                      )}
                       <TableHead className="text-xs">구분</TableHead>
                       <TableHead className="text-xs">대상</TableHead>
                       <TableHead className="text-xs">요청자</TableHead>
@@ -1187,6 +1230,11 @@ export default function DispatchApprovalInboxPage() {
                         <Fragment key={log.id}>
                           <TableRow className="cursor-pointer hover:bg-gray-50" onClick={() => setExpandedLogId(expanded ? null : log.id)}>
                             <TableCell>{expanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}</TableCell>
+                            {isAdmin && (
+                              <TableCell onClick={e => e.stopPropagation()}>
+                                <Checkbox checked={logSelectedIds.includes(log.id)} onCheckedChange={() => toggleLogSelect(log.id)} />
+                              </TableCell>
+                            )}
                             <TableCell><Badge variant="outline" className="text-xs">{DOMAIN_LABEL[log.domain]}</Badge></TableCell>
                             <TableCell className="font-medium text-sm">{log.subjectLabel}</TableCell>
                             <TableCell className="text-sm">{log.requester_name}</TableCell>
@@ -1205,7 +1253,7 @@ export default function DispatchApprovalInboxPage() {
                           </TableRow>
                           {expanded && (
                             <TableRow className="bg-gray-50/60">
-                              <TableCell colSpan={isAdmin ? 10 : 9} className="text-xs">
+                              <TableCell colSpan={isAdmin ? 11 : 9} className="text-xs">
                                 {log.actions.length === 0 ? (
                                   <div className="text-gray-400 py-2">결재 진행 이력이 없습니다.</div>
                                 ) : (
@@ -1231,6 +1279,7 @@ export default function DispatchApprovalInboxPage() {
                     })}
                   </TableBody>
                 </Table>
+                </>
               )}
             </CardContent>
           </Card>
