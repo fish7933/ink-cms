@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Eye, RefreshCw, ClipboardList, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +44,8 @@ export default function SalaryTemplatesPage() {
   const [prefillAssignId, setPrefillAssignId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -85,6 +88,22 @@ export default function SalaryTemplatesPage() {
     if (!confirm('삭제하시겠습니까?')) return;
     await deleteSalaryTemplate(id);
     await loadData();
+  };
+
+  useEffect(() => { setSelectedIds([]); }, [page]);
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`선택한 ${selectedIds.length}개 템플릿을 삭제하시겠습니까?`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all(selectedIds.map(id => deleteSalaryTemplate(id)));
+      toast({ title: '삭제 완료', description: `${selectedIds.length}개 템플릿이 삭제되었습니다.` });
+      setSelectedIds([]);
+      await loadData();
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   const openRenew = (t: SalaryTemplate) => {
@@ -141,6 +160,8 @@ export default function SalaryTemplatesPage() {
     );
   }
 
+  const pageTemplates = templates.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -165,10 +186,32 @@ export default function SalaryTemplatesPage() {
               {templates.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-500">등록된 급여 템플릿이 없습니다.</div>
               ) : (
+                <div className="space-y-2">
+                  {permissions.canDelete && selectedIds.length > 0 && (
+                    <div className="flex items-center justify-between gap-2 rounded-md border bg-blue-50 border-blue-200 px-3 py-2">
+                      <span className="text-xs text-blue-800">{selectedIds.length}개 선택됨</span>
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50"
+                        onClick={handleBulkDelete} disabled={bulkDeleting}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting ? '삭제 중...' : '선택 삭제'}
+                      </Button>
+                    </div>
+                  )}
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {permissions.canDelete && (
+                          <TableHead className="w-8">
+                            <Checkbox
+                              checked={pageTemplates.length > 0 && pageTemplates.every(t => selectedIds.includes(t.id))}
+                              onCheckedChange={checked => setSelectedIds(checked ? pageTemplates.map(t => t.id) : [])}
+                              disabled={pageTemplates.length === 0}
+                            />
+                          </TableHead>
+                        )}
                         <TableHead className="text-xs">템플릿명</TableHead>
                         <TableHead className="text-xs">통화</TableHead>
                         <TableHead className="text-xs">설명</TableHead>
@@ -178,8 +221,16 @@ export default function SalaryTemplatesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {templates.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(t => (
+                      {pageTemplates.map(t => (
                         <TableRow key={t.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openView(t)}>
+                          {permissions.canDelete && (
+                            <TableCell onClick={e => e.stopPropagation()}>
+                              <Checkbox
+                                checked={selectedIds.includes(t.id)}
+                                onCheckedChange={() => setSelectedIds(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id])}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell className="font-medium text-sm">{t.name}</TableCell>
                           <TableCell className="text-sm">{t.currency}</TableCell>
                           <TableCell className="text-gray-600 text-sm">{t.description || '-'}</TableCell>
@@ -268,6 +319,7 @@ export default function SalaryTemplatesPage() {
                       </Pagination>
                     </div>
                   )}
+                </div>
                 </div>
               )}
             </CardContent>
