@@ -49,6 +49,8 @@ export function CrewRotationPage() {
 
   const [plans, setPlans] = useState<CrewRotationPlanWithDetails[]>([]);
   const [planApprovalMap, setPlanApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
+  const [portLabelById, setPortLabelById] = useState<Map<string, string>>(new Map());
+  const [monthExporting, setMonthExporting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -83,6 +85,7 @@ export function CrewRotationPage() {
 
   useEffect(() => {
     loadPlans(); loadOwners();
+    getPorts().then(ports => setPortLabelById(new Map(ports.map(p => [p.id, `${p.country_name} ${p.city_name}`]))));
     getCurrentUser().then(async u => {
       setCurrentUser(u);
       if (!u) return;
@@ -171,6 +174,23 @@ export function CrewRotationPage() {
   }, [paginatedPlans]);
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
+
+  // 월별 배승계획서 — 화면에 표시된 그룹(현재 필터 적용, 페이지네이션은 무시하고 해당 월 전체)을 내보낸다
+  const exportMonth = async (monthKey: string) => {
+    const monthPlans = filteredPlans.filter(p => {
+      const d = new Date(p.rotation_date);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return key === monthKey;
+    });
+    if (monthPlans.length === 0) return;
+    setMonthExporting(monthKey);
+    try {
+      const portLabelByPlanId = new Map(monthPlans.map(p => [p.id, p.port_id ? portLabelById.get(p.port_id) || '' : '']));
+      await exportMonthlyRotationPlansToExcel(monthPlans, monthKey, portLabelByPlanId);
+    } finally {
+      setMonthExporting(null);
+    }
+  };
 
   // 삭제(발령 완료 포함 전 상태)는 시스템관리자 이상만 가능. 삭제해도 실제 선원 상태/계약/
   // 승선경력 등은 되돌리지 않고, 목록에서만 빠지며 삭제자/삭제일시가 기록된다.
@@ -632,7 +652,16 @@ export function CrewRotationPage() {
                   <Fragment key={group.key}>
                     <TableRow className="bg-gray-50/80 hover:bg-gray-50/80">
                       <TableCell colSpan={10} className="text-xs font-semibold text-gray-600 py-1.5">
-                        {group.label} <span className="ml-1 font-normal text-gray-400">({group.plans.length}건)</span>
+                        <div className="flex items-center justify-between">
+                          <span>{group.label} <span className="ml-1 font-normal text-gray-400">({group.plans.length}건)</span></span>
+                          <Button
+                            variant="outline" size="sm" className="h-6 px-2 text-xs gap-1 font-normal"
+                            onClick={e => { e.stopPropagation(); exportMonth(group.key); }}
+                            disabled={monthExporting === group.key}
+                          >
+                            {monthExporting === group.key ? '내보내는 중...' : '이 달 전체 배승계획서 엑셀'}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                     {group.plans.map(plan => (

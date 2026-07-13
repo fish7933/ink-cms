@@ -33,11 +33,8 @@ const border = (opts: { thickTop?: boolean; thickBottom?: boolean; thickLeft?: b
 const COL_LABELS = ['No.', '직급', '성명', '출국일', '승선일', '직급', '성명', '하선일', '귀국일'];
 const COL_ALIGN: ('center' | 'left')[] = ['center', 'center', 'left', 'center', 'center', 'center', 'left', 'center', 'center'];
 
-// 배승계획서 엑셀 내보내기 — 좌: 신규 승선(IN), 우: 기존 하선(OUT)
-export async function exportRotationPlanToExcel(
-  plan: CrewRotationPlanWithDetails & { creator_name?: string },
-  portLabel?: string
-): Promise<void> {
+// 배승계획서 한 건의 워크시트를 만든다 — 좌: 신규 승선(IN), 우: 기존 하선(OUT). 단건/월별 내보내기 공용.
+function buildRotationPlanWorksheet(plan: CrewRotationPlanWithDetails & { creator_name?: string }, portLabel?: string) {
   const colCount = COL_LABELS.length;
   const rows: ReturnType<typeof cell>[][] = [];
 
@@ -140,11 +137,10 @@ export async function exportRotationPlanToExcel(
     { s: { r: 4, c: 1 }, e: { r: 4, c: 4 } },
     { s: { r: 4, c: 5 }, e: { r: 4, c: 8 } },
   ];
+  return worksheet;
+}
 
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, '배승계획서');
-  const fileName = `${plan.ship_name}_배승계획서_${plan.rotation_date}.xlsx`;
-
+async function writeWorkbook(workbook: XLSX.WorkBook, fileName: string): Promise<void> {
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
   if (picker) {
     try {
@@ -165,4 +161,49 @@ export async function exportRotationPlanToExcel(
     }
   }
   XLSX.writeFile(workbook, fileName);
+}
+
+// 배승계획서 엑셀 내보내기(단건) — 좌: 신규 승선(IN), 우: 기존 하선(OUT)
+export async function exportRotationPlanToExcel(
+  plan: CrewRotationPlanWithDetails & { creator_name?: string },
+  portLabel?: string
+): Promise<void> {
+  const worksheet = buildRotationPlanWorksheet(plan, portLabel);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, '배승계획서');
+  await writeWorkbook(workbook, `${plan.ship_name}_배승계획서_${plan.rotation_date}.xlsx`);
+}
+
+// Excel 시트명 제약(31자, \ / * ? : [ ] 금지)에 맞춰 정리하고, 중복되면 번호를 붙인다
+function sanitizeSheetName(name: string, usedNames: Set<string>): string {
+  let base = name.replace(/[\\/*?:[\]]/g, '').slice(0, 28) || '계획';
+  let candidate = base;
+  let n = 2;
+  while (usedNames.has(candidate)) {
+    candidate = `${base}(${n})`;
+    n++;
+  }
+  usedNames.add(candidate);
+  return candidate;
+}
+
+// 월별 배승계획서 엑셀 내보내기 — 해당 월에 교대일이 속한 모든 선박의 계획을 한 워크북에
+// 선박(계획)별 시트로 담는다. 각 시트 내용/서식은 단건 내보내기와 동일하다.
+export async function exportMonthlyRotationPlansToExcel(
+  plans: (CrewRotationPlanWithDetails & { creator_name?: string })[],
+  month: string, // 'YYYY-MM'
+  portLabelByPlanId: Map<string, string>
+): Promise<void> {
+  if (plans.length === 0) return;
+  const workbook = XLSX.utils.book_new();
+  const usedNames = new Set<string>();
+  // 선박명 기준 정렬 후 시트로 추가
+  const sorted = [...plans].sort((a, b) => a.ship_name.localeCompare(b.ship_name));
+  for (const plan of sorted) {
+    const worksheet = buildRotationPlanWorksheet(plan, portLabelByPlanId.get(plan.id));
+    const sheetName = sanitizeSheetName(plan.ship_name || plan.plan_name, usedNames);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  }
+  const [y, m] = month.split('-');
+  await writeWorkbook(workbook, `${y}년${m}월_배승계획서_전체.xlsx`);
 }
