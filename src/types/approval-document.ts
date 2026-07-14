@@ -66,9 +66,24 @@ export interface ApprovalDocument {
   created_by: string;
   requester_comment: string | null;
   final_comment: string | null;
+  // 반려 후 같은 결재라인으로 다시 상신한 횟수. 0이면 아직 재상신된 적 없음.
+  resubmit_count: number;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+}
+
+// 반려 시점의 기록 — 재상신으로 결재 단계가 초기화돼도 이 이력은 남아 문서에 계속 표시된다.
+export interface ApprovalDocumentRejectionHistoryEntry {
+  id: string;
+  document_id: string;
+  round: number;
+  rejected_step_order: number;
+  rejected_by: string | null;
+  rejected_by_name: string;
+  rejected_by_label: string | null;
+  comment: string;
+  rejected_at: string;
 }
 
 export interface ApprovalDocumentReference {

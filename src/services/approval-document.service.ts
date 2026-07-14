@@ -10,6 +10,7 @@ import type {
   ApprovalDocumentAttachment,
   ApprovalDocumentStep,
   ApprovalDocumentWithDetails,
+  ApprovalDocumentRejectionHistoryEntry,
   DocumentFormField,
 } from '@/types/approval-document';
 
@@ -78,13 +79,36 @@ export async function getLeaveDetail(referenceType: string | null, referenceId: 
   };
 }
 
+// 반려 순간의 기록을 approval_document_rejection_history에 남긴다. 재상신 시
+// approval_document_steps는 pending으로 초기화돼 반려 기록이 사라지므로, 이 이력이
+// 문서에 "몇 차 상신에서 누가 왜 반려했는지"를 영구적으로 보존하는 유일한 자리가 된다.
+async function recordRejectionHistory(
+  documentId: string,
+  resubmitCountAtRejection: number,
+  rejectedStep: { step_order: number; approver_id: string; approver_name: string; approver_label: string | null },
+  comment: string,
+  rejectedAt: string
+): Promise<void> {
+  const { error } = await supabase.from('approval_document_rejection_history').insert({
+    document_id: documentId,
+    round: resubmitCountAtRejection + 1,
+    rejected_step_order: rejectedStep.step_order,
+    rejected_by: rejectedStep.approver_id,
+    rejected_by_name: rejectedStep.approver_name,
+    rejected_by_label: rejectedStep.approver_label,
+    comment,
+    rejected_at: rejectedAt,
+  });
+  if (error) console.error('반려 이력 기록 실패', error);
+}
+
 // 시스템 연동형 문서(reference_type/reference_id)가 최종 승인/반려되면 원본 레코드의
 // 상태도 함께 동기화한다. 현재는 교대계획 결재 통합에만 쓰이지만, 다른 화면의 결재
 // 연동도 여기에 케이스를 추가하면 된다.
 async function applyReferenceSideEffect(
   referenceType: string,
   referenceId: string | null,
-  newStatus: 'approved' | 'rejected'
+  newStatus: 'approved' | 'rejected' | 'pending'
 ): Promise<void> {
   if (!referenceId) return;
   if (referenceType === 'crew_rotation_plan') {
@@ -604,7 +628,7 @@ export const approvalDocumentService = {
   async rejectDocumentStep(documentId: string, approverId: string, comment: string): Promise<void> {
     const { data: doc, error: docError } = await supabase
       .from('approval_documents')
-      .select('current_step, reference_type, reference_id')
+      .select('current_step, reference_type, reference_id, resubmit_count')
       .eq('id', documentId)
       .single();
     if (docError) throw docError;
@@ -626,6 +650,7 @@ export const approvalDocumentService = {
       .eq('id', documentId)
       .eq('status', 'pending');
     if (error) throw error;
+    await recordRejectionHistory(documentId, doc.resubmit_count, updatedSteps[0], comment, now);
     if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'rejected');
   },
 
@@ -657,23 +682,25 @@ export const approvalDocumentService = {
   async adminForceRejectDocumentStep(documentId: string, adminId: string, comment: string): Promise<void> {
     const { data: doc, error: docError } = await supabase
       .from('approval_documents')
-      .select('current_step, reference_type, reference_id')
+      .select('current_step, reference_type, reference_id, resubmit_count')
       .eq('id', documentId)
       .single();
     if (docError) throw docError;
 
     const now = new Date().toISOString();
-    await supabase
+    const { data: updatedSteps } = await supabase
       .from('approval_document_steps')
       .update({ status: 'rejected', comment: `[관리자 ${adminId}] ${comment}`, acted_at: now })
       .eq('document_id', documentId)
-      .eq('step_order', doc.current_step);
+      .eq('step_order', doc.current_step)
+      .select();
 
     const { error } = await supabase
       .from('approval_documents')
       .update({ status: 'rejected', final_comment: comment, completed_at: now })
       .eq('id', documentId);
     if (error) throw error;
+    if (updatedSteps && updatedSteps[0]) await recordRejectionHistory(documentId, doc.resubmit_count, updatedSteps[0], comment, now);
     if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'rejected');
   },
 
@@ -683,6 +710,116 @@ export const approvalDocumentService = {
       .update({ status: 'cancelled', completed_at: new Date().toISOString() })
       .eq('id', documentId);
     if (error) throw error;
+  },
+
+  // 반려된 문서를 기안서 작성 화면에서 내용을 고쳐 같은 문서 id로 다시 상신한다(브랜드뉴 문서를
+  // 만드는 게 아니다). 결재라인은 (바뀐 부서/유형 기준으로) 새로 계산하고, 이전 상신의 결재
+  // 단계는 지우고 새로 만든다 — 직전 반려 기록은 rejectDocumentStep에서 이미
+  // approval_document_rejection_history에 남아있으므로 단계를 지워도 사라지지 않는다.
+  async resubmitDocument(documentId: string, input: {
+    document_type_id: string;
+    title: string;
+    content?: string;
+    form_data?: Record<string, string | number | null>;
+    attachments?: ApprovalDocumentAttachment[];
+    org_unit_id: string;
+    requester_comment?: string;
+    ccUserIds?: string[];
+    ccOrgUnitIds?: string[];
+    manualChain?: ApprovalChainStep[];
+  }): Promise<ApprovalDocumentWithDetails> {
+    const { data: existing, error: existingError } = await supabase
+      .from('approval_documents')
+      .select('resubmit_count, created_by, reference_type, reference_id')
+      .eq('id', documentId)
+      .eq('status', 'rejected')
+      .single();
+    if (existingError) throw existingError;
+
+    const chain = input.manualChain && input.manualChain.length > 0
+      ? input.manualChain
+      : await this.previewChain(input.org_unit_id, input.document_type_id);
+    if (chain.length === 0) {
+      throw new Error('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
+    }
+
+    const now = new Date().toISOString();
+    const isAutoChain = !(input.manualChain && input.manualChain.length > 0);
+    const stepRows = chain.map((c, i) => {
+      const isSelf = isAutoChain && c.approver_id === existing.created_by;
+      return {
+        step_order: i + 1,
+        approver_id: c.approver_id,
+        approver_name: c.approver_name,
+        approver_label: c.approver_role,
+        status: (isSelf ? 'approved' : 'pending') as 'approved' | 'pending',
+        comment: isSelf ? SELF_APPROVE_COMMENT : null,
+        acted_at: isSelf ? now : null,
+      };
+    });
+    const firstPending = stepRows.find(s => s.status === 'pending');
+    const allApproved = !firstPending;
+
+    const docPayload = {
+      document_type_id: input.document_type_id,
+      title: input.title,
+      content: input.content || null,
+      form_data: input.form_data || null,
+      attachments: input.attachments || [],
+      org_unit_id: input.org_unit_id,
+      requester_comment: input.requester_comment || null,
+      status: allApproved ? 'approved' : 'pending',
+      current_step: allApproved ? stepRows.length : firstPending!.step_order,
+      completed_at: allApproved ? now : null,
+      final_comment: null,
+      resubmit_count: (existing.resubmit_count || 0) + 1,
+      updated_at: now,
+    };
+
+    const { data: doc, error: docError } = await supabase
+      .from('approval_documents')
+      .update(docPayload)
+      .eq('id', documentId)
+      .eq('status', 'rejected')
+      .select()
+      .single();
+    if (docError) throw docError;
+
+    const { error: deleteStepsError } = await supabase.from('approval_document_steps').delete().eq('document_id', documentId);
+    if (deleteStepsError) throw deleteStepsError;
+    const { data: steps, error: stepsError } = await supabase
+      .from('approval_document_steps')
+      .insert(stepRows.map(s => ({ ...s, document_id: documentId })))
+      .select();
+    if (stepsError) throw stepsError;
+
+    // 참조(통보) 대상도 이번 상신에서 새로 지정한 값으로 교체
+    await supabase.from('approval_document_references').delete().eq('document_id', documentId);
+    const refRows = [
+      ...(input.ccUserIds || []).map(user_id => ({ document_id: documentId, user_id, org_unit_id: null })),
+      ...(input.ccOrgUnitIds || []).map(org_unit_id => ({ document_id: documentId, user_id: null, org_unit_id })),
+    ];
+    if (refRows.length > 0) {
+      const { error: refError } = await supabase.from('approval_document_references').insert(refRows);
+      if (refError) throw refError;
+    }
+
+    if (existing.reference_type) {
+      await applyReferenceSideEffect(existing.reference_type, existing.reference_id, allApproved ? 'approved' : 'pending');
+    }
+
+    const [enriched] = await enrichDocuments([doc]);
+    return { ...enriched, steps: (steps || []) as ApprovalDocumentStep[] };
+  },
+
+  async getRejectionHistory(documentId: string): Promise<ApprovalDocumentRejectionHistoryEntry[]> {
+    const { data, error } = await supabase
+      .from('approval_document_rejection_history')
+      .select('*')
+      .eq('document_id', documentId)
+      .order('round');
+    if (error) throw error;
+    return data || [];
   },
 
   // 결재가 끝난(승인/반려/취소) 문서를 완전히 삭제 — approval_document_steps는 CASCADE로 함께 삭제됨

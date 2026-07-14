@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle2, XCircle, FileText, Paperclip, Trash2, Printer, ArrowLeft } from 'lucide-react';
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import { CheckCircle2, XCircle, FileText, Paperclip, Trash2, Printer, ArrowLeft, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +18,7 @@ import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
-import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
+import type { ApprovalDocumentWithDetails, ApprovalDocumentType, ApprovalDocumentRejectionHistoryEntry } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 
 const STATUS_BADGE: Record<string, { label: string; className: string; icon: typeof CheckCircle2 }> = {
@@ -30,7 +32,7 @@ export default function ApprovalDocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { activeTabId, closeTab } = useTabContext();
+  const { activeTabId, closeTab, openNewTab } = useTabContext();
   const permissions = usePermissions('approval_inbox');
 
   const [loading, setLoading] = useState(true);
@@ -46,6 +48,7 @@ export default function ApprovalDocumentDetailPage() {
   const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
+  const [rejectionHistory, setRejectionHistory] = useState<ApprovalDocumentRejectionHistoryEntry[]>([]);
 
   useEffect(() => { loadData(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -73,6 +76,7 @@ export default function ApprovalDocumentDetailPage() {
       setPositions(shorePositions);
       setCreatorPositionName(found ? members.find(m => m.id === found.created_by)?.position_name || null : null);
       setLeaveDetail(await getLeaveDetail(found?.reference_type ?? null, found?.reference_id ?? null).catch(() => null));
+      setRejectionHistory(found ? await approvalDocumentService.getRejectionHistory(found.id).catch(() => []) : []);
 
       // 이 문서에 내가 참조로 지정돼 있으면(개인 또는 소속 부서), 상세를 연 시점에 열람 처리해
       // 결재함 배지 집계에서 빠지도록 한다.
@@ -113,6 +117,11 @@ export default function ApprovalDocumentDetailPage() {
   // 문서는 기안자 본인도 취소할 수 없다(취소하려면 결재자가 반려해야 한다).
   const canCancel = doc && doc.status === 'pending' && doc.created_by === currentUserId && doc.steps.every(s => s.status === 'pending');
   const canDelete = doc && doc.status !== 'pending' && (doc.created_by === currentUserId || isAdmin) && permissions.canDelete;
+  // 반려된 문서는 기안자 본인(또는 관리자)이 기안서 작성 화면에서 내용을 고쳐 다시 상신할 수
+  // 있다. 연차/질병휴가/교대계획/발령처럼 다른 화면이 자동으로 만든 문서(reference_type 있음)는
+  // 기안서 작성 화면에서 다룰 수 있는 자유서식이 아니므로, 원래 신청했던 화면에서 다시
+  // 신청해야 한다 — 여기서는 자유서식으로 직접 기안한 문서만 재상신 버튼을 보여준다.
+  const canResubmit = doc && doc.status === 'rejected' && !doc.reference_type && (doc.created_by === currentUserId || isAdmin);
 
   const handleAction = async () => {
     if (!doc || !actionType) return;
@@ -153,6 +162,13 @@ export default function ApprovalDocumentDetailPage() {
     }
   };
 
+  // 내용을 고쳐서 다시 상신할 수 있도록 기안서 작성 화면으로 이동 — 같은 문서 id를 그대로
+  // 이어받아 제출하면 새 문서가 아니라 이 문서가 갱신된다(resubmitDocument).
+  const handleResubmit = () => {
+    if (!doc) return;
+    openNewTab(`/documents/new?resubmit=${doc.id}`, `${doc.title} (재상신)`);
+  };
+
   const handleDelete = async () => {
     if (!doc || !confirm('이 기안서를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
     try {
@@ -190,6 +206,7 @@ export default function ApprovalDocumentDetailPage() {
         <Button variant="ghost" size="sm" onClick={goBack} className="h-8 px-2"><ArrowLeft className="w-4 h-4 mr-1" />결재함</Button>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className={statusInfo.className}><StatusIcon className="w-3 h-3 mr-1" />{statusInfo.label}</Badge>
+          {doc.resubmit_count > 0 && <Badge variant="outline" className="text-blue-700 border-blue-300">{doc.resubmit_count + 1}차 상신</Badge>}
           {isMyTurn && <Badge className="bg-blue-500">내 차례</Badge>}
           {doc.status === 'approved' && (
             <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => window.open(`/print/documents/${doc.id}`, '_blank')}><Printer className="w-3.5 h-3.5" />시행문 출력</Button>
@@ -207,6 +224,11 @@ export default function ApprovalDocumentDetailPage() {
             </>
           )}
           {canCancel && <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300" onClick={handleCancel}>기안 취소</Button>}
+          {canResubmit && (
+            <Button size="sm" variant="outline" className="h-8 gap-1 text-blue-600 border-blue-300" onClick={handleResubmit}>
+              <RotateCcw className="w-3.5 h-3.5" />다시 상신
+            </Button>
+          )}
           {canDelete && (
             <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 gap-1" onClick={handleDelete}><Trash2 className="w-3.5 h-3.5" />삭제</Button>
           )}
@@ -244,6 +266,22 @@ export default function ApprovalDocumentDetailPage() {
       )}
       {doc.final_comment && (
         <div className="bg-red-50 p-3 rounded"><p className="text-sm font-semibold mb-1">반려 사유:</p><p className="text-sm text-gray-700">{doc.final_comment}</p></div>
+      )}
+
+      {rejectionHistory.length > 0 && (
+        <div className="bg-red-50/60 border border-red-100 p-3 rounded space-y-2">
+          <p className="text-sm font-semibold text-red-800">반려 이력 ({rejectionHistory.length}건)</p>
+          {rejectionHistory.map(h => (
+            <div key={h.id} className="text-sm bg-white rounded border border-red-100 p-2">
+              <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                <span className="font-medium text-red-700">{h.round}차 상신 반려</span>
+                <span>{h.rejected_by_label ? `${h.rejected_by_label} ` : ''}{h.rejected_by_name}</span>
+                <span>{format(new Date(h.rejected_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>
+              </div>
+              <p className="text-gray-700 whitespace-pre-wrap">{h.comment}</p>
+            </div>
+          ))}
+        </div>
       )}
 
       <ReferenceReadStatus documentId={doc.id} />

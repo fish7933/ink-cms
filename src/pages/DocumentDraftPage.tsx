@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { FileText, Upload, X, Archive, Clock, CheckCircle2, XCircle, Ban, PencilLine, Trash2, Sparkles, Search } from 'lucide-react';
@@ -53,6 +53,7 @@ const FILTER_LABELS: { value: StatusFilter; label: string }[] = [
 // 제출된 문서를 클릭하면 결재 진행상황이 아니라 기안 당시의 입력 형태 그대로 열람한다.
 export default function DocumentDraftPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { openNewTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -68,6 +69,9 @@ export default function DocumentDraftPage() {
 
   // 작성 탭 상태
   const [draftId, setDraftId] = useState<string | null>(null);
+  // 반려된 문서를 내용을 고쳐 재상신하는 중이면 그 문서 id — draftId(임시저장 이어쓰기)와
+  // 달리 "임시저장"이 불가능하고, 제출 시 새 문서가 아니라 이 문서를 그대로 갱신한다.
+  const [resubmitId, setResubmitId] = useState<string | null>(null);
   const [documentTypeId, setDocumentTypeId] = useState('');
   const [orgUnitId, setOrgUnitId] = useState('');
   const [title, setTitle] = useState('');
@@ -136,6 +140,20 @@ export default function DocumentDraftPage() {
         setMyPositionName(me?.position_name || null);
         // 대부분 본인 소속 부서로 기안하므로 기본값으로 미리 채워둔다 (필요하면 직접 바꿀 수 있음)
         if (myUnitIds[0]) setOrgUnitId(myUnitIds[0]);
+
+        // 결재함/문서상세에서 "다시 상신" 버튼으로 넘어온 경우 — 반려된 문서를 불러와 편집 상태로 채운다.
+        const resubmitParam = searchParams.get('resubmit');
+        if (resubmitParam) {
+          const [target] = await approvalDocumentService.getDocumentDetails([resubmitParam]);
+          if (!target || target.status !== 'rejected') {
+            toast({ title: '다시 상신할 수 없습니다.', description: '반려된 문서가 아니거나 이미 처리되었습니다.', variant: 'destructive' });
+          } else if (target.created_by !== user.id && !isAdminRole) {
+            toast({ title: '본인이 기안한 문서만 다시 상신할 수 있습니다.', variant: 'destructive' });
+          } else {
+            loadRejectedIntoForm(target);
+          }
+        }
+
         await loadDocuments(user.id);
       } catch (e) {
         console.error(e);
@@ -248,6 +266,7 @@ export default function DocumentDraftPage() {
 
   const resetForm = () => {
     setDraftId(null);
+    setResubmitId(null);
     if (documentTypeId !== '') skipFormResetRef.current = true;
     setDocumentTypeId('');
     setTitle('');
@@ -276,6 +295,24 @@ export default function DocumentDraftPage() {
   const loadDraftIntoForm = (doc: ApprovalDocumentWithDetails) => {
     if (doc.document_type_id !== documentTypeId) skipFormResetRef.current = true;
     setDraftId(doc.id);
+    setResubmitId(null);
+    setDocumentTypeId(doc.document_type_id);
+    setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
+    setTitle(doc.title);
+    setContent(doc.content || '');
+    setFormValues(doc.form_data || {});
+    setRequesterComment(doc.requester_comment || '');
+    setUploadedFiles([]);
+    setExistingAttachments(doc.attachments || []);
+    setInnerTab('write');
+  };
+
+  // 반려된 문서를 고쳐서 다시 상신 — draftId가 아니라 resubmitId로 표시해, 제출 시
+  // resubmitDocument(같은 문서 id 갱신)를 타도록 한다. 임시저장 개념은 적용되지 않는다.
+  const loadRejectedIntoForm = (doc: ApprovalDocumentWithDetails) => {
+    if (doc.document_type_id !== documentTypeId) skipFormResetRef.current = true;
+    setDraftId(null);
+    setResubmitId(doc.id);
     setDocumentTypeId(doc.document_type_id);
     setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
     setTitle(doc.title);
@@ -401,21 +438,37 @@ export default function DocumentDraftPage() {
       setSubmitting(true);
       const newAttachments = await uploadAttachments(uploadedFiles);
       const attachments = [...existingAttachments, ...newAttachments];
-      await approvalDocumentService.createDocument({
-        document_type_id: documentTypeId,
-        title: title.trim(),
-        content: formFields.length > 0 ? undefined : (content.trim() || undefined),
-        form_data: formFields.length > 0 ? formValues : undefined,
-        attachments,
-        org_unit_id: orgUnitId,
-        created_by: currentUser.id,
-        requester_comment: requesterComment.trim() || undefined,
-        ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
-        ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
-        draftId: draftId || undefined,
-        manualChain: useManualLine ? manualChain : undefined,
-      });
-      toast({ title: '기안서가 제출되었습니다.' });
+      if (resubmitId) {
+        await approvalDocumentService.resubmitDocument(resubmitId, {
+          document_type_id: documentTypeId,
+          title: title.trim(),
+          content: formFields.length > 0 ? undefined : (content.trim() || undefined),
+          form_data: formFields.length > 0 ? formValues : undefined,
+          attachments,
+          org_unit_id: orgUnitId,
+          requester_comment: requesterComment.trim() || undefined,
+          ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
+          ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
+          manualChain: useManualLine ? manualChain : undefined,
+        });
+        toast({ title: '다시 상신되었습니다.' });
+      } else {
+        await approvalDocumentService.createDocument({
+          document_type_id: documentTypeId,
+          title: title.trim(),
+          content: formFields.length > 0 ? undefined : (content.trim() || undefined),
+          form_data: formFields.length > 0 ? formValues : undefined,
+          attachments,
+          org_unit_id: orgUnitId,
+          created_by: currentUser.id,
+          requester_comment: requesterComment.trim() || undefined,
+          ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
+          ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
+          draftId: draftId || undefined,
+          manualChain: useManualLine ? manualChain : undefined,
+        });
+        toast({ title: '기안서가 제출되었습니다.' });
+      }
       resetForm();
       window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
       openNewTab('/approval-inbox', '결재함');
@@ -451,15 +504,20 @@ export default function DocumentDraftPage() {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-600" />
-                  <CardTitle className="text-base">{draftId ? '기안서 작성 (임시저장 이어쓰기)' : '기안서 작성'}</CardTitle>
+                  <CardTitle className="text-base">{resubmitId ? '기안서 작성 (반려 문서 다시 상신)' : draftId ? '기안서 작성 (임시저장 이어쓰기)' : '기안서 작성'}</CardTitle>
                 </div>
-                {(draftId || title || documentTypeId) && (
+                {(draftId || resubmitId || title || documentTypeId) && (
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetForm} disabled={submitting || savingDraft}>새로 작성</Button>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-1">문서유형과 기안 부서를 고르면 결재라인이 자동으로 구성됩니다.</p>
             </CardHeader>
             <CardContent className="pt-0 space-y-4">
+              {resubmitId && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 text-blue-800 text-xs p-2.5">
+                  반려된 문서를 다시 상신하는 중입니다. 내용을 수정한 뒤 제출하면 새 문서가 아니라 이 문서가 그대로 갱신되며, 결재는 1단계부터 다시 진행됩니다. 이전 반려 기록은 문서 상세에 계속 남습니다.
+                </div>
+              )}
               {frequentDocs.length > 0 && (
                 <div className="rounded-md border bg-amber-50/50 border-amber-200 p-3 space-y-2">
                   <p className="text-xs font-medium flex items-center gap-1 text-amber-800"><Sparkles className="w-3.5 h-3.5" />자주 쓰는 문서 <span className="text-amber-600 font-normal">(클릭하면 제목/내용을 그대로 불러옵니다)</span></p>
@@ -687,14 +745,14 @@ export default function DocumentDraftPage() {
               </div>
 
               <div className="flex justify-end gap-2 pt-1">
-                {permissions.canCreate && (
+                {permissions.canCreate && !resubmitId && (
                   <Button variant="outline" size="sm" onClick={handleSaveDraft} disabled={submitting || savingDraft}>
                     {savingDraft ? '저장 중...' : '임시저장'}
                   </Button>
                 )}
                 {permissions.canCreate && (
                   <Button size="sm" onClick={handleSubmit} disabled={submitting || savingDraft || effectiveChain.length === 0}>
-                    {submitting ? '제출 중...' : '제출'}
+                    {submitting ? '제출 중...' : resubmitId ? '다시 상신' : '제출'}
                   </Button>
                 )}
               </div>
@@ -762,6 +820,14 @@ export default function DocumentDraftPage() {
                                   onClick={() => handleCancelDocument(doc.id)}
                                 >
                                   기안 취소
+                                </Button>
+                              )}
+                              {doc.status === 'rejected' && !doc.reference_type && permissions.canCreate && (
+                                <Button
+                                  variant="ghost" size="sm" className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700"
+                                  onClick={() => loadRejectedIntoForm(doc)}
+                                >
+                                  다시 상신
                                 </Button>
                               )}
                               {(doc.status === 'approved' || doc.status === 'rejected' || doc.status === 'cancelled') && permissions.canDelete && (

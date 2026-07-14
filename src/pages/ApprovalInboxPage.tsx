@@ -172,6 +172,12 @@ export default function ApprovalInboxPage() {
   // 않은 경우에만 가능하다 — 이미 결재가 시작된 문서는 기안자 본인도 취소할 수 없다.
   const canCancelDoc = (doc: ApprovalDocumentWithDetails) =>
     doc.status === 'pending' && doc.created_by === currentUserId && doc.steps.every(s => s.status === 'pending');
+  // 반려된 자유서식 문서(연차/질병휴가 등 다른 화면이 자동 생성한 문서 제외)는 기안자 본인
+  // (또는 관리자)이 기안서 작성 화면에서 내용을 고쳐 다시 상신할 수 있다.
+  const canResubmitDoc = (doc: ApprovalDocumentWithDetails) =>
+    doc.status === 'rejected' && !doc.reference_type && (doc.created_by === currentUserId || isAdmin);
+  const handleResubmitDoc = (doc: ApprovalDocumentWithDetails) =>
+    openNewTab(`/documents/new?resubmit=${doc.id}`, `${doc.title} (재상신)`);
   // "삭제"는 문서를 지우는 게 아니라 내 결재함 목록에서만 숨기는 것이지만, 아직 결재가
   // 진행중이거나(내 차례가 아니어도 결과를 지켜봐야 함) 나에게 참조됐는데 아직 열람하지
   // 않은 문서는 지울 수 없다 — 확인해야 할 것을 결재함에서 숨겨버리면 안 된다.
@@ -372,6 +378,7 @@ export default function ApprovalInboxPage() {
                       </>
                     )}
                     {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
+                    {canResubmitDoc(doc) && <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-blue-600 border-blue-300" onClick={() => handleResubmitDoc(doc)}>다시 상신</Button>}
                     {canDeleteDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
                   </div>
