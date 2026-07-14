@@ -281,6 +281,22 @@ export default function ApprovalInboxPage() {
     }
   };
 
+  const handleBulkPermanentDeleteDocs = async () => {
+    if (docSelectedIds.length === 0) return;
+    if (!confirm(`선택한 ${docSelectedIds.length}건을 삭제된 문서함에서 완전히 제거하시겠습니까?\n\n이후에는 복원할 수 없습니다. 문서 자체는 삭제되지 않으며, 다른 참여자의 결재함이나 결재 이력에는 전혀 영향이 없습니다.`)) return;
+    try {
+      setBulkDeleteProcessing(true);
+      await Promise.all(docSelectedIds.map(id => approvalDocumentService.permanentlyHideDocumentForUser(id, currentUserId)));
+      setHiddenDocuments(prev => prev.filter(d => !docSelectedIds.includes(d.id)));
+      toast({ title: `${docSelectedIds.length}건 영구 삭제되었습니다.` });
+      setDocSelectedIds([]);
+    } catch (e) {
+      toast({ title: '영구 삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkDeleteProcessing(false);
+    }
+  };
+
   const handleDocAction = async () => {
     if (!selectedDocument || !docActionType) return;
     if (docActionType === 'rejected' && !docComment.trim()) {
@@ -413,11 +429,20 @@ export default function ApprovalInboxPage() {
   };
 
   // 삭제된 문서함 — 문서 자체는 살아있고, 이 사용자의 결재함에서만 숨겨진 상태. 복원 가능.
-  const renderDeletedDocTable = (list: ApprovalDocumentWithDetails[]) => (
+  const renderDeletedDocTable = (list: ApprovalDocumentWithDetails[]) => {
+    const selectableIds = list.filter(canPermanentlyDeleteDoc).map(d => d.id);
+    return (
     <div className="rounded-md border overflow-hidden overflow-x-auto">
       <table className="w-full text-xs whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
+            <th className="w-8 p-2">
+              <Checkbox
+                checked={selectableIds.length > 0 && selectableIds.every(id => docSelectedIds.includes(id))}
+                onCheckedChange={checked => toggleDocSelectAll(!!checked, selectableIds)}
+                disabled={selectableIds.length === 0}
+              />
+            </th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
@@ -429,6 +454,9 @@ export default function ApprovalInboxPage() {
         <tbody>
           {list.map(doc => (
             <tr key={doc.id} className="border-b hover:bg-gray-50 text-gray-400">
+              <td className="p-2" onClick={e => e.stopPropagation()}>
+                {canPermanentlyDeleteDoc(doc) && <Checkbox checked={docSelectedIds.includes(doc.id)} onCheckedChange={() => toggleDocSelect(doc.id)} />}
+              </td>
               <td className="p-2">{getStatusBadge(doc.status)}</td>
               <td className="p-2 font-medium">{doc.title}</td>
               <td className="p-2">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
@@ -448,7 +476,8 @@ export default function ApprovalInboxPage() {
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   // 참조로만 관계있는 문서(기안자도 아니고 결재선에도 없는)는 승인/반려 탭에서는 보이지
   // 않아야 한다 — 참조자는 참조함 탭에서만 그 문서를 본다.
@@ -613,24 +642,27 @@ export default function ApprovalInboxPage() {
             />
           </div>
 
-          {docFilter !== 'deleted' && (
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                {docSelectedIds.length > 0 && (
-                  <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-300" onClick={handleBulkDeleteDocs} disabled={bulkDeleteProcessing}>
-                    {bulkDeleteProcessing ? '삭제 중...' : `선택 삭제 (${docSelectedIds.length})`}
-                  </Button>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-400">페이지당</span>
-                <Select value={docItemsPerPage.toString()} onValueChange={v => { setDocItemsPerPage(+v); setDocPage(1); }}>
-                  <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              {docSelectedIds.length > 0 && docFilter === 'deleted' && (
+                <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={handleBulkPermanentDeleteDocs} disabled={bulkDeleteProcessing}>
+                  {bulkDeleteProcessing ? '삭제 중...' : `선택 영구삭제 (${docSelectedIds.length})`}
+                </Button>
+              )}
+              {docSelectedIds.length > 0 && docFilter !== 'deleted' && (
+                <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-300" onClick={handleBulkDeleteDocs} disabled={bulkDeleteProcessing}>
+                  {bulkDeleteProcessing ? '삭제 중...' : `선택 삭제 (${docSelectedIds.length})`}
+                </Button>
+              )}
             </div>
-          )}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">페이지당</span>
+              <Select value={docItemsPerPage.toString()} onValueChange={v => { setDocItemsPerPage(+v); setDocPage(1); }}>
+                <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
 
           {docFiltered.length === 0 ? (
             <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 문서가 없습니다</p></CardContent></Card>
