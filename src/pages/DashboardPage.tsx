@@ -190,11 +190,14 @@ export default function DashboardPage() {
       case 'ship_owner':
         return '선박 및 구인 현황을 확인하고 선원 고용을 승인/거절하세요.';
       case 'ship_manager':
-        return '전체 시스템을 관리하고 운영하세요.';
+        return '선박·선원 현황을 확인하고 업무를 처리하세요.';
       case 'manning_agency':
         return '소속 선원을 대신하여 구인 공고에 지원하고 관리하세요.';
       case 'crew':
         return '구직 활동을 하고 지원 현황을 확인하세요.';
+      case 'admin':
+      case 'system_admin':
+        return '전체 시스템을 관리하고 운영하세요.';
       default:
         return '시스템에 오신 것을 환영합니다.';
     }
