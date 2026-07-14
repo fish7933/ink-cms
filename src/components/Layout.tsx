@@ -13,6 +13,7 @@ import { getEffectiveMenuStructure } from '@/services/menu-config.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { routeConfig } from '@/lib/route-config';
 import { useDispatchApprovalPendingCount } from '@/hooks/useDispatchApprovalPendingCount';
+import { useRotationPlanActionCount } from '@/hooks/useRotationPlanActionCount';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ export default function Layout() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const { tabs, activeTabId, refreshNonces } = useTabContext();
   const dispatchApprovalPendingCount = useDispatchApprovalPendingCount();
+  const rotationPlanActionCount = useRotationPlanActionCount();
 
   useEffect(() => {
     let isMounted = true;
@@ -91,7 +93,7 @@ export default function Layout() {
           currentRole={currentUser?.role || 'crew'}
           permissions={permissions}
           selectedCategoryId={selectedCategoryId}
-          badgeCounts={{ 'dispatch-approval-inbox': dispatchApprovalPendingCount }}
+          badgeCounts={{ 'dispatch-approval-inbox': dispatchApprovalPendingCount, 'crew-rotation': rotationPlanActionCount }}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           <TabBar />

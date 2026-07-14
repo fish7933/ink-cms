@@ -34,6 +34,9 @@ export function ApprovalChainCell({ approval }: { approval?: ApprovalChainLike |
           </span>
         );
       })}
+      {approval.status === 'approved' && (
+        <span className="ml-1.5 text-green-700 font-semibold">(결재완료)</span>
+      )}
     </div>
   );
 }

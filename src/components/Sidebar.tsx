@@ -99,7 +99,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
                     onClick={() => item.path && openTab(item.path, item.label)}
                   >
                     {ItemIcon && <ItemIcon className="h-3.5 w-3.5 mr-2 shrink-0" />}
-                    <span className="truncate flex-1 text-left">{item.label}</span>
+                    <span className="truncate flex-1 min-w-0 text-left">{item.label}</span>
                     {badgeCount > 0 && (
                       <span className="ml-1.5 shrink-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] leading-[1.1rem] text-center font-semibold">
                         {badgeCount > 99 ? '99+' : badgeCount}

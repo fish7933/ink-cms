@@ -104,6 +104,7 @@ export default function CrewRotationDetailPage() {
       toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
       setSubmitDialogOpen(false);
       loadPlan();
+      window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
     } finally {
       setSubmitting(false);
     }
@@ -112,7 +113,7 @@ export default function CrewRotationDetailPage() {
   const handleExecute = async () => {
     if (!plan || !confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
     const ok = await rotationService.executeRotationPlan(plan.id);
-    if (ok) { toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' }); loadPlan(); }
+    if (ok) { toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' }); loadPlan(); window.dispatchEvent(new CustomEvent('rotation-plan-data-changed')); }
     else toast({ title: '실행 중 오류가 발생했습니다', variant: 'destructive' });
   };
 

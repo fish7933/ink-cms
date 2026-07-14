@@ -582,6 +582,7 @@ export default function RotationPlanFormPage() {
         : await rotationService.createRotationPlan(planPayload);
 
       if (!result) throw new Error('저장에 실패했습니다');
+      window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
       const { moved } = result;
       if (moved.length > 0) {
         const summary = moved.map(m => `${m.crewName}(${m.fromPlanName})`).join(', ');

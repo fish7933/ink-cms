@@ -135,6 +135,7 @@ export function CrewRotationPage() {
       console.error(e);
     }
     setLoading(false);
+    window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
   };
 
   const loadOwners = async () => {
