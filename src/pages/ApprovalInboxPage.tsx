@@ -119,18 +119,28 @@ export default function ApprovalInboxPage() {
       // 문서함 탭에서만 보여준다.
       setDocuments(allDocs.filter(d => !hiddenIds.has(d.id)));
       setHiddenDocuments(hidden);
-      setReferencedDocIds(refs);
 
-      if (refs.size === 0) {
+      // 내가 기안했거나 결재선에 포함된 문서는 참조로도 같이 지정돼 있더라도 참조를 무시한다 —
+      // 그렇지 않으면 같은 문서 하나가 결재함에 "결재할 문서"와 "참조 문서" 둘로 겹쳐 보인다.
+      const docsById = new Map(allDocs.map(d => [d.id, d]));
+      const pureRefs = new Set(
+        [...refs].filter(id => {
+          const d = docsById.get(id);
+          return !d || (d.created_by !== userId && !d.steps.some(s => s.approver_id === userId));
+        })
+      );
+      setReferencedDocIds(pureRefs);
+
+      if (pureRefs.size === 0) {
         setUnreadReferenceDocIds(new Set());
       } else {
         const { data: reads } = await supabase
           .from('approval_document_reference_reads')
           .select('document_id')
           .eq('user_id', userId)
-          .in('document_id', [...refs]);
+          .in('document_id', [...pureRefs]);
         const readSet = new Set((reads || []).map((r: { document_id: string }) => r.document_id));
-        setUnreadReferenceDocIds(new Set([...refs].filter(id => !readSet.has(id))));
+        setUnreadReferenceDocIds(new Set([...pureRefs].filter(id => !readSet.has(id))));
       }
     } catch (e) {
       console.error(e);

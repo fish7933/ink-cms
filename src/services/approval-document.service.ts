@@ -864,7 +864,9 @@ export const approvalDocumentService = {
     if (error) throw error;
   },
 
-  // "참조함": 결재선에는 없지만 개인 또는 소속 부서로 참조 지정된 문서 목록
+  // "참조함": 결재선에는 없지만 개인 또는 소속 부서로 참조 지정된 문서 목록. 내가 기안했거나
+  // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 제외한다 — 참조는 결재와 무관한 사람에게만
+  // 의미가 있고, 그렇지 않으면 같은 문서가 참조함과 결재함에 중복으로 나타난다.
   async getReferencedDocuments(userId: string, myOrgUnitIds: string[]): Promise<ApprovalDocumentWithDetails[]> {
     const orFilter = myOrgUnitIds.length > 0
       ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
@@ -877,16 +879,27 @@ export const approvalDocumentService = {
     const docIds = [...new Set((refs || []).map(r => r.document_id))];
     if (docIds.length === 0) return [];
 
+    const { data: steps, error: stepsError } = await supabase
+      .from('approval_document_steps')
+      .select('document_id')
+      .eq('approver_id', userId)
+      .in('document_id', docIds);
+    if (stepsError) throw stepsError;
+    const myStepDocIds = new Set((steps || []).map(s => s.document_id));
+
     const { data: docs, error: docsError } = await supabase
       .from('approval_documents')
       .select('*')
       .in('id', docIds)
+      .neq('created_by', userId)
       .order('created_at', { ascending: false });
     if (docsError) throw docsError;
-    return enrichDocuments(docs || []);
+    return enrichDocuments((docs || []).filter(d => !myStepDocIds.has(d.id)));
   },
 
-  // 결재함 배지 — 참조로 지정된 문서 중 아직 상세를 열어보지 않은 건수
+  // 결재함 배지 — 참조로 지정된 문서 중 아직 상세를 열어보지 않은 건수. 내가 기안했거나
+  // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 무시한다 — 그렇지 않으면 같은 문서
+  // 하나가 "결재 대기"와 "참조 미열람" 배지 양쪽에 중복으로 잡힌다.
   async getUnreadReferenceCount(userId: string, myOrgUnitIds: string[]): Promise<number> {
     const orFilter = myOrgUnitIds.length > 0
       ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
@@ -896,7 +909,20 @@ export const approvalDocumentService = {
       .select('document_id')
       .or(orFilter);
     if (refError) throw refError;
-    const docIds = [...new Set((refs || []).map(r => r.document_id))];
+    const refDocIds = [...new Set((refs || []).map(r => r.document_id))];
+    if (refDocIds.length === 0) return 0;
+
+    const [{ data: docs, error: docsError }, { data: steps, error: stepsError }] = await Promise.all([
+      supabase.from('approval_documents').select('id, created_by').in('id', refDocIds),
+      supabase.from('approval_document_steps').select('document_id').eq('approver_id', userId).in('document_id', refDocIds),
+    ]);
+    if (docsError) throw docsError;
+    if (stepsError) throw stepsError;
+    const myStepDocIds = new Set((steps || []).map(s => s.document_id));
+    const docIds = refDocIds.filter(id => {
+      const d = (docs || []).find(x => x.id === id);
+      return !(d && (d.created_by === userId || myStepDocIds.has(id)));
+    });
     if (docIds.length === 0) return 0;
 
     const { data: reads, error: readsError } = await supabase
