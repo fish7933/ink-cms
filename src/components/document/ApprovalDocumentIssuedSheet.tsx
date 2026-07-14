@@ -116,8 +116,8 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         <thead>
           <tr>
             <th>기안</th>
-            {doc.steps.map(s => <th key={s.id}>{positionOf(s.approver_label) || `${s.step_order}차 결재`}</th>)}
-            {isDelegated && <th>{topPosition!.name}</th>}
+            {doc.steps.map((s, i) => <th key={s.id}>{i === doc.steps.length - 1 ? '최종결재' : '중간결재'}</th>)}
+            {isDelegated && <th>최종결재</th>}
           </tr>
         </thead>
         <tbody>
