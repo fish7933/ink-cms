@@ -152,23 +152,19 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         {company?.name || ''}
       </div>
 
-      {/* 실제로 내용을 담아 인쇄할 수 있는 이미지/PDF만 각자 새 페이지를 차지한다. 미리보기가
-          안 되는 파일(hwp/docx/xlsx 등)은 페이지를 새로 만들지 않는다 — 파일명은 이미 위
-          "붙임" 줄에 나열돼 있으므로, 내용 없는 페이지만 늘리는 걸 막기 위함. */}
+      {/* 이미지만 각자 새 페이지에 인쇄물로 합쳐 넣는다. PDF는 iframe으로 끼워넣으면 뷰어의
+          현재 화면(보통 첫 페이지)만 찍히고 스크롤바까지 인쇄되는 등 브라우저 인쇄와 근본적으로
+          맞지 않아 제외한다 — PDF/기타 형식은 위 "붙임" 줄의 파일명 표기로 충분하고, 원본은
+          화면(인쇄 전 미리보기)의 "새 탭에서 열기"로 따로 인쇄하게 한다. */}
       {includeAttachments && doc.attachments.map((a, i) => {
         const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
         const url = data?.publicUrl;
         const isImage = a.type?.startsWith('image/');
-        const isPdf = a.type === 'application/pdf';
-        if (!((isImage || isPdf) && url)) return null;
+        if (!(isImage && url)) return null;
         return (
           <div key={i} style={{ pageBreakBefore: 'always', paddingTop: 8 }}>
             <p style={{ fontSize: 12, color: '#555', marginBottom: 8 }}>붙임 {i + 1}. {a.name}</p>
-            {isImage ? (
-              <img src={url} alt={a.name} style={{ maxWidth: '100%' }} />
-            ) : (
-              <iframe src={url} title={a.name} style={{ width: '100%', height: '1000px', border: '1px solid #ccc' }} />
-            )}
+            <img src={url} alt={a.name} style={{ maxWidth: '100%' }} />
           </div>
         );
       })}
