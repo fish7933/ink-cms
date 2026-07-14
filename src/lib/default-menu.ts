@@ -350,6 +350,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 5,
         is_active: true,
       },
+      {
+        id: 'user-groups',
+        label: '사용자 관리',
+        path: '/user-groups',
+        icon: 'UserCog',
+        roles: ['ship_manager'],
+        order: 6,
+        is_active: true,
+      },
     ],
   },
 ];

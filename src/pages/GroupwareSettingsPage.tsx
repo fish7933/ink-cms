@@ -7,13 +7,13 @@ import OrgChartManagementPage from './OrgChartManagementPage';
 import ApprovalLineManagementPage from './ApprovalLineManagementPage';
 import DocumentTypesManagementPage from './DocumentTypesManagementPage';
 import ShorePositionsPage from './ShorePositionsPage';
-import UserGroupManagementPage from './UserGroupManagementPage';
 import PermissionsPage from './PermissionsPage';
 import MenuConfigurationPage from './MenuConfigurationPage';
 
-// 그룹웨어 성격의 설정 화면(직원카드/조직도/결재선/문서유형/직급/권한/UI구성/사용자관리)을
+// 그룹웨어 성격의 설정 화면(직원카드/조직도/결재선/문서유형/직급/권한/UI구성)을
 // 한 페이지에 탭으로 묶은 화면. CrewManagementSettingsPage와 동일한 패턴 — 각 탭은 기존
-// 독립 페이지 컴포넌트를 그대로 재사용한다.
+// 독립 페이지 컴포넌트를 그대로 재사용한다. 사용자 관리(선주/선원매닝사/선원)는 여기가 아니라
+// 대메뉴 "설정" 카테고리에 별도 항목으로 있다.
 export default function GroupwareSettingsPage() {
   const navigate = useNavigate();
   const permissions = usePermissions('groupware_settings');
@@ -34,7 +34,6 @@ export default function GroupwareSettingsPage() {
           <TabsTrigger value="shore-positions" className="text-xs h-8">직급 관리</TabsTrigger>
           <TabsTrigger value="permissions" className="text-xs h-8">권한 관리</TabsTrigger>
           <TabsTrigger value="menu-configuration" className="text-xs h-8">UI 구성 관리</TabsTrigger>
-          <TabsTrigger value="user-groups" className="text-xs h-8">사용자 관리</TabsTrigger>
         </TabsList>
         <TabsContent value="employee-cards" className="mt-3"><EmployeeCardManagementPage /></TabsContent>
         <TabsContent value="org-chart" className="mt-3"><OrgChartManagementPage /></TabsContent>
@@ -43,7 +42,6 @@ export default function GroupwareSettingsPage() {
         <TabsContent value="shore-positions" className="mt-3"><ShorePositionsPage /></TabsContent>
         <TabsContent value="permissions" className="mt-3"><PermissionsPage /></TabsContent>
         <TabsContent value="menu-configuration" className="mt-3"><MenuConfigurationPage /></TabsContent>
-        <TabsContent value="user-groups" className="mt-3"><UserGroupManagementPage /></TabsContent>
       </Tabs>
     </div>
   );
