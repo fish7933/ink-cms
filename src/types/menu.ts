@@ -5,6 +5,8 @@ export interface MenuItem {
   icon?: string;
   children?: MenuItem[];
   roles?: string[];
+  // true면 admin/system_admin도 roles 배열을 그대로 적용받는다 (기본은 관리자 전체 열람 예외).
+  strictRoles?: boolean;
   order: number;
   parent_id?: string | null;
   is_active: boolean;

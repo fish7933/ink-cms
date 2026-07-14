@@ -104,6 +104,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/my-recommendations',
         icon: 'ListChecks',
         roles: ['manning_agency'],
+        strictRoles: true,
         order: 2,
         is_active: true,
       },

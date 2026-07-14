@@ -73,7 +73,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
         ...c,
         items: c.items.filter(item =>
           item.is_active &&
-          (isAdmin || !item.roles || item.roles.length === 0 || item.roles.includes(currentUser.role))
+          ((isAdmin && !item.strictRoles) || !item.roles || item.roles.length === 0 || item.roles.includes(currentUser.role))
         ),
       }))
       .filter(c => c.items.length > 0)

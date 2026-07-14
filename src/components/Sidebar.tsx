@@ -46,7 +46,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
   const filterItemsByRole = (items: MenuItem[]) =>
     items.filter(item =>
       item.is_active &&
-      (isFullAccessRole || !item.roles || item.roles.length === 0 || item.roles.includes(currentRole)) &&
+      ((isFullAccessRole && !item.strictRoles) || !item.roles || item.roles.length === 0 || item.roles.includes(currentRole)) &&
       canViewItem(item)
     );
 
