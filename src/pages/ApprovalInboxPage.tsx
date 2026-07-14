@@ -120,13 +120,16 @@ export default function ApprovalInboxPage() {
       setDocuments(allDocs.filter(d => !hiddenIds.has(d.id)));
       setHiddenDocuments(hidden);
 
-      // 내가 기안했거나 결재선에 포함된 문서는 참조로도 같이 지정돼 있더라도 참조를 무시한다 —
-      // 그렇지 않으면 같은 문서 하나가 결재함에 "결재할 문서"와 "참조 문서" 둘로 겹쳐 보인다.
+      // 내가 기안했거나 결재선에 포함된 문서는 참조로도 같이 지정돼 있더라도 참조를 무시하고
+      // (그렇지 않으면 같은 문서 하나가 결재함에 "결재할 문서"와 "참조 문서" 둘로 겹쳐 보임),
+      // 참조는 결재가 완료(승인)된 문서만 유효하다 — getMyRelatedDocuments가 이미 승인되지
+      // 않은 참조 문서는 allDocs에서 빼버리므로, docsById에 없으면(=아직 승인 전이면) 참조로
+      // 치지 않는다.
       const docsById = new Map(allDocs.map(d => [d.id, d]));
       const pureRefs = new Set(
         [...refs].filter(id => {
           const d = docsById.get(id);
-          return !d || (d.created_by !== userId && !d.steps.some(s => s.approver_id === userId));
+          return !!d && d.status === 'approved' && d.created_by !== userId && !d.steps.some(s => s.approver_id === userId);
         })
       );
       setReferencedDocIds(pureRefs);

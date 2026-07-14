@@ -79,8 +79,9 @@ export default function ApprovalDocumentDetailPage() {
       setRejectionHistory(found ? await approvalDocumentService.getRejectionHistory(found.id).catch(() => []) : []);
 
       // 이 문서에 내가 참조로 지정돼 있으면(개인 또는 소속 부서), 상세를 연 시점에 열람 처리해
-      // 결재함 배지 집계에서 빠지도록 한다.
-      if (found) {
+      // 결재함 배지 집계에서 빠지도록 한다. 참조는 결재가 완료(승인)된 문서에 대해서만 의미가
+      // 있다 — 아직 결재 중이거나 반려된 문서는 참조 대상에게 노출되지 않으므로 열람 처리도 하지 않는다.
+      if (found && found.status === 'approved') {
         const { data: myUnits } = await supabase.from('org_unit_members').select('org_unit_id').eq('user_id', user.id);
         const myOrgUnitIds = (myUnits || []).map(u => u.org_unit_id);
         const orFilter = myOrgUnitIds.length > 0

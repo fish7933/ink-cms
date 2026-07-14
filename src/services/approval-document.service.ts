@@ -495,8 +495,11 @@ export const approvalDocumentService = {
   },
 
   // 일반 사용자용: 나와 관계있는 문서 전체 (기안자 본인 / 이미 내 차례가 됐거나 지나간 결재선
-  // 담당자 / 참조 대상) — 상태 무관. 결재선에 이름은 있지만 아직 내 차례가 오지 않은(현재 단계가
-  // 나보다 앞선) 문서는 제외한다 — "아직 나에게 도착하지 않은 문서"는 결재함에 보이면 안 된다.
+  // 담당자 / 참조 대상) — 결재선에 이름은 있지만 아직 내 차례가 오지 않은(현재 단계가 나보다
+  // 앞선) 문서는 제외한다 — "아직 나에게 도착하지 않은 문서"는 결재함에 보이면 안 된다. 참조는
+  // 결재가 완료(승인)된 문서에 대해서만 의미가 있으므로, 아직 결재 중이거나 반려된 문서는
+  // 참조 대상에게 노출되지 않는다 — 상급 결재자가 검토하기도 전에 참조자가 먼저 내용을 알게
+  // 되거나, 반려돼 무효가 된 내용이 참조자에게 그대로 남는 것을 막기 위함.
   // "결재함"의 기본 노출 범위 — 관리자도 예외 없이 동일하게 적용된다.
   async getMyRelatedDocuments(userId: string, myOrgUnitIds: string[] = []): Promise<ApprovalDocumentWithDetails[]> {
     const orFilter = myOrgUnitIds.length > 0
@@ -523,10 +526,19 @@ export const approvalDocumentService = {
         .map(s => s.document_id);
     }
 
+    const refDocIds = [...new Set((refsRes.data || []).map(r => r.document_id))];
+    let approvedRefDocIds: string[] = [];
+    if (refDocIds.length > 0) {
+      const { data: refDocs, error: refDocsError } = await supabase
+        .from('approval_documents').select('id').in('id', refDocIds).eq('status', 'approved');
+      if (refDocsError) throw refDocsError;
+      approvedRefDocIds = (refDocs || []).map(d => d.id);
+    }
+
     const docIds = new Set<string>();
     for (const d of draftedRes.data || []) docIds.add(d.id);
     for (const id of reachedStepDocIds) docIds.add(id);
-    for (const r of refsRes.data || []) docIds.add(r.document_id);
+    for (const id of approvedRefDocIds) docIds.add(id);
     if (docIds.size === 0) return [];
 
     const { data: docs, error } = await supabase
@@ -866,7 +878,8 @@ export const approvalDocumentService = {
 
   // "참조함": 결재선에는 없지만 개인 또는 소속 부서로 참조 지정된 문서 목록. 내가 기안했거나
   // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 제외한다 — 참조는 결재와 무관한 사람에게만
-  // 의미가 있고, 그렇지 않으면 같은 문서가 참조함과 결재함에 중복으로 나타난다.
+  // 의미가 있고, 그렇지 않으면 같은 문서가 참조함과 결재함에 중복으로 나타난다. 참조는 결재가
+  // 완료(승인)된 문서에 대해서만 유효하다 — 결재 중이거나 반려된 문서는 참조 대상에게 아직 보이지 않는다.
   async getReferencedDocuments(userId: string, myOrgUnitIds: string[]): Promise<ApprovalDocumentWithDetails[]> {
     const orFilter = myOrgUnitIds.length > 0
       ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
@@ -891,6 +904,7 @@ export const approvalDocumentService = {
       .from('approval_documents')
       .select('*')
       .in('id', docIds)
+      .eq('status', 'approved')
       .neq('created_by', userId)
       .order('created_at', { ascending: false });
     if (docsError) throw docsError;
@@ -898,8 +912,9 @@ export const approvalDocumentService = {
   },
 
   // 결재함 배지 — 참조로 지정된 문서 중 아직 상세를 열어보지 않은 건수. 내가 기안했거나
-  // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 무시한다 — 그렇지 않으면 같은 문서
-  // 하나가 "결재 대기"와 "참조 미열람" 배지 양쪽에 중복으로 잡힌다.
+  // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 무시하고(같은 문서가 "결재 대기"와
+  // "참조 미열람" 배지 양쪽에 중복으로 잡히는 것을 방지), 결재가 완료(승인)된 문서만 센다 —
+  // 결재 중이거나 반려된 문서는 아직 참조 대상에게 노출되지 않는다.
   async getUnreadReferenceCount(userId: string, myOrgUnitIds: string[]): Promise<number> {
     const orFilter = myOrgUnitIds.length > 0
       ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
@@ -913,7 +928,7 @@ export const approvalDocumentService = {
     if (refDocIds.length === 0) return 0;
 
     const [{ data: docs, error: docsError }, { data: steps, error: stepsError }] = await Promise.all([
-      supabase.from('approval_documents').select('id, created_by').in('id', refDocIds),
+      supabase.from('approval_documents').select('id, created_by, status').in('id', refDocIds),
       supabase.from('approval_document_steps').select('document_id').eq('approver_id', userId).in('document_id', refDocIds),
     ]);
     if (docsError) throw docsError;
@@ -921,7 +936,7 @@ export const approvalDocumentService = {
     const myStepDocIds = new Set((steps || []).map(s => s.document_id));
     const docIds = refDocIds.filter(id => {
       const d = (docs || []).find(x => x.id === id);
-      return !(d && (d.created_by === userId || myStepDocIds.has(id)));
+      return !!d && d.status === 'approved' && d.created_by !== userId && !myStepDocIds.has(id);
     });
     if (docIds.length === 0) return 0;
 
