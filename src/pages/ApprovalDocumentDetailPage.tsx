@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { CheckCircle2, XCircle, FileText, Paperclip, Trash2, Printer, ArrowLeft, RotateCcw } from 'lucide-react';
+import { CheckCircle2, XCircle, FileText, Paperclip, Trash2, Printer, X, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -194,7 +194,7 @@ export default function ApprovalDocumentDetailPage() {
   if (!doc) {
     return (
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-        <Button variant="ghost" size="sm" onClick={goBack} className="h-8 px-2 mb-3"><ArrowLeft className="w-4 h-4 mr-1" />결재함</Button>
+        <Button variant="ghost" size="sm" onClick={goBack} className="h-8 px-2 mb-3"><X className="w-4 h-4 mr-1" />닫기</Button>
         <p className="text-sm text-gray-400 text-center py-12">문서를 찾을 수 없습니다.</p>
       </div>
     );
@@ -206,7 +206,7 @@ export default function ApprovalDocumentDetailPage() {
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={goBack} className="h-8 px-2"><ArrowLeft className="w-4 h-4 mr-1" />결재함</Button>
+        <Button variant="ghost" size="sm" onClick={goBack} className="h-8 px-2"><X className="w-4 h-4 mr-1" />닫기</Button>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className={statusInfo.className}><StatusIcon className="w-3 h-3 mr-1" />{statusInfo.label}</Badge>
           {doc.resubmit_count > 0 && <Badge variant="outline" className="text-blue-700 border-blue-300">{doc.resubmit_count + 1}차 상신</Badge>}
