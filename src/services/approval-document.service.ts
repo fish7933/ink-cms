@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { formatLeaveHours } from '@/lib/leave-calc';
 import type { ApprovalChainStep } from '@/types/org-chart';
+import type { ApprovalLineWithSteps } from '@/types/approval';
 import type {
   ApprovalDocumentType,
   ApprovalAuthorityLimit,
@@ -11,6 +12,20 @@ import type {
   ApprovalDocumentWithDetails,
   DocumentFormField,
 } from '@/types/approval-document';
+
+// 문서유형의 전결규정(조직도 기반 자동계산)과 별개로, 결재선 관리에서 고른 결재라인을
+// 그대로 기안서 결재 단계로 쓰고 싶을 때 ApprovalChainStep[] 형태로 변환해준다.
+export function approvalLineToChainSteps(line: ApprovalLineWithSteps): ApprovalChainStep[] {
+  return [...line.steps]
+    .sort((a, b) => a.step_order - b.step_order)
+    .map(s => ({
+      approver_id: s.approver_id,
+      approver_name: s.approver_name,
+      approver_role: `결재선: ${line.name}`,
+      org_unit_id: '',
+      org_unit_name: '',
+    }));
+}
 
 const SELF_APPROVE_COMMENT = '본인 기안으로 자동 승인 처리됨';
 const ALREADY_PROCESSED_ERROR = '이미 처리되었거나 결재 순서가 아닙니다.';
@@ -217,8 +232,13 @@ export const approvalDocumentService = {
     ccOrgUnitIds?: string[];
     // 임시저장해둔 초안을 정식 제출로 전환할 때 — 새 행을 만들지 않고 이 초안 행을 그대로 갱신한다.
     draftId?: string;
+    // 문서유형의 전결규정(조직도 기반 자동 계산)과 별개로, 결재선 관리에서 고른 결재라인을
+    // 그대로 쓰고 싶을 때 넘긴다 — 지정되면 previewChain() 자동계산을 건너뛴다.
+    manualChain?: ApprovalChainStep[];
   }): Promise<ApprovalDocumentWithDetails> {
-    const chain = await this.previewChain(input.org_unit_id, input.document_type_id);
+    const chain = input.manualChain && input.manualChain.length > 0
+      ? input.manualChain
+      : await this.previewChain(input.org_unit_id, input.document_type_id);
     if (chain.length === 0) {
       throw new Error('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
     }

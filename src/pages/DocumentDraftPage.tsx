@@ -15,15 +15,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
-import { approvalDocumentService } from '@/services/approval-document.service';
+import { approvalDocumentService, approvalLineToChainSteps } from '@/services/approval-document.service';
+import { approvalService } from '@/services/approval.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
 import { msg } from '@/lib/messages';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { OrgUnit, OrgMember } from '@/types/org-chart';
 import type { ApprovalDocumentType, ApprovalDocumentAttachment, ApprovalDocumentWithDetails } from '@/types/approval-document';
 import type { ApprovalChainStep } from '@/types/org-chart';
+import type { ApprovalLineWithSteps } from '@/types/approval';
 import type { User } from '@/types/models';
 
 type StatusFilter = 'all' | 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -83,6 +86,11 @@ export default function DocumentDraftPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
 
+  // 문서유형의 전결규정으로 자동 계산된 결재라인 대신, 결재선 관리에서 고른 라인을 쓰고 싶을 때
+  const [approvalLines, setApprovalLines] = useState<ApprovalLineWithSteps[]>([]);
+  const [useManualLine, setUseManualLine] = useState(false);
+  const [manualLineId, setManualLineId] = useState('');
+
   // 문서함 탭 상태
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [boxLoading, setBoxLoading] = useState(true);
@@ -109,7 +117,16 @@ export default function DocumentDraftPage() {
         ]);
         setTypes(t);
         setUnits(u);
-        setMembers(members);
+        // 참조인 선택 목록은 직급(선임순) 우선, 같은 직급 내에서는 입사일이 빠른 순으로 정렬
+        setMembers([...members].sort((a, b) => {
+          const posA = a.position_order ?? Infinity;
+          const posB = b.position_order ?? Infinity;
+          if (posA !== posB) return posA - posB;
+          const hireA = a.hire_date ?? '9999-99-99';
+          const hireB = b.hire_date ?? '9999-99-99';
+          return hireA.localeCompare(hireB);
+        }));
+        approvalService.getApprovalLines(user.company_id ?? null).then(setApprovalLines).catch(console.error);
         // 기안 부서는 본인이 소속된 부서만 고를 수 있어야 한다 (다른 부서 명의로 기안하면 안 됨).
         // 단, 관리자는 조직도 담당자 지정 없이 시스템 전체를 관리하므로 예외적으로 전체 부서를 허용한다.
         const me = members.find(m => m.id === user.id);
@@ -173,9 +190,13 @@ export default function DocumentDraftPage() {
     setCcOrgUnitIds(selectedType?.default_cc_org_unit_ids || []);
   }, [documentTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const selectedManualLine = approvalLines.find(l => l.id === manualLineId) || null;
+  const manualChain = useMemo(() => selectedManualLine ? approvalLineToChainSteps(selectedManualLine) : [], [selectedManualLine]);
+  const effectiveChain = useManualLine ? manualChain : previewChain;
+
   const selfStepIndexes = useMemo(
-    () => previewChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
-    [previewChain, currentUser],
+    () => effectiveChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
+    [effectiveChain, currentUser],
   );
 
   // 자주 쓰는 문서 목록에서 사용자가 지운 제목들 (브라우저에 사용자별로 저장)
@@ -233,6 +254,8 @@ export default function DocumentDraftPage() {
     setUploadedFiles([]);
     setExistingAttachments([]);
     setOrgUnitId(myOrgUnitIds[0] || '');
+    setUseManualLine(false);
+    setManualLineId('');
   };
 
   const applyTemplate = (doc: ApprovalDocumentWithDetails) => {
@@ -363,7 +386,8 @@ export default function DocumentDraftPage() {
     if (!documentTypeId) { toast({ title: '문서유형을 선택해주세요.', variant: 'destructive' }); return; }
     if (!orgUnitId) { toast({ title: '기안 부서를 선택해주세요.', variant: 'destructive' }); return; }
     if (!title.trim()) { toast({ title: '제목을 입력해주세요.', variant: 'destructive' }); return; }
-    if (previewChain.length === 0) { toast({ title: '결재라인을 구성할 수 없는 부서입니다.', variant: 'destructive' }); return; }
+    if (useManualLine && !manualLineId) { toast({ title: '사용할 결재선을 선택해주세요.', variant: 'destructive' }); return; }
+    if (effectiveChain.length === 0) { toast({ title: useManualLine ? '선택한 결재선에 단계가 없습니다.' : '결재라인을 구성할 수 없는 부서입니다.', variant: 'destructive' }); return; }
     const missingField = formFields.find(f => f.required && (formValues[f.key] === undefined || formValues[f.key] === '' || formValues[f.key] === null));
     if (missingField) { toast({ title: `${missingField.label}을(를) 입력해주세요.`, variant: 'destructive' }); return; }
 
@@ -383,6 +407,7 @@ export default function DocumentDraftPage() {
         ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
         ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
         draftId: draftId || undefined,
+        manualChain: useManualLine ? manualChain : undefined,
       });
       toast({ title: '기안서가 제출되었습니다.' });
       resetForm();
@@ -594,15 +619,41 @@ export default function DocumentDraftPage() {
                 )}
               </div>
 
-              <div className="rounded-md border bg-gray-50 p-3">
-                <p className="text-xs font-medium mb-2">결재라인 미리보기</p>
-                {!documentTypeId || !orgUnitId ? (
+              <div className="rounded-md border bg-gray-50 p-3 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-xs font-medium">결재라인 미리보기</p>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <Checkbox checked={useManualLine} onCheckedChange={c => setUseManualLine(c === true)} disabled={submitting} />
+                    <span className="text-xs text-gray-600">전결규정 자동계산 대신 결재선 관리의 라인 사용</span>
+                  </label>
+                </div>
+
+                {useManualLine && (
+                  <Select value={manualLineId} onValueChange={setManualLineId} disabled={submitting}>
+                    <SelectTrigger className="h-8 text-sm bg-white"><SelectValue placeholder="결재선 선택" /></SelectTrigger>
+                    <SelectContent>
+                      {approvalLines.length === 0
+                        ? <div className="px-2 py-1.5 text-sm text-gray-500">등록된 결재선이 없습니다</div>
+                        : approvalLines.map(l => <SelectItem key={l.id} value={l.id} className="text-sm">{l.name} ({l.steps.length}단계)</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {useManualLine ? (
+                  manualLineId && manualChain.length === 0 ? (
+                    <p className="text-xs text-red-500">선택한 결재선에 단계가 없습니다.</p>
+                  ) : !manualLineId ? (
+                    <p className="text-xs text-gray-400">사용할 결재선을 선택하세요.</p>
+                  ) : null
+                ) : !documentTypeId || !orgUnitId ? (
                   <p className="text-xs text-gray-400">문서유형과 기안 부서를 선택하면 결재라인이 표시됩니다.</p>
                 ) : previewLoading ? (
                   <p className="text-xs text-gray-400">계산 중...</p>
                 ) : previewError ? (
                   <p className="text-xs text-red-500">{previewError}</p>
-                ) : (
+                ) : null}
+
+                {effectiveChain.length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="px-2.5 py-1.5 rounded border bg-purple-50 border-purple-300 text-xs">
                       <div className="text-[10px] text-purple-500 font-medium">신청자</div>
@@ -611,17 +662,17 @@ export default function DocumentDraftPage() {
                         {[units.find(u => u.id === orgUnitId)?.name, myPositionName].filter(Boolean).join(' · ') || '-'}
                       </div>
                     </div>
-                    {previewChain.length > 0 && <span className="text-gray-400">→</span>}
-                    {previewChain.map((c, i) => {
+                    <span className="text-gray-400">→</span>
+                    {effectiveChain.map((c, i) => {
                       const isSelf = selfStepIndexes.includes(i);
                       return (
                         <div key={i} className="flex items-center gap-2">
                           <div className={`px-2.5 py-1.5 rounded border text-xs ${isSelf ? 'bg-blue-50 border-blue-400' : 'bg-white border-gray-300'}`}>
-                            <div className="text-[10px] text-gray-500 font-medium">{i === previewChain.length - 1 ? '최종결재자' : '중간결재자'}</div>
+                            <div className="text-[10px] text-gray-500 font-medium">{i === effectiveChain.length - 1 ? '최종결재자' : '중간결재자'}</div>
                             <div className="font-medium">{i + 1}. {c.approver_name}{isSelf && <span className="text-blue-600 ml-1">(본인 · 자동승인)</span>}</div>
                             <div className="text-gray-500">{c.approver_role}</div>
                           </div>
-                          {i < previewChain.length - 1 && <span className="text-gray-400">→</span>}
+                          {i < effectiveChain.length - 1 && <span className="text-gray-400">→</span>}
                         </div>
                       );
                     })}
@@ -636,7 +687,7 @@ export default function DocumentDraftPage() {
                   </Button>
                 )}
                 {permissions.canCreate && (
-                  <Button size="sm" onClick={handleSubmit} disabled={submitting || savingDraft || previewChain.length === 0}>
+                  <Button size="sm" onClick={handleSubmit} disabled={submitting || savingDraft || effectiveChain.length === 0}>
                     {submitting ? '제출 중...' : '제출'}
                   </Button>
                 )}
