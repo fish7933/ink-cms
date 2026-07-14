@@ -286,11 +286,16 @@ export default function ApprovalInboxPage() {
     </div>
   );
 
+  // 참조로만 관계있는 문서(기안자도 아니고 결재선에도 없는)는 승인/반려 탭에서는 보이지
+  // 않아야 한다 — 참조자는 참조함 탭에서만 그 문서를 본다.
+  const isReferenceOnly = (doc: ApprovalDocumentWithDetails) =>
+    doc.created_by !== currentUserId && !doc.steps.some(s => s.approver_id === currentUserId);
+
   const docMyRequested = documents.filter(d => d.created_by === currentUserId);
   const docPending = documents.filter(d => d.status === 'pending');
   const docReferenced = documents.filter(d => referencedDocIds.has(d.id));
-  const docApproved = documents.filter(d => d.status === 'approved');
-  const docRejected = documents.filter(d => d.status === 'rejected');
+  const docApproved = documents.filter(d => d.status === 'approved' && !isReferenceOnly(d));
+  const docRejected = documents.filter(d => d.status === 'rejected' && !isReferenceOnly(d));
   const docFiltered = docFilter === 'mine' ? docMyRequested
     : docFilter === 'pending' ? docPending
     : docFilter === 'referenced' ? docReferenced
