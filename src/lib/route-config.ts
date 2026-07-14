@@ -43,6 +43,7 @@ const ProfilePage = lazy(() => import('@/pages/ProfilePage'));
 const CompanyManagementPage = lazy(() => import('@/pages/CompanyManagementPage'));
 const CompanyInfoPage = lazy(() => import('@/pages/CompanyInfoPage'));
 const UserGroupManagementPage = lazy(() => import('@/pages/UserGroupManagementPage'));
+const EmployeeCardManagementPage = lazy(() => import('@/pages/EmployeeCardManagementPage'));
 const ManagerAssignmentPage = lazy(() => import('@/pages/ManagerAssignmentPage'));
 const NationalityManagementPage = lazy(() => import('@/pages/NationalityManagementPage'));
 const CertificateTypeManagementPage = lazy(() => import('@/pages/CertificateTypeManagementPage'));
@@ -123,6 +124,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/companies', component: CompanyManagementPage },
   { path: '/company-info', component: CompanyInfoPage },
   { path: '/user-groups', component: UserGroupManagementPage },
+  { path: '/employee-cards', component: EmployeeCardManagementPage },
   { path: '/manager-assignments', component: ManagerAssignmentPage },
   { path: '/nationalities', component: NationalityManagementPage },
   { path: '/certificate-types', component: CertificateTypeManagementPage },

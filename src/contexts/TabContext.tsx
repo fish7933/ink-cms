@@ -186,7 +186,7 @@ function getTitleFromPath(path: string): string {
     '/approval-inbox': '결재함', '/approval-archive': '결재함', '/approval-management': '결재함', '/approval-lines': '결재선 관리',
     '/documents/new': '기안함', '/documents': '결재함', '/document-types': '문서유형/전결규정 관리', '/my-documents': '기안함',
     '/salary/templates': '급여 템플릿', '/salary/templates/new': '급여 템플릿 추가', '/salary-components': '급여 구성항목', '/allotment-management': '송금 관리',
-    '/companies': '회사 관리', '/companies?type=owner': '선주사 관리', '/companies?type=manning': '선원 매닝사 관리', '/company-info': '회사 정보 관리', '/user-groups': '사용자 그룹', '/manager-assignments': '선주 사용자 관리', '/supervisor-management': '우리회사 담당자 관리',
+    '/companies': '회사 관리', '/companies?type=owner': '선주사 관리', '/companies?type=manning': '선원 매닝사 관리', '/company-info': '회사 정보 관리', '/user-groups': '사용자 관리', '/employee-cards': '직원카드 관리', '/manager-assignments': '선주 사용자 관리', '/supervisor-management': '우리회사 담당자 관리',
     '/ranks': '선원 직급 관리', '/nationalities': '선원 국적 관리', '/certificate-types': '증서 관리',
     '/shore-positions': '직급 관리', '/org-chart': '조직도 관리', '/permissions': '권한 관리', '/menu-configuration': 'UI 구성 관리', '/profile': '프로필',
     '/certificate-expiry': '증서 만료 현황', '/reports': '통계 대시보드',

@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '@/services/auth.service';
 import { getUsers, addUser, updateUser, deleteUser } from '@/services/user.service';
 import { getCompanies } from '@/services/company.service';
-import { getShorePositions } from '@/services/shore-position.service';
 import { supabase } from '@/lib/supabase';
-import type { User, Company, ShorePosition } from '@/types/models';
+import type { User, Company } from '@/types/models';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -19,15 +18,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
-const ROLE_LABELS: Record<string, string> = { ship_owner: '선주', ship_manager: '선박관리사', manning_agency: '선원매닝사', crew: '선원', admin: '슈퍼관리자', system_admin: '시스템관리자' };
-const ROLE_COLORS: Record<string, string> = { ship_owner: 'bg-purple-500', ship_manager: 'bg-blue-500', manning_agency: 'bg-green-500', crew: 'bg-gray-500', admin: 'bg-red-500', system_admin: 'bg-indigo-500' };
-// 선박관리사 탭에는 우리회사 내부 직원(선박관리사 + 관리자 계정)을 함께 보여준다
-const SHIP_MANAGER_TAB_ROLES = ['ship_manager', 'admin', 'system_admin'];
+const ROLE_LABELS: Record<string, string> = { ship_owner: '선주', manning_agency: '선원매닝사', crew: '선원' };
+const ROLE_COLORS: Record<string, string> = { ship_owner: 'bg-purple-500', manning_agency: 'bg-green-500', crew: 'bg-gray-500' };
 
 type CompanyExt = Company & { company_type?: string };
 interface CrewOption { id: string; name: string; }
 
-const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'crew', company_id: '', position_id: '', crew_member_id: '', hire_date: '' };
+const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'crew', company_id: '', crew_member_id: '' };
 
 export default function UserGroupManagementPage() {
   const navigate = useNavigate();
@@ -35,7 +32,6 @@ export default function UserGroupManagementPage() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<CompanyExt[]>([]);
-  const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,31 +65,25 @@ export default function UserGroupManagementPage() {
 
   const loadData = async () => {
     try {
-      const [u, c, p, crewRes] = await Promise.all([
-        getUsers(), getCompanies(), getShorePositions(),
+      const [u, c, crewRes] = await Promise.all([
+        getUsers(), getCompanies(),
         supabase.from('crew_members').select('id,name').order('name'),
       ]);
-      setUsers(u); setCompanies(c as CompanyExt[]); setPositions(p);
+      setUsers(u); setCompanies(c as CompanyExt[]);
       setCrewOptions((crewRes.data || []) as CrewOption[]);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
   const openAdd = (role: string) => {
-    const mgmtCompany = companies.find(c => (c as CompanyExt).company_type === '선박관리사');
     setEditId(null);
     setFormError('');
-    setFormData({
-      ...EMPTY_FORM,
-      role,
-      company_id: (role === 'ship_manager' || role === 'admin') ? (mgmtCompany?.id || '') : '',
-    });
+    setFormData({ ...EMPTY_FORM, role, company_id: '' });
     setModalOpen(true);
   };
 
   const openEdit = (u: User) => {
-    if (isProtectedFromCurrentUser(u)) return;
-    const eu = u as User & { username?: string; position_id?: string; crew_member_id?: string };
+    const eu = u as User & { username?: string; crew_member_id?: string };
     setEditId(u.id);
     setFormError('');
     setFormData({
@@ -103,9 +93,7 @@ export default function UserGroupManagementPage() {
       email: u.email,
       role: u.role,
       company_id: u.company_id || '',
-      position_id: eu.position_id || '',
       crew_member_id: eu.crew_member_id || '',
-      hire_date: u.hire_date || '',
     });
     setModalOpen(true);
   };
@@ -115,7 +103,6 @@ export default function UserGroupManagementPage() {
   const getCompanyOptions = (role: string): CompanyExt[] => {
     if (role === 'ship_owner') return companies.filter(c => c.type === 'owner');
     if (role === 'manning_agency') return companies.filter(c => c.type === 'manning');
-    if (role === 'ship_manager' || role === 'admin') return companies.filter(c => (c as CompanyExt).company_type === '선박관리사');
     return [];
   };
 
@@ -132,9 +119,7 @@ export default function UserGroupManagementPage() {
           name: formData.name, email: formData.email,
           role: formData.role as User['role'],
           company_id: formData.company_id || null,
-          position_id: formData.position_id || null,
           crew_member_id: formData.crew_member_id || null,
-          hire_date: formData.hire_date || null,
           ...(formData.password ? { password: formData.password } : {}),
         });
       } else {
@@ -143,9 +128,7 @@ export default function UserGroupManagementPage() {
           name: formData.name, email: formData.email,
           role: formData.role as User['role'],
           company_id: formData.company_id || null,
-          position_id: formData.position_id || null,
           crew_member_id: formData.crew_member_id || null,
-          hire_date: formData.hire_date || null,
         });
       }
       toast({ title: editId ? '수정 완료' : '등록 완료' });
@@ -170,9 +153,7 @@ export default function UserGroupManagementPage() {
   };
 
   const renderTable = (role: string) => {
-    const roleUsers = role === 'ship_manager'
-      ? users.filter(u => SHIP_MANAGER_TAB_ROLES.includes(u.role))
-      : users.filter(u => u.role === role);
+    const roleUsers = users.filter(u => u.role === role);
     return (
       <Card>
         <CardHeader className="pb-3">
@@ -216,7 +197,7 @@ export default function UserGroupManagementPage() {
                         <TableCell className="font-medium text-sm">{eu.username || '-'}</TableCell>
                         <TableCell className="text-sm">{u.name}</TableCell>
                         <TableCell className="text-sm">{u.email}</TableCell>
-                        <TableCell className="text-sm">{company ? company.name : (['ship_manager','admin'].includes(role) ? 'INK' : '-')}</TableCell>
+                        <TableCell className="text-sm">{company ? company.name : '-'}</TableCell>
                         <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-500'}`}>{ROLE_LABELS[u.role] || u.role}</Badge></TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           {canDeleteRow && (
@@ -251,23 +232,23 @@ export default function UserGroupManagementPage() {
           <div className="flex items-center gap-2">
             <UserCircle className="w-6 h-6" />
             <div>
-              <h1 className="text-xl font-bold text-gray-900">사용자 그룹 관리</h1>
-              <p className="text-sm text-gray-600">프로그램에 접속하는 사용자를 그룹별로 관리합니다</p>
+              <h1 className="text-xl font-bold text-gray-900">사용자 관리</h1>
+              <p className="text-sm text-gray-600">선주/선원매닝사/선원 등 외부 사용자를 그룹별로 관리합니다</p>
             </div>
           </div>
           <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={loadData}>
             <RefreshCw className="w-3.5 h-3.5" />새로고침
           </Button>
         </div>
-        <Tabs defaultValue="ship_manager" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-9">
-            {['ship_manager','ship_owner','manning_agency','crew'].map(role => (
+        <Tabs defaultValue="ship_owner" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 h-9">
+            {['ship_owner','manning_agency','crew'].map(role => (
               <TabsTrigger key={role} value={role} className="text-sm">
-                {ROLE_LABELS[role]} ({(role === 'ship_manager' ? users.filter(u => SHIP_MANAGER_TAB_ROLES.includes(u.role)) : users.filter(u => u.role === role)).length})
+                {ROLE_LABELS[role]} ({users.filter(u => u.role === role).length})
               </TabsTrigger>
             ))}
           </TabsList>
-          {['ship_manager','ship_owner','manning_agency','crew'].map(role => (
+          {['ship_owner','manning_agency','crew'].map(role => (
             <TabsContent key={role} value={role} className="mt-3">{renderTable(role)}</TabsContent>
           ))}
         </Tabs>
@@ -308,37 +289,16 @@ export default function UserGroupManagementPage() {
               </div>
             </div>
 
-            {['ship_owner','manning_agency','ship_manager','admin'].includes(formData.role) && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">소속 회사 <span className="text-gray-400 font-normal">(선택)</span></Label>
-                  <Select value={formData.company_id || '_none'} onValueChange={v => setFormData({ ...formData, company_id: v === '_none' ? '' : v })}>
-                    <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="회사 선택" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">— 미지정 —</SelectItem>
-                      {companyOptions.map(c => <SelectItem key={c.id} value={String(c.id)} className="text-sm">{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {(formData.role === 'ship_manager' || formData.role === 'admin') && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">직급</Label>
-                    <Select value={formData.position_id || '_none'} onValueChange={v => setFormData({ ...formData, position_id: v === '_none' ? '' : v })}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="직급 선택" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">— 선택 —</SelectItem>
-                        {positions.map(p => <SelectItem key={p.id} value={String(p.id)} className="text-sm">{p.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {(formData.role === 'ship_manager' || formData.role === 'admin' || formData.role === 'system_admin') && (
+            {['ship_owner','manning_agency'].includes(formData.role) && (
               <div className="space-y-1.5">
-                <Label className="text-xs">입사일 <span className="text-gray-400 font-normal">(연차 산정 기준)</span></Label>
-                <Input type="date" value={formData.hire_date} onChange={e => setFormData({ ...formData, hire_date: e.target.value })} className="h-8 text-sm" />
+                <Label className="text-xs">소속 회사 <span className="text-gray-400 font-normal">(선택)</span></Label>
+                <Select value={formData.company_id || '_none'} onValueChange={v => setFormData({ ...formData, company_id: v === '_none' ? '' : v })}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="회사 선택" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— 미지정 —</SelectItem>
+                    {companyOptions.map(c => <SelectItem key={c.id} value={String(c.id)} className="text-sm">{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 
