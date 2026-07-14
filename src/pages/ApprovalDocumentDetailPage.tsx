@@ -13,7 +13,7 @@ import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
-import { approvalDocumentService } from '@/services/approval-document.service';
+import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 
 const STATUS_BADGE: Record<string, { label: string; className: string; icon: typeof CheckCircle2 }> = {
@@ -38,6 +38,7 @@ export default function ApprovalDocumentDetailPage() {
   const [actionType, setActionType] = useState<'approved' | 'rejected' | null>(null);
   const [comment, setComment] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [leaveDetail, setLeaveDetail] = useState<LeaveDetail | null>(null);
 
   useEffect(() => { loadData(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -58,6 +59,7 @@ export default function ApprovalDocumentDetailPage() {
       const found = docs[0] || null;
       setDoc(found);
       setDocType(found ? types.find(t => t.id === found.document_type_id) || null : null);
+      setLeaveDetail(await getLeaveDetail(found?.reference_type ?? null, found?.reference_id ?? null).catch(() => null));
 
       // 이 문서에 내가 참조로 지정돼 있으면(개인 또는 소속 부서), 상세를 연 시점에 열람 처리해
       // 결재함 배지 집계에서 빠지도록 한다.
@@ -191,7 +193,14 @@ export default function ApprovalDocumentDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {doc.form_data && Object.keys(doc.form_data).length > 0 ? (
+            {leaveDetail ? (
+              <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">휴가 종류</span><span>{leaveDetail.typeLabel}</span></div>
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">신청 기간</span><span>{leaveDetail.period}</span></div>
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">신청 시간</span><span>{leaveDetail.hoursLabel}</span></div>
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">사유</span><span className="whitespace-pre-wrap">{leaveDetail.reason}</span></div>
+              </div>
+            ) : doc.form_data && Object.keys(doc.form_data).length > 0 ? (
               <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
                 {(docType?.field_schema || []).map(field => (
                   <div key={field.key} className="flex gap-2">

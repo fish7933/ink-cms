@@ -1,17 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import type { CompanyInfo } from '@/services/company-info.service';
+import type { LeaveDetail } from '@/services/approval-document.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
-
-// 연차/질병휴가 신청 문서(reference_type이 shore_leave_request/sick_leave_request)는 자유서식
-// content만으로는 신청 당시 정보(기간/시간/사유)가 누락되기 쉬워, 원본 신청 레코드에서 조회한
-// 값을 별도로 받아 구조화된 표로 보여준다.
-export interface LeaveDetail {
-  typeLabel: string;
-  period: string;
-  hoursLabel: string;
-  reason: string;
-}
 
 interface Props {
   doc: ApprovalDocumentWithDetails;

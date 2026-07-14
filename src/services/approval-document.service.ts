@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
+import { formatLeaveHours } from '@/lib/leave-calc';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type {
   ApprovalDocumentType,
@@ -13,6 +14,39 @@ import type {
 
 const SELF_APPROVE_COMMENT = '본인 기안으로 자동 승인 처리됨';
 const ALREADY_PROCESSED_ERROR = '이미 처리되었거나 결재 순서가 아닙니다.';
+
+// 연차/질병휴가 신청 문서(reference_type이 shore_leave_request/sick_leave_request)는 자유서식
+// content만으로는 신청 당시 정보가 누락되기 쉬워, 원본 신청 레코드에서 직접 조회해 결재 상세/
+// 시행문 양쪽에서 구조화된 정보로 보여준다.
+export interface LeaveDetail {
+  typeLabel: string;
+  period: string;
+  hoursLabel: string;
+  reason: string;
+}
+
+const LEAVE_REFERENCE_TABLE: Record<string, string> = {
+  shore_leave_request: 'shore_leave_requests',
+  sick_leave_request: 'sick_leave_requests',
+};
+const LEAVE_REFERENCE_LABEL: Record<string, string> = {
+  shore_leave_request: '연차',
+  sick_leave_request: '질병휴가',
+};
+
+export async function getLeaveDetail(referenceType: string | null, referenceId: string | null): Promise<LeaveDetail | null> {
+  if (!referenceType || !referenceId) return null;
+  const table = LEAVE_REFERENCE_TABLE[referenceType];
+  if (!table) return null;
+  const { data } = await supabase.from(table).select('start_date, start_time, end_date, end_time, hours, reason').eq('id', referenceId).maybeSingle();
+  if (!data) return null;
+  return {
+    typeLabel: LEAVE_REFERENCE_LABEL[referenceType] || '휴가',
+    period: `${data.start_date} ${data.start_time} ~ ${data.end_date} ${data.end_time}`,
+    hoursLabel: formatLeaveHours(data.hours),
+    reason: data.reason || '-',
+  };
+}
 
 // 시스템 연동형 문서(reference_type/reference_id)가 최종 승인/반려되면 원본 레코드의
 // 상태도 함께 동기화한다. 현재는 교대계획 결재 통합에만 쓰이지만, 다른 화면의 결재

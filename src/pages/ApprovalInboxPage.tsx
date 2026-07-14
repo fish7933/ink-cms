@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
-  CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus,
+  CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus, Paperclip,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,10 +14,10 @@ import { getCurrentUser } from '@/lib/store';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
-import { approvalDocumentService } from '@/services/approval-document.service';
+import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { supabase } from '@/lib/supabase';
-import type { ApprovalDocumentWithDetails } from '@/types/approval-document';
+import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 
 type DocFilter = 'all' | 'mine' | 'pending' | 'referenced' | 'approved' | 'rejected';
 
@@ -35,6 +35,7 @@ export default function ApprovalInboxPage() {
   const [myOrgUnitIds, setMyOrgUnitIds] = useState<string[]>([]);
 
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
+  const [docTypes, setDocTypes] = useState<ApprovalDocumentType[]>([]);
   const [referencedDocIds, setReferencedDocIds] = useState<Set<string>>(new Set());
   const [docFilter, setDocFilter] = useState<DocFilter>('all');
   const [docViewMode, setDocViewMode] = useState<'list' | 'action'>('list');
@@ -42,6 +43,7 @@ export default function ApprovalInboxPage() {
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
   const [docComment, setDocComment] = useState('');
   const [docProcessing, setDocProcessing] = useState(false);
+  const [actionLeaveDetail, setActionLeaveDetail] = useState<LeaveDetail | null>(null);
 
   const permissions = usePermissions('approval_inbox');
 
@@ -74,6 +76,7 @@ export default function ApprovalInboxPage() {
       const orgUnitIds = members.find(m => m.id === currentUser.id)?.org_unit_ids || [];
       setMyOrgUnitIds(orgUnitIds);
 
+      approvalDocumentService.getDocumentTypes(true).then(setDocTypes).catch(console.error);
       await loadDocuments(currentUser.id, admin, orgUnitIds);
     } finally {
       setInitializing(false);
@@ -110,7 +113,15 @@ export default function ApprovalInboxPage() {
   };
 
   const docGoBackToList = () => {
-    setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment('');
+    setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment(''); setActionLeaveDetail(null);
+  };
+
+  const openDocAction = (doc: ApprovalDocumentWithDetails, type: 'approved' | 'rejected') => {
+    setSelectedDocument(doc);
+    setDocActionType(type);
+    setDocViewMode('action');
+    setActionLeaveDetail(null);
+    getLeaveDetail(doc.reference_type, doc.reference_id).then(setActionLeaveDetail).catch(console.error);
   };
 
   const canCancelDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && (doc.created_by === currentUserId || isAdmin);
@@ -208,8 +219,8 @@ export default function ApprovalInboxPage() {
                   <div className="flex justify-end gap-1">
                     {myTurn && (
                       <>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => { setSelectedDocument(doc); setDocActionType('approved'); setDocViewMode('action'); }}>승인</Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => { setSelectedDocument(doc); setDocActionType('rejected'); setDocViewMode('action'); }}>반려</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => openDocAction(doc, 'approved')}>승인</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => openDocAction(doc, 'rejected')}>반려</Button>
                       </>
                     )}
                     {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
@@ -237,8 +248,14 @@ export default function ApprovalInboxPage() {
     : docFilter === 'rejected' ? docRejected
     : documents;
 
+  const openAttachment = (path: string) => {
+    const { data } = supabase.storage.from('documents').getPublicUrl(path);
+    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+  };
+
   const renderDocAction = () => {
     if (!selectedDocument || !docActionType) return null;
+    const actionDocType = docTypes.find(t => t.id === selectedDocument.document_type_id);
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
@@ -248,9 +265,47 @@ export default function ApprovalInboxPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">{selectedDocument.title}</CardTitle>
-            <CardDescription>{selectedDocument.document_type_name}{selectedDocument.org_unit_name ? ` · ${selectedDocument.org_unit_name}` : ''}</CardDescription>
+            <CardDescription>{selectedDocument.document_type_name}{selectedDocument.org_unit_name ? ` · ${selectedDocument.org_unit_name}` : ''} · 기안자: {selectedDocument.creator_name}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {actionLeaveDetail ? (
+              <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">휴가 종류</span><span>{actionLeaveDetail.typeLabel}</span></div>
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">신청 기간</span><span>{actionLeaveDetail.period}</span></div>
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">신청 시간</span><span>{actionLeaveDetail.hoursLabel}</span></div>
+                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">사유</span><span className="whitespace-pre-wrap">{actionLeaveDetail.reason}</span></div>
+              </div>
+            ) : selectedDocument.form_data && Object.keys(selectedDocument.form_data).length > 0 ? (
+              <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
+                {(actionDocType?.field_schema || []).map(field => (
+                  <div key={field.key} className="flex gap-2">
+                    <span className="text-gray-500 shrink-0 w-24">{field.label}</span>
+                    <span className="whitespace-pre-wrap">{selectedDocument.form_data?.[field.key] ?? '-'}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              selectedDocument.content && <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{selectedDocument.content}</div>
+            )}
+
+            {selectedDocument.attachments.length > 0 && (
+              <div className="bg-gray-50 p-3 rounded">
+                <p className="text-sm font-semibold mb-1.5 flex items-center gap-1"><Paperclip className="w-3.5 h-3.5" />첨부 문서</p>
+                <div className="space-y-1">
+                  {selectedDocument.attachments.map((f, idx) => (
+                    <button key={idx} type="button" onClick={() => openAttachment(f.path)} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
+                      <span className="text-xs text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedDocument.requester_comment && (
+              <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{selectedDocument.requester_comment}</p></div>
+            )}
+
             <div>
               <Label>{docActionType === 'approved' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>
               <Textarea value={docComment} onChange={e => setDocComment(e.target.value)} rows={4} className="mt-2" disabled={docProcessing} />
