@@ -36,7 +36,7 @@ export const orgChartService = {
   async getOrgMembers(): Promise<OrgMember[]> {
     const { data, error } = await supabase
       .from('users')
-      .select('id, name, role, position_id, is_active')
+      .select('id, name, role, position_id, hire_date, is_active')
       .in('role', INTERNAL_ROLES)
       .eq('is_active', true)
       .order('name');
@@ -62,6 +62,7 @@ export const orgChartService = {
         position_id: u.position_id,
         position_name: pos?.name || null,
         position_order: pos?.display_order ?? null,
+        hire_date: u.hire_date || null,
         org_unit_ids: unitsByUser.get(u.id) || [],
       };
     });

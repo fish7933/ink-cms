@@ -16,6 +16,7 @@ export interface OrgMember {
   position_id: string | null;
   position_name: string | null;
   position_order: number | null; // shore_positions.display_order — 낮을수록 선임
+  hire_date: string | null; // 입사일 — 같은 직급 내 정렬 기준(입사연도가 빠를수록 선임)
   org_unit_ids: string[]; // 소속된 모든 부서 id (한 사람이 여러 부서에 소속 가능)
 }
 

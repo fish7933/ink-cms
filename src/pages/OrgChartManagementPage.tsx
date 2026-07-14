@@ -302,7 +302,14 @@ export default function OrgChartManagementPage() {
                     <p className="text-xs text-gray-400 mb-2">소속된 구성원이 없습니다.</p>
                   ) : (
                     <div className="space-y-1 mb-2">
-                      {selectedNode.members.map(m => (
+                      {[...selectedNode.members].sort((a, b) => {
+                        const posA = a.position_order ?? Infinity;
+                        const posB = b.position_order ?? Infinity;
+                        if (posA !== posB) return posA - posB;
+                        const hireA = a.hire_date ?? '9999-99-99';
+                        const hireB = b.hire_date ?? '9999-99-99';
+                        return hireA.localeCompare(hireB);
+                      }).map(m => (
                         <div key={m.id} className="flex items-center justify-between text-sm px-2 py-1.5 rounded bg-gray-50">
                           <span>
                             {m.name}{m.position_name ? <span className="text-gray-500"> · {m.position_name}</span> : ''}
