@@ -15,16 +15,31 @@ import type {
 
 // 문서유형의 전결규정(조직도 기반 자동계산)과 별개로, 결재선 관리에서 고른 결재라인을
 // 그대로 기안서 결재 단계로 쓰고 싶을 때 ApprovalChainStep[] 형태로 변환해준다.
-export function approvalLineToChainSteps(line: ApprovalLineWithSteps): ApprovalChainStep[] {
-  return [...line.steps]
-    .sort((a, b) => a.step_order - b.step_order)
-    .map(s => ({
+export async function approvalLineToChainSteps(line: ApprovalLineWithSteps): Promise<ApprovalChainStep[]> {
+  const sorted = [...line.steps].sort((a, b) => a.step_order - b.step_order);
+
+  // 결재란/시행문에는 "결재선: OOO" 같은 라인 이름이 아니라 다른 결재라인과 동일하게
+  // 결재자의 실제 직급만 표시해야 하므로, users.position_id → shore_positions.name을 조회한다.
+  const approverIds = [...new Set(sorted.map(s => s.approver_id))];
+  const { data: users } = await supabase.from('users').select('id, position_id').in('id', approverIds);
+  const positionIdByUser = new Map((users || []).map(u => [u.id, u.position_id as string | null]));
+  const positionIds = [...new Set([...positionIdByUser.values()].filter((id): id is string => !!id))];
+  const { data: positions } = positionIds.length > 0
+    ? await supabase.from('shore_positions').select('id, name').in('id', positionIds)
+    : { data: [] as { id: string; name: string }[] };
+  const positionNameById = new Map((positions || []).map(p => [p.id, p.name]));
+
+  return sorted.map(s => {
+    const positionId = positionIdByUser.get(s.approver_id);
+    const positionName = positionId ? positionNameById.get(positionId) : undefined;
+    return {
       approver_id: s.approver_id,
       approver_name: s.approver_name,
-      approver_role: `결재선: ${line.name}`,
+      approver_role: positionName || '',
       org_unit_id: '',
       org_unit_name: '',
-    }));
+    };
+  });
 }
 
 const SELF_APPROVE_COMMENT = '본인 기안으로 자동 승인 처리됨';

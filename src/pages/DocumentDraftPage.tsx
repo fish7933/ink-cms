@@ -191,7 +191,13 @@ export default function DocumentDraftPage() {
   }, [documentTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedManualLine = approvalLines.find(l => l.id === manualLineId) || null;
-  const manualChain = useMemo(() => selectedManualLine ? approvalLineToChainSteps(selectedManualLine) : [], [selectedManualLine]);
+  const [manualChain, setManualChain] = useState<ApprovalChainStep[]>([]);
+  useEffect(() => {
+    if (!selectedManualLine) { setManualChain([]); return; }
+    let cancelled = false;
+    approvalLineToChainSteps(selectedManualLine).then(chain => { if (!cancelled) setManualChain(chain); });
+    return () => { cancelled = true; };
+  }, [selectedManualLine]);
   const effectiveChain = useManualLine ? manualChain : previewChain;
 
   const selfStepIndexes = useMemo(
