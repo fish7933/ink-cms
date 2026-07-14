@@ -308,7 +308,7 @@ export default function ApprovalInboxPage() {
                   {canDeleteDoc(doc) && <Checkbox checked={docSelectedIds.includes(doc.id)} onCheckedChange={() => toggleDocSelect(doc.id)} />}
                 </td>
                 <td className="p-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5">
                     {getStatusBadge(doc.status)}
                     {myTurn && <Badge className="bg-blue-500 text-xs">내 차례</Badge>}
                     {referencedDocIds.has(doc.id) && (
@@ -322,7 +322,7 @@ export default function ApprovalInboxPage() {
                 <td className="p-2 text-gray-500">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
                 <td className="p-2 text-gray-500">{doc.creator_name}</td>
                 <td className="p-2">
-                  <div className="flex items-center gap-1 flex-wrap text-xs whitespace-nowrap">
+                  <div className="flex items-center gap-1 text-xs whitespace-nowrap">
                     <span className="text-gray-400">기안</span>
                     {doc.steps.map(s => (
                       <span key={s.id} className="flex items-center gap-1">
