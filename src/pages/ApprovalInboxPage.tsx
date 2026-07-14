@@ -323,7 +323,7 @@ export default function ApprovalInboxPage() {
     const selectableIds = list.filter(canDeleteDoc).map(d => d.id);
     return (
     <div className="rounded-md border overflow-hidden overflow-x-auto">
-      <table className="w-full text-sm whitespace-nowrap">
+      <table className="w-full text-xs whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
             <th className="w-8 p-2">
@@ -415,7 +415,7 @@ export default function ApprovalInboxPage() {
   // 삭제된 문서함 — 문서 자체는 살아있고, 이 사용자의 결재함에서만 숨겨진 상태. 복원 가능.
   const renderDeletedDocTable = (list: ApprovalDocumentWithDetails[]) => (
     <div className="rounded-md border overflow-hidden overflow-x-auto">
-      <table className="w-full text-sm whitespace-nowrap">
+      <table className="w-full text-xs whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
