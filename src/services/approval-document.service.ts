@@ -1040,4 +1040,30 @@ export const approvalDocumentService = {
       readAt: readAtById.get(id) || null,
     }));
   },
+
+  // 시행문 상단 "참조" 줄 표시용 — 참조 대상을 지정된 그대로(부서 전체 참조면 부서명,
+  // 개인 참조면 이름) 보여준다. getReferenceReadStatus처럼 부서 참조를 소속 인원별로
+  // 펼치지 않는다 — 시행문에는 "누가 CC됐는지 지정된 형태"만 필요하기 때문이다.
+  async getReferenceLabels(documentId: string): Promise<string[]> {
+    const { data: refs, error } = await supabase
+      .from('approval_document_references')
+      .select('user_id, org_unit_id')
+      .eq('document_id', documentId);
+    if (error) throw error;
+    if (!refs || refs.length === 0) return [];
+
+    const userIds = refs.filter(r => r.user_id).map(r => r.user_id as string);
+    const orgUnitIds = refs.filter(r => r.org_unit_id).map(r => r.org_unit_id as string);
+
+    const [{ data: users }, { data: units }] = await Promise.all([
+      userIds.length > 0 ? supabase.from('users').select('id, name').in('id', userIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      orgUnitIds.length > 0 ? supabase.from('org_units').select('id, name').in('id', orgUnitIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ]);
+    const userNameById = new Map((users || []).map(u => [u.id, u.name]));
+    const unitNameById = new Map((units || []).map(u => [u.id, u.name]));
+
+    return refs.map(r =>
+      r.user_id ? (userNameById.get(r.user_id) || '알 수 없음') : `${unitNameById.get(r.org_unit_id!) || '부서'} (전체)`
+    );
+  },
 };

@@ -22,6 +22,7 @@ export default function ApprovalDocumentPrintPage() {
   const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
   const [leaveDetail, setLeaveDetail] = useState<LeaveDetail | null>(null);
+  const [referenceLabels, setReferenceLabels] = useState<string[]>([]);
   const [includeAttachments, setIncludeAttachments] = useState(false);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function ApprovalDocumentPrintPage() {
       setPositions(shorePositions);
       setCreatorPositionName(found ? members.find(m => m.id === found.created_by)?.position_name || null : null);
       setLeaveDetail(await getLeaveDetail(found?.reference_type ?? null, found?.reference_id ?? null).catch(() => null));
+      setReferenceLabels(found ? await approvalDocumentService.getReferenceLabels(found.id).catch(() => []) : []);
       setLoading(false);
     };
     load();
@@ -101,7 +103,7 @@ export default function ApprovalDocumentPrintPage() {
           </div>
         )}
       </div>
-      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} leaveDetail={leaveDetail} />
+      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} leaveDetail={leaveDetail} referenceLabels={referenceLabels} />
     </div>
   );
 }

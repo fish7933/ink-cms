@@ -12,11 +12,12 @@ interface Props {
   creatorPositionName?: string | null;
   includeAttachments?: boolean;
   leaveDetail?: LeaveDetail | null;
+  referenceLabels?: string[];
 }
 
 // 결재 완료된 문서(특히 지출결의서 등 구조화 양식)를 총무팀 보관용 "시행문" 형식으로 출력하는 문서 본문.
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
-export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false, leaveDetail }: Props) {
+export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false, leaveDetail, referenceLabels = [] }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
   const issuedDate = doc.completed_at ? new Date(doc.completed_at) : new Date(doc.created_at);
   const fields = documentType?.field_schema || [];
@@ -88,10 +89,10 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
             <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
             <tr><td style={{ padding: '3px 0' }}><b>시행일자</b>&nbsp;&nbsp;{issuedDate.toLocaleDateString('ko-KR')}</td></tr>
             <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;총무팀 (보존)</td></tr>
-            <tr><td style={{ padding: '3px 0' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td></tr>
-            {doc.attachments.length > 0 && (
-              <tr><td style={{ padding: '3px 0' }}><b>붙임</b>&nbsp;&nbsp;{doc.attachments.map(a => a.name).join(', ')}</td></tr>
+            {referenceLabels.length > 0 && (
+              <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
             )}
+            <tr><td style={{ padding: '3px 0' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td></tr>
           </tbody>
         </table>
 
@@ -135,8 +136,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         </div>
       </div>
 
-      <div style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', margin: '28px 0 16px' }}>{doc.title}</div>
-      <div style={{ borderBottom: '1.5px solid #1a1a1a', marginBottom: 20 }} />
+      <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', margin: '22px 0 18px' }}>{doc.title}</div>
 
       {leaveDetail ? (
         <table className="issued-fields">
@@ -160,6 +160,15 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         </table>
       ) : (
         doc.content && <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>
+      )}
+
+      {doc.attachments.length > 0 && (
+        <div style={{ fontSize: 13, marginTop: 18 }}>
+          <b>붙임</b>
+          {doc.attachments.map((a, i) => (
+            <div key={i} style={{ marginLeft: 28 }}>{i + 1}. {a.name}</div>
+          ))}
+        </div>
       )}
 
       <div className="issued-footer">

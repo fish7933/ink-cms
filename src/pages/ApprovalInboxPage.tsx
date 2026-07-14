@@ -61,6 +61,7 @@ export default function ApprovalInboxPage() {
   const [memberPositionByUserId, setMemberPositionByUserId] = useState<Map<string, string | null>>(new Map());
   const [docProcessing, setDocProcessing] = useState(false);
   const [actionLeaveDetail, setActionLeaveDetail] = useState<LeaveDetail | null>(null);
+  const [actionReferenceLabels, setActionReferenceLabels] = useState<string[]>([]);
 
   const permissions = usePermissions('approval_inbox');
 
@@ -169,7 +170,7 @@ export default function ApprovalInboxPage() {
   const canAdminForceDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && isAdmin && !isMyDocTurn(doc);
 
   const docGoBackToList = () => {
-    setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment(''); setActionLeaveDetail(null); setDocForceMode(false);
+    setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment(''); setActionLeaveDetail(null); setActionReferenceLabels([]); setDocForceMode(false);
   };
 
   const openDocAction = (doc: ApprovalDocumentWithDetails, type: 'approved' | 'rejected', force = false) => {
@@ -179,6 +180,8 @@ export default function ApprovalInboxPage() {
     setDocViewMode('action');
     setActionLeaveDetail(null);
     getLeaveDetail(doc.reference_type, doc.reference_id).then(setActionLeaveDetail).catch(console.error);
+    setActionReferenceLabels([]);
+    approvalDocumentService.getReferenceLabels(doc.id).then(setActionReferenceLabels).catch(console.error);
   };
 
   // 기안 취소는 본인이 기안한 문서만, 그리고 결재라인이 아직 하나도 진행(승인/반려)되지
@@ -489,6 +492,7 @@ export default function ApprovalInboxPage() {
             positions={positions}
             creatorPositionName={memberPositionByUserId.get(selectedDocument.created_by) || null}
             leaveDetail={actionLeaveDetail}
+            referenceLabels={actionReferenceLabels}
           />
         </div>
 
