@@ -259,9 +259,14 @@ export const approvalDocumentService = {
     }
 
     const now = new Date().toISOString();
-    // 기안자 본인이 결재라인에 포함돼 있으면 그 단계는 생성 시점에 자동 승인 처리
+    // 기안자 본인이 결재라인에 포함돼 있으면 그 단계는 생성 시점에 자동 승인 처리 — 단, 이건
+    // 조직도 기반 자동 계산 체인에서만 의미가 있다(내 상위 직급을 거슬러 올라가다 보면 내
+    // 자리를 다시 지나칠 수 있음). 결재선 관리에서 직접 고른 결재선은 여러 사람이 공용으로
+    // 재사용하는 고정 라인이라, 그 라인의 특정 단계에 우연히 내 계정이 들어있다고 해서 실제
+    // 검토 없이 자동 승인돼버리면 안 된다.
+    const isAutoChain = !(input.manualChain && input.manualChain.length > 0);
     const stepRows = chain.map((c, i) => {
-      const isSelf = c.approver_id === input.created_by;
+      const isSelf = isAutoChain && c.approver_id === input.created_by;
       return {
         step_order: i + 1,
         approver_id: c.approver_id,
