@@ -684,25 +684,34 @@ class ApprovalService {
     return this.getApprovalDetails(approvals.map(a => a.id));
   }
 
-  // 일반 사용자용: 나와 관계있는 선원추천 결재 전체 (요청자 본인 / 결재선에 포함된 결재자) — 상태 무관.
-  // "결재함"의 기본 노출 범위 — 시스템관리자 이상은 getAllApprovals()로 전체를 본다.
+  // 일반 사용자용: 나와 관계있는 선원추천 결재 전체 (요청자 본인 / 이미 내 차례가 됐거나 지나간
+  // 결재자) — 상태 무관. 아직 내 차례가 오지 않은 건은 제외한다. "결재함"의 기본 노출 범위 —
+  // 관리자도 예외 없이 동일하게 적용된다.
   async getMyRelatedApprovals(userId: string): Promise<CrewRecommendationApprovalWithDetails[]> {
     const [requestedRes, stepsRes] = await Promise.all([
       supabase.from('crew_recommendation_approvals').select('id').eq('requester_id', userId),
-      supabase.from('approval_line_steps').select('approval_line_id').eq('approver_id', userId),
+      supabase.from('approval_line_steps').select('approval_line_id, step_order').eq('approver_id', userId),
     ]);
     if (requestedRes.error) throw requestedRes.error;
     if (stepsRes.error) throw stepsRes.error;
 
     const approvalIds = new Set<string>((requestedRes.data || []).map(r => r.id));
-    const lineIds = [...new Set((stepsRes.data || []).map(s => s.approval_line_id))];
+    const myMinStepOrderByLine = new Map<string, number>();
+    for (const s of stepsRes.data || []) {
+      const prev = myMinStepOrderByLine.get(s.approval_line_id);
+      if (prev === undefined || s.step_order < prev) myMinStepOrderByLine.set(s.approval_line_id, s.step_order);
+    }
+    const lineIds = [...myMinStepOrderByLine.keys()];
     if (lineIds.length > 0) {
       const { data: onMyLines, error } = await supabase
         .from('crew_recommendation_approvals')
-        .select('id')
+        .select('id, approval_line_id, current_step')
         .in('approval_line_id', lineIds);
       if (error) throw error;
-      for (const a of onMyLines || []) approvalIds.add(a.id);
+      for (const a of onMyLines || []) {
+        const myStepOrder = myMinStepOrderByLine.get(a.approval_line_id);
+        if (myStepOrder !== undefined && a.current_step >= myStepOrder) approvalIds.add(a.id);
+      }
     }
     if (approvalIds.size === 0) return [];
     return this.getApprovalDetails([...approvalIds]);

@@ -403,24 +403,38 @@ export const approvalDocumentService = {
     return enrichDocuments(data || []);
   },
 
-  // 일반 사용자용: 나와 관계있는 문서 전체 (기안자 본인 / 결재선에 포함된 결재자 / 참조 대상) — 상태 무관.
-  // "결재함"의 기본 노출 범위 — 시스템관리자 이상은 getAllDocuments()로 전체를 본다.
+  // 일반 사용자용: 나와 관계있는 문서 전체 (기안자 본인 / 이미 내 차례가 됐거나 지나간 결재선
+  // 담당자 / 참조 대상) — 상태 무관. 결재선에 이름은 있지만 아직 내 차례가 오지 않은(현재 단계가
+  // 나보다 앞선) 문서는 제외한다 — "아직 나에게 도착하지 않은 문서"는 결재함에 보이면 안 된다.
+  // "결재함"의 기본 노출 범위 — 관리자도 예외 없이 동일하게 적용된다.
   async getMyRelatedDocuments(userId: string, myOrgUnitIds: string[] = []): Promise<ApprovalDocumentWithDetails[]> {
     const orFilter = myOrgUnitIds.length > 0
       ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
       : `user_id.eq.${userId}`;
     const [draftedRes, stepsRes, refsRes] = await Promise.all([
       supabase.from('approval_documents').select('id').eq('created_by', userId).neq('status', 'draft'),
-      supabase.from('approval_document_steps').select('document_id').eq('approver_id', userId),
+      supabase.from('approval_document_steps').select('document_id, step_order, status').eq('approver_id', userId),
       supabase.from('approval_document_references').select('document_id').or(orFilter),
     ]);
     if (draftedRes.error) throw draftedRes.error;
     if (stepsRes.error) throw stepsRes.error;
     if (refsRes.error) throw refsRes.error;
 
+    const myStepDocIds = [...new Set((stepsRes.data || []).map(s => s.document_id))];
+    let reachedStepDocIds: string[] = [];
+    if (myStepDocIds.length > 0) {
+      const { data: parentDocs, error: parentError } = await supabase
+        .from('approval_documents').select('id, current_step').in('id', myStepDocIds);
+      if (parentError) throw parentError;
+      const currentStepByDoc = new Map((parentDocs || []).map(d => [d.id, d.current_step]));
+      reachedStepDocIds = (stepsRes.data || [])
+        .filter(s => s.status !== 'pending' || s.step_order <= (currentStepByDoc.get(s.document_id) ?? 0))
+        .map(s => s.document_id);
+    }
+
     const docIds = new Set<string>();
     for (const d of draftedRes.data || []) docIds.add(d.id);
-    for (const s of stepsRes.data || []) docIds.add(s.document_id);
+    for (const id of reachedStepDocIds) docIds.add(id);
     for (const r of refsRes.data || []) docIds.add(r.document_id);
     if (docIds.size === 0) return [];
 

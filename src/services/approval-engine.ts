@@ -157,20 +157,30 @@ export function createApprovalEngine(config: ApprovalEngineConfig) {
       return enrichDetails((approvals || []) as ApprovalRequest[]);
     },
 
+    // 결재선에 이름이 있어도 아직 내 차례가 오지 않은(현재 단계가 내 단계보다 앞선) 건은
+    // 제외한다 — "아직 나에게 도착하지 않은 결재"는 결재함에 보이면 안 된다.
     async getMyRelatedApprovals(userId: string): Promise<ApprovalRequestWithDetails[]> {
       const [requestedRes, stepsRes] = await Promise.all([
         supabase.from(requestTable).select('id').eq('requester_id', userId),
-        supabase.from('approval_line_steps').select('approval_line_id').eq('approver_id', userId),
+        supabase.from('approval_line_steps').select('approval_line_id, step_order').eq('approver_id', userId),
       ]);
       if (requestedRes.error) throw requestedRes.error;
       if (stepsRes.error) throw stepsRes.error;
 
       const approvalIds = new Set<string>((requestedRes.data || []).map((r: { id: string }) => r.id));
-      const lineIds = [...new Set((stepsRes.data || []).map((s: { approval_line_id: string }) => s.approval_line_id))];
+      const myMinStepOrderByLine = new Map<string, number>();
+      for (const s of (stepsRes.data || []) as { approval_line_id: string; step_order: number }[]) {
+        const prev = myMinStepOrderByLine.get(s.approval_line_id);
+        if (prev === undefined || s.step_order < prev) myMinStepOrderByLine.set(s.approval_line_id, s.step_order);
+      }
+      const lineIds = [...myMinStepOrderByLine.keys()];
       if (lineIds.length > 0) {
-        const { data: onMyLines, error } = await supabase.from(requestTable).select('id').in('approval_line_id', lineIds);
+        const { data: onMyLines, error } = await supabase.from(requestTable).select('id, approval_line_id, current_step').in('approval_line_id', lineIds);
         if (error) throw error;
-        for (const a of (onMyLines || []) as { id: string }[]) approvalIds.add(a.id);
+        for (const a of (onMyLines || []) as { id: string; approval_line_id: string; current_step: number }[]) {
+          const myStepOrder = myMinStepOrderByLine.get(a.approval_line_id);
+          if (myStepOrder !== undefined && a.current_step >= myStepOrder) approvalIds.add(a.id);
+        }
       }
       if (approvalIds.size === 0) return [];
       return getDetails([...approvalIds]);
