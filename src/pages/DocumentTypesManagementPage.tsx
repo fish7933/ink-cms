@@ -182,6 +182,7 @@ export default function DocumentTypesManagementPage() {
                     <TableHead className="text-xs">구분</TableHead>
                     <TableHead className="text-xs">양식</TableHead>
                     <TableHead className="text-xs">전결 기준 직급</TableHead>
+                    <TableHead className="text-xs">참조부서</TableHead>
                     <TableHead className="text-xs">상태</TableHead>
                     <TableHead className="text-right text-xs w-48">작업</TableHead>
                   </TableRow>
@@ -213,6 +214,20 @@ export default function DocumentTypesManagementPage() {
                               {positions.map(p => <SelectItem key={p.id} value={p.id} className="text-sm">{p.name} 전결</SelectItem>)}
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          {t.default_cc_org_unit_ids && t.default_cc_org_unit_ids.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[160px]">
+                              {t.default_cc_org_unit_ids.map(id => {
+                                const name = orgUnits.find(u => u.id === id)?.name;
+                                return name ? (
+                                  <Badge key={id} variant="outline" className="text-[10px] bg-gray-50 text-gray-600 border-gray-200">{name}</Badge>
+                                ) : null;
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">{t.is_active ? '사용중' : '비활성'}</Badge>
