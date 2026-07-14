@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
-  CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus, Paperclip, ChevronLeft, ChevronRight,
+  CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus, Paperclip, ChevronLeft, ChevronRight, Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -48,6 +49,7 @@ export default function ApprovalInboxPage() {
   const [referencedDocIds, setReferencedDocIds] = useState<Set<string>>(new Set());
   const [unreadReferenceDocIds, setUnreadReferenceDocIds] = useState<Set<string>>(new Set());
   const [docFilter, setDocFilter] = useState<DocFilter>('all');
+  const [docSearch, setDocSearch] = useState('');
   const [docPage, setDocPage] = useState(1);
   const [docItemsPerPage, setDocItemsPerPage] = useState(20);
   const [docSelectedIds, setDocSelectedIds] = useState<string[]>([]);
@@ -73,7 +75,7 @@ export default function ApprovalInboxPage() {
 
   useEffect(() => { init(); }, []);
 
-  useEffect(() => { setDocPage(1); setDocSelectedIds([]); }, [docFilter]);
+  useEffect(() => { setDocPage(1); setDocSelectedIds([]); }, [docFilter, docSearch]);
 
   // 문서 상세를 별도 탭에서 열어서 처리(승인/반려/취소/삭제)했을 때, 결재함 목록도 동기화되도록 새로고침한다.
   useEffect(() => {
@@ -459,13 +461,22 @@ export default function ApprovalInboxPage() {
   const docReferenced = documents.filter(d => referencedDocIds.has(d.id));
   const docApproved = documents.filter(d => d.status === 'approved' && !isReferenceOnly(d));
   const docRejected = documents.filter(d => d.status === 'rejected' && !isReferenceOnly(d));
-  const docFiltered = docFilter === 'mine' ? docMyRequested
+  const docFilteredByTab = docFilter === 'mine' ? docMyRequested
     : docFilter === 'pending' ? docPending
     : docFilter === 'referenced' ? docReferenced
     : docFilter === 'approved' ? docApproved
     : docFilter === 'rejected' ? docRejected
     : docFilter === 'deleted' ? hiddenDocuments
     : documents;
+  const docSearchQuery = docSearch.trim().toLowerCase();
+  const docFiltered = docSearchQuery
+    ? docFilteredByTab.filter(d =>
+        d.title.toLowerCase().includes(docSearchQuery) ||
+        d.creator_name.toLowerCase().includes(docSearchQuery) ||
+        d.document_type_name.toLowerCase().includes(docSearchQuery) ||
+        (d.org_unit_name || '').toLowerCase().includes(docSearchQuery)
+      )
+    : docFilteredByTab;
   const docTotalPages = Math.max(1, Math.ceil(docFiltered.length / docItemsPerPage));
   const docPaginated = docFiltered.slice((docPage - 1) * docItemsPerPage, docPage * docItemsPerPage);
 
@@ -593,6 +604,15 @@ export default function ApprovalInboxPage() {
                 </button>
               );
             })}
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <Input
+              value={docSearch} onChange={e => setDocSearch(e.target.value)}
+              placeholder="제목, 기안자, 문서유형, 부서로 검색"
+              className="h-8 text-sm pl-8"
+            />
           </div>
 
           {docFilter !== 'deleted' && (
