@@ -172,9 +172,15 @@ export default function ApprovalInboxPage() {
   // 않은 경우에만 가능하다 — 이미 결재가 시작된 문서는 기안자 본인도 취소할 수 없다.
   const canCancelDoc = (doc: ApprovalDocumentWithDetails) =>
     doc.status === 'pending' && doc.created_by === currentUserId && doc.steps.every(s => s.status === 'pending');
-  // "삭제"는 문서를 지우는 게 아니라 내 결재함 목록에서만 숨기는 것이므로, 상태나 기안자
-  // 여부와 무관하게 이 문서와 관계있는(목록에 보이는) 사람이면 누구나 자기 화면에서 지울 수 있다.
-  const canDeleteDoc = () => permissions.canDelete;
+  // "삭제"는 문서를 지우는 게 아니라 내 결재함 목록에서만 숨기는 것이지만, 아직 결재가
+  // 진행중이거나(내 차례가 아니어도 결과를 지켜봐야 함) 나에게 참조됐는데 아직 열람하지
+  // 않은 문서는 지울 수 없다 — 확인해야 할 것을 결재함에서 숨겨버리면 안 된다.
+  const canDeleteDoc = (doc: ApprovalDocumentWithDetails) => {
+    if (!permissions.canDelete) return false;
+    if (doc.status === 'pending') return false;
+    if (referencedDocIds.has(doc.id) && unreadReferenceDocIds.has(doc.id)) return false;
+    return true;
+  };
 
   const handleCancelDoc = async (doc: ApprovalDocumentWithDetails) => {
     if (!confirm('이 기안서를 취소하시겠습니까?')) return;
@@ -270,16 +276,18 @@ export default function ApprovalInboxPage() {
 
   const openDocDetail = (doc: ApprovalDocumentWithDetails) => openNewTab(`/documents/${doc.id}`, doc.title);
 
-  const renderDocTable = (list: ApprovalDocumentWithDetails[]) => (
+  const renderDocTable = (list: ApprovalDocumentWithDetails[]) => {
+    const selectableIds = list.filter(canDeleteDoc).map(d => d.id);
+    return (
     <div className="rounded-md border overflow-hidden overflow-x-auto">
       <table className="w-full text-sm whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
             <th className="w-8 p-2">
               <Checkbox
-                checked={list.length > 0 && list.every(d => docSelectedIds.includes(d.id))}
-                onCheckedChange={checked => toggleDocSelectAll(!!checked, list.map(d => d.id))}
-                disabled={list.length === 0}
+                checked={selectableIds.length > 0 && selectableIds.every(id => docSelectedIds.includes(id))}
+                onCheckedChange={checked => toggleDocSelectAll(!!checked, selectableIds)}
+                disabled={selectableIds.length === 0}
               />
             </th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
@@ -297,7 +305,7 @@ export default function ApprovalInboxPage() {
             return (
               <tr key={doc.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => openDocDetail(doc)}>
                 <td className="p-2" onClick={e => e.stopPropagation()}>
-                  <Checkbox checked={docSelectedIds.includes(doc.id)} onCheckedChange={() => toggleDocSelect(doc.id)} />
+                  {canDeleteDoc(doc) && <Checkbox checked={docSelectedIds.includes(doc.id)} onCheckedChange={() => toggleDocSelect(doc.id)} />}
                 </td>
                 <td className="p-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -347,7 +355,7 @@ export default function ApprovalInboxPage() {
                       </>
                     )}
                     {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
-                    {canDeleteDoc() && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
+                    {canDeleteDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
                   </div>
                 </td>
@@ -357,7 +365,8 @@ export default function ApprovalInboxPage() {
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   // 삭제된 문서함 — 문서 자체는 살아있고, 이 사용자의 결재함에서만 숨겨진 상태. 복원 가능.
   const renderDeletedDocTable = (list: ApprovalDocumentWithDetails[]) => (
