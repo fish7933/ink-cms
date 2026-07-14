@@ -6,7 +6,7 @@ import {
   CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus, Paperclip,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -85,8 +85,11 @@ export default function ApprovalInboxPage() {
       const members = await orgChartService.getOrgMembers();
       const orgUnitIds = members.find(m => m.id === currentUser.id)?.org_unit_ids || [];
       setMyOrgUnitIds(orgUnitIds);
+      setMemberPositionByUserId(new Map(members.map(m => [m.id, m.position_name])));
 
       approvalDocumentService.getDocumentTypes(true).then(setDocTypes).catch(console.error);
+      getCompanyInfo().then(setCompany).catch(() => setCompany(null));
+      getShorePositions().then(setPositions).catch(() => setPositions([]));
       await loadDocuments(currentUser.id, admin, orgUnitIds);
     } finally {
       setInitializing(false);
@@ -326,75 +329,59 @@ export default function ApprovalInboxPage() {
           <Button variant="ghost" size="icon" onClick={docGoBackToList}><ArrowLeft className="w-5 h-5" /></Button>
           <h2 className="text-lg font-bold">{docActionType === 'approved' ? '결재 승인' : '결재 반려'}</h2>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{selectedDocument.title}</CardTitle>
-            <CardDescription>{selectedDocument.document_type_name}{selectedDocument.org_unit_name ? ` · ${selectedDocument.org_unit_name}` : ''} · 기안자: {selectedDocument.creator_name}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {actionLeaveDetail ? (
-              <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
-                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">휴가 종류</span><span>{actionLeaveDetail.typeLabel}</span></div>
-                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">신청 기간</span><span>{actionLeaveDetail.period}</span></div>
-                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">신청 시간</span><span>{actionLeaveDetail.hoursLabel}</span></div>
-                <div className="flex gap-2"><span className="text-gray-500 shrink-0 w-24">사유</span><span className="whitespace-pre-wrap">{actionLeaveDetail.reason}</span></div>
-              </div>
-            ) : selectedDocument.form_data && Object.keys(selectedDocument.form_data).length > 0 ? (
-              <div className="bg-gray-50 p-3 rounded text-sm space-y-1.5">
-                {(actionDocType?.field_schema || []).map(field => (
-                  <div key={field.key} className="flex gap-2">
-                    <span className="text-gray-500 shrink-0 w-24">{field.label}</span>
-                    <span className="whitespace-pre-wrap">{selectedDocument.form_data?.[field.key] ?? '-'}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              selectedDocument.content && <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{selectedDocument.content}</div>
-            )}
 
-            {selectedDocument.attachments.length > 0 && (
-              <div className="bg-gray-50 p-3 rounded">
-                <p className="text-sm font-semibold mb-1.5 flex items-center gap-1"><Paperclip className="w-3.5 h-3.5" />첨부 문서</p>
-                <div className="space-y-1">
-                  {selectedDocument.attachments.map((f, idx) => (
-                    <button key={idx} type="button" onClick={() => openAttachment(f.path)} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
-                      <span className="text-xs text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* 결재함에서 열람할 때도 시행문(공식 문서 출력본)과 동일한 형태로 보여준다 */}
+        <div className="border rounded-md bg-white p-6">
+          <ApprovalDocumentIssuedSheet
+            doc={selectedDocument}
+            documentType={actionDocType || null}
+            company={company}
+            positions={positions}
+            creatorPositionName={memberPositionByUserId.get(selectedDocument.created_by) || null}
+            leaveDetail={actionLeaveDetail}
+          />
+        </div>
 
-            {selectedDocument.requester_comment && (
-              <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{selectedDocument.requester_comment}</p></div>
-            )}
-
-            <ReferenceReadStatus documentId={selectedDocument.id} />
-
-            {docForceMode && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5">
-                관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 문서를 즉시 {docActionType === 'approved' ? '승인' : '반려'} 처리합니다. 남은 결재 단계는 진행되지 않습니다.
-              </div>
-            )}
-
-            <div>
-              <Label>{docActionType === 'approved' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>
-              <Textarea value={docComment} onChange={e => setDocComment(e.target.value)} rows={4} className="mt-2" disabled={docProcessing} />
+        {selectedDocument.attachments.length > 0 && (
+          <div className="bg-gray-50 p-3 rounded">
+            <p className="text-sm font-semibold mb-1.5 flex items-center gap-1"><Paperclip className="w-3.5 h-3.5" />첨부 문서</p>
+            <div className="space-y-1">
+              {selectedDocument.attachments.map((f, idx) => (
+                <button key={idx} type="button" onClick={() => openAttachment(f.path)} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                  <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
+                  <span className="text-xs text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
+                </button>
+              ))}
             </div>
-            <div className="flex gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={docGoBackToList} disabled={docProcessing} className="flex-1">취소</Button>
-              <Button
-                onClick={handleDocAction}
-                disabled={docProcessing || (docActionType === 'rejected' && !docComment.trim())}
-                variant={docActionType === 'approved' ? 'default' : 'destructive'}
-                className="flex-1"
-              >
-                {docProcessing ? '처리 중...' : docActionType === 'approved' ? '승인' : '반려'}
-              </Button>
+          </div>
+        )}
+
+        {selectedDocument.requester_comment && (
+          <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{selectedDocument.requester_comment}</p></div>
+        )}
+
+        <ReferenceReadStatus documentId={selectedDocument.id} />
+
+        <div className="border rounded-md bg-white p-4 space-y-3">
+          {docForceMode && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5">
+              관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 문서를 즉시 {docActionType === 'approved' ? '승인' : '반려'} 처리합니다. 남은 결재 단계는 진행되지 않습니다.
             </div>
-          </CardContent>
-        </Card>
+          )}
+          <Label>{docActionType === 'approved' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>
+          <Textarea value={docComment} onChange={e => setDocComment(e.target.value)} rows={4} disabled={docProcessing} />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={docGoBackToList} disabled={docProcessing} className="flex-1">취소</Button>
+            <Button
+              onClick={handleDocAction}
+              disabled={docProcessing || (docActionType === 'rejected' && !docComment.trim())}
+              variant={docActionType === 'approved' ? 'default' : 'destructive'}
+              className="flex-1"
+            >
+              {docProcessing ? '처리 중...' : docActionType === 'approved' ? '승인' : '반려'}
+            </Button>
+          </div>
+        </div>
       </div>
     );
   };
