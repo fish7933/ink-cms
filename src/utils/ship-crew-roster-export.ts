@@ -35,10 +35,10 @@ const border = (opts: { thickTop?: boolean; thickBottom?: boolean; thickLeft?: b
   right: { style: opts.thickRight ? 'medium' : 'thin', color: { rgb: opts.thickRight ? THICK : THIN } },
 });
 
-const HEADER_LABELS = ['No.', '직급', '이름', '국적', '생년월일', '선원수첩번호', '여권번호', '여권 발급일', '여권 만료일', '승선일', '하선(예정)일'];
+const HEADER_LABELS = ['No.', 'Rank', 'Name', 'Nationality', 'Date of Birth', "Seaman's Book No.", 'Passport No.', 'Passport Issue Date', 'Passport Expiry Date', 'Sign-on Date', 'Sign-off Date'];
 const COL_ALIGN: ('center' | 'left' | 'right')[] = ['center', 'center', 'left', 'center', 'center', 'center', 'center', 'center', 'center', 'center', 'center'];
 
-// 승선 현황 엑셀 내보내기: 직급/이름/국적/생년월일/선원수첩번호/여권번호/여권 발급일/여권 만료일/승선일/하선(예정)일
+// 승선 현황(Crew List) 엑셀 내보내기 — 국제표준에 맞춰 전부 영문 표기
 export async function exportShipCrewRosterToExcel(
   ship: ShipIdentity,
   date: string,
@@ -50,13 +50,13 @@ export async function exportShipCrewRosterToExcel(
 
   // 제목
   rows.push([
-    cell(`${ship.shipName} 승선 현황`, { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } }),
+    cell(`${ship.shipName} Crew List`, { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   // 부제(선박 식별정보)
   rows.push([
     cell(
-      `IMO ${ship.imoNumber || '-'}   |   Call Sign ${ship.callSign || '-'}   |   선적 ${ship.flag || '-'}   |   기준일 ${date}`,
+      `IMO ${ship.imoNumber || '-'}   |   Call Sign ${ship.callSign || '-'}   |   Flag ${ship.flag || '-'}   |   Date ${date}`,
       { font: { sz: BASE_SZ, color: { rgb: '666666' } }, alignment: { horizontal: 'center' }, border: { bottom: { style: 'medium', color: { rgb: THICK } } } }
     ),
     ...Array.from({ length: colCount - 1 }, () => cell('', { border: { bottom: { style: 'medium', color: { rgb: THICK } } } })),
@@ -74,10 +74,11 @@ export async function exportShipCrewRosterToExcel(
   // 데이터
   roster.forEach((r, i) => {
     const zebraFill = i % 2 === 1 ? { fgColor: { rgb: ZEBRA_BG } } : undefined;
+    const rankLabel = r.rank_code || r.rank;
     const values = [
       i + 1,
-      r.rank_grade ? `${r.rank}(${r.rank_grade})` : r.rank,
-      r.crew_name,
+      r.rank_grade ? `${rankLabel}(${r.rank_grade})` : rankLabel,
+      (r.crew_name_english || r.crew_name).toUpperCase(),
       r.nationality ? (nationalityLabel?.(r.nationality) || r.nationality) : '',
       r.date_of_birth || '',
       r.seaman_book_number || '',
@@ -105,8 +106,8 @@ export async function exportShipCrewRosterToExcel(
   ];
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, '승선현황');
-  const fileName = `${ship.shipName}_승선현황_${date}.xlsx`;
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Crew List');
+  const fileName = `${ship.shipName}_CrewList_${date}.xlsx`;
 
   // 지원 브라우저(Chrome/Edge)에서는 저장 위치/파일명을 직접 고를 수 있는 대화창을 띄운다.
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;

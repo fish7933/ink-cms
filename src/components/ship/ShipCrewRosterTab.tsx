@@ -7,7 +7,6 @@ import { getNationalities } from '@/services/nationality.service';
 import { exportShipCrewRosterToExcel } from '@/utils/ship-crew-roster-export';
 import type { Nationality } from '@/types/nationality';
 import ShipCrewRosterTable from './ShipCrewRosterTable';
-import ShipCrewRosterPrintDialog from './ShipCrewRosterPrintDialog';
 import ShipRosterCalendar from './ShipRosterCalendar';
 
 interface ShipCrewRosterTabProps {
@@ -27,7 +26,6 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
   const [roster, setRoster] = useState<ShipCrewRosterEntry[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [loading, setLoading] = useState(false);
-  const [printOpen, setPrintOpen] = useState(false);
 
   useEffect(() => {
     getNationalities().then(setNationalities).catch(console.error);
@@ -47,12 +45,12 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
     return (code: string) => map.get(code) || code;
   }, [nationalities]);
 
-  // Crew List(인쇄/엑셀)는 국적을 한글이 아닌 국가 코드로 표기한다 — 저장값이 코드가 아니라
-  // (구 데이터 등으로) 한글 국가명 그대로인 경우까지 코드로 정규화해준다.
-  const nationalityCode = useMemo(() => {
-    const codes = new Set(nationalities.map(n => n.country_code));
-    const byKoName = new Map(nationalities.map(n => [n.country_name_ko, n.country_code]));
-    return (value: string) => (codes.has(value) ? value : byKoName.get(value) || value);
+  // Crew List(엑셀)는 국제표준에 맞춰 국적을 영문 국가명으로 표기한다 — 저장값이 코드가 아니라
+  // (구 데이터 등으로) 한글 국가명 그대로인 경우까지 영문명으로 정규화해준다.
+  const nationalityLabelEn = useMemo(() => {
+    const byCode = new Map(nationalities.map(n => [n.country_code, n.country_name_en]));
+    const byKoName = new Map(nationalities.map(n => [n.country_name_ko, n.country_name_en]));
+    return (value: string) => byCode.get(value) || byKoName.get(value) || value;
   }, [nationalities]);
 
   if (!shipId) {
@@ -67,10 +65,10 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
           <ShipRosterCalendar shipId={shipId} selectedDate={date} onSelectDate={setDate} />
         </div>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => exportShipCrewRosterToExcel({ shipName, imoNumber, callSign, flag }, date, roster, nationalityCode)} disabled={roster.length === 0}>
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => exportShipCrewRosterToExcel({ shipName, imoNumber, callSign, flag }, date, roster, nationalityLabelEn)} disabled={roster.length === 0}>
             <FileSpreadsheet className="w-3.5 h-3.5" />엑셀 저장
           </Button>
-          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setPrintOpen(true)} disabled={roster.length === 0}>
+          <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => shipId && window.open(`/print/ships/${shipId}/crew-list?date=${date}`, '_blank')} disabled={roster.length === 0}>
             <Printer className="w-3.5 h-3.5" />인쇄
           </Button>
         </div>
@@ -81,18 +79,6 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
       ) : (
         <ShipCrewRosterTable roster={roster} nationalityLabel={nationalityLabel} />
       )}
-
-      <ShipCrewRosterPrintDialog
-        open={printOpen}
-        onOpenChange={setPrintOpen}
-        shipName={shipName}
-        imoNumber={imoNumber}
-        callSign={callSign}
-        flag={flag}
-        date={date}
-        roster={roster}
-        nationalityLabel={nationalityCode}
-      />
     </div>
   );
 }

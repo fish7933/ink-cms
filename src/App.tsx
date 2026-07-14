@@ -8,6 +8,7 @@ import ApprovalDocumentPrintPage from '@/pages/ApprovalDocumentPrintPage';
 import CrewResumePage from '@/pages/CrewResumePage';
 import RotationPlanPrintPage from '@/pages/RotationPlanPrintPage';
 import RotationPlanLedgerPrintPage from '@/pages/RotationPlanLedgerPrintPage';
+import ShipCrewListPrintPage from '@/pages/ShipCrewListPrintPage';
 import Layout from '@/components/Layout';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -26,6 +27,7 @@ function App() {
           <Route path="/print/crew/:id/resume" element={<CrewResumePage />} />
           <Route path="/print/rotation-plans/:id" element={<RotationPlanPrintPage />} />
           <Route path="/print/rotation-plans-ledger" element={<RotationPlanLedgerPrintPage />} />
+          <Route path="/print/ships/:shipId/crew-list" element={<ShipCrewListPrintPage />} />
           <Route path="*" element={<Layout />} />
         </Routes>
         <Toaster />

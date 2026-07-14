@@ -5,7 +5,9 @@ export interface ShipCrewRosterEntry {
   record_id: string;
   crew_member_id: string;
   crew_name: string;
+  crew_name_english: string | null;
   rank: string;
+  rank_code: string | null;
   rank_grade: string | null;
   nationality: string | null;
   date_of_birth: string | null;
@@ -37,6 +39,7 @@ interface CrewContractRosterRow extends CrewContractRange {
   rank: string;
   crew_members: {
     name: string;
+    name_english: string | null;
     nationality: string | null;
     date_of_birth: string | null;
     seaman_book_flag_number: string | null;
@@ -45,7 +48,7 @@ interface CrewContractRosterRow extends CrewContractRange {
   } | null;
 }
 
-const CREW_ROSTER_SELECT = 'id, crew_member_id, rank, start_date, end_date, terminated_date, status, crew_members(name, nationality, date_of_birth, seaman_book_flag_number, seaman_book_number, certificates)';
+const CREW_ROSTER_SELECT = 'id, crew_member_id, rank, start_date, end_date, terminated_date, status, crew_members(name, name_english, nationality, date_of_birth, seaman_book_flag_number, seaman_book_number, certificates)';
 
 // crew_members.certificates는 JSON 문자열로 저장돼있을 수 있어 파싱해준다 (CrewDetailPanel.tsx와 동일 처리)
 function parseCertificates(raw: CrewCertificate[] | string | null | undefined): CrewCertificate[] {
@@ -83,7 +86,7 @@ export async function getShipContractRanges(shipId: string): Promise<CrewContrac
 // 특정 선박에서 특정 기준일에 승선 중이었던(계약 start_date <= date <= end_date/조기하선일) 선원 목록.
 // date에 오늘 날짜를 넘기면 "현재 승선 중" 목록이 된다. crew_contracts(정식 계약)를 기준으로 한다.
 export async function getShipCrewRoster(shipId: string, date: string): Promise<ShipCrewRosterEntry[]> {
-  const [{ data, error }, passportTypeNames] = await Promise.all([
+  const [{ data, error }, passportTypeNames, { data: ranks }] = await Promise.all([
     supabase
       .from('crew_contracts')
       .select(CREW_ROSTER_SELECT)
@@ -91,9 +94,11 @@ export async function getShipCrewRoster(shipId: string, date: string): Promise<S
       .neq('status', 'draft')
       .order('start_date', { ascending: false }),
     getPassportCertificateTypeNames(),
+    supabase.from('ranks').select('name, rank_code'),
   ]);
 
   if (error) throw error;
+  const rankCodeByName = new Map((ranks || []).map((r: { name: string; rank_code: string }) => [r.name, r.rank_code]));
 
   const seenCrew = new Set<string>();
   const roster: ShipCrewRosterEntry[] = [];
@@ -109,7 +114,9 @@ export async function getShipCrewRoster(shipId: string, date: string): Promise<S
       record_id: r.id,
       crew_member_id: r.crew_member_id,
       crew_name: crew?.name || '알 수 없음',
+      crew_name_english: crew?.name_english || null,
       rank: r.rank,
+      rank_code: rankCodeByName.get(r.rank) || null,
       rank_grade: null,
       nationality: crew?.nationality || null,
       date_of_birth: crew?.date_of_birth || null,
