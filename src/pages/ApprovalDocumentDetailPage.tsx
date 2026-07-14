@@ -58,6 +58,21 @@ export default function ApprovalDocumentDetailPage() {
       const found = docs[0] || null;
       setDoc(found);
       setDocType(found ? types.find(t => t.id === found.document_type_id) || null : null);
+
+      // 이 문서에 내가 참조로 지정돼 있으면(개인 또는 소속 부서), 상세를 연 시점에 열람 처리해
+      // 결재함 배지 집계에서 빠지도록 한다.
+      if (found) {
+        const { data: myUnits } = await supabase.from('org_unit_members').select('org_unit_id').eq('user_id', user.id);
+        const myOrgUnitIds = (myUnits || []).map(u => u.org_unit_id);
+        const orFilter = myOrgUnitIds.length > 0
+          ? `user_id.eq.${user.id},org_unit_id.in.(${myOrgUnitIds.join(',')})`
+          : `user_id.eq.${user.id}`;
+        const { data: refs } = await supabase.from('approval_document_references').select('id').eq('document_id', id).or(orFilter);
+        if (refs && refs.length > 0) {
+          await approvalDocumentService.markReferenceRead(id, user.id);
+          window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
+        }
+      }
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '문서를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });

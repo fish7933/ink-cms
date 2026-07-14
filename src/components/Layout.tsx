@@ -14,6 +14,7 @@ import { useTabContext } from '@/contexts/TabContext';
 import { routeConfig } from '@/lib/route-config';
 import { useDispatchApprovalPendingCount } from '@/hooks/useDispatchApprovalPendingCount';
 import { useRotationPlanActionCount } from '@/hooks/useRotationPlanActionCount';
+import { useApprovalInboxBadgeCount } from '@/hooks/useApprovalInboxBadgeCount';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -26,6 +27,7 @@ export default function Layout() {
   const { tabs, activeTabId, refreshNonces } = useTabContext();
   const dispatchApprovalPendingCount = useDispatchApprovalPendingCount();
   const rotationPlanActionCount = useRotationPlanActionCount();
+  const approvalInboxBadgeCount = useApprovalInboxBadgeCount();
 
   useEffect(() => {
     let isMounted = true;
@@ -93,10 +95,10 @@ export default function Layout() {
           currentRole={currentUser?.role || 'crew'}
           permissions={permissions}
           selectedCategoryId={selectedCategoryId}
-          badgeCounts={{ 'dispatch-approval-inbox': dispatchApprovalPendingCount, 'crew-rotation': rotationPlanActionCount }}
+          badgeCounts={{ 'dispatch-approval-inbox': dispatchApprovalPendingCount, 'crew-rotation': rotationPlanActionCount, 'approval-inbox': approvalInboxBadgeCount }}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <TabBar />
+          <TabBar pathBadgeCounts={{ '/approval-inbox': approvalInboxBadgeCount }} />
           <div className="flex-1 overflow-hidden relative">
             {tabs.map(tab => (
               <div

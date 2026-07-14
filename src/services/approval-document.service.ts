@@ -542,4 +542,69 @@ export const approvalDocumentService = {
     if (docsError) throw docsError;
     return enrichDocuments(docs || []);
   },
+
+  // 결재함 배지 — 참조로 지정된 문서 중 아직 상세를 열어보지 않은 건수
+  async getUnreadReferenceCount(userId: string, myOrgUnitIds: string[]): Promise<number> {
+    const orFilter = myOrgUnitIds.length > 0
+      ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
+      : `user_id.eq.${userId}`;
+    const { data: refs, error: refError } = await supabase
+      .from('approval_document_references')
+      .select('document_id')
+      .or(orFilter);
+    if (refError) throw refError;
+    const docIds = [...new Set((refs || []).map(r => r.document_id))];
+    if (docIds.length === 0) return 0;
+
+    const { data: reads, error: readsError } = await supabase
+      .from('approval_document_reference_reads')
+      .select('document_id')
+      .eq('user_id', userId)
+      .in('document_id', docIds);
+    if (readsError) throw readsError;
+    const readSet = new Set((reads || []).map(r => r.document_id));
+    return docIds.filter(id => !readSet.has(id)).length;
+  },
+
+  // 참조로 지정된 문서 상세를 열람했을 때 호출 — 이후 배지 집계에서 제외된다
+  async markReferenceRead(documentId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('approval_document_reference_reads')
+      .upsert({ document_id: documentId, user_id: userId }, { onConflict: 'document_id,user_id' });
+    if (error) throw error;
+  },
+
+  // 결재함 배지 — 결재선상 지금 내 차례인(즉시 조치가 필요한) 문서 건수. 관리자는 전체 대기 건수.
+  async getMyPendingTurnCount(userId: string, isAdmin: boolean): Promise<number> {
+    if (isAdmin) {
+      const { count, error } = await supabase
+        .from('approval_documents')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      if (error) throw error;
+      return count || 0;
+    }
+
+    const { data: steps, error: stepsError } = await supabase
+      .from('approval_document_steps')
+      .select('document_id, step_order')
+      .eq('approver_id', userId)
+      .eq('status', 'pending');
+    if (stepsError) throw stepsError;
+    if (!steps || steps.length === 0) return 0;
+
+    const docIds = [...new Set(steps.map(s => s.document_id))];
+    const { data: docs, error: docsError } = await supabase
+      .from('approval_documents')
+      .select('id, status, current_step')
+      .in('id', docIds)
+      .eq('status', 'pending');
+    if (docsError) throw docsError;
+
+    const currentStepByDoc = new Map((docs || []).map(d => [d.id, d.current_step]));
+    const myTurnDocIds = new Set(
+      steps.filter(s => currentStepByDoc.get(s.document_id) === s.step_order).map(s => s.document_id)
+    );
+    return myTurnDocIds.size;
+  },
 };

@@ -6,7 +6,12 @@ import { useUISettings } from '@/contexts/UISettingsContext';
 const CONTROLS_WIDTH = 120;
 const HOVER_PADDING = 40; // 양쪽 px + 닫기 버튼 여유
 
-export default function TabBar() {
+interface TabBarProps {
+  // 탭의 path(쿼리스트링 제외)와 정확히 일치할 때 탭 제목 옆에 작은 배지 숫자를 표시한다.
+  pathBadgeCounts?: Record<string, number>;
+}
+
+export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
   const { tabs, activeTabId, activateTab, closeTab, closeLastTab, closeAllTabs } = useTabContext();
   const { uiSettings } = useUISettings();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -49,6 +54,7 @@ export default function TabBar() {
         const isActive = tab.id === activeTabId;
         const isHovered = hoveredTabId === tab.id;
         const tabWidth = isHovered ? Math.max(baseTabWidth, measureTextWidth(tab.title)) : baseTabWidth;
+        const tabBadge = pathBadgeCounts[tab.path.split('?')[0]] || 0;
         return (
           <div
             key={tab.id}
@@ -63,6 +69,11 @@ export default function TabBar() {
             onMouseLeave={() => setHoveredTabId(null)}
           >
             <span className={`flex-1 text-xs select-none ${isHovered ? '' : 'truncate'}`}>{tab.title}</span>
+            {tabBadge > 0 && (
+              <span className="shrink-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] leading-[1.1rem] text-center font-semibold">
+                {tabBadge > 99 ? '99+' : tabBadge}
+              </span>
+            )}
             <button
               className={`shrink-0 rounded p-0.5 transition-colors opacity-0 group-hover:opacity-100 ${
                 isActive ? 'hover:bg-blue-100 text-blue-500' : 'hover:bg-gray-200 text-gray-400'
