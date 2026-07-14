@@ -159,13 +159,57 @@ async function enrichDocuments(docs: ApprovalDocument[]): Promise<ApprovalDocume
     stepsByDoc.get(s.document_id)!.push(s);
   }
 
-  return docs.map(d => ({
-    ...d,
-    document_type_name: typesMap.get(d.document_type_id) || '알 수 없음',
-    creator_name: creatorsMap.get(d.created_by) || '알 수 없음',
-    org_unit_name: d.org_unit_id ? (unitsMap.get(d.org_unit_id) || null) : null,
-    steps: stepsByDoc.get(d.id) || [],
-  }));
+  // 과거 자동승인 버그 등으로 current_step이 가리키는 단계가 이미 처리(승인/반려)돼 있는
+  // 경우를 스스로 고쳐준다 — 실제로 다음에 처리해야 할 진짜 대기 단계를 다시 찾아 맞추고,
+  // 남은 단계가 모두 이미 처리돼 있으면 그대로 완료 처리한다. 문서를 조회할 때마다 자동으로
+  // 바로잡히므로 "이미 처리되었다"는데 화면은 "내 차례"라고 나오는 불일치가 발생하지 않는다.
+  const repairs: { id: string; current_step: number; status: 'pending' | 'approved'; completed_at: string | null; reference_type: string | null; reference_id: string | null }[] = [];
+  const now = new Date().toISOString();
+
+  const enriched = docs.map(d => {
+    const steps = stepsByDoc.get(d.id) || [];
+    let current_step = d.current_step;
+    let status = d.status;
+    let completed_at = d.completed_at;
+
+    if (status === 'pending' && steps.length > 0) {
+      const curStep = steps.find(s => s.step_order === current_step);
+      if (curStep && curStep.status !== 'pending') {
+        const nextPending = steps.filter(s => s.step_order >= current_step).find(s => s.status === 'pending');
+        if (nextPending) {
+          current_step = nextPending.step_order;
+        } else {
+          status = 'approved';
+          completed_at = completed_at || now;
+        }
+        repairs.push({ id: d.id, current_step, status: status as 'pending' | 'approved', completed_at, reference_type: d.reference_type, reference_id: d.reference_id });
+      }
+    }
+
+    return {
+      ...d,
+      current_step,
+      status,
+      completed_at,
+      document_type_name: typesMap.get(d.document_type_id) || '알 수 없음',
+      creator_name: creatorsMap.get(d.created_by) || '알 수 없음',
+      org_unit_name: d.org_unit_id ? (unitsMap.get(d.org_unit_id) || null) : null,
+      steps,
+    };
+  });
+
+  if (repairs.length > 0) {
+    await Promise.all(repairs.map(async r => {
+      await supabase.from('approval_documents')
+        .update({ current_step: r.current_step, status: r.status, completed_at: r.completed_at })
+        .eq('id', r.id).eq('status', 'pending');
+      if (r.status === 'approved' && r.reference_type) {
+        await applyReferenceSideEffect(r.reference_type, r.reference_id, 'approved').catch(console.error);
+      }
+    }));
+  }
+
+  return enriched;
 }
 
 export const approvalDocumentService = {

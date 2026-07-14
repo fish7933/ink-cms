@@ -106,7 +106,7 @@ export default function ApprovalDocumentDetailPage() {
   // 관리자 계정이라도 결재선상 실제 현재 단계 담당자가 아니면 "내 차례"가 아니다 — admin/system_admin
   // 이라는 계정 권한과 결재라인상의 전결/최종결재자는 별개다. 관리자가 실제로 그 단계의 담당자로
   // 지정돼 있으면(직급 기준 전결 포함) 일반 결재자와 동일하게 한 단계씩만 진행된다.
-  const isMyTurn = doc && doc.status === 'pending' && doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId);
+  const isMyTurn = doc && doc.status === 'pending' && doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId && s.status === 'pending');
   const canAdminForce = doc && doc.status === 'pending' && isAdmin && !isMyTurn;
   // 기안 취소는 본인이 기안한 문서만, 그리고 결재라인이 아직 하나도 진행(승인/반려)되지
   // 않은 경우에만 가능하다 — 관리자라도 남의 기안을 취소할 수 없고, 이미 결재가 시작된

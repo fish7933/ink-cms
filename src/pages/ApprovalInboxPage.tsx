@@ -151,7 +151,7 @@ export default function ApprovalInboxPage() {
   // "관리자 강제 승인/반려"로만 예외 처리를 허용한다.
   const isMyDocTurn = (doc: ApprovalDocumentWithDetails) => {
     if (doc.status !== 'pending') return false;
-    return doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId);
+    return doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId && s.status === 'pending');
   };
   const canAdminForceDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && isAdmin && !isMyDocTurn(doc);
 
