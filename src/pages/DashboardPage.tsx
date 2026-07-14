@@ -15,7 +15,7 @@ import type { JobPostingGroupWithDetails, CrewRecommendationWithDetails } from '
 
 interface MyPendingItem {
   id: string;
-  kind: 'crew' | 'document';
+  kind: 'crew' | 'document' | 'reference';
   title: string;
   requesterName: string;
   createdAt: string;
@@ -97,9 +97,10 @@ export default function DashboardPage() {
     const members = await orgChartService.getOrgMembers();
     const myOrgUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
 
-    const [crewApprovals, documents] = await Promise.all([
+    const [crewApprovals, documents, unreadReferences] = await Promise.all([
       approvalService.getMyRelatedApprovals(user.id),
       approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
+      approvalDocumentService.getUnreadReferencedDocuments(user.id, myOrgUnitIds),
     ]);
 
     const myTurnCrew: MyPendingItem[] = crewApprovals
@@ -110,8 +111,11 @@ export default function DashboardPage() {
       .filter(d => d.status === 'pending' && d.steps.some(s => s.step_order === d.current_step && s.approver_id === user.id && s.status === 'pending'))
       .map(d => ({ id: d.id, kind: 'document', title: d.title, requesterName: d.creator_name, createdAt: d.created_at }));
 
+    const unreadRefs: MyPendingItem[] = unreadReferences
+      .map(d => ({ id: d.id, kind: 'reference', title: d.title, requesterName: d.creator_name, createdAt: d.created_at }));
+
     setMyPendingApprovals(
-      [...myTurnCrew, ...myTurnDocs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      [...myTurnCrew, ...myTurnDocs, ...unreadRefs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     );
   };
 
@@ -235,7 +239,7 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Inbox className="w-4 h-4" />내 결재함 — 결재 대기 ({myPendingApprovals.length})
+                  <Inbox className="w-4 h-4" />내 결재함 — 처리할 항목 ({myPendingApprovals.length})
                 </CardTitle>
                 <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => openNewTab('/approval-inbox', '결재함')}>
                   전체 보기<ChevronRight className="w-3.5 h-3.5" />
@@ -244,18 +248,23 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="pt-0">
               {myPendingApprovals.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">지금 결재할 문서가 없습니다.</p>
+                <p className="text-sm text-gray-400 text-center py-6">지금 결재하거나 확인할 문서가 없습니다.</p>
               ) : (
                 <div className="space-y-1.5">
                   {myPendingApprovals.slice(0, 5).map(item => (
                     <div
                       key={`${item.kind}-${item.id}`}
                       className="flex items-center justify-between p-2.5 border rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => openNewTab('/approval-inbox', '결재함')}
+                      onClick={() => item.kind === 'crew'
+                        ? openNewTab('/dispatch-approval-inbox', '발령 결재함')
+                        : openNewTab(`/documents/${item.id}`, item.title)}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {item.kind === 'crew' ? <Users className="w-4 h-4 text-blue-500 shrink-0" /> : <FileText className="w-4 h-4 text-blue-500 shrink-0" />}
                         <span className="text-sm font-medium truncate">{item.title}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${item.kind === 'reference' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {item.kind === 'reference' ? '참조 미열람' : '결재 대기'}
+                        </span>
                         <span className="text-xs text-gray-400 shrink-0">{item.requesterName} 기안</span>
                       </div>
                       <span className="text-xs text-gray-400 shrink-0">{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>

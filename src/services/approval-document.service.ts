@@ -940,6 +940,20 @@ export const approvalDocumentService = {
     return enrichDocuments((docs || []).filter(d => !myStepDocIds.has(d.id)));
   },
 
+  // 대시보드 위젯용 — 참조 대상 문서 중 아직 상세를 열어보지 않은 것만 실제 문서 정보와 함께 반환.
+  async getUnreadReferencedDocuments(userId: string, myOrgUnitIds: string[]): Promise<ApprovalDocumentWithDetails[]> {
+    const referenced = await this.getReferencedDocuments(userId, myOrgUnitIds);
+    if (referenced.length === 0) return [];
+    const { data: reads, error } = await supabase
+      .from('approval_document_reference_reads')
+      .select('document_id')
+      .eq('user_id', userId)
+      .in('document_id', referenced.map(d => d.id));
+    if (error) throw error;
+    const readSet = new Set((reads || []).map(r => r.document_id));
+    return referenced.filter(d => !readSet.has(d.id));
+  },
+
   // 결재함 배지 — 참조로 지정된 문서 중 아직 상세를 열어보지 않은 건수. 내가 기안했거나
   // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 무시하고(같은 문서가 "결재 대기"와
   // "참조 미열람" 배지 양쪽에 중복으로 잡히는 것을 방지), 결재가 완료(승인)된 문서만 센다 —
