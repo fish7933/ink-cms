@@ -273,6 +273,7 @@ export default function ApprovalInboxPage() {
       toast({ title: '성공', description: docActionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.' });
       docGoBackToList();
       await loadDocuments(currentUserId, isAdmin, myOrgUnitIds);
+      window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: e instanceof Error ? e.message : '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });

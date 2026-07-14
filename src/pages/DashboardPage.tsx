@@ -79,25 +79,7 @@ export default function DashboardPage() {
         // 관리자 계정이라도 실제로 내 차례인 건만 보여준다 — 계정 권한(admin/system_admin)과
         // 결재라인상 실제 담당자는 별개다(결재함 화면과 동일한 기준).
         if (['ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(user.role)) {
-          const members = await orgChartService.getOrgMembers();
-          const myOrgUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
-
-          const [crewApprovals, documents] = await Promise.all([
-            approvalService.getMyRelatedApprovals(user.id),
-            approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
-          ]);
-
-          const myTurnCrew: MyPendingItem[] = crewApprovals
-            .filter(a => a.status === 'pending' && a.current_approver?.approver_id === user.id)
-            .map(a => ({ id: a.id, kind: 'crew', title: '선원추천 결재', requesterName: a.requester_name, createdAt: a.created_at }));
-
-          const myTurnDocs: MyPendingItem[] = documents
-            .filter(d => d.status === 'pending' && d.steps.some(s => s.step_order === d.current_step && s.approver_id === user.id && s.status === 'pending'))
-            .map(d => ({ id: d.id, kind: 'document', title: d.title, requesterName: d.creator_name, createdAt: d.created_at }));
-
-          setMyPendingApprovals(
-            [...myTurnCrew, ...myTurnDocs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-          );
+          await loadMyPendingApprovals(user);
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -108,6 +90,41 @@ export default function DashboardPage() {
 
     loadData();
   }, []);
+
+  // 내 결재함 위젯 — 사이드바/결재함과 같은 이벤트를 구독해, 결재를 처리하거나(승인/반려)
+  // 참조 문서를 열람하는 즉시(60초 폴링을 기다리지 않고) 대시보드에도 반영되게 한다.
+  const loadMyPendingApprovals = async (user: User) => {
+    const members = await orgChartService.getOrgMembers();
+    const myOrgUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
+
+    const [crewApprovals, documents] = await Promise.all([
+      approvalService.getMyRelatedApprovals(user.id),
+      approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
+    ]);
+
+    const myTurnCrew: MyPendingItem[] = crewApprovals
+      .filter(a => a.status === 'pending' && a.current_approver?.approver_id === user.id)
+      .map(a => ({ id: a.id, kind: 'crew', title: '선원추천 결재', requesterName: a.requester_name, createdAt: a.created_at }));
+
+    const myTurnDocs: MyPendingItem[] = documents
+      .filter(d => d.status === 'pending' && d.steps.some(s => s.step_order === d.current_step && s.approver_id === user.id && s.status === 'pending'))
+      .map(d => ({ id: d.id, kind: 'document', title: d.title, requesterName: d.creator_name, createdAt: d.created_at }));
+
+    setMyPendingApprovals(
+      [...myTurnCrew, ...myTurnDocs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    );
+  };
+
+  useEffect(() => {
+    if (!currentUser || !['ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(currentUser.role)) return;
+    const handler = () => loadMyPendingApprovals(currentUser).catch(e => console.error('내 결재함 위젯 갱신 실패', e));
+    window.addEventListener('approval-inbox-data-changed', handler);
+    window.addEventListener('dispatch-approval-inbox-data-changed', handler);
+    return () => {
+      window.removeEventListener('approval-inbox-data-changed', handler);
+      window.removeEventListener('dispatch-approval-inbox-data-changed', handler);
+    };
+  }, [currentUser]);
 
   // 공고별 내 추천 현황 (상태별 건수) — 채용과정 표시용
   const recsByGroup = new Map<string, CrewRecommendationWithDetails[]>();
