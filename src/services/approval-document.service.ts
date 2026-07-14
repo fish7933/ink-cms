@@ -661,4 +661,48 @@ export const approvalDocumentService = {
     );
     return myTurnDocIds.size;
   },
+
+  // 이 문서에 참조 지정된 개별/부서 참조를 실제 수신자 단위로 풀어서, 각자 열람했는지 함께 보여준다
+  // (부서 참조 1건을 소속 인원 여러 명이 공유하므로, 사람 단위로 펼쳐야 "누가 아직 안 봤는지" 알 수 있다).
+  async getReferenceReadStatus(documentId: string): Promise<{ userId: string; userName: string; via: string; readAt: string | null }[]> {
+    const { data: refs, error: refError } = await supabase
+      .from('approval_document_references')
+      .select('user_id, org_unit_id')
+      .eq('document_id', documentId);
+    if (refError) throw refError;
+    if (!refs || refs.length === 0) return [];
+
+    const directUserIds = refs.filter(r => r.user_id).map(r => r.user_id as string);
+    const orgUnitIds = refs.filter(r => r.org_unit_id).map(r => r.org_unit_id as string);
+
+    const recipients = new Map<string, string>(); // userId -> via label
+    for (const id of directUserIds) recipients.set(id, '개별 참조');
+
+    if (orgUnitIds.length > 0) {
+      const [{ data: memberships }, { data: units }] = await Promise.all([
+        supabase.from('org_unit_members').select('user_id, org_unit_id').in('org_unit_id', orgUnitIds),
+        supabase.from('org_units').select('id, name').in('id', orgUnitIds),
+      ]);
+      const unitNameById = new Map((units || []).map(u => [u.id, u.name]));
+      for (const m of memberships || []) {
+        if (!recipients.has(m.user_id)) recipients.set(m.user_id, `${unitNameById.get(m.org_unit_id) || '부서'} 참조`);
+      }
+    }
+
+    if (recipients.size === 0) return [];
+    const userIds = [...recipients.keys()];
+    const [{ data: users }, { data: reads }] = await Promise.all([
+      supabase.from('users').select('id, name').in('id', userIds),
+      supabase.from('approval_document_reference_reads').select('user_id, read_at').eq('document_id', documentId).in('user_id', userIds),
+    ]);
+    const nameById = new Map((users || []).map(u => [u.id, u.name]));
+    const readAtById = new Map((reads || []).map(r => [r.user_id, r.read_at]));
+
+    return userIds.map(id => ({
+      userId: id,
+      userName: nameById.get(id) || '알 수 없음',
+      via: recipients.get(id) || '',
+      readAt: readAtById.get(id) || null,
+    }));
+  },
 };

@@ -15,6 +15,7 @@ import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
+import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import { orgChartService } from '@/services/org-chart.service';
 import { supabase } from '@/lib/supabase';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
@@ -37,6 +38,7 @@ export default function ApprovalInboxPage() {
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [docTypes, setDocTypes] = useState<ApprovalDocumentType[]>([]);
   const [referencedDocIds, setReferencedDocIds] = useState<Set<string>>(new Set());
+  const [unreadReferenceDocIds, setUnreadReferenceDocIds] = useState<Set<string>>(new Set());
   const [docFilter, setDocFilter] = useState<DocFilter>('all');
   const [docViewMode, setDocViewMode] = useState<'list' | 'action'>('list');
   const [selectedDocument, setSelectedDocument] = useState<ApprovalDocumentWithDetails | null>(null);
@@ -91,6 +93,18 @@ export default function ApprovalInboxPage() {
       ]);
       setDocuments(docs);
       setReferencedDocIds(refs);
+
+      if (refs.size === 0) {
+        setUnreadReferenceDocIds(new Set());
+      } else {
+        const { data: reads } = await supabase
+          .from('approval_document_reference_reads')
+          .select('document_id')
+          .eq('user_id', userId)
+          .in('document_id', [...refs]);
+        const readSet = new Set((reads || []).map((r: { document_id: string }) => r.document_id));
+        setUnreadReferenceDocIds(new Set([...refs].filter(id => !readSet.has(id))));
+      }
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '문서 결재 요청을 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -195,6 +209,7 @@ export default function ApprovalInboxPage() {
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">결재 현황</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안일</th>
             <th className="text-right p-2 text-xs font-medium text-gray-600 w-60">작업</th>
           </tr>
@@ -208,12 +223,34 @@ export default function ApprovalInboxPage() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {getStatusBadge(doc.status)}
                     {myTurn && <Badge className="bg-blue-500 text-xs">내 차례</Badge>}
-                    {referencedDocIds.has(doc.id) && <Badge variant="outline" className="text-xs">참조</Badge>}
+                    {referencedDocIds.has(doc.id) && (
+                      <Badge variant="outline" className={`text-xs ${unreadReferenceDocIds.has(doc.id) ? 'text-amber-700 border-amber-300' : 'text-gray-400'}`}>
+                        참조{unreadReferenceDocIds.has(doc.id) ? ' · 미열람' : ' · 열람함'}
+                      </Badge>
+                    )}
                   </div>
                 </td>
                 <td className="p-2 font-medium">{doc.title}</td>
                 <td className="p-2 text-gray-500">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
                 <td className="p-2 text-gray-500">{doc.creator_name}</td>
+                <td className="p-2">
+                  <div className="flex items-center gap-1 flex-wrap text-xs whitespace-nowrap">
+                    <span className="text-gray-400">기안</span>
+                    {doc.steps.map(s => (
+                      <span key={s.id} className="flex items-center gap-1">
+                        <span className="text-gray-300">→</span>
+                        <span className={
+                          s.status === 'approved' ? 'text-green-600'
+                          : s.status === 'rejected' ? 'text-red-600 font-medium'
+                          : s.step_order === doc.current_step && doc.status === 'pending' ? 'text-blue-600 font-semibold'
+                          : 'text-gray-400'
+                        }>
+                          {s.approver_name}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </td>
                 <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
                 <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-end gap-1">
@@ -305,6 +342,8 @@ export default function ApprovalInboxPage() {
             {selectedDocument.requester_comment && (
               <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{selectedDocument.requester_comment}</p></div>
             )}
+
+            <ReferenceReadStatus documentId={selectedDocument.id} />
 
             <div>
               <Label>{docActionType === 'approved' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>

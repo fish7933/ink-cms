@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
+import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 
 const STATUS_BADGE: Record<string, { label: string; className: string; icon: typeof CheckCircle2 }> = {
@@ -233,6 +234,8 @@ export default function ApprovalDocumentDetailPage() {
             {doc.final_comment && (
               <div className="bg-red-50 p-3 rounded"><p className="text-sm font-semibold mb-1">반려 사유:</p><p className="text-sm text-gray-700">{doc.final_comment}</p></div>
             )}
+
+            <ReferenceReadStatus documentId={doc.id} />
 
             {actionType && (
               <div className="space-y-3 border-t pt-4">
