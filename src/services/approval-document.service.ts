@@ -454,6 +454,44 @@ export const approvalDocumentService = {
     return enrichDocuments(data || []);
   },
 
+  // 결재함 "삭제"는 문서를 지우는 게 아니라 이 사용자의 결재함 목록에서만 숨기는 것 —
+  // 다른 참여자의 결재함/문서 자체(결재 이력 포함)에는 전혀 영향이 없다.
+  async hideDocumentForUser(documentId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('approval_document_hides')
+      .upsert({ document_id: documentId, user_id: userId }, { onConflict: 'document_id,user_id' });
+    if (error) throw error;
+  },
+
+  async unhideDocumentForUser(documentId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('approval_document_hides')
+      .delete()
+      .eq('document_id', documentId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  },
+
+  async getHiddenDocumentIds(userId: string): Promise<Set<string>> {
+    const { data, error } = await supabase.from('approval_document_hides').select('document_id').eq('user_id', userId);
+    if (error) throw error;
+    return new Set((data || []).map(r => r.document_id));
+  },
+
+  // "삭제된 문서함" — 이 사용자가 본인 결재함에서 숨긴 문서 목록 (문서 자체는 살아있음)
+  async getMyHiddenDocuments(userId: string): Promise<ApprovalDocumentWithDetails[]> {
+    const { data: hides, error: hidesError } = await supabase
+      .from('approval_document_hides').select('document_id').eq('user_id', userId);
+    if (hidesError) throw hidesError;
+    const docIds = (hides || []).map(h => h.document_id);
+    if (docIds.length === 0) return [];
+
+    const { data: docs, error } = await supabase
+      .from('approval_documents').select('*').in('id', docIds).order('created_at', { ascending: false });
+    if (error) throw error;
+    return enrichDocuments(docs || []);
+  },
+
   async approveDocumentStep(documentId: string, approverId: string, comment?: string): Promise<void> {
     const { data: doc, error: docError } = await supabase
       .from('approval_documents')
@@ -642,17 +680,10 @@ export const approvalDocumentService = {
     if (error) throw error;
   },
 
-  // 결재함 배지 — 결재선상 지금 내 차례인(즉시 조치가 필요한) 문서 건수. 관리자는 전체 대기 건수.
-  async getMyPendingTurnCount(userId: string, isAdmin: boolean): Promise<number> {
-    if (isAdmin) {
-      const { count, error } = await supabase
-        .from('approval_documents')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending');
-      if (error) throw error;
-      return count || 0;
-    }
-
+  // 결재함 배지 — 결재선상 지금 내 차례인(즉시 조치가 필요한) 문서 건수. 관리자라고 예외를
+  // 두지 않는다 — 그룹웨어 결재함에서 관리자도 실제로 내 차례인 것만 보고 처리하므로,
+  // 배지도 목록에 보이지 않는 전체 시스템 대기 건수가 아니라 동일한 기준으로 집계해야 한다.
+  async getMyPendingTurnCount(userId: string, _isAdmin: boolean): Promise<number> {
     const { data: steps, error: stepsError } = await supabase
       .from('approval_document_steps')
       .select('document_id, step_order')
