@@ -7,6 +7,7 @@ export const rotationApprovalService = createApprovalEngine({
   actionTable: 'rotation_plan_approval_actions',
   targetIdColumn: 'crew_rotation_plan_id',
   domain: 'rotation',
+  documentTypeCode: 'rotation_plan',
   async onFinalApproved(planId: string) {
     const { error } = await supabase
       .from('crew_rotation_plans')

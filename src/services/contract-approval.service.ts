@@ -14,6 +14,7 @@ export const contractApprovalService = createApprovalEngine({
   actionTable: 'crew_contract_approval_actions',
   targetIdColumn: 'crew_contract_id',
   domain: 'contract',
+  documentTypeCode: 'crew_contract',
   async onFinalApproved(contractId: string) {
     const { data: contract, error: fetchError } = await supabase
       .from('crew_contracts')

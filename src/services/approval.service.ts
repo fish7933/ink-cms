@@ -9,6 +9,7 @@ import type {
   CrewRecommendationApprovalLog,
 } from '@/types/approval';
 import { crewRecommendationService } from './crew-recommendation.service';
+import { isAuthorityDelegated, applyDefaultReferences } from './approval-authority.service';
 
 class ApprovalService {
   // Approval Lines Management
@@ -155,6 +156,7 @@ class ApprovalService {
       .single();
 
     if (error) throw error;
+    await applyDefaultReferences('crew_recommendation', data.id);
     return data;
   }
 
@@ -504,8 +506,10 @@ class ApprovalService {
 
     // Check if this is the last step
     const isLastStep = approval.current_step >= (steps?.length || 0);
+    // 전결: 결재자 직급이 문서유형에 설정된 전결 기준 이상이면 남은 단계와 무관하게 즉시 종결
+    const delegated = !isLastStep && await isAuthorityDelegated('crew_recommendation', approverId);
 
-    if (isLastStep) {
+    if (isLastStep || delegated) {
       // Final approval - update crew recommendation status to accepted
       const { error: updateError } = await supabase
         .from('crew_recommendation_approvals')

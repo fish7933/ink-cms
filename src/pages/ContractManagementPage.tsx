@@ -16,6 +16,7 @@ import { getContracts, addContract, updateContract, deleteContract } from '@/ser
 import { allowanceService } from '@/services/allowance.service';
 import { approvalService } from '@/services/approval.service';
 import { contractApprovalService } from '@/services/contract-approval.service';
+import { getReferenceOrgUnitNames } from '@/services/approval-authority.service';
 import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
 import { getCurrentUser } from '@/lib/store';
@@ -42,6 +43,7 @@ export default function ContractManagementPage() {
   const permissions = usePermissions('contract_management');
   const [contracts, setContracts] = useState<CrewContractWithDetails[]>([]);
   const [contractApprovalMap, setContractApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
+  const [contractCcMap, setContractCcMap] = useState<Map<string, string[]>>(new Map());
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +138,13 @@ export default function ContractManagementPage() {
           if (!amap.has(contractId)) amap.set(contractId, a);
         }
         setContractApprovalMap(amap);
+        const ccByRequestId = await getReferenceOrgUnitNames('crew_contract', [...amap.values()].map(a => a.id));
+        const ccmap = new Map<string, string[]>();
+        for (const [contractId, a] of amap) {
+          const labels = ccByRequestId.get(a.id);
+          if (labels) ccmap.set(contractId, labels);
+        }
+        setContractCcMap(ccmap);
       } catch (e) { console.error(e); }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
@@ -449,7 +458,7 @@ export default function ContractManagementPage() {
                           <td className="p-2 text-muted-foreground">{c.contract_type === 'renewal' ? c.created_at.slice(0, 10) : '-'}</td>
                           <td className="p-2 text-right font-mono">{c.salary_amount ? `${c.salary_amount.toLocaleString()} ${c.salary_currency}` : '-'}</td>
                           <td className="p-2 text-center"><Badge className={`text-xs ${EFFECTIVE_STATUS_CONFIG[status].color}`}>{EFFECTIVE_STATUS_CONFIG[status].label}</Badge></td>
-                          <td className="p-2"><ApprovalChainCell approval={contractApprovalMap.get(c.id)} /></td>
+                          <td className="p-2"><ApprovalChainCell approval={contractApprovalMap.get(c.id)} ccLabels={contractCcMap.get(c.id)} /></td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-center gap-1">
                               {status === 'draft' && permissions.canEdit && (

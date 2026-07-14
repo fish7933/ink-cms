@@ -8,6 +8,7 @@ export const dispatchOrderApprovalService = createApprovalEngine({
   actionTable: 'dispatch_order_approval_actions',
   targetIdColumn: 'crew_dispatch_order_id',
   domain: 'dispatch',
+  documentTypeCode: 'dispatch_order',
   async onFinalApproved(orderId: string) {
     const { error: updateError } = await supabase
       .from('crew_dispatch_orders')

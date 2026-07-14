@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { dispatchService } from '@/services/dispatch.service';
 import { approvalService } from '@/services/approval.service';
 import { dispatchOrderApprovalService } from '@/services/dispatch-order-approval.service';
+import { getReferenceOrgUnitNames } from '@/services/approval-authority.service';
 import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
 import { getCurrentUser } from '@/lib/store';
@@ -42,6 +43,7 @@ export default function DispatchOrderListPage() {
 
   const [orders, setOrders] = useState<CrewDispatchOrderWithDetails[]>([]);
   const [orderApprovalMap, setOrderApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
+  const [orderCcMap, setOrderCcMap] = useState<Map<string, string[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -81,6 +83,13 @@ export default function DispatchOrderListPage() {
         if (!amap.has(orderId)) amap.set(orderId, a);
       }
       setOrderApprovalMap(amap);
+      const ccByRequestId = await getReferenceOrgUnitNames('dispatch_order', [...amap.values()].map(a => a.id));
+      const ccmap = new Map<string, string[]>();
+      for (const [orderId, a] of amap) {
+        const labels = ccByRequestId.get(a.id);
+        if (labels) ccmap.set(orderId, labels);
+      }
+      setOrderCcMap(ccmap);
     } catch (e) {
       console.error(e);
     }
@@ -185,7 +194,7 @@ export default function DispatchOrderListPage() {
                           <TableCell className="text-sm text-gray-600">{o.ship_name || '-'}</TableCell>
                           <TableCell className="text-xs text-gray-600">{o.effective_date}</TableCell>
                           <TableCell><Badge variant={STATUS_CONFIG[o.status].variant} className="text-xs">{STATUS_CONFIG[o.status].label}</Badge></TableCell>
-                          <TableCell><ApprovalChainCell approval={orderApprovalMap.get(o.id)} /></TableCell>
+                          <TableCell><ApprovalChainCell approval={orderApprovalMap.get(o.id)} ccLabels={orderCcMap.get(o.id)} /></TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               {o.status === 'draft' && permissions.canEdit && (

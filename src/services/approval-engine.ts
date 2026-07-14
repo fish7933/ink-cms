@@ -3,6 +3,7 @@ import type {
   ApprovalLineStep,
   ApprovalAction,
 } from '@/types/approval';
+import { isAuthorityDelegated, applyDefaultReferences, type ApprovalDomainCode } from './approval-authority.service';
 
 // crew_recommendation_approvals(채용 결재, approval.service.ts)와 동일한 구조(결재선 기반
 // 다단계 승인)를 다른 대상(배승/계약 등)에도 재사용하기 위한 공통 엔진. 결재선(approval_lines/
@@ -37,12 +38,15 @@ export interface ApprovalEngineConfig {
   targetIdColumn: string;
   // 결재 이력 삭제 시 dispatch_approval_deletion_log에 domain 구분값으로 함께 기록한다.
   domain: 'rotation' | 'contract' | 'dispatch';
+  // 문서유형/전결규정관리(approval_document_types)와 연동할 때 쓰는 코드 — 전결 자동종결
+  // 판정과 기본 참조부서 스냅샷 저장에 쓰인다.
+  documentTypeCode: ApprovalDomainCode;
   onFinalApproved: (targetId: string) => Promise<void>;
   onRejected: (targetId: string) => Promise<void>;
 }
 
 export function createApprovalEngine(config: ApprovalEngineConfig) {
-  const { requestTable, actionTable, targetIdColumn, domain, onFinalApproved, onRejected } = config;
+  const { requestTable, actionTable, targetIdColumn, domain, documentTypeCode, onFinalApproved, onRejected } = config;
 
   async function enrichDetails(approvals: ApprovalRequest[]): Promise<ApprovalRequestWithDetails[]> {
     if (approvals.length === 0) return [];
@@ -142,6 +146,7 @@ export function createApprovalEngine(config: ApprovalEngineConfig) {
         .select()
         .single();
       if (error) throw error;
+      await applyDefaultReferences(documentTypeCode, data.id);
       return data;
     },
 
@@ -196,8 +201,10 @@ export function createApprovalEngine(config: ApprovalEngineConfig) {
       if (actionError) throw actionError;
 
       const isLastStep = approval.current_step >= (steps?.length || 0);
+      // 전결: 결재자 직급이 문서유형에 설정된 전결 기준 이상이면 남은 단계와 무관하게 즉시 종결
+      const delegated = !isLastStep && await isAuthorityDelegated(documentTypeCode, approverId);
 
-      if (isLastStep) {
+      if (isLastStep || delegated) {
         const { error: updateError } = await supabase
           .from(requestTable).update({ status: 'approved', completed_at: new Date().toISOString() }).eq('id', approvalId);
         if (updateError) throw updateError;

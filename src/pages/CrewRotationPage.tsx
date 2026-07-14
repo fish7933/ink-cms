@@ -21,6 +21,7 @@ import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Company, Fleet, Ship as ShipType, User } from '@/types/models';
 import { approvalService } from '@/services/approval.service';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
+import { getReferenceOrgUnitNames } from '@/services/approval-authority.service';
 import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
@@ -49,6 +50,7 @@ export function CrewRotationPage() {
 
   const [plans, setPlans] = useState<CrewRotationPlanWithDetails[]>([]);
   const [planApprovalMap, setPlanApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
+  const [planCcMap, setPlanCcMap] = useState<Map<string, string[]>>(new Map());
   const [portLabelById, setPortLabelById] = useState<Map<string, string>>(new Map());
   const [monthExporting, setMonthExporting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,6 +135,13 @@ export function CrewRotationPage() {
         if (!amap.has(planId)) amap.set(planId, a);
       }
       setPlanApprovalMap(amap);
+      const ccByRequestId = await getReferenceOrgUnitNames('rotation_plan', [...amap.values()].map(a => a.id));
+      const ccmap = new Map<string, string[]>();
+      for (const [planId, a] of amap) {
+        const labels = ccByRequestId.get(a.id);
+        if (labels) ccmap.set(planId, labels);
+      }
+      setPlanCcMap(ccmap);
     } catch (e) {
       console.error(e);
     }
@@ -787,7 +796,7 @@ export function CrewRotationPage() {
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(plan.status)}</TableCell>
-                        <TableCell><ApprovalChainCell approval={planApprovalMap.get(plan.id)} /></TableCell>
+                        <TableCell><ApprovalChainCell approval={planApprovalMap.get(plan.id)} ccLabels={planCcMap.get(plan.id)} /></TableCell>
                         <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
