@@ -497,7 +497,7 @@ export default function DispatchApprovalInboxPage() {
   const handleDeleteCrew = async (approval: ApprovalWithRecommendation) => {
     if (!confirm('이 결재 이력을 삭제하시겠습니까? 이미 등록된 선원 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
     try {
-      await approvalService.deleteApproval(approval, approval.recommendation?.crew_name || '알 수 없음', currentUserId, currentUserName);
+      await approvalService.deleteApproval(approval, `${approval.recommendation?.crew_name || '알 수 없음'}${approval.recommendation?.ranks?.rank_code ? ` (${approval.recommendation.ranks.rank_code})` : ''}`, currentUserId, currentUserName);
       toast({ title: '삭제되었습니다.' });
       setSelectedCrew(null);
       await loadCrewApprovals(currentUserId, isAdmin);
@@ -648,7 +648,7 @@ export default function DispatchApprovalInboxPage() {
       load: () => loadCrewApprovals(currentUserId, isAdmin),
       deleteOne: (a) => {
         const rec = a as ApprovalWithRecommendation;
-        return approvalService.deleteApproval(rec, rec.recommendation?.crew_name || '알 수 없음', currentUserId, currentUserName);
+        return approvalService.deleteApproval(rec, `${rec.recommendation?.crew_name || '알 수 없음'}${rec.recommendation?.ranks?.rank_code ? ` (${rec.recommendation.ranks.rank_code})` : ''}`, currentUserId, currentUserName);
       },
     };
     if (domain === 'rotation') return {

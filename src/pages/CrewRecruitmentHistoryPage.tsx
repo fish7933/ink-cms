@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { approvalService } from '@/services/approval.service';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import type { CrewRecommendationApprovalLog } from '@/types/approval';
 
 const STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -30,6 +31,9 @@ export default function CrewRecruitmentHistoryPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  // crew_recommendation_id → 직급코드. 삭제된 건 결재이력만 지워지고 crew_recommendations
+  // 원본은 남아있으므로, 현재 등록된 직급을 그때그때 조회해서 보여준다(추천 자체가 지워졌으면 '-').
+  const [rankByRecommendationId, setRankByRecommendationId] = useState<Map<string, string>>(new Map());
 
   useEffect(() => { init(); }, []);
 
@@ -51,7 +55,21 @@ export default function CrewRecruitmentHistoryPage() {
 
   const loadLogs = async () => {
     try {
-      setLogs(await approvalService.getApprovalDeletionLogs());
+      const data = await approvalService.getApprovalDeletionLogs();
+      setLogs(data);
+
+      const recIds = [...new Set(data.map(l => l.crew_recommendation_id).filter((id): id is string => !!id))];
+      if (recIds.length > 0) {
+        const { data: recs } = await supabase.from('crew_recommendations').select('id, rank_id').in('id', recIds);
+        const rankIds = [...new Set((recs || []).map(r => r.rank_id).filter(Boolean))];
+        const { data: ranks } = rankIds.length > 0
+          ? await supabase.from('ranks').select('id, rank_code').in('id', rankIds)
+          : { data: [] };
+        const rankCodeById = new Map((ranks || []).map(r => [r.id, r.rank_code]));
+        setRankByRecommendationId(new Map((recs || []).map(r => [r.id, rankCodeById.get(r.rank_id) || '-'])));
+      } else {
+        setRankByRecommendationId(new Map());
+      }
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: '채용 히스토리를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
@@ -148,6 +166,7 @@ export default function CrewRecruitmentHistoryPage() {
                   )}
                   <TableHead className="text-xs w-6" />
                   <TableHead className="text-xs">선원명</TableHead>
+                  <TableHead className="text-xs">직급</TableHead>
                   <TableHead className="text-xs">추천자</TableHead>
                   <TableHead className="text-xs">결재선</TableHead>
                   <TableHead className="text-xs">최종 상태</TableHead>
@@ -171,6 +190,7 @@ export default function CrewRecruitmentHistoryPage() {
                         )}
                         <TableCell>{expanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}</TableCell>
                         <TableCell className="font-medium text-sm">{log.crew_name}</TableCell>
+                        <TableCell className="text-sm">{(log.crew_recommendation_id && rankByRecommendationId.get(log.crew_recommendation_id)) || '-'}</TableCell>
                         <TableCell className="text-sm">{log.requester_name}</TableCell>
                         <TableCell className="text-sm">{log.approval_line_name || '-'}</TableCell>
                         <TableCell><Badge variant="outline" className={`text-xs ${status.className}`}>{status.label}</Badge></TableCell>
@@ -187,7 +207,7 @@ export default function CrewRecruitmentHistoryPage() {
                       </TableRow>
                       {expanded && (
                         <TableRow className="bg-gray-50/60">
-                          <TableCell colSpan={isAdmin ? 10 : 8} className="text-xs">
+                          <TableCell colSpan={isAdmin ? 11 : 9} className="text-xs">
                             {log.actions.length === 0 ? (
                               <div className="text-gray-400 py-2">결재 진행 이력이 없습니다.</div>
                             ) : (
