@@ -750,7 +750,7 @@ export default function DocumentDraftPage() {
                                   <Trash2 className="h-3.5 w-3.5 mr-1" />삭제
                                 </Button>
                               )}
-                              {doc.status === 'pending' && (
+                              {doc.status === 'pending' && doc.steps.every(s => s.status === 'pending') && (
                                 <Button
                                   variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-500 hover:text-red-600"
                                   onClick={() => handleCancelDocument(doc.id)}

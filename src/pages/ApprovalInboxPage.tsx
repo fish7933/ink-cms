@@ -16,9 +16,13 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
+import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
+import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
+import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { supabase } from '@/lib/supabase';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
+import type { ShorePosition } from '@/types/models';
 
 type DocFilter = 'all' | 'mine' | 'pending' | 'referenced' | 'approved' | 'rejected';
 
@@ -45,6 +49,9 @@ export default function ApprovalInboxPage() {
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
   const [docForceMode, setDocForceMode] = useState(false);
   const [docComment, setDocComment] = useState('');
+  const [company, setCompany] = useState<CompanyInfo | null>(null);
+  const [positions, setPositions] = useState<ShorePosition[]>([]);
+  const [memberPositionByUserId, setMemberPositionByUserId] = useState<Map<string, string | null>>(new Map());
   const [docProcessing, setDocProcessing] = useState(false);
   const [actionLeaveDetail, setActionLeaveDetail] = useState<LeaveDetail | null>(null);
 
@@ -144,8 +151,10 @@ export default function ApprovalInboxPage() {
     getLeaveDetail(doc.reference_type, doc.reference_id).then(setActionLeaveDetail).catch(console.error);
   };
 
-  // 기안 취소는 본인이 기안한 문서만 — 관리자라도 남의 기안을 취소할 수 없다.
-  const canCancelDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && doc.created_by === currentUserId;
+  // 기안 취소는 본인이 기안한 문서만, 그리고 결재라인이 아직 하나도 진행(승인/반려)되지
+  // 않은 경우에만 가능하다 — 이미 결재가 시작된 문서는 기안자 본인도 취소할 수 없다.
+  const canCancelDoc = (doc: ApprovalDocumentWithDetails) =>
+    doc.status === 'pending' && doc.created_by === currentUserId && doc.steps.every(s => s.status === 'pending');
   const canDeleteDoc = (doc: ApprovalDocumentWithDetails) => doc.status !== 'pending' && (doc.created_by === currentUserId || isAdmin) && permissions.canDelete;
 
   const handleCancelDoc = async (doc: ApprovalDocumentWithDetails) => {
