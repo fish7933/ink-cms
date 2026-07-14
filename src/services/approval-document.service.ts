@@ -318,6 +318,8 @@ export const approvalDocumentService = {
     // 문서유형의 전결규정(조직도 기반 자동 계산)과 별개로, 결재선 관리에서 고른 결재라인을
     // 그대로 쓰고 싶을 때 넘긴다 — 지정되면 previewChain() 자동계산을 건너뛴다.
     manualChain?: ApprovalChainStep[];
+    // manualChain을 만든 결재선의 id — 반려 후 재상신 시 같은 결재선을 다시 골라주기 위해 기억해둔다.
+    manualLineId?: string;
   }): Promise<ApprovalDocumentWithDetails> {
     const chain = input.manualChain && input.manualChain.length > 0
       ? input.manualChain
@@ -360,6 +362,7 @@ export const approvalDocumentService = {
       requester_comment: input.requester_comment || null,
       reference_type: input.reference_type || null,
       reference_id: input.reference_id || null,
+      manual_line_id: isAutoChain ? null : (input.manualLineId || null),
       status: allApproved ? 'approved' : 'pending',
       current_step: allApproved ? stepRows.length : firstPending!.step_order,
       completed_at: allApproved ? now : null,
@@ -729,10 +732,12 @@ export const approvalDocumentService = {
     ccUserIds?: string[];
     ccOrgUnitIds?: string[];
     manualChain?: ApprovalChainStep[];
+    // manualChain을 만든 결재선의 id
+    manualLineId?: string;
   }): Promise<ApprovalDocumentWithDetails> {
     const { data: existing, error: existingError } = await supabase
       .from('approval_documents')
-      .select('resubmit_count, created_by, org_unit_id, document_type_id, reference_type, reference_id')
+      .select('resubmit_count, created_by, org_unit_id, document_type_id, reference_type, reference_id, manual_line_id')
       .eq('id', documentId)
       .eq('status', 'rejected')
       .single();
@@ -750,9 +755,11 @@ export const approvalDocumentService = {
     const hasManualChain = !!(input.manualChain && input.manualChain.length > 0);
 
     let stepRows: { step_order: number; approver_id: string; approver_name: string; approver_label: string | null; status: 'approved' | 'pending'; comment: string | null; acted_at: string | null }[];
+    let manualLineIdForPayload: string | null;
     if (!hasManualChain && !deptOrTypeChanged && (prevSteps || []).length > 0) {
       // 디폴트: 부서/문서유형을 바꾸지 않았으면 직전 상신의 결재라인을 그대로 재사용한다.
       // 본인 결재라 자동승인됐던 단계만 유지하고, 나머지는 전부 pending으로 되돌려 다시 검토받는다.
+      manualLineIdForPayload = existing.manual_line_id;
       stepRows = prevSteps!.map(s => {
         const isSelf = s.comment === SELF_APPROVE_COMMENT;
         return {
@@ -771,6 +778,7 @@ export const approvalDocumentService = {
         throw new Error('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
       }
       const isAutoChain = !hasManualChain;
+      manualLineIdForPayload = isAutoChain ? null : (input.manualLineId || null);
       stepRows = chain.map((c, i) => {
         const isSelf = isAutoChain && c.approver_id === existing.created_by;
         return {
@@ -795,6 +803,7 @@ export const approvalDocumentService = {
       attachments: input.attachments || [],
       org_unit_id: input.org_unit_id,
       requester_comment: input.requester_comment || null,
+      manual_line_id: manualLineIdForPayload,
       status: allApproved ? 'approved' : 'pending',
       current_step: allApproved ? stepRows.length : firstPending!.step_order,
       completed_at: allApproved ? now : null,

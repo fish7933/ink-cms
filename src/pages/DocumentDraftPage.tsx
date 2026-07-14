@@ -333,19 +333,29 @@ export default function DocumentDraftPage() {
     setRequesterComment(doc.requester_comment || '');
     setUploadedFiles([]);
     setExistingAttachments(doc.attachments || []);
-    setUseManualLine(false);
-    setManualLineId('');
-    setResubmitOriginalChain(
-      [...doc.steps].sort((a, b) => a.step_order - b.step_order).map(s => ({
-        approver_id: s.approver_id,
-        approver_name: s.approver_name,
-        approver_role: s.approver_label || '',
-        org_unit_id: '',
-        org_unit_name: '',
-      }))
-    );
-    setResubmitOriginalOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
-    setResubmitOriginalDocTypeId(doc.document_type_id);
+    if (doc.manual_line_id) {
+      // 직전 상신이 결재선 관리의 특정 라인을 골라 쓴 경우 — 체크박스를 기본으로 체크해두고
+      // 그 라인을 그대로 선택해준다. 체크를 해제하면 조직도 기준 자동계산으로 전환된다.
+      setUseManualLine(true);
+      setManualLineId(doc.manual_line_id);
+      setResubmitOriginalChain([]);
+      setResubmitOriginalOrgUnitId('');
+      setResubmitOriginalDocTypeId('');
+    } else {
+      setUseManualLine(false);
+      setManualLineId('');
+      setResubmitOriginalChain(
+        [...doc.steps].sort((a, b) => a.step_order - b.step_order).map(s => ({
+          approver_id: s.approver_id,
+          approver_name: s.approver_name,
+          approver_role: s.approver_label || '',
+          org_unit_id: '',
+          org_unit_name: '',
+        }))
+      );
+      setResubmitOriginalOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
+      setResubmitOriginalDocTypeId(doc.document_type_id);
+    }
     setInnerTab('write');
   };
 
@@ -475,6 +485,7 @@ export default function DocumentDraftPage() {
           ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
           ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
           manualChain: useManualLine ? manualChain : undefined,
+          manualLineId: useManualLine ? manualLineId : undefined,
         });
         toast({ title: '다시 상신되었습니다.' });
       } else {
@@ -491,6 +502,7 @@ export default function DocumentDraftPage() {
           ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
           draftId: draftId || undefined,
           manualChain: useManualLine ? manualChain : undefined,
+          manualLineId: useManualLine ? manualLineId : undefined,
         });
         toast({ title: '기안서가 제출되었습니다.' });
       }

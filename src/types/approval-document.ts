@@ -68,6 +68,8 @@ export interface ApprovalDocument {
   final_comment: string | null;
   // 반려 후 같은 결재라인으로 다시 상신한 횟수. 0이면 아직 재상신된 적 없음.
   resubmit_count: number;
+  // 전결규정 자동계산 대신 결재선 관리의 이 라인을 직접 골라 썼으면 그 id, 자동계산이면 null.
+  manual_line_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
