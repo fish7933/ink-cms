@@ -395,6 +395,12 @@ export default function ApprovalInboxPage() {
     { value: 'approved', label: '승인' },
     { value: 'rejected', label: '반려' },
   ];
+  // 결재중 = 지금 내가 결재해야 하는 건수, 참조됨 = 아직 열람하지 않은 참조 문서 건수. 처리/열람하면 사라진다.
+  const filterBadgeCount = (value: DocFilter): number => {
+    if (value === 'pending') return documents.filter(isMyDocTurn).length;
+    if (value === 'referenced') return unreadReferenceDocIds.size;
+    return 0;
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -402,25 +408,33 @@ export default function ApprovalInboxPage() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Inbox className="w-6 h-6" />결재함</h1>
           <p className="text-gray-600 mt-1 text-sm">
-            {isAdmin ? '모든 결재 문서를 조회하고 처리합니다.' : '기안자, 결재자, 참조자로 나와 관계있는 문서를 조회하고, 내 차례인 결재를 처리합니다.'}
+            기안자, 결재자, 참조자로 나와 관계있는 문서를 조회하고, 내 차례인 결재를 처리합니다.
           </p>
         </div>
         {DRAFT_ROLES.includes(currentUserRole) && permissions.canCreate && (
-          <Button size="sm" className="gap-1.5" onClick={() => navigate('/documents/new')}><Plus className="w-4 h-4" />기안서 작성</Button>
+          <Button size="sm" className="gap-1.5" onClick={() => openNewTab('/documents/new', '기안서 작성')}><Plus className="w-4 h-4" />기안서 작성</Button>
         )}
       </div>
 
       {docViewMode === 'action' ? renderDocAction() : (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-1.5">
-            {FILTER_LABELS.map(f => (
-              <button
-                key={f.value} type="button" onClick={() => setDocFilter(f.value)}
-                className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${docFilter === f.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-              >
-                {f.label}
-              </button>
-            ))}
+            {FILTER_LABELS.map(f => {
+              const badgeCount = filterBadgeCount(f.value);
+              return (
+                <button
+                  key={f.value} type="button" onClick={() => setDocFilter(f.value)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs border transition-colors ${docFilter === f.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  {f.label}
+                  {badgeCount > 0 && (
+                    <span className={`min-w-[1.1rem] h-[1.1rem] px-1 rounded-full text-[10px] leading-[1.1rem] text-center font-semibold ${docFilter === f.value ? 'bg-white text-blue-600' : 'bg-red-500 text-white'}`}>
+                      {badgeCount > 99 ? '99+' : badgeCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
           {docFiltered.length === 0 ? (
             <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 문서가 없습니다</p></CardContent></Card>
