@@ -146,7 +146,7 @@ export default function RanksPage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex justify-between items-center">
-            <CardTitle className="text-base">{isFormMode ? (editId ? '직급 수정' : '직급 추가') : '직급 관리'}</CardTitle>
+            <CardTitle className="text-base">{isFormMode ? (editId ? '직급 수정' : '직급 추가') : '선원 직급 관리'}</CardTitle>
             {isFormMode ? (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>취소</Button>

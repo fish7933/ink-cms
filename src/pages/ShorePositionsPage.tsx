@@ -92,7 +92,7 @@ export default function ShorePositionsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Briefcase className="w-5 h-5 text-blue-600" />
-              <CardTitle className="text-base">육상 직원 직급 관리</CardTitle>
+              <CardTitle className="text-base">직급 관리</CardTitle>
             </div>
             {permissions.canCreate && (
               <Button size="sm" className="gap-1.5 h-8" onClick={handleAdd}>

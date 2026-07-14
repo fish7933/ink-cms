@@ -29,7 +29,7 @@ export default function GroupwareSettingsPage() {
           <TabsTrigger value="org-chart" className="text-xs h-8">조직도 관리</TabsTrigger>
           <TabsTrigger value="approval-lines" className="text-xs h-8">결재선 관리</TabsTrigger>
           <TabsTrigger value="document-types" className="text-xs h-8">문서유형/전결규정 관리</TabsTrigger>
-          <TabsTrigger value="shore-positions" className="text-xs h-8">육상 직원 직급</TabsTrigger>
+          <TabsTrigger value="shore-positions" className="text-xs h-8">직급 관리</TabsTrigger>
           <TabsTrigger value="user-groups" className="text-xs h-8">사용자 그룹 관리</TabsTrigger>
           <TabsTrigger value="permissions" className="text-xs h-8">권한 관리</TabsTrigger>
           <TabsTrigger value="menu-configuration" className="text-xs h-8">UI 구성 관리</TabsTrigger>
