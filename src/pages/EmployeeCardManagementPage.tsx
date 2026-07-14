@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
-const ROLE_LABELS: Record<string, string> = { ship_manager: '선박관리사', admin: '슈퍼관리자', system_admin: '시스템관리자' };
+const ROLE_LABELS: Record<string, string> = { ship_manager: '일반사용자', admin: '슈퍼관리자', system_admin: '시스템관리자' };
 const ROLE_COLORS: Record<string, string> = { ship_manager: 'bg-blue-500', admin: 'bg-red-500', system_admin: 'bg-indigo-500' };
 // 우리회사(선박관리사) 내부 직원 = 선박관리사 + 관리자 계정
 const EMPLOYEE_ROLES = ['ship_manager', 'admin', 'system_admin'];
@@ -151,7 +151,17 @@ export default function EmployeeCardManagementPage() {
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
 
-  const employees = users.filter(u => EMPLOYEE_ROLES.includes(u.role));
+  const positionOrderById = new Map(positions.map(p => [p.id, p.display_order]));
+  const employees = users
+    .filter(u => EMPLOYEE_ROLES.includes(u.role))
+    .sort((a, b) => {
+      const posA = positionOrderById.get((a as User & { position_id?: string }).position_id || '') ?? Infinity;
+      const posB = positionOrderById.get((b as User & { position_id?: string }).position_id || '') ?? Infinity;
+      if (posA !== posB) return posA - posB;
+      const hireA = a.hire_date ?? '9999-99-99';
+      const hireB = b.hire_date ?? '9999-99-99';
+      return hireA.localeCompare(hireB);
+    });
 
   return (
     <>
