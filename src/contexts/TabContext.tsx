@@ -53,11 +53,13 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   // 메뉴 클릭 등 기존 탭 재사용 방식 — 이미 열려 있는 탭이면 새로고침도 함께 트리거한다.
   const openTab = useCallback((path: string, title: string) => {
     setTabs(prev => {
-      const existing = prev.find(t => t.id === path);
+      // id가 아니라 path로 찾아야 한다 — openNewTab으로 열린 탭은 id가
+      // `${path}:${timestamp}` 형태라 id===path 비교로는 못 찾아 중복 탭이 열렸었다.
+      const existing = prev.find(t => t.path === path);
       if (existing) {
-        setActiveTabId(path);
+        setActiveTabId(existing.id);
         navigate(path);
-        refreshTab(path);
+        refreshTab(existing.id);
         return prev;
       }
       const limit = uiSettings.maxOpenTabs;

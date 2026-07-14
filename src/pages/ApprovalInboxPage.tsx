@@ -216,6 +216,22 @@ export default function ApprovalInboxPage() {
     }
   };
 
+  // "삭제"(숨김)와 달리 문서 자체를 완전히 지운다 — 다른 참여자의 결재함, 결재 이력에서도
+  // 사라지므로 기안자 본인 또는 관리자만, 그리고 삭제된 문서함(이미 숨긴 것)에서만 가능하게 한다.
+  const canPermanentlyDeleteDoc = (doc: ApprovalDocumentWithDetails) =>
+    permissions.canDelete && (doc.created_by === currentUserId || isAdmin);
+
+  const handlePermanentDeleteDoc = async (doc: ApprovalDocumentWithDetails) => {
+    if (!confirm(`"${doc.title}" 문서를 영구 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다. 결재 이력을 포함한 문서 전체가 시스템에서 완전히 삭제되며, 다른 참여자의 결재함에서도 사라집니다.`)) return;
+    try {
+      await approvalDocumentService.deleteDocument(doc.id);
+      toast({ title: '영구 삭제되었습니다.' });
+      setHiddenDocuments(prev => prev.filter(d => d.id !== doc.id));
+    } catch (e) {
+      toast({ title: '영구 삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
   const toggleDocSelect = (id: string) =>
     setDocSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const toggleDocSelectAll = (checked: boolean, ids: string[]) =>
@@ -394,6 +410,9 @@ export default function ApprovalInboxPage() {
                 <div className="flex justify-end gap-1">
                   <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleRestoreDoc(doc)}>복원</Button>
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
+                  {canPermanentlyDeleteDoc(doc) && (
+                    <Button size="sm" variant="destructive" className="h-7 px-2 text-xs" onClick={() => handlePermanentDeleteDoc(doc)}>영구삭제</Button>
+                  )}
                 </div>
               </td>
             </tr>
