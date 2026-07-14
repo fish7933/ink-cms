@@ -152,20 +152,22 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         {company?.name || ''}
       </div>
 
+      {/* 실제로 내용을 담아 인쇄할 수 있는 이미지/PDF만 각자 새 페이지를 차지한다. 미리보기가
+          안 되는 파일(hwp/docx/xlsx 등)은 페이지를 새로 만들지 않는다 — 파일명은 이미 위
+          "붙임" 줄에 나열돼 있으므로, 내용 없는 페이지만 늘리는 걸 막기 위함. */}
       {includeAttachments && doc.attachments.map((a, i) => {
         const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
         const url = data?.publicUrl;
         const isImage = a.type?.startsWith('image/');
         const isPdf = a.type === 'application/pdf';
+        if (!((isImage || isPdf) && url)) return null;
         return (
           <div key={i} style={{ pageBreakBefore: 'always', paddingTop: 8 }}>
             <p style={{ fontSize: 12, color: '#555', marginBottom: 8 }}>붙임 {i + 1}. {a.name}</p>
-            {isImage && url ? (
+            {isImage ? (
               <img src={url} alt={a.name} style={{ maxWidth: '100%' }} />
-            ) : isPdf && url ? (
-              <iframe src={url} title={a.name} style={{ width: '100%', height: '1000px', border: '1px solid #ccc' }} />
             ) : (
-              <p style={{ fontSize: 12, color: '#999' }}>이 파일 형식은 미리보기 인쇄를 지원하지 않습니다. 원본 파일은 결재함에서 별도로 확인해주세요.</p>
+              <iframe src={url} title={a.name} style={{ width: '100%', height: '1000px', border: '1px solid #ccc' }} />
             )}
           </div>
         );
