@@ -713,9 +713,11 @@ export const approvalDocumentService = {
   },
 
   // 반려된 문서를 기안서 작성 화면에서 내용을 고쳐 같은 문서 id로 다시 상신한다(브랜드뉴 문서를
-  // 만드는 게 아니다). 결재라인은 (바뀐 부서/유형 기준으로) 새로 계산하고, 이전 상신의 결재
-  // 단계는 지우고 새로 만든다 — 직전 반려 기록은 rejectDocumentStep에서 이미
-  // approval_document_rejection_history에 남아있으므로 단계를 지워도 사라지지 않는다.
+  // 만드는 게 아니다). 결재라인은 기본적으로 직전 상신 때와 완전히 동일하게(같은 결재자 순서
+  // 그대로) 재사용한다 — 사용자가 다른 결재선을 직접 골랐거나(manualChain) 기안 부서/문서유형을
+  // 바꾼 경우에만 새로 계산한다. 이전 상신의 결재 단계 행 자체는 지우고 새로 만들지만, 직전
+  // 반려 기록은 rejectDocumentStep에서 이미 approval_document_rejection_history에 남아있으므로
+  // 단계를 지워도 사라지지 않는다.
   async resubmitDocument(documentId: string, input: {
     document_type_id: string;
     title: string;
@@ -730,33 +732,58 @@ export const approvalDocumentService = {
   }): Promise<ApprovalDocumentWithDetails> {
     const { data: existing, error: existingError } = await supabase
       .from('approval_documents')
-      .select('resubmit_count, created_by, reference_type, reference_id')
+      .select('resubmit_count, created_by, org_unit_id, document_type_id, reference_type, reference_id')
       .eq('id', documentId)
       .eq('status', 'rejected')
       .single();
     if (existingError) throw existingError;
 
-    const chain = input.manualChain && input.manualChain.length > 0
-      ? input.manualChain
-      : await this.previewChain(input.org_unit_id, input.document_type_id);
-    if (chain.length === 0) {
-      throw new Error('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
-    }
+    const { data: prevSteps, error: prevStepsError } = await supabase
+      .from('approval_document_steps')
+      .select('*')
+      .eq('document_id', documentId)
+      .order('step_order');
+    if (prevStepsError) throw prevStepsError;
 
     const now = new Date().toISOString();
-    const isAutoChain = !(input.manualChain && input.manualChain.length > 0);
-    const stepRows = chain.map((c, i) => {
-      const isSelf = isAutoChain && c.approver_id === existing.created_by;
-      return {
-        step_order: i + 1,
-        approver_id: c.approver_id,
-        approver_name: c.approver_name,
-        approver_label: c.approver_role,
-        status: (isSelf ? 'approved' : 'pending') as 'approved' | 'pending',
-        comment: isSelf ? SELF_APPROVE_COMMENT : null,
-        acted_at: isSelf ? now : null,
-      };
-    });
+    const deptOrTypeChanged = input.org_unit_id !== existing.org_unit_id || input.document_type_id !== existing.document_type_id;
+    const hasManualChain = !!(input.manualChain && input.manualChain.length > 0);
+
+    let stepRows: { step_order: number; approver_id: string; approver_name: string; approver_label: string | null; status: 'approved' | 'pending'; comment: string | null; acted_at: string | null }[];
+    if (!hasManualChain && !deptOrTypeChanged && (prevSteps || []).length > 0) {
+      // 디폴트: 부서/문서유형을 바꾸지 않았으면 직전 상신의 결재라인을 그대로 재사용한다.
+      // 본인 결재라 자동승인됐던 단계만 유지하고, 나머지는 전부 pending으로 되돌려 다시 검토받는다.
+      stepRows = prevSteps!.map(s => {
+        const isSelf = s.comment === SELF_APPROVE_COMMENT;
+        return {
+          step_order: s.step_order,
+          approver_id: s.approver_id,
+          approver_name: s.approver_name,
+          approver_label: s.approver_label,
+          status: (isSelf ? 'approved' : 'pending') as 'approved' | 'pending',
+          comment: isSelf ? SELF_APPROVE_COMMENT : null,
+          acted_at: isSelf ? now : null,
+        };
+      });
+    } else {
+      const chain = hasManualChain ? input.manualChain! : await this.previewChain(input.org_unit_id, input.document_type_id);
+      if (chain.length === 0) {
+        throw new Error('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
+      }
+      const isAutoChain = !hasManualChain;
+      stepRows = chain.map((c, i) => {
+        const isSelf = isAutoChain && c.approver_id === existing.created_by;
+        return {
+          step_order: i + 1,
+          approver_id: c.approver_id,
+          approver_name: c.approver_name,
+          approver_label: c.approver_role,
+          status: (isSelf ? 'approved' : 'pending') as 'approved' | 'pending',
+          comment: isSelf ? SELF_APPROVE_COMMENT : null,
+          acted_at: isSelf ? now : null,
+        };
+      });
+    }
     const firstPending = stepRows.find(s => s.status === 'pending');
     const allApproved = !firstPending;
 

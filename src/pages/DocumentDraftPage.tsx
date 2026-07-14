@@ -216,7 +216,14 @@ export default function DocumentDraftPage() {
     approvalLineToChainSteps(selectedManualLine).then(chain => { if (!cancelled) setManualChain(chain); });
     return () => { cancelled = true; };
   }, [selectedManualLine]);
-  const effectiveChain = useManualLine ? manualChain : previewChain;
+
+  // 재상신 시 직전 상신의 결재라인을 디폴트로 그대로 가져온다 — 기안 부서/문서유형을 그대로
+  // 두는 한(서버의 resubmitDocument와 동일한 기준) 자동 재계산 대신 이 값을 그대로 보여준다.
+  const [resubmitOriginalChain, setResubmitOriginalChain] = useState<ApprovalChainStep[]>([]);
+  const [resubmitOriginalOrgUnitId, setResubmitOriginalOrgUnitId] = useState('');
+  const [resubmitOriginalDocTypeId, setResubmitOriginalDocTypeId] = useState('');
+  const resubmitChainUnchanged = !!resubmitId && orgUnitId === resubmitOriginalOrgUnitId && documentTypeId === resubmitOriginalDocTypeId;
+  const effectiveChain = useManualLine ? manualChain : (resubmitChainUnchanged ? resubmitOriginalChain : previewChain);
 
   const selfStepIndexes = useMemo(
     () => effectiveChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
@@ -267,6 +274,9 @@ export default function DocumentDraftPage() {
   const resetForm = () => {
     setDraftId(null);
     setResubmitId(null);
+    setResubmitOriginalChain([]);
+    setResubmitOriginalOrgUnitId('');
+    setResubmitOriginalDocTypeId('');
     if (documentTypeId !== '') skipFormResetRef.current = true;
     setDocumentTypeId('');
     setTitle('');
@@ -309,6 +319,8 @@ export default function DocumentDraftPage() {
 
   // 반려된 문서를 고쳐서 다시 상신 — draftId가 아니라 resubmitId로 표시해, 제출 시
   // resubmitDocument(같은 문서 id 갱신)를 타도록 한다. 임시저장 개념은 적용되지 않는다.
+  // 결재라인은 디폴트로 직전 상신 때 그대로(resubmitOriginalChain)를 보여주고, 부서/문서유형을
+  // 실제로 바꿀 때만 자동 재계산으로 전환된다.
   const loadRejectedIntoForm = (doc: ApprovalDocumentWithDetails) => {
     if (doc.document_type_id !== documentTypeId) skipFormResetRef.current = true;
     setDraftId(null);
@@ -321,6 +333,19 @@ export default function DocumentDraftPage() {
     setRequesterComment(doc.requester_comment || '');
     setUploadedFiles([]);
     setExistingAttachments(doc.attachments || []);
+    setUseManualLine(false);
+    setManualLineId('');
+    setResubmitOriginalChain(
+      [...doc.steps].sort((a, b) => a.step_order - b.step_order).map(s => ({
+        approver_id: s.approver_id,
+        approver_name: s.approver_name,
+        approver_role: s.approver_label || '',
+        org_unit_id: '',
+        org_unit_name: '',
+      }))
+    );
+    setResubmitOriginalOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
+    setResubmitOriginalDocTypeId(doc.document_type_id);
     setInnerTab('write');
   };
 
@@ -709,6 +734,8 @@ export default function DocumentDraftPage() {
                   ) : !manualLineId ? (
                     <p className="text-xs text-gray-400">사용할 결재선을 선택하세요.</p>
                   ) : null
+                ) : resubmitChainUnchanged ? (
+                  <p className="text-xs text-blue-600">직전 상신과 동일한 결재라인입니다. (기안 부서나 문서유형을 바꾸면 자동으로 다시 계산됩니다)</p>
                 ) : !documentTypeId || !orgUnitId ? (
                   <p className="text-xs text-gray-400">문서유형과 기안 부서를 선택하면 결재라인이 표시됩니다.</p>
                 ) : previewLoading ? (
