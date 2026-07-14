@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getCurrentUser } from '@/services/auth.service';
-import { getCertificateTypes, addCertificateType, updateCertificateType, deleteCertificateType } from '@/services/certificate-type.service';
+import {
+  getCertificateTypes, addCertificateType, updateCertificateType, deleteCertificateType,
+  getNationalityValidityForType, upsertNationalityValidity, deleteNationalityValidity,
+} from '@/services/certificate-type.service';
 import {
   getCertificateCategories, addCertificateCategory, updateCertificateCategory, deleteCertificateCategory,
+  reorderCertificateCategories,
 } from '@/services/certificate-category.service';
-import type { CertificateType } from '@/types/certificate-type';
+import { getNationalities } from '@/services/nationality.service';
+import type { CertificateType, CertificateNationalityValidity } from '@/types/certificate-type';
 import type { CertificateCategory } from '@/types/certificate-category';
+import type { Nationality } from '@/types/nationality';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Trash2, FileText, Save, Settings, Edit2, X, Check } from 'lucide-react';
+import { Plus, Trash2, FileText, Save, Settings, Edit2, X, Check, GripVertical } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,7 +28,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useTabContext } from '@/contexts/TabContext';
 import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableCategoryRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center justify-between gap-2 p-2 text-sm">
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing touch-none shrink-0">
+        <GripVertical className="w-4 h-4 text-gray-400" />
+      </div>
+      {children}
+    </div>
+  );
+}
 
 const EMPTY_FORM = { category: '', type_code: '', type_name_en: '', type_name_ko: '', description: '', validity_period_months: undefined as number|undefined, is_mandatory: false, is_active: true, display_order: 999 };
 
@@ -48,6 +68,12 @@ export default function CertificateTypeManagementPage() {
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingCatName, setEditingCatName] = useState('');
   const [catSaving, setCatSaving] = useState(false);
+
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
+  const [validityOverrides, setValidityOverrides] = useState<CertificateNationalityValidity[]>([]);
+  const [newOverrideNat, setNewOverrideNat] = useState('');
+  const [newOverrideMonths, setNewOverrideMonths] = useState('');
+  const [overrideSaving, setOverrideSaving] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -81,6 +107,15 @@ export default function CertificateTypeManagementPage() {
   useEffect(() => {
     if (!activeTab && categories.length > 0) setActiveTab(categories[0].code);
   }, [categories, activeTab]);
+
+  useEffect(() => {
+    getNationalities().then(setNationalities).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!editId) { setValidityOverrides([]); return; }
+    getNationalityValidityForType(editId).then(setValidityOverrides).catch(console.error);
+  }, [editId]);
 
   const loadData = async () => {
     try {
@@ -151,6 +186,53 @@ export default function CertificateTypeManagementPage() {
     if (!confirm('삭제하시겠습니까?')) return;
     try { await deleteCertificateType(id); await loadData(); }
     catch { alert('삭제 중 오류가 발생했습니다.'); }
+  };
+
+  // 국적별 유효기간 예외 — 증서유형과 별개로 즉시 저장(카테고리 관리와 동일한 방식)
+  const handleAddOverride = async () => {
+    if (!editId || !newOverrideNat) return;
+    if (validityOverrides.some(o => o.nationality_code === newOverrideNat)) { alert('이미 이 국적에 대한 예외가 등록되어 있습니다.'); return; }
+    try {
+      setOverrideSaving(true);
+      await upsertNationalityValidity(editId, newOverrideNat, newOverrideMonths ? parseInt(newOverrideMonths) : null);
+      setValidityOverrides(await getNationalityValidityForType(editId));
+      setNewOverrideNat(''); setNewOverrideMonths('');
+    } catch { alert('국적별 예외 저장 중 오류가 발생했습니다.'); }
+    finally { setOverrideSaving(false); }
+  };
+
+  const handleUpdateOverrideMonths = async (o: CertificateNationalityValidity, months: string) => {
+    if (!editId) return;
+    try {
+      await upsertNationalityValidity(editId, o.nationality_code, months ? parseInt(months) : null);
+      setValidityOverrides(await getNationalityValidityForType(editId));
+    } catch { alert('국적별 예외 저장 중 오류가 발생했습니다.'); }
+  };
+
+  const handleDeleteOverride = async (o: CertificateNationalityValidity) => {
+    try {
+      await deleteNationalityValidity(o.id);
+      setValidityOverrides(prev => prev.filter(v => v.id !== o.id));
+    } catch { alert('국적별 예외 삭제 중 오류가 발생했습니다.'); }
+  };
+
+  const handleCategoryReorderDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = categories.findIndex(c => c.id === active.id);
+    const newIndex = categories.findIndex(c => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(categories, oldIndex, newIndex);
+    setCategories(reordered);
+
+    try {
+      await reorderCertificateCategories(reordered.map(c => c.id));
+    } catch {
+      alert('순서 저장 중 오류가 발생했습니다.');
+      await loadData();
+    }
   };
 
   const handleCategoryDragEnd = async (category: string, event: DragEndEvent) => {
@@ -252,12 +334,55 @@ export default function CertificateTypeManagementPage() {
                 <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_mandatory} onCheckedChange={c => setFormData({ ...formData, is_mandatory: c === true })} /><span className="text-xs">필수 증서</span></label>
                 <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_active} onCheckedChange={c => setFormData({ ...formData, is_active: c === true })} /><span className="text-xs">활성 상태</span></label>
               </div>
+              {editId && (
+                <div className="space-y-1.5 border-t pt-3">
+                  <Label className="text-xs">국적별 유효기간 예외 <span className="text-gray-400 font-normal">(같은 증서라도 자국 증서 유효기간이 다른 국적만 등록 — 비워두면 그 국적은 무기한)</span></Label>
+                  {validityOverrides.length > 0 && (
+                    <div className="rounded-md border divide-y">
+                      {validityOverrides.map(o => {
+                        const nat = nationalities.find(n => n.country_code === o.nationality_code);
+                        return (
+                          <div key={o.id} className="flex items-center gap-2 p-2 text-sm">
+                            <span className="flex-1 min-w-0 truncate">{nat ? `${nat.country_name_ko} (${nat.country_code})` : o.nationality_code}</span>
+                            <Input
+                              type="number" min={1} placeholder="무기한"
+                              defaultValue={o.validity_period_months ?? ''}
+                              onBlur={e => handleUpdateOverrideMonths(o, e.target.value)}
+                              className="h-8 text-sm w-24"
+                            />
+                            <span className="text-xs text-gray-400 shrink-0">개월</span>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteOverride(o)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex gap-2 items-end p-2.5 bg-gray-50 rounded-md">
+                    <div className="space-y-1 flex-1">
+                      <Label className="text-xs">국적</Label>
+                      <Select value={newOverrideNat} onValueChange={setNewOverrideNat}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                        <SelectContent>
+                          {nationalities.filter(n => !validityOverrides.some(o => o.nationality_code === n.country_code)).map(n => (
+                            <SelectItem key={n.country_code} value={n.country_code} className="text-sm">{n.country_name_ko} ({n.country_code})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 w-28">
+                      <Label className="text-xs">유효기간(개월)</Label>
+                      <Input type="number" min={1} placeholder="무기한" value={newOverrideMonths} onChange={e => setNewOverrideMonths(e.target.value)} className="h-8 text-sm" disabled={overrideSaving} />
+                    </div>
+                    <Button size="sm" className="h-8 gap-1" onClick={handleAddOverride} disabled={overrideSaving || !newOverrideNat}><Plus className="w-3.5 h-3.5" />추가</Button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : categories.length === 0 ? (
             <div className="text-center py-8 text-sm text-gray-500">등록된 카테고리가 없습니다. 카테고리 관리에서 먼저 추가하세요.</div>
           ) : (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full flex-wrap h-auto gap-1">
+              <TabsList className="w-full flex-wrap h-auto gap-1 justify-start">
                 {categories.map(cat => <TabsTrigger key={cat.code} value={cat.code} className="text-xs">{cat.name} ({types.filter(t => t.category === cat.code).length})</TabsTrigger>)}
               </TabsList>
               {categories.map(cat => {
@@ -327,33 +452,39 @@ export default function CertificateTypeManagementPage() {
             <div className="rounded-md border divide-y max-h-80 overflow-y-auto">
               {categories.length === 0 ? (
                 <p className="text-center py-6 text-sm text-gray-400">등록된 카테고리가 없습니다</p>
-              ) : categories.map(c => (
-                <div key={c.id} className="flex items-center justify-between gap-2 p-2 text-sm">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="font-mono text-xs text-gray-400 shrink-0">{c.code}</span>
-                    {editingCatId === c.id ? (
-                      <Input value={editingCatName} onChange={e => setEditingCatName(e.target.value)} className="h-7 text-sm" autoFocus />
-                    ) : (
-                      <span className={`truncate ${!c.is_active ? 'text-gray-400' : ''}`}>{c.name}</span>
-                    )}
-                    {!c.is_active && <Badge variant="outline" className="text-xs shrink-0">비활성</Badge>}
-                  </div>
-                  <div className="flex gap-0.5 shrink-0">
-                    {editingCatId === c.id ? (
-                      <>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => saveEditCategory(c.id)} disabled={catSaving}><Check className="h-3.5 w-3.5" /></Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingCatId(null)}><X className="h-3.5 w-3.5" /></Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleCategoryActive(c)}>{c.is_active ? '비활성화' : '활성화'}</Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEditCategory(c)}><Edit2 className="h-3.5 w-3.5" /></Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteCategory(c)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
+              ) : (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryReorderDragEnd}>
+                  <SortableContext items={categories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                    {categories.map(c => (
+                      <SortableCategoryRow key={c.id} id={c.id}>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="font-mono text-xs text-gray-400 shrink-0">{c.code}</span>
+                          {editingCatId === c.id ? (
+                            <Input value={editingCatName} onChange={e => setEditingCatName(e.target.value)} className="h-7 text-sm" autoFocus />
+                          ) : (
+                            <span className={`truncate ${!c.is_active ? 'text-gray-400' : ''}`}>{c.name}</span>
+                          )}
+                          {!c.is_active && <Badge variant="outline" className="text-xs shrink-0">비활성</Badge>}
+                        </div>
+                        <div className="flex gap-0.5 shrink-0">
+                          {editingCatId === c.id ? (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => saveEditCategory(c.id)} disabled={catSaving}><Check className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditingCatId(null)}><X className="h-3.5 w-3.5" /></Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleCategoryActive(c)}>{c.is_active ? '비활성화' : '활성화'}</Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEditCategory(c)}><Edit2 className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteCategory(c)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            </>
+                          )}
+                        </div>
+                      </SortableCategoryRow>
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              )}
             </div>
           </div>
         </DialogContent>

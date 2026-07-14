@@ -13,3 +13,14 @@ export interface CertificateType {
   created_at: string;
   updated_at: string;
 }
+
+// 같은 증서 유형이라도 선원 국적(자국 증서 발급 기준)에 따라 유효기간이 다른 경우의 예외 규칙.
+// validity_period_months가 null이면 그 국적은 무기한(만료 없음)이라는 뜻.
+export interface CertificateNationalityValidity {
+  id: string;
+  certificate_type_id: string;
+  nationality_code: string;
+  validity_period_months: number | null;
+  created_at: string;
+  updated_at: string;
+}

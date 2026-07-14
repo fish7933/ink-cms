@@ -13,11 +13,11 @@ import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewService } from '@/services/crew.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
-import { getCertificateTypes } from '@/services/certificate-type.service';
+import { getCertificateTypes, getAllNationalityValidityOverrides } from '@/services/certificate-type.service';
 import { getCertificateCategories } from '@/services/certificate-category.service';
 import { getNationalities } from '@/services/nationality.service';
 import type { CrewRecommendationWithDetails, Rank } from '@/types/models';
-import type { CertificateType } from '@/types/certificate-type';
+import type { CertificateType, CertificateNationalityValidity } from '@/types/certificate-type';
 import type { CertificateCategory } from '@/types/certificate-category';
 import type { Nationality } from '@/types/nationality';
 import { useTabContext } from '@/contexts/TabContext';
@@ -68,6 +68,7 @@ export default function CrewInputPage() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
+  const [nationalityValidityOverrides, setNationalityValidityOverrides] = useState<CertificateNationalityValidity[]>([]);
   const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
 
   const [formData, setFormData] = useState({
@@ -114,6 +115,7 @@ export default function CrewInputPage() {
     }
     loadRanks();
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
+    getAllNationalityValidityOverrides().then(setNationalityValidityOverrides).catch(console.error);
     getCertificateCategories(true).then(setCertificateCategories).catch(console.error);
     getNationalities().then(setNationalities).catch(console.error);
     setFormData(prev => ({
@@ -172,6 +174,14 @@ export default function CrewInputPage() {
       console.error('Error uploading photo:', e);
       return null;
     }
+  };
+
+  // 같은 증서 유형이라도 선원 국적(자국 증서 발급 기준)에 따라 유효기간이 다른 경우가 있어,
+  // 국적별 예외가 있으면 그걸 우선하고 없으면 증서유형의 기본 유효기간을 따른다.
+  const hasExpiryForNationality = (ct: CertificateType): boolean => {
+    const override = nationalityValidityOverrides.find(o => o.certificate_type_id === ct.id && o.nationality_code === formData.nationality);
+    if (override) return override.validity_period_months != null;
+    return !!ct.validity_period_months;
   };
 
   // 증서 관련
@@ -455,7 +465,7 @@ const addCert = (name?: string) => {
                         <Button type="button" variant="default" size="sm" onClick={() => {
                           setCertificates(certificateTypes.map(ct => ({
                             name: `${ct.type_name_en}`,
-                            number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !ct.validity_period_months,
+                            number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct),
                           })));
                         }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />전체 증서 불러오기</Button>
                       )}
@@ -464,7 +474,7 @@ const addCert = (name?: string) => {
                           const existingNames = new Set(certificates.map(c => c.name));
                           const newCerts = certificateTypes
                             .filter(ct => !existingNames.has(`${ct.type_name_en}`))
-                            .map(ct => ({ name: `${ct.type_name_en}`, number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !ct.validity_period_months }));
+                            .map(ct => ({ name: `${ct.type_name_en}`, number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct) }));
                           if (newCerts.length > 0) setCertificates(prev => [...prev, ...newCerts]);
                         }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />누락 증서 추가</Button>
                       )}
@@ -481,7 +491,7 @@ const addCert = (name?: string) => {
                         <Button type="button" variant="outline" size="sm" onClick={() => {
                           setCertificates(certificateTypes.map(ct => ({
                             name: `${ct.type_name_en}`,
-                            number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !ct.validity_period_months,
+                            number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct),
                           })));
                         }} className="text-xs gap-1"><Plus className="h-3 w-3" />등록된 증서 유형 전체 불러오기 ({certificateTypes.length}건)</Button>
                       )}
