@@ -575,16 +575,28 @@ export const approvalDocumentService = {
     if (error) throw error;
   },
 
+  // "삭제된 문서함"의 영구삭제 — 문서(approval_documents 행)는 절대 지우지 않는다. 문서는
+  // 기안자/결재자/참조자가 함께 보는 하나의 보관 기록이라, 어떤 한 사람이 자기 개인 폴더에서
+  // 영구삭제한다고 해서 다른 사람의 문서함/결재 이력에서까지 사라지면 안 되기 때문이다.
+  // 대신 hides 행에 permanent 플래그만 세워, 이 사용자에게만 다시는(복원 포함) 보이지 않게 한다.
+  async permanentlyHideDocumentForUser(documentId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('approval_document_hides')
+      .upsert({ document_id: documentId, user_id: userId, permanent: true }, { onConflict: 'document_id,user_id' });
+    if (error) throw error;
+  },
+
   async getHiddenDocumentIds(userId: string): Promise<Set<string>> {
     const { data, error } = await supabase.from('approval_document_hides').select('document_id').eq('user_id', userId);
     if (error) throw error;
     return new Set((data || []).map(r => r.document_id));
   },
 
-  // "삭제된 문서함" — 이 사용자가 본인 결재함에서 숨긴 문서 목록 (문서 자체는 살아있음)
+  // "삭제된 문서함" — 이 사용자가 본인 결재함에서 숨긴 문서 목록 (문서 자체는 살아있음).
+  // 영구삭제(permanent)된 항목은 복원 대상이 아니므로 이 목록에서도 빠진다.
   async getMyHiddenDocuments(userId: string): Promise<ApprovalDocumentWithDetails[]> {
     const { data: hides, error: hidesError } = await supabase
-      .from('approval_document_hides').select('document_id').eq('user_id', userId);
+      .from('approval_document_hides').select('document_id').eq('user_id', userId).eq('permanent', false);
     if (hidesError) throw hidesError;
     const docIds = (hides || []).map(h => h.document_id);
     if (docIds.length === 0) return [];

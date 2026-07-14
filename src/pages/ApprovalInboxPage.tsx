@@ -235,15 +235,17 @@ export default function ApprovalInboxPage() {
     }
   };
 
-  // "삭제"(숨김)와 달리 문서 자체를 완전히 지운다 — 다른 참여자의 결재함, 결재 이력에서도
-  // 사라지므로 기안자 본인 또는 관리자만, 그리고 삭제된 문서함(이미 숨긴 것)에서만 가능하게 한다.
-  const canPermanentlyDeleteDoc = (doc: ApprovalDocumentWithDetails) =>
-    permissions.canDelete && (doc.created_by === currentUserId || isAdmin);
+  // 문서는 기안자/결재자/참조자가 함께 보는 하나의 보관 기록이라, 어떤 한 사람이 자기
+  // 개인 폴더(삭제된 문서함)에서 "영구삭제"한다고 해서 다른 사람의 문서함/결재 이력에서까지
+  // 사라지면 안 된다 — 문서 자체(approval_documents 행)는 절대 건드리지 않고, 이 사용자의
+  // 삭제된 문서함에서만 다시는 안 보이게(복원도 불가능하게) 만든다. 그래서 기안자/관리자로
+  // 제한할 이유가 없다 — 이미 내가 숨긴 문서라면 누구나 자기 폴더를 완전히 비울 수 있다.
+  const canPermanentlyDeleteDoc = (_doc: ApprovalDocumentWithDetails) => permissions.canDelete;
 
   const handlePermanentDeleteDoc = async (doc: ApprovalDocumentWithDetails) => {
-    if (!confirm(`"${doc.title}" 문서를 영구 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다. 결재 이력을 포함한 문서 전체가 시스템에서 완전히 삭제되며, 다른 참여자의 결재함에서도 사라집니다.`)) return;
+    if (!confirm(`"${doc.title}" 문서를 삭제된 문서함에서 완전히 제거하시겠습니까?\n\n이후에는 복원할 수 없습니다. 문서 자체는 삭제되지 않으며, 다른 참여자의 결재함이나 결재 이력에는 전혀 영향이 없습니다.`)) return;
     try {
-      await approvalDocumentService.deleteDocument(doc.id);
+      await approvalDocumentService.permanentlyHideDocumentForUser(doc.id, currentUserId);
       toast({ title: '영구 삭제되었습니다.' });
       setHiddenDocuments(prev => prev.filter(d => d.id !== doc.id));
     } catch (e) {
