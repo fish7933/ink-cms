@@ -76,22 +76,23 @@ export default function DashboardPage() {
         }
 
         // 결재함에 접근 가능한 역할(default-menu.ts의 approval-inbox roles)만 내 결재함 위젯을 계산한다.
+        // 관리자 계정이라도 실제로 내 차례인 건만 보여준다 — 계정 권한(admin/system_admin)과
+        // 결재라인상 실제 담당자는 별개다(결재함 화면과 동일한 기준).
         if (['ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(user.role)) {
-          const isAdminUser = user.role === 'admin' || user.role === 'system_admin';
           const members = await orgChartService.getOrgMembers();
           const myOrgUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
 
           const [crewApprovals, documents] = await Promise.all([
-            isAdminUser ? approvalService.getAllApprovals() : approvalService.getMyRelatedApprovals(user.id),
-            isAdminUser ? approvalDocumentService.getAllDocuments() : approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
+            approvalService.getMyRelatedApprovals(user.id),
+            approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
           ]);
 
           const myTurnCrew: MyPendingItem[] = crewApprovals
-            .filter(a => a.status === 'pending' && (isAdminUser || a.current_approver?.approver_id === user.id))
+            .filter(a => a.status === 'pending' && a.current_approver?.approver_id === user.id)
             .map(a => ({ id: a.id, kind: 'crew', title: '선원추천 결재', requesterName: a.requester_name, createdAt: a.created_at }));
 
           const myTurnDocs: MyPendingItem[] = documents
-            .filter(d => d.status === 'pending' && (isAdminUser || d.steps.some(s => s.step_order === d.current_step && s.approver_id === user.id)))
+            .filter(d => d.status === 'pending' && d.steps.some(s => s.step_order === d.current_step && s.approver_id === user.id && s.status === 'pending'))
             .map(d => ({ id: d.id, kind: 'document', title: d.title, requesterName: d.creator_name, createdAt: d.created_at }));
 
           setMyPendingApprovals(
