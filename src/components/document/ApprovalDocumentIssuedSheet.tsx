@@ -3,6 +3,16 @@ import type { CompanyInfo } from '@/services/company-info.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 
+// 연차/질병휴가 신청 문서(reference_type이 shore_leave_request/sick_leave_request)는 자유서식
+// content만으로는 신청 당시 정보(기간/시간/사유)가 누락되기 쉬워, 원본 신청 레코드에서 조회한
+// 값을 별도로 받아 구조화된 표로 보여준다.
+export interface LeaveDetail {
+  typeLabel: string;
+  period: string;
+  hoursLabel: string;
+  reason: string;
+}
+
 interface Props {
   doc: ApprovalDocumentWithDetails;
   documentType: ApprovalDocumentType | null;
@@ -10,11 +20,12 @@ interface Props {
   positions: ShorePosition[];
   creatorPositionName?: string | null;
   includeAttachments?: boolean;
+  leaveDetail?: LeaveDetail | null;
 }
 
 // 결재 완료된 문서(특히 지출결의서 등 구조화 양식)를 총무팀 보관용 "시행문" 형식으로 출력하는 문서 본문.
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
-export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false }: Props) {
+export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false, leaveDetail }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
   const issuedDate = doc.completed_at ? new Date(doc.completed_at) : new Date(doc.created_at);
   const fields = documentType?.field_schema || [];
@@ -85,7 +96,16 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
 
       <div style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', margin: '20px 0' }}>{doc.title}</div>
 
-      {fields.length > 0 ? (
+      {leaveDetail ? (
+        <table className="issued-fields">
+          <tbody>
+            <tr><th>휴가 종류</th><td>{leaveDetail.typeLabel}</td></tr>
+            <tr><th>신청 기간</th><td>{leaveDetail.period}</td></tr>
+            <tr><th>신청 시간</th><td>{leaveDetail.hoursLabel}</td></tr>
+            <tr><th>사유</th><td>{leaveDetail.reason}</td></tr>
+          </tbody>
+        </table>
+      ) : fields.length > 0 ? (
         <table className="issued-fields">
           <tbody>
             {fields.map(f => (

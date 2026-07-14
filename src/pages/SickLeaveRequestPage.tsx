@@ -134,10 +134,16 @@ export default function SickLeaveRequestPage() {
         reason: form.reason || undefined,
       });
 
+      const sickContent = [
+        `신청 기간: ${form.start_date} ~ ${form.end_date} (${totalDays}일)`,
+        `신청 시간: ${formatLeaveHours(totalHours)}`,
+        `사유: ${form.reason || '-'}`,
+      ].join('\n');
+
       const doc = await approvalDocumentService.createDocument({
         document_type_id: sickType.id,
         title: `${currentUser.name} 질병휴가 신청 (${form.start_date} ~ ${form.end_date}, ${formatLeaveHours(totalHours)})`,
-        content: form.reason || undefined,
+        content: sickContent,
         org_unit_id: myOrgUnitId,
         created_by: currentUser.id,
         ccOrgUnitIds: form.ccOrgUnitIds,

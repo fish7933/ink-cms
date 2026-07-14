@@ -187,10 +187,19 @@ export default function ShoreLeaveRequestPage() {
         reason: form.reason || undefined,
       });
 
+      const leaveTypeLabel = LEAVE_TYPE_OPTIONS.find(o => o.value === effectiveLeaveType)?.label || '종일';
+      const leaveContent = [
+        `휴가 종류: ${leaveTypeLabel}`,
+        `신청 기간: ${form.start_date} ${start_time} ~ ${form.end_date} ${end_time}`,
+        `신청 시간: ${formatLeaveHours(totalHours)}`,
+        `잔여 연차(신청 전): ${formatLeaveHours(balance.remainingHours)}`,
+        `사유: ${form.reason || '-'}`,
+      ].join('\n');
+
       const doc = await approvalDocumentService.createDocument({
         document_type_id: leaveType.id,
         title: `${currentUser.name} 연차 신청 (${form.start_date} ~ ${form.end_date}, ${formatLeaveHours(totalHours)})`,
-        content: form.reason || undefined,
+        content: leaveContent,
         org_unit_id: myOrgUnitId,
         created_by: currentUser.id,
         ccOrgUnitIds: form.ccOrgUnitIds,

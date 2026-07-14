@@ -1,13 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
-import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
+import { formatLeaveHours } from '@/lib/leave-calc';
+import ApprovalDocumentIssuedSheet, { type LeaveDetail } from '@/components/document/ApprovalDocumentIssuedSheet';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
+
+const LEAVE_TYPE_LABEL: Record<string, string> = { shore_leave_request: '연차', sick_leave_request: '질병휴가' };
+
+async function fetchLeaveDetail(referenceType: string, referenceId: string): Promise<LeaveDetail | null> {
+  const table = referenceType === 'shore_leave_request' ? 'shore_leave_requests'
+    : referenceType === 'sick_leave_request' ? 'sick_leave_requests'
+    : null;
+  if (!table) return null;
+  const { data } = await supabase.from(table).select('start_date, start_time, end_date, end_time, hours, reason').eq('id', referenceId).maybeSingle();
+  if (!data) return null;
+  return {
+    typeLabel: LEAVE_TYPE_LABEL[referenceType] || '휴가',
+    period: `${data.start_date} ${data.start_time} ~ ${data.end_date} ${data.end_time}`,
+    hoursLabel: formatLeaveHours(data.hours),
+    reason: data.reason || '-',
+  };
+}
 
 // 사이드바/헤더/탭바 없이 순수 문서만 렌더링되는 독립 인쇄 페이지 (App.tsx 최상위 라우트, Layout 우회).
 // 별도 브라우저 탭에서 열려서, 인쇄하거나 닫아도 원래 작업 중이던 탭/화면에는 전혀 영향을 주지 않는다.
@@ -20,6 +39,7 @@ export default function ApprovalDocumentPrintPage() {
   const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
+  const [leaveDetail, setLeaveDetail] = useState<LeaveDetail | null>(null);
   const [includeAttachments, setIncludeAttachments] = useState(false);
 
   useEffect(() => {
@@ -40,6 +60,9 @@ export default function ApprovalDocumentPrintPage() {
       setCompany(companyInfo);
       setPositions(shorePositions);
       setCreatorPositionName(found ? members.find(m => m.id === found.created_by)?.position_name || null : null);
+      if (found?.reference_type && found.reference_id) {
+        setLeaveDetail(await fetchLeaveDetail(found.reference_type, found.reference_id).catch(() => null));
+      }
       setLoading(false);
     };
     load();
@@ -71,7 +94,7 @@ export default function ApprovalDocumentPrintPage() {
           인쇄 / PDF 저장
         </button>
       </div>
-      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} />
+      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} leaveDetail={leaveDetail} />
     </div>
   );
 }
