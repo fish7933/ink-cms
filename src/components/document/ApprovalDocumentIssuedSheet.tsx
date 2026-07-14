@@ -88,7 +88,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           <tbody>
             <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
             <tr><td style={{ padding: '3px 0' }}><b>시행일자</b>&nbsp;&nbsp;{issuedDate.toLocaleDateString('ko-KR')}</td></tr>
-            <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;총무팀 (보존)</td></tr>
+            <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
             {referenceLabels.length > 0 && (
               <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
             )}

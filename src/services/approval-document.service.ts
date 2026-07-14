@@ -165,7 +165,10 @@ async function enrichDocuments(docs: ApprovalDocument[]): Promise<ApprovalDocume
   const docIds = docs.map(d => d.id);
   const typeIds = [...new Set(docs.map(d => d.document_type_id))];
   const creatorIds = [...new Set(docs.map(d => d.created_by))];
-  const unitIds = [...new Set(docs.map(d => d.org_unit_id).filter((id): id is string => !!id))];
+  const unitIds = [...new Set([
+    ...docs.map(d => d.org_unit_id),
+    ...docs.map(d => d.recipient_org_unit_id),
+  ].filter((id): id is string => !!id))];
 
   const [stepsRes, typesRes, creatorsRes, unitsRes] = await Promise.all([
     supabase.from('approval_document_steps').select('*').in('document_id', docIds).order('step_order'),
@@ -218,6 +221,7 @@ async function enrichDocuments(docs: ApprovalDocument[]): Promise<ApprovalDocume
       document_type_name: typesMap.get(d.document_type_id) || '알 수 없음',
       creator_name: creatorsMap.get(d.created_by) || '알 수 없음',
       org_unit_name: d.org_unit_id ? (unitsMap.get(d.org_unit_id) || null) : null,
+      recipient_org_unit_name: d.recipient_org_unit_id ? (unitsMap.get(d.recipient_org_unit_id) || null) : null,
       steps,
     };
   });
@@ -245,17 +249,23 @@ export const approvalDocumentService = {
     return data || [];
   },
 
-  async createDocumentType(input: { code: string; name: string; field_schema?: DocumentFormField[] | null; default_cc_org_unit_ids?: string[] | null }): Promise<ApprovalDocumentType> {
+  async createDocumentType(input: { code: string; name: string; field_schema?: DocumentFormField[] | null; default_cc_org_unit_ids?: string[] | null; default_recipient_org_unit_id?: string | null }): Promise<ApprovalDocumentType> {
     const { data, error } = await supabase
       .from('approval_document_types')
-      .insert({ code: input.code, name: input.name, field_schema: input.field_schema || null, default_cc_org_unit_ids: input.default_cc_org_unit_ids || null })
+      .insert({
+        code: input.code,
+        name: input.name,
+        field_schema: input.field_schema || null,
+        default_cc_org_unit_ids: input.default_cc_org_unit_ids || null,
+        default_recipient_org_unit_id: input.default_recipient_org_unit_id || null,
+      })
       .select()
       .single();
     if (error) throw error;
     return data;
   },
 
-  async updateDocumentType(id: string, updates: Partial<Pick<ApprovalDocumentType, 'code' | 'name' | 'is_active' | 'field_schema' | 'default_cc_org_unit_ids'>>): Promise<void> {
+  async updateDocumentType(id: string, updates: Partial<Pick<ApprovalDocumentType, 'code' | 'name' | 'is_active' | 'field_schema' | 'default_cc_org_unit_ids' | 'default_recipient_org_unit_id'>>): Promise<void> {
     const { error } = await supabase
       .from('approval_document_types')
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -310,6 +320,8 @@ export const approvalDocumentService = {
     requester_comment?: string;
     reference_type?: string;
     reference_id?: string;
+    // 결재선/참조와 별개인 문서의 공식 수신부서
+    recipientOrgUnitId?: string;
     // 결재선과 별개로 통보만 받을 참조자(개인) / 참조 부서
     ccUserIds?: string[];
     ccOrgUnitIds?: string[];
@@ -363,6 +375,7 @@ export const approvalDocumentService = {
       reference_type: input.reference_type || null,
       reference_id: input.reference_id || null,
       manual_line_id: isAutoChain ? null : (input.manualLineId || null),
+      recipient_org_unit_id: input.recipientOrgUnitId || null,
       status: allApproved ? 'approved' : 'pending',
       current_step: allApproved ? stepRows.length : firstPending!.step_order,
       completed_at: allApproved ? now : null,
@@ -408,6 +421,7 @@ export const approvalDocumentService = {
     org_unit_id?: string;
     created_by: string;
     requester_comment?: string;
+    recipientOrgUnitId?: string;
   }): Promise<ApprovalDocumentWithDetails> {
     const payload = {
       document_type_id: input.document_type_id,
@@ -418,6 +432,7 @@ export const approvalDocumentService = {
       org_unit_id: input.org_unit_id || null,
       created_by: input.created_by,
       requester_comment: input.requester_comment || null,
+      recipient_org_unit_id: input.recipientOrgUnitId || null,
       status: 'draft',
       current_step: 0,
       updated_at: new Date().toISOString(),
@@ -753,6 +768,7 @@ export const approvalDocumentService = {
     attachments?: ApprovalDocumentAttachment[];
     org_unit_id: string;
     requester_comment?: string;
+    recipientOrgUnitId?: string;
     ccUserIds?: string[];
     ccOrgUnitIds?: string[];
     manualChain?: ApprovalChainStep[];
@@ -828,6 +844,7 @@ export const approvalDocumentService = {
       org_unit_id: input.org_unit_id,
       requester_comment: input.requester_comment || null,
       manual_line_id: manualLineIdForPayload,
+      recipient_org_unit_id: input.recipientOrgUnitId || null,
       status: allApproved ? 'approved' : 'pending',
       current_step: allApproved ? stepRows.length : firstPending!.step_order,
       completed_at: allApproved ? now : null,

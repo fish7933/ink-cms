@@ -34,6 +34,7 @@ export default function DocumentTypesManagementPage() {
   const [form, setForm] = useState({ code: '', name: '' });
   const [fieldSchema, setFieldSchema] = useState<DocumentFormField[]>([]);
   const [defaultCcOrgUnitIds, setDefaultCcOrgUnitIds] = useState<string[]>([]);
+  const [defaultRecipientOrgUnitId, setDefaultRecipientOrgUnitId] = useState('');
   const [saving, setSaving] = useState(false);
 
   const permissions = usePermissions('document_types');
@@ -72,8 +73,8 @@ export default function DocumentTypesManagementPage() {
     }
   };
 
-  const openCreate = () => { setEditingType(null); setForm({ code: '', name: '' }); setFieldSchema([]); setDefaultCcOrgUnitIds([]); setDialogOpen(true); };
-  const openEdit = (t: ApprovalDocumentType) => { setEditingType(t); setForm({ code: t.code, name: t.name }); setFieldSchema(t.field_schema || []); setDefaultCcOrgUnitIds(t.default_cc_org_unit_ids || []); setDialogOpen(true); };
+  const openCreate = () => { setEditingType(null); setForm({ code: '', name: '' }); setFieldSchema([]); setDefaultCcOrgUnitIds([]); setDefaultRecipientOrgUnitId(''); setDialogOpen(true); };
+  const openEdit = (t: ApprovalDocumentType) => { setEditingType(t); setForm({ code: t.code, name: t.name }); setFieldSchema(t.field_schema || []); setDefaultCcOrgUnitIds(t.default_cc_org_unit_ids || []); setDefaultRecipientOrgUnitId(t.default_recipient_org_unit_id || ''); setDialogOpen(true); };
   const isSystemManaged = (t: ApprovalDocumentType) => t.is_free_form === false;
   const toggleDefaultCcUnit = (unitId: string) =>
     setDefaultCcOrgUnitIds(prev => prev.includes(unitId) ? prev.filter(id => id !== unitId) : [...prev, unitId]);
@@ -85,10 +86,11 @@ export default function DocumentTypesManagementPage() {
       setSaving(true);
       const schema = fieldSchema.length > 0 ? fieldSchema : null;
       const defaultCc = defaultCcOrgUnitIds.length > 0 ? defaultCcOrgUnitIds : null;
+      const defaultRecipient = defaultRecipientOrgUnitId || null;
       if (editingType) {
-        await approvalDocumentService.updateDocumentType(editingType.id, { code: form.code.trim(), name: form.name.trim(), field_schema: schema, default_cc_org_unit_ids: defaultCc });
+        await approvalDocumentService.updateDocumentType(editingType.id, { code: form.code.trim(), name: form.name.trim(), field_schema: schema, default_cc_org_unit_ids: defaultCc, default_recipient_org_unit_id: defaultRecipient });
       } else {
-        await approvalDocumentService.createDocumentType({ code: form.code.trim(), name: form.name.trim(), field_schema: schema, default_cc_org_unit_ids: defaultCc });
+        await approvalDocumentService.createDocumentType({ code: form.code.trim(), name: form.name.trim(), field_schema: schema, default_cc_org_unit_ids: defaultCc, default_recipient_org_unit_id: defaultRecipient });
       }
       setDialogOpen(false);
       await loadData();
@@ -182,6 +184,7 @@ export default function DocumentTypesManagementPage() {
                     <TableHead className="text-xs">구분</TableHead>
                     <TableHead className="text-xs">양식</TableHead>
                     <TableHead className="text-xs">전결 기준 직급</TableHead>
+                    <TableHead className="text-xs">수신부서</TableHead>
                     <TableHead className="text-xs">참조부서</TableHead>
                     <TableHead className="text-xs">상태</TableHead>
                     <TableHead className="text-right text-xs w-48">작업</TableHead>
@@ -214,6 +217,15 @@ export default function DocumentTypesManagementPage() {
                               {positions.map(p => <SelectItem key={p.id} value={p.id} className="text-sm">{p.name} 전결</SelectItem>)}
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          {t.default_recipient_org_unit_id ? (
+                            <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-600 border-gray-200">
+                              {orgUnits.find(u => u.id === t.default_recipient_org_unit_id)?.name || '-'}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {t.default_cc_org_unit_ids && t.default_cc_org_unit_ids.length > 0 ? (
@@ -282,6 +294,16 @@ export default function DocumentTypesManagementPage() {
                 <DocumentFormFieldsEditor fields={fieldSchema} onChange={setFieldSchema} disabled={saving} />
               </div>
             )}
+            <div className="space-y-1.5 border-t pt-3">
+              <Label className="text-xs">기본 수신부서 <span className="text-gray-400 font-normal">(결재선/참조와 별개로 시행문의 "수신"란에 표시, 예: 지출결의서 → 총무팀)</span></Label>
+              <Select value={defaultRecipientOrgUnitId || '_none'} onValueChange={v => setDefaultRecipientOrgUnitId(v === '_none' ? '' : v)} disabled={saving}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="수신부서 선택" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">지정 안 함 (총무팀(보존) 기본 표기)</SelectItem>
+                  {orgUnits.map(u => <SelectItem key={u.id} value={u.id} className="text-sm">{u.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5 border-t pt-3">
               <Label className="text-xs">기본 참조부서 <span className="text-gray-400 font-normal">(이 유형으로 기안하면 자동으로 참조 지정, 예: 지출결의서 → 총무팀)</span></Label>
               <div className="flex flex-wrap gap-1.5">

@@ -74,6 +74,7 @@ export default function DocumentDraftPage() {
   const [resubmitId, setResubmitId] = useState<string | null>(null);
   const [documentTypeId, setDocumentTypeId] = useState('');
   const [orgUnitId, setOrgUnitId] = useState('');
+  const [recipientOrgUnitId, setRecipientOrgUnitId] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [formValues, setFormValues] = useState<Record<string, string | number | null>>({});
@@ -204,8 +205,9 @@ export default function DocumentDraftPage() {
   useEffect(() => {
     if (skipFormResetRef.current) { skipFormResetRef.current = false; return; }
     setFormValues({});
-    // 문서유형에 기본 참조부서가 설정되어 있으면 자동으로 반영 (기안 화면에서 개별 조정 가능)
+    // 문서유형에 기본 참조부서/수신부서가 설정되어 있으면 자동으로 반영 (기안 화면에서 개별 조정 가능)
     setCcOrgUnitIds(selectedType?.default_cc_org_unit_ids || []);
+    setRecipientOrgUnitId(selectedType?.default_recipient_org_unit_id || '');
   }, [documentTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedManualLine = approvalLines.find(l => l.id === manualLineId) || null;
@@ -289,6 +291,7 @@ export default function DocumentDraftPage() {
     setUploadedFiles([]);
     setExistingAttachments([]);
     setOrgUnitId(myOrgUnitIds[0] || '');
+    setRecipientOrgUnitId('');
     setUseManualLine(false);
     setManualLineId('');
   };
@@ -308,6 +311,7 @@ export default function DocumentDraftPage() {
     setResubmitId(null);
     setDocumentTypeId(doc.document_type_id);
     setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
+    setRecipientOrgUnitId(doc.recipient_org_unit_id || '');
     setTitle(doc.title);
     setContent(doc.content || '');
     setFormValues(doc.form_data || {});
@@ -327,6 +331,7 @@ export default function DocumentDraftPage() {
     setResubmitId(doc.id);
     setDocumentTypeId(doc.document_type_id);
     setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
+    setRecipientOrgUnitId(doc.recipient_org_unit_id || '');
     setTitle(doc.title);
     setContent(doc.content || '');
     setFormValues(doc.form_data || {});
@@ -407,6 +412,7 @@ export default function DocumentDraftPage() {
         org_unit_id: orgUnitId || undefined,
         created_by: currentUser.id,
         requester_comment: requesterComment.trim() || undefined,
+        recipientOrgUnitId: recipientOrgUnitId || undefined,
       });
       setDraftId(saved.id);
       setExistingAttachments(attachments);
@@ -482,6 +488,7 @@ export default function DocumentDraftPage() {
           attachments,
           org_unit_id: orgUnitId,
           requester_comment: requesterComment.trim() || undefined,
+          recipientOrgUnitId: recipientOrgUnitId || undefined,
           ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
           ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
           manualChain: useManualLine ? manualChain : undefined,
@@ -498,6 +505,7 @@ export default function DocumentDraftPage() {
           org_unit_id: orgUnitId,
           created_by: currentUser.id,
           requester_comment: requesterComment.trim() || undefined,
+          recipientOrgUnitId: recipientOrgUnitId || undefined,
           ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
           ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
           draftId: draftId || undefined,
@@ -582,7 +590,7 @@ export default function DocumentDraftPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">문서유형 *</Label>
                   <Select value={documentTypeId} onValueChange={setDocumentTypeId} disabled={submitting}>
@@ -602,6 +610,16 @@ export default function DocumentDraftPage() {
                       {myUnits.length === 0
                         ? <div className="px-2 py-1.5 text-sm text-gray-500">소속된 부서가 없습니다. 관리자에게 문의하세요.</div>
                         : myUnits.map(u => <SelectItem key={u.id} value={u.id} className="text-sm">{u.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">수신 부서 <span className="text-gray-400 font-normal">(결재선/참조와 별개)</span></Label>
+                  <Select value={recipientOrgUnitId || '_none'} onValueChange={v => setRecipientOrgUnitId(v === '_none' ? '' : v)} disabled={submitting}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="수신부서 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">지정 안 함 (총무팀(보존) 기본 표기)</SelectItem>
+                      {units.map(u => <SelectItem key={u.id} value={u.id} className="text-sm">{u.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

@@ -17,6 +17,7 @@ import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.servic
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
+import ApprovalStatus from '@/components/document/ApprovalStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType, ApprovalDocumentRejectionHistoryEntry } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
@@ -288,6 +289,7 @@ export default function ApprovalDocumentDetailPage() {
         </div>
       )}
 
+      <ApprovalStatus doc={doc} creatorPositionName={creatorPositionName} />
       <ReferenceReadStatus documentId={doc.id} />
 
       {actionType && (

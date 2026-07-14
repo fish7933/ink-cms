@@ -18,6 +18,8 @@ export interface ApprovalDocumentType {
   field_schema: DocumentFormField[] | null;
   // 이 문서유형으로 기안할 때 기본으로 참조(통보) 지정되는 부서 (예: 지출결의서 → 총무팀)
   default_cc_org_unit_ids: string[] | null;
+  // 이 문서유형으로 기안할 때 기본으로 채워지는 수신부서 (예: 지출결의서 → 총무팀)
+  default_recipient_org_unit_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +72,8 @@ export interface ApprovalDocument {
   resubmit_count: number;
   // 전결규정 자동계산 대신 결재선 관리의 이 라인을 직접 골라 썼으면 그 id, 자동계산이면 null.
   manual_line_id: string | null;
+  // 문서의 공식 수신부서 (결재선/참조와 별개 개념) — 미지정이면 시행문에는 기본 문구로 표시.
+  recipient_org_unit_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -100,5 +104,6 @@ export interface ApprovalDocumentWithDetails extends ApprovalDocument {
   document_type_name: string;
   creator_name: string;
   org_unit_name: string | null;
+  recipient_org_unit_name: string | null;
   steps: ApprovalDocumentStep[];
 }
