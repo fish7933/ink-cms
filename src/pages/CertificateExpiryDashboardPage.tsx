@@ -126,7 +126,7 @@ export default function CertificateExpiryDashboardPage() {
 
             {/* 테이블 */}
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs whitespace-nowrap">
                 <thead>
                   <tr className="border-b bg-gray-50">
                     <th className="text-left p-2">선원명</th>

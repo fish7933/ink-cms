@@ -266,7 +266,7 @@ export default function CertificateTypeManagementPage() {
                   <TabsContent key={cat.code} value={cat.code} className="mt-3">
                     {items.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">등록된 증서 유형이 없습니다</div> : (
                       <div className="rounded-md border">
-                        <Table>
+                        <Table className="whitespace-nowrap">
                           <TableHeader>
                             <TableRow>
                               <TableHead className="text-xs w-12"></TableHead>
