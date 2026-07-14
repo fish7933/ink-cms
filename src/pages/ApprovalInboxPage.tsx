@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
-  CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus, Paperclip,
+  CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus, Paperclip, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentUser } from '@/lib/store';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +26,7 @@ import { supabase } from '@/lib/supabase';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 
-type DocFilter = 'all' | 'mine' | 'pending' | 'referenced' | 'approved' | 'rejected';
+type DocFilter = 'all' | 'mine' | 'pending' | 'referenced' | 'approved' | 'rejected' | 'deleted';
 
 const DRAFT_ROLES = ['ship_manager', 'admin', 'system_admin'];
 
@@ -40,10 +42,15 @@ export default function ApprovalInboxPage() {
   const [myOrgUnitIds, setMyOrgUnitIds] = useState<string[]>([]);
 
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
+  const [hiddenDocuments, setHiddenDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [docTypes, setDocTypes] = useState<ApprovalDocumentType[]>([]);
   const [referencedDocIds, setReferencedDocIds] = useState<Set<string>>(new Set());
   const [unreadReferenceDocIds, setUnreadReferenceDocIds] = useState<Set<string>>(new Set());
   const [docFilter, setDocFilter] = useState<DocFilter>('all');
+  const [docPage, setDocPage] = useState(1);
+  const [docItemsPerPage, setDocItemsPerPage] = useState(20);
+  const [docSelectedIds, setDocSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteProcessing, setBulkDeleteProcessing] = useState(false);
   const [docViewMode, setDocViewMode] = useState<'list' | 'action'>('list');
   const [selectedDocument, setSelectedDocument] = useState<ApprovalDocumentWithDetails | null>(null);
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
@@ -63,6 +70,8 @@ export default function ApprovalInboxPage() {
   }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => { init(); }, []);
+
+  useEffect(() => { setDocPage(1); setDocSelectedIds([]); }, [docFilter]);
 
   // 문서 상세를 별도 탭에서 열어서 처리(승인/반려/취소/삭제)했을 때, 결재함 목록도 동기화되도록 새로고침한다.
   useEffect(() => {
@@ -100,11 +109,16 @@ export default function ApprovalInboxPage() {
     try {
       // 시스템관리자/슈퍼관리자라도 그룹웨어 결재함에서는 본인이 기안했거나, 결재선에 포함돼
       // 있거나, 참조로 지정된 문서만 보인다 — 관리자 권한으로 전체 문서를 열람하지 않는다.
-      const [docs, refs] = await Promise.all([
+      const [allDocs, refs, hiddenIds, hidden] = await Promise.all([
         approvalDocumentService.getMyRelatedDocuments(userId, orgUnitIds),
         loadMyReferenceDocIds(userId, orgUnitIds),
+        approvalDocumentService.getHiddenDocumentIds(userId),
+        approvalDocumentService.getMyHiddenDocuments(userId),
       ]);
-      setDocuments(docs);
+      // "삭제"는 이 사용자의 결재함에서만 숨기는 것이므로, 목록에서는 제외하고 별도 삭제된
+      // 문서함 탭에서만 보여준다.
+      setDocuments(allDocs.filter(d => !hiddenIds.has(d.id)));
+      setHiddenDocuments(hidden);
       setReferencedDocIds(refs);
 
       if (refs.size === 0) {
@@ -158,7 +172,9 @@ export default function ApprovalInboxPage() {
   // 않은 경우에만 가능하다 — 이미 결재가 시작된 문서는 기안자 본인도 취소할 수 없다.
   const canCancelDoc = (doc: ApprovalDocumentWithDetails) =>
     doc.status === 'pending' && doc.created_by === currentUserId && doc.steps.every(s => s.status === 'pending');
-  const canDeleteDoc = (doc: ApprovalDocumentWithDetails) => doc.status !== 'pending' && (doc.created_by === currentUserId || isAdmin) && permissions.canDelete;
+  // "삭제"는 문서를 지우는 게 아니라 내 결재함 목록에서만 숨기는 것이므로, 상태나 기안자
+  // 여부와 무관하게 이 문서와 관계있는(목록에 보이는) 사람이면 누구나 자기 화면에서 지울 수 있다.
+  const canDeleteDoc = () => permissions.canDelete;
 
   const handleCancelDoc = async (doc: ApprovalDocumentWithDetails) => {
     if (!confirm('이 기안서를 취소하시겠습니까?')) return;
@@ -172,13 +188,48 @@ export default function ApprovalInboxPage() {
   };
 
   const handleDeleteDoc = async (doc: ApprovalDocumentWithDetails) => {
-    if (!confirm('이 기안서를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+    if (!confirm('이 문서를 내 결재함에서 삭제하시겠습니까? 다른 참여자의 결재함이나 결재 이력에는 영향이 없으며, 삭제된 문서함에서 복원할 수 있습니다.')) return;
     try {
-      await approvalDocumentService.deleteDocument(doc.id);
+      await approvalDocumentService.hideDocumentForUser(doc.id, currentUserId);
       toast({ title: '삭제되었습니다.' });
-      window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
+      setDocuments(prev => prev.filter(d => d.id !== doc.id));
+      setHiddenDocuments(prev => [doc, ...prev]);
     } catch (e) {
       toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleRestoreDoc = async (doc: ApprovalDocumentWithDetails) => {
+    try {
+      await approvalDocumentService.unhideDocumentForUser(doc.id, currentUserId);
+      toast({ title: '복원되었습니다.' });
+      setHiddenDocuments(prev => prev.filter(d => d.id !== doc.id));
+      setDocuments(prev => [doc, ...prev]);
+    } catch (e) {
+      toast({ title: '복원 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const toggleDocSelect = (id: string) =>
+    setDocSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleDocSelectAll = (checked: boolean, ids: string[]) =>
+    setDocSelectedIds(checked ? ids : []);
+
+  const handleBulkDeleteDocs = async () => {
+    if (docSelectedIds.length === 0) return;
+    if (!confirm(`선택한 ${docSelectedIds.length}건을 내 결재함에서 삭제하시겠습니까? 다른 참여자에게는 영향이 없으며, 삭제된 문서함에서 복원할 수 있습니다.`)) return;
+    try {
+      setBulkDeleteProcessing(true);
+      await Promise.all(docSelectedIds.map(id => approvalDocumentService.hideDocumentForUser(id, currentUserId)));
+      const moved = documents.filter(d => docSelectedIds.includes(d.id));
+      setDocuments(prev => prev.filter(d => !docSelectedIds.includes(d.id)));
+      setHiddenDocuments(prev => [...moved, ...prev]);
+      setDocSelectedIds([]);
+      toast({ title: `${moved.length}건 삭제되었습니다.` });
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkDeleteProcessing(false);
     }
   };
 
@@ -224,6 +275,13 @@ export default function ApprovalInboxPage() {
       <table className="w-full text-sm whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
+            <th className="w-8 p-2">
+              <Checkbox
+                checked={list.length > 0 && list.every(d => docSelectedIds.includes(d.id))}
+                onCheckedChange={checked => toggleDocSelectAll(!!checked, list.map(d => d.id))}
+                disabled={list.length === 0}
+              />
+            </th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
@@ -238,6 +296,9 @@ export default function ApprovalInboxPage() {
             const myTurn = isMyDocTurn(doc);
             return (
               <tr key={doc.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => openDocDetail(doc)}>
+                <td className="p-2" onClick={e => e.stopPropagation()}>
+                  <Checkbox checked={docSelectedIds.includes(doc.id)} onCheckedChange={() => toggleDocSelect(doc.id)} />
+                </td>
                 <td className="p-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {getStatusBadge(doc.status)}
@@ -286,13 +347,48 @@ export default function ApprovalInboxPage() {
                       </>
                     )}
                     {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
-                    {canDeleteDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
+                    {canDeleteDoc() && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
                   </div>
                 </td>
               </tr>
             );
           })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  // 삭제된 문서함 — 문서 자체는 살아있고, 이 사용자의 결재함에서만 숨겨진 상태. 복원 가능.
+  const renderDeletedDocTable = (list: ApprovalDocumentWithDetails[]) => (
+    <div className="rounded-md border overflow-hidden overflow-x-auto">
+      <table className="w-full text-sm whitespace-nowrap">
+        <thead className="bg-gray-50 border-b">
+          <tr>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-32">작업</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(doc => (
+            <tr key={doc.id} className="border-b hover:bg-gray-50 text-gray-400">
+              <td className="p-2">{getStatusBadge(doc.status)}</td>
+              <td className="p-2 font-medium">{doc.title}</td>
+              <td className="p-2">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
+              <td className="p-2">{doc.creator_name}</td>
+              <td className="p-2">{format(new Date(doc.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
+              <td className="p-2 text-right">
+                <div className="flex justify-end gap-1">
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleRestoreDoc(doc)}>복원</Button>
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -313,7 +409,10 @@ export default function ApprovalInboxPage() {
     : docFilter === 'referenced' ? docReferenced
     : docFilter === 'approved' ? docApproved
     : docFilter === 'rejected' ? docRejected
+    : docFilter === 'deleted' ? hiddenDocuments
     : documents;
+  const docTotalPages = Math.max(1, Math.ceil(docFiltered.length / docItemsPerPage));
+  const docPaginated = docFiltered.slice((docPage - 1) * docItemsPerPage, docPage * docItemsPerPage);
 
   const openAttachment = (path: string) => {
     const { data } = supabase.storage.from('documents').getPublicUrl(path);
@@ -395,6 +494,7 @@ export default function ApprovalInboxPage() {
     { value: 'referenced', label: '참조됨' },
     { value: 'approved', label: '승인' },
     { value: 'rejected', label: '반려' },
+    { value: 'deleted', label: '삭제된 문서함' },
   ];
   // 결재중 = 지금 내가 결재해야 하는 건수, 참조됨 = 아직 열람하지 않은 참조 문서 건수. 처리/열람하면 사라진다.
   const filterBadgeCount = (value: DocFilter): number => {
@@ -437,9 +537,50 @@ export default function ApprovalInboxPage() {
               );
             })}
           </div>
+
+          {docFilter !== 'deleted' && (
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                {docSelectedIds.length > 0 && (
+                  <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-300" onClick={handleBulkDeleteDocs} disabled={bulkDeleteProcessing}>
+                    {bulkDeleteProcessing ? '삭제 중...' : `선택 삭제 (${docSelectedIds.length})`}
+                  </Button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">페이지당</span>
+                <Select value={docItemsPerPage.toString()} onValueChange={v => { setDocItemsPerPage(+v); setDocPage(1); }}>
+                  <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
           {docFiltered.length === 0 ? (
             <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 문서가 없습니다</p></CardContent></Card>
-          ) : renderDocTable(docFiltered)}
+          ) : docFilter === 'deleted' ? renderDeletedDocTable(docPaginated) : renderDocTable(docPaginated)}
+
+          {docTotalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 py-2">
+              <Button variant="outline" size="sm" onClick={() => setDocPage(p => Math.max(1, p - 1))} disabled={docPage === 1} className="h-8">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              {Array.from({ length: Math.min(5, docTotalPages) }, (_, i) => {
+                const p = docTotalPages <= 5 ? i + 1
+                  : docPage <= 3 ? i + 1
+                  : docPage >= docTotalPages - 2 ? docTotalPages - 4 + i
+                  : docPage - 2 + i;
+                return (
+                  <Button key={p} variant={docPage === p ? 'default' : 'outline'} size="sm"
+                    onClick={() => setDocPage(p)} className="h-8 w-8 p-0">{p}</Button>
+                );
+              })}
+              <Button variant="outline" size="sm" onClick={() => setDocPage(p => Math.min(docTotalPages, p + 1))} disabled={docPage === docTotalPages} className="h-8">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
