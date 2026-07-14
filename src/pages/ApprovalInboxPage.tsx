@@ -19,7 +19,6 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
-import ApprovalStatus from '@/components/document/ApprovalStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
@@ -526,7 +525,6 @@ export default function ApprovalInboxPage() {
           <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{selectedDocument.requester_comment}</p></div>
         )}
 
-        <ApprovalStatus doc={selectedDocument} creatorPositionName={memberPositionByUserId.get(selectedDocument.created_by) || null} />
         <ReferenceReadStatus documentId={selectedDocument.id} />
 
         <div className="border rounded-md bg-white p-4 space-y-3">
