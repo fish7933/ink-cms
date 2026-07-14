@@ -134,6 +134,7 @@ export default function DispatchApprovalInboxPage() {
   const [crewViewMode, setCrewViewMode] = useState<'list' | 'action'>('list');
   const [selectedCrew, setSelectedCrew] = useState<ApprovalWithRecommendation | null>(null);
   const [crewAction, setCrewAction] = useState<'approve' | 'reject' | null>(null);
+  const [crewForce, setCrewForce] = useState(false);
   const [crewComment, setCrewComment] = useState('');
   const [crewProcessing, setCrewProcessing] = useState(false);
 
@@ -144,6 +145,7 @@ export default function DispatchApprovalInboxPage() {
   const [rotationViewMode, setRotationViewMode] = useState<'list' | 'action'>('list');
   const [selectedRotation, setSelectedRotation] = useState<RotationApprovalWithPlan | null>(null);
   const [rotationAction, setRotationAction] = useState<'approve' | 'reject' | null>(null);
+  const [rotationForce, setRotationForce] = useState(false);
   const [rotationComment, setRotationComment] = useState('');
   const [rotationProcessing, setRotationProcessing] = useState(false);
 
@@ -154,6 +156,7 @@ export default function DispatchApprovalInboxPage() {
   const [contractViewMode, setContractViewMode] = useState<'list' | 'action'>('list');
   const [selectedContract, setSelectedContract] = useState<ContractApprovalWithContract | null>(null);
   const [contractAction, setContractAction] = useState<'approve' | 'reject' | null>(null);
+  const [contractForce, setContractForce] = useState(false);
   const [contractComment, setContractComment] = useState('');
   const [contractProcessing, setContractProcessing] = useState(false);
 
@@ -164,6 +167,7 @@ export default function DispatchApprovalInboxPage() {
   const [dispatchViewMode, setDispatchViewMode] = useState<'list' | 'action'>('list');
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchApprovalWithOrder | null>(null);
   const [dispatchAction, setDispatchAction] = useState<'approve' | 'reject' | null>(null);
+  const [dispatchForce, setDispatchForce] = useState(false);
   const [dispatchComment, setDispatchComment] = useState('');
   const [dispatchProcessing, setDispatchProcessing] = useState(false);
 
@@ -448,11 +452,15 @@ export default function DispatchApprovalInboxPage() {
 
   // --- 공통 헬퍼 ---
 
+  // 관리자 계정이라도 결재선상 실제 현재 단계 담당자가 아니면 "내 차례"가 아니다 — admin/system_admin
+  // 이라는 계정 권한과 결재라인상의 전결/최종결재자는 별개다. 관리자가 실제로 그 단계의 담당자로
+  // 지정돼 있으면 일반 결재자와 동일하게 한 단계씩만 진행된다. 그 외의 경우 관리자는 별도의
+  // "관리자 강제 승인/반려"로만 결재라인을 건너뛸 수 있다.
   const isMyTurn = (approval: ApprovalLike) => {
     if (approval.status !== 'pending') return false;
-    if (isAdmin) return true;
     return approval.current_approver?.approver_id === currentUserId;
   };
+  const canForce = (approval: ApprovalLike) => approval.status === 'pending' && isAdmin && !isMyTurn(approval);
 
   const myTurnBadge = (count: number) => count === 0 ? null : (
     <span className="inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold">
@@ -475,7 +483,7 @@ export default function DispatchApprovalInboxPage() {
     if (crewAction === 'reject' && !crewComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
     try {
       setCrewProcessing(true);
-      if (isAdmin) {
+      if (crewForce) {
         if (crewAction === 'reject') await approvalService.adminForceReject(selectedCrew.id, currentUserId, crewComment);
         else await approvalService.adminForceApprove(selectedCrew.id, currentUserId, crewComment || undefined);
       } else {
@@ -483,7 +491,7 @@ export default function DispatchApprovalInboxPage() {
         else await approvalService.approveStep(selectedCrew.id, currentUserId, crewComment || undefined);
       }
       toast({ title: '성공', description: crewAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
-      setCrewViewMode('list'); setSelectedCrew(null); setCrewAction(null); setCrewComment('');
+      setCrewViewMode('list'); setSelectedCrew(null); setCrewAction(null); setCrewComment(''); setCrewForce(false);
       await loadCrewApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
@@ -514,7 +522,7 @@ export default function DispatchApprovalInboxPage() {
     if (rotationAction === 'reject' && !rotationComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
     try {
       setRotationProcessing(true);
-      if (isAdmin) {
+      if (rotationForce) {
         if (rotationAction === 'reject') await rotationApprovalService.adminForceReject(selectedRotation.id, currentUserId, rotationComment);
         else await rotationApprovalService.adminForceApprove(selectedRotation.id, currentUserId, rotationComment || undefined);
       } else {
@@ -522,7 +530,7 @@ export default function DispatchApprovalInboxPage() {
         else await rotationApprovalService.approveStep(selectedRotation.id, currentUserId, rotationComment || undefined);
       }
       toast({ title: '성공', description: rotationAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
-      setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); setRotationComment('');
+      setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); setRotationComment(''); setRotationForce(false);
       await loadRotationApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
@@ -540,7 +548,7 @@ export default function DispatchApprovalInboxPage() {
     if (contractAction === 'reject' && !contractComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
     try {
       setContractProcessing(true);
-      if (isAdmin) {
+      if (contractForce) {
         if (contractAction === 'reject') await contractApprovalService.adminForceReject(selectedContract.id, currentUserId, contractComment);
         else await contractApprovalService.adminForceApprove(selectedContract.id, currentUserId, contractComment || undefined);
       } else {
@@ -548,7 +556,7 @@ export default function DispatchApprovalInboxPage() {
         else await contractApprovalService.approveStep(selectedContract.id, currentUserId, contractComment || undefined);
       }
       toast({ title: '성공', description: contractAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
-      setContractViewMode('list'); setSelectedContract(null); setContractAction(null); setContractComment('');
+      setContractViewMode('list'); setSelectedContract(null); setContractAction(null); setContractComment(''); setContractForce(false);
       await loadContractApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
@@ -566,7 +574,7 @@ export default function DispatchApprovalInboxPage() {
     if (dispatchAction === 'reject' && !dispatchComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
     try {
       setDispatchProcessing(true);
-      if (isAdmin) {
+      if (dispatchForce) {
         if (dispatchAction === 'reject') await dispatchOrderApprovalService.adminForceReject(selectedDispatch.id, currentUserId, dispatchComment);
         else await dispatchOrderApprovalService.adminForceApprove(selectedDispatch.id, currentUserId, dispatchComment || undefined);
       } else {
@@ -574,7 +582,7 @@ export default function DispatchApprovalInboxPage() {
         else await dispatchOrderApprovalService.approveStep(selectedDispatch.id, currentUserId, dispatchComment || undefined);
       }
       toast({ title: '성공', description: dispatchAction === 'approve' ? '승인되었습니다. 승인 즉시 계약/승선경력에 반영됩니다.' : '반려되었습니다.' });
-      setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); setDispatchComment('');
+      setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); setDispatchComment(''); setDispatchForce(false);
       await loadDispatchApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
@@ -712,16 +720,13 @@ export default function DispatchApprovalInboxPage() {
     if (targets.length === 0) return;
     try {
       setBulkProcessing(true);
-      await Promise.all(targets.map(a => {
-        if (isAdmin) {
-          return action === 'approve'
-            ? cfg.service.adminForceApprove(a.id, currentUserId, bulkComment || undefined)
-            : cfg.service.adminForceReject(a.id, currentUserId, bulkComment);
-        }
-        return action === 'approve'
+      // 일괄 승인/반려 대상은 이미 isMyTurn(현재 단계의 실제 담당자)인 건만 선택 가능하므로,
+      // 관리자 강제 처리(결재라인 전체 건너뛰기)는 여기서 쓰지 않는다 — 항상 정상 단계 진행.
+      await Promise.all(targets.map(a =>
+        action === 'approve'
           ? cfg.service.approveStep(a.id, currentUserId, bulkComment || undefined)
-          : cfg.service.rejectStep(a.id, currentUserId, bulkComment);
-      }));
+          : cfg.service.rejectStep(a.id, currentUserId, bulkComment)
+      ));
       toast({ title: '성공', description: `${targets.length}건 ${action === 'approve' ? '승인' : '반려'}되었습니다.` });
       cfg.setSelectedIds([]);
       setBulkDialog(null);
@@ -853,6 +858,8 @@ export default function DispatchApprovalInboxPage() {
     onReject: (a: T) => void,
     selectedIds: string[],
     setSelectedIds: (ids: string[]) => void,
+    onForceApprove: (a: T) => void,
+    onForceReject: (a: T) => void,
   ) => {
     const selectableIds = list.filter(a => isMyTurn(a) || isDeletable(a)).map(a => a.id);
     const toggleOne = (id: string) => setSelectedIds(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
@@ -880,6 +887,7 @@ export default function DispatchApprovalInboxPage() {
           {list.map(approval => {
             const myTurn = isMyTurn(approval);
             const deletable = isDeletable(approval);
+            const forceable = canForce(approval);
             return (
               <tr key={approval.id} className={`border-b cursor-pointer hover:bg-gray-50 ${myTurn ? 'bg-blue-50/40' : ''}`} onClick={() => onView(approval)}>
                 <td className="p-2" onClick={e => e.stopPropagation()}>
@@ -899,6 +907,12 @@ export default function DispatchApprovalInboxPage() {
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => onApprove(approval)}>승인</Button>
                       <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => onReject(approval)}>반려</Button>
+                    </div>
+                  )}
+                  {forceable && (
+                    <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => onForceApprove(approval)}>강제승인</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => onForceReject(approval)}>강제반려</Button>
                     </div>
                   )}
                 </td>
@@ -974,6 +988,7 @@ export default function DispatchApprovalInboxPage() {
     comment: string, setComment: (v: string) => void,
     action: 'approve' | 'reject' | null, processing: boolean,
     onBack: () => void, onSubmit: () => void,
+    forceMode = false,
   ) => (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -983,6 +998,11 @@ export default function DispatchApprovalInboxPage() {
       <Card>
         <CardHeader><CardTitle className="text-base">{title}</CardTitle><CardDescription>{subject}</CardDescription></CardHeader>
         <CardContent className="space-y-4">
+          {forceMode && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5">
+              관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 건을 즉시 {action === 'approve' ? '승인' : '반려'} 처리합니다. 남은 결재 단계는 진행되지 않습니다.
+            </div>
+          )}
           <div>
             <Label>{action === 'approve' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>
             <Textarea value={comment} onChange={e => setComment(e.target.value)} rows={4} className="mt-2" disabled={processing} />
@@ -1030,7 +1050,7 @@ export default function DispatchApprovalInboxPage() {
           {crewViewMode === 'action' && selectedCrew ? renderActionPanel(
             selectedCrew.recommendation?.crew_name || '선원 추천', `결재선: ${selectedCrew.approval_line.name}`,
             crewComment, setCrewComment, crewAction, crewProcessing,
-            () => { setCrewViewMode('list'); setSelectedCrew(null); setCrewAction(null); }, handleCrewAction,
+            () => { setCrewViewMode('list'); setSelectedCrew(null); setCrewAction(null); setCrewForce(false); }, handleCrewAction, crewForce,
           ) : (
             <div className="space-y-4">
               {renderFilterBar(crewFilter, setCrewFilter)}
@@ -1044,9 +1064,11 @@ export default function DispatchApprovalInboxPage() {
                     a => `${a.recommendation?.ranks?.rank_code ? `${a.recommendation.ranks.rank_code} ` : ''}${a.recommendation?.crew_name || '선원 추천'}`,
                     a => hierarchyLabel(a.recommendation?.owner?.name, a.recommendation?.fleet?.name, a.recommendation?.ships?.name),
                     a => { setSelectedCrew(a); setCrewViewMode('list'); },
-                    a => { setSelectedCrew(a); setCrewAction('approve'); setCrewViewMode('action'); setCrewComment(''); },
-                    a => { setSelectedCrew(a); setCrewAction('reject'); setCrewViewMode('action'); setCrewComment(''); },
+                    a => { setSelectedCrew(a); setCrewAction('approve'); setCrewForce(false); setCrewViewMode('action'); setCrewComment(''); },
+                    a => { setSelectedCrew(a); setCrewAction('reject'); setCrewForce(false); setCrewViewMode('action'); setCrewComment(''); },
                     crewSelectedIds, setCrewSelectedIds,
+                    a => { setSelectedCrew(a); setCrewAction('approve'); setCrewForce(true); setCrewViewMode('action'); setCrewComment(''); },
+                    a => { setSelectedCrew(a); setCrewAction('reject'); setCrewForce(true); setCrewViewMode('action'); setCrewComment(''); },
                   )}
                   {renderPagination(crewFiltered.length, crewPage, setCrewPage)}
                 </>
@@ -1066,7 +1088,7 @@ export default function DispatchApprovalInboxPage() {
           {rotationViewMode === 'action' && selectedRotation ? renderActionPanel(
             selectedRotation.plan_name || '교대계획', `결재선: ${selectedRotation.approval_line.name} · ${selectedRotation.ship_name}`,
             rotationComment, setRotationComment, rotationAction, rotationProcessing,
-            () => { setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); }, handleRotationAction,
+            () => { setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); setRotationForce(false); }, handleRotationAction, rotationForce,
           ) : (
             <div className="space-y-4">
               {renderFilterBar(rotationFilter, setRotationFilter)}
@@ -1080,9 +1102,11 @@ export default function DispatchApprovalInboxPage() {
                     a => a.plan_name || '교대계획',
                     a => a.ship_name || '',
                     a => { setSelectedRotation(a); setRotationViewMode('list'); },
-                    a => { setSelectedRotation(a); setRotationAction('approve'); setRotationViewMode('action'); setRotationComment(''); },
-                    a => { setSelectedRotation(a); setRotationAction('reject'); setRotationViewMode('action'); setRotationComment(''); },
+                    a => { setSelectedRotation(a); setRotationAction('approve'); setRotationForce(false); setRotationViewMode('action'); setRotationComment(''); },
+                    a => { setSelectedRotation(a); setRotationAction('reject'); setRotationForce(false); setRotationViewMode('action'); setRotationComment(''); },
                     rotationSelectedIds, setRotationSelectedIds,
+                    a => { setSelectedRotation(a); setRotationAction('approve'); setRotationForce(true); setRotationViewMode('action'); setRotationComment(''); },
+                    a => { setSelectedRotation(a); setRotationAction('reject'); setRotationForce(true); setRotationViewMode('action'); setRotationComment(''); },
                   )}
                   {renderPagination(rotationFiltered.length, rotationPage, setRotationPage)}
                 </>
@@ -1103,7 +1127,7 @@ export default function DispatchApprovalInboxPage() {
             `${selectedContract.rank_code || ''}${selectedContract.rank_grade ? `(${selectedContract.rank_grade})` : ''} ${selectedContract.crew_name || '-'}`,
             `결재선: ${selectedContract.approval_line.name} · ${hierarchyLabel(selectedContract.owner_name, selectedContract.fleet_name, selectedContract.ship_name)}`,
             contractComment, setContractComment, contractAction, contractProcessing,
-            () => { setContractViewMode('list'); setSelectedContract(null); setContractAction(null); }, handleContractAction,
+            () => { setContractViewMode('list'); setSelectedContract(null); setContractAction(null); setContractForce(false); }, handleContractAction, contractForce,
           ) : (
             <div className="space-y-4">
               {renderFilterBar(contractFilter, setContractFilter)}
@@ -1117,9 +1141,11 @@ export default function DispatchApprovalInboxPage() {
                     a => `${a.rank_code || ''}${a.rank_grade ? `(${a.rank_grade})` : ''} ${a.crew_name || '-'}`,
                     a => hierarchyLabel(a.owner_name, a.fleet_name, a.ship_name),
                     a => { setSelectedContract(a); setContractViewMode('list'); },
-                    a => { setSelectedContract(a); setContractAction('approve'); setContractViewMode('action'); setContractComment(''); },
-                    a => { setSelectedContract(a); setContractAction('reject'); setContractViewMode('action'); setContractComment(''); },
+                    a => { setSelectedContract(a); setContractAction('approve'); setContractForce(false); setContractViewMode('action'); setContractComment(''); },
+                    a => { setSelectedContract(a); setContractAction('reject'); setContractForce(false); setContractViewMode('action'); setContractComment(''); },
                     contractSelectedIds, setContractSelectedIds,
+                    a => { setSelectedContract(a); setContractAction('approve'); setContractForce(true); setContractViewMode('action'); setContractComment(''); },
+                    a => { setSelectedContract(a); setContractAction('reject'); setContractForce(true); setContractViewMode('action'); setContractComment(''); },
                   )}
                   {renderPagination(contractFiltered.length, contractPage, setContractPage)}
                 </>
@@ -1140,7 +1166,7 @@ export default function DispatchApprovalInboxPage() {
             `${selectedDispatch.new_rank_code || ''}${selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''} ${selectedDispatch.crew_name} — ${selectedDispatch.dispatch_type === 'promotion' ? '승진' : '강등'}`,
             `결재선: ${selectedDispatch.approval_line.name} · ${hierarchyLabel(selectedDispatch.owner_name, selectedDispatch.fleet_name, selectedDispatch.ship_name)}`,
             dispatchComment, setDispatchComment, dispatchAction, dispatchProcessing,
-            () => { setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); }, handleDispatchAction,
+            () => { setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); setDispatchForce(false); }, handleDispatchAction, dispatchForce,
           ) : (
             <div className="space-y-4">
               {renderFilterBar(dispatchFilter, setDispatchFilter)}
@@ -1154,9 +1180,11 @@ export default function DispatchApprovalInboxPage() {
                     a => `${a.new_rank_code || ''}${a.new_grade ? `(${a.new_grade})` : ''} ${a.crew_name || '-'} (${a.dispatch_type === 'promotion' ? '승진' : '강등'})`,
                     a => `${hierarchyLabel(a.owner_name, a.fleet_name, a.ship_name)} · ${a.previous_rank_code}${a.previous_grade ? `(${a.previous_grade})` : ''} → ${a.new_rank_code}${a.new_grade ? `(${a.new_grade})` : ''}`,
                     a => { setSelectedDispatch(a); setDispatchViewMode('list'); },
-                    a => { setSelectedDispatch(a); setDispatchAction('approve'); setDispatchViewMode('action'); setDispatchComment(''); },
-                    a => { setSelectedDispatch(a); setDispatchAction('reject'); setDispatchViewMode('action'); setDispatchComment(''); },
+                    a => { setSelectedDispatch(a); setDispatchAction('approve'); setDispatchForce(false); setDispatchViewMode('action'); setDispatchComment(''); },
+                    a => { setSelectedDispatch(a); setDispatchAction('reject'); setDispatchForce(false); setDispatchViewMode('action'); setDispatchComment(''); },
                     dispatchSelectedIds, setDispatchSelectedIds,
+                    a => { setSelectedDispatch(a); setDispatchAction('approve'); setDispatchForce(true); setDispatchViewMode('action'); setDispatchComment(''); },
+                    a => { setSelectedDispatch(a); setDispatchAction('reject'); setDispatchForce(true); setDispatchViewMode('action'); setDispatchComment(''); },
                   )}
                   {renderPagination(dispatchFiltered.length, dispatchPage, setDispatchPage)}
                 </>

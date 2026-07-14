@@ -43,6 +43,7 @@ export default function ApprovalInboxPage() {
   const [docViewMode, setDocViewMode] = useState<'list' | 'action'>('list');
   const [selectedDocument, setSelectedDocument] = useState<ApprovalDocumentWithDetails | null>(null);
   const [docActionType, setDocActionType] = useState<'approved' | 'rejected' | null>(null);
+  const [docForceMode, setDocForceMode] = useState(false);
   const [docComment, setDocComment] = useState('');
   const [docProcessing, setDocProcessing] = useState(false);
   const [actionLeaveDetail, setActionLeaveDetail] = useState<LeaveDetail | null>(null);
@@ -85,10 +86,12 @@ export default function ApprovalInboxPage() {
     }
   };
 
-  const loadDocuments = async (userId: string, admin: boolean, orgUnitIds: string[]) => {
+  const loadDocuments = async (userId: string, _admin: boolean, orgUnitIds: string[]) => {
     try {
+      // 시스템관리자/슈퍼관리자라도 그룹웨어 결재함에서는 본인이 기안했거나, 결재선에 포함돼
+      // 있거나, 참조로 지정된 문서만 보인다 — 관리자 권한으로 전체 문서를 열람하지 않는다.
       const [docs, refs] = await Promise.all([
-        admin ? approvalDocumentService.getAllDocuments() : approvalDocumentService.getMyRelatedDocuments(userId, orgUnitIds),
+        approvalDocumentService.getMyRelatedDocuments(userId, orgUnitIds),
         loadMyReferenceDocIds(userId, orgUnitIds),
       ]);
       setDocuments(docs);
@@ -120,25 +123,29 @@ export default function ApprovalInboxPage() {
     return new Set((data || []).map((r: { document_id: string }) => r.document_id));
   };
 
+  // 관리자 계정이라도 결재선상 실제 현재 단계 담당자가 아니면 "내 차례"가 아니다 — 별도의
+  // "관리자 강제 승인/반려"로만 예외 처리를 허용한다.
   const isMyDocTurn = (doc: ApprovalDocumentWithDetails) => {
     if (doc.status !== 'pending') return false;
-    if (isAdmin) return true;
     return doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId);
   };
+  const canAdminForceDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && isAdmin && !isMyDocTurn(doc);
 
   const docGoBackToList = () => {
-    setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment(''); setActionLeaveDetail(null);
+    setDocViewMode('list'); setSelectedDocument(null); setDocActionType(null); setDocComment(''); setActionLeaveDetail(null); setDocForceMode(false);
   };
 
-  const openDocAction = (doc: ApprovalDocumentWithDetails, type: 'approved' | 'rejected') => {
+  const openDocAction = (doc: ApprovalDocumentWithDetails, type: 'approved' | 'rejected', force = false) => {
     setSelectedDocument(doc);
     setDocActionType(type);
+    setDocForceMode(force);
     setDocViewMode('action');
     setActionLeaveDetail(null);
     getLeaveDetail(doc.reference_type, doc.reference_id).then(setActionLeaveDetail).catch(console.error);
   };
 
-  const canCancelDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && (doc.created_by === currentUserId || isAdmin);
+  // 기안 취소는 본인이 기안한 문서만 — 관리자라도 남의 기안을 취소할 수 없다.
+  const canCancelDoc = (doc: ApprovalDocumentWithDetails) => doc.status === 'pending' && doc.created_by === currentUserId;
   const canDeleteDoc = (doc: ApprovalDocumentWithDetails) => doc.status !== 'pending' && (doc.created_by === currentUserId || isAdmin) && permissions.canDelete;
 
   const handleCancelDoc = async (doc: ApprovalDocumentWithDetails) => {
@@ -171,7 +178,7 @@ export default function ApprovalInboxPage() {
     }
     try {
       setDocProcessing(true);
-      if (isAdmin) {
+      if (docForceMode) {
         if (docActionType === 'rejected') await approvalDocumentService.adminForceRejectDocumentStep(selectedDocument.id, currentUserId, docComment);
         else await approvalDocumentService.adminForceApproveDocumentStep(selectedDocument.id, currentUserId, docComment || undefined);
       } else {
@@ -260,6 +267,12 @@ export default function ApprovalInboxPage() {
                         <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => openDocAction(doc, 'rejected')}>반려</Button>
                       </>
                     )}
+                    {canAdminForceDoc(doc) && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => openDocAction(doc, 'approved', true)}>강제승인</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => openDocAction(doc, 'rejected', true)}>강제반려</Button>
+                      </>
+                    )}
                     {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
                     {canDeleteDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
@@ -344,6 +357,12 @@ export default function ApprovalInboxPage() {
             )}
 
             <ReferenceReadStatus documentId={selectedDocument.id} />
+
+            {docForceMode && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5">
+                관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 문서를 즉시 {docActionType === 'approved' ? '승인' : '반려'} 처리합니다. 남은 결재 단계는 진행되지 않습니다.
+              </div>
+            )}
 
             <div>
               <Label>{docActionType === 'approved' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>

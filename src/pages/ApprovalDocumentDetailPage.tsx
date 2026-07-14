@@ -37,6 +37,7 @@ export default function ApprovalDocumentDetailPage() {
   const [currentUserId, setCurrentUserId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [actionType, setActionType] = useState<'approved' | 'rejected' | null>(null);
+  const [forceMode, setForceMode] = useState(false);
   const [comment, setComment] = useState('');
   const [processing, setProcessing] = useState(false);
   const [leaveDetail, setLeaveDetail] = useState<LeaveDetail | null>(null);
@@ -91,8 +92,13 @@ export default function ApprovalDocumentDetailPage() {
 
   const notifyListRefresh = () => window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
 
-  const isMyTurn = doc && doc.status === 'pending' && (isAdmin || doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId));
-  const canCancel = doc && doc.status === 'pending' && (doc.created_by === currentUserId || isAdmin);
+  // 관리자 계정이라도 결재선상 실제 현재 단계 담당자가 아니면 "내 차례"가 아니다 — admin/system_admin
+  // 이라는 계정 권한과 결재라인상의 전결/최종결재자는 별개다. 관리자가 실제로 그 단계의 담당자로
+  // 지정돼 있으면(직급 기준 전결 포함) 일반 결재자와 동일하게 한 단계씩만 진행된다.
+  const isMyTurn = doc && doc.status === 'pending' && doc.steps.some(s => s.step_order === doc.current_step && s.approver_id === currentUserId);
+  const canAdminForce = doc && doc.status === 'pending' && isAdmin && !isMyTurn;
+  // 기안 취소는 본인이 기안한 문서만 — 관리자라도 남의 기안을 취소할 수 없다.
+  const canCancel = doc && doc.status === 'pending' && doc.created_by === currentUserId;
   const canDelete = doc && doc.status !== 'pending' && (doc.created_by === currentUserId || isAdmin) && permissions.canDelete;
 
   const handleAction = async () => {
@@ -103,7 +109,7 @@ export default function ApprovalDocumentDetailPage() {
     }
     try {
       setProcessing(true);
-      if (isAdmin) {
+      if (forceMode) {
         if (actionType === 'rejected') await approvalDocumentService.adminForceRejectDocumentStep(doc.id, currentUserId, comment);
         else await approvalDocumentService.adminForceApproveDocumentStep(doc.id, currentUserId, comment || undefined);
       } else {
@@ -111,7 +117,7 @@ export default function ApprovalDocumentDetailPage() {
         else await approvalDocumentService.approveDocumentStep(doc.id, currentUserId, comment || undefined);
       }
       toast({ title: '성공', description: actionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.' });
-      setActionType(null); setComment('');
+      setActionType(null); setComment(''); setForceMode(false);
       notifyListRefresh();
       await loadData();
     } catch (e) {
@@ -186,8 +192,14 @@ export default function ApprovalDocumentDetailPage() {
             </div>
             {isMyTurn && !actionType && (
               <div className="flex gap-2 shrink-0">
-                <Button size="sm" variant="outline" className="text-green-600 border-green-600" onClick={() => setActionType('approved')}><CheckCircle2 className="h-4 w-4 mr-1" />승인</Button>
-                <Button size="sm" variant="outline" className="text-red-600 border-red-600" onClick={() => setActionType('rejected')}><XCircle className="h-4 w-4 mr-1" />반려</Button>
+                <Button size="sm" variant="outline" className="text-green-600 border-green-600" onClick={() => { setForceMode(false); setActionType('approved'); }}><CheckCircle2 className="h-4 w-4 mr-1" />승인</Button>
+                <Button size="sm" variant="outline" className="text-red-600 border-red-600" onClick={() => { setForceMode(false); setActionType('rejected'); }}><XCircle className="h-4 w-4 mr-1" />반려</Button>
+              </div>
+            )}
+            {canAdminForce && !actionType && (
+              <div className="flex gap-2 shrink-0">
+                <Button size="sm" variant="outline" className="text-amber-600 border-amber-300" onClick={() => { setForceMode(true); setActionType('approved'); }}>관리자 강제 승인</Button>
+                <Button size="sm" variant="outline" className="text-amber-600 border-amber-300" onClick={() => { setForceMode(true); setActionType('rejected'); }}>관리자 강제 반려</Button>
               </div>
             )}
           </div>
@@ -239,10 +251,15 @@ export default function ApprovalDocumentDetailPage() {
 
             {actionType && (
               <div className="space-y-3 border-t pt-4">
+                {forceMode && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5">
+                    관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 문서를 즉시 {actionType === 'approved' ? '승인' : '반려'} 처리합니다. 남은 결재 단계는 진행되지 않습니다.
+                  </div>
+                )}
                 <Label>{actionType === 'approved' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>
                 <Textarea value={comment} onChange={e => setComment(e.target.value)} rows={3} disabled={processing} />
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => { setActionType(null); setComment(''); }} disabled={processing} className="flex-1">취소</Button>
+                  <Button variant="outline" onClick={() => { setActionType(null); setComment(''); setForceMode(false); }} disabled={processing} className="flex-1">취소</Button>
                   <Button
                     onClick={handleAction}
                     disabled={processing || (actionType === 'rejected' && !comment.trim())}
