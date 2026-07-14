@@ -859,7 +859,7 @@ export default function DispatchApprovalInboxPage() {
     const toggleAll = (checked: boolean) => setSelectedIds(checked ? selectableIds : []);
     return (
     <div className="rounded-md border overflow-hidden overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
             <th className="w-8 p-2">

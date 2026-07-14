@@ -717,7 +717,7 @@ export default function DocumentDraftPage() {
                 <div className="text-center py-12 text-sm text-gray-400">해당하는 문서가 없습니다.</div>
               ) : (
                 <div className="rounded-md border overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm whitespace-nowrap">
                     <thead className="bg-gray-50 border-b">
                       <tr>
                         <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
