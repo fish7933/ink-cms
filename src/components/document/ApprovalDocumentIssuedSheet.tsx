@@ -34,11 +34,6 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
       <style>{`
-        @media print {
-          body { margin: 0; }
-          @page { size: A4 portrait; margin: 14mm 15mm; }
-          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
         table.issued-fields { border-collapse: collapse; width: 100%; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
@@ -46,6 +41,26 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 12px; padding: 6px 4px; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
         table.approval-block td.sign-cell { height: 46px; vertical-align: middle; }
+        .issued-footer {
+          margin-top: 48px;
+          padding-top: 8px;
+          border-top: 1px solid #ccc;
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          font-size: 11px;
+          color: #555;
+        }
+        .issued-footer > span:first-child { text-align: left; }
+        .issued-footer > span:last-child { text-align: right; }
+        @media print {
+          body { margin: 0; }
+          @page { size: A4 portrait; margin: 14mm 15mm; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          /* 하단 바(양식번호/회사명)가 매 페이지 하단에 고정되도록 — @page 여백(14mm) 안쪽에
+             자리잡아 본문 내용과 겹치지 않는다. */
+          .issued-footer { position: fixed; bottom: 6mm; left: 15mm; right: 15mm; margin-top: 0; }
+        }
       `}</style>
 
       {company && (
@@ -85,33 +100,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         </tbody>
       </table>
 
-      <div style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', margin: '20px 0' }}>{doc.title}</div>
-
-      {leaveDetail ? (
-        <table className="issued-fields">
-          <tbody>
-            <tr><th>휴가 종류</th><td>{leaveDetail.typeLabel}</td></tr>
-            <tr><th>신청 기간</th><td>{leaveDetail.period}</td></tr>
-            <tr><th>신청 시간</th><td>{leaveDetail.hoursLabel}</td></tr>
-            <tr><th>사유</th><td>{leaveDetail.reason}</td></tr>
-          </tbody>
-        </table>
-      ) : fields.length > 0 ? (
-        <table className="issued-fields">
-          <tbody>
-            {fields.map(f => (
-              <tr key={f.key}>
-                <th>{f.label}</th>
-                <td>{doc.form_data?.[f.key] ?? '-'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        doc.content && <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>
-      )}
-
-      <div style={{ marginTop: 36, marginBottom: 8, fontSize: 12, color: '#555' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 6 }}>({lastStepPositionName} 전결)</span>}</div>
+      <div style={{ marginBottom: 8, fontSize: 12, color: '#555' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 6 }}>({lastStepPositionName} 전결)</span>}</div>
       <table className="approval-block">
         <thead>
           <tr>
@@ -148,8 +137,36 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         </tbody>
       </table>
 
-      <div style={{ textAlign: 'center', marginTop: 48, fontSize: 15, fontWeight: 600 }}>
-        {company?.name || ''}
+      <div style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', margin: '28px 0 20px' }}>{doc.title}</div>
+
+      {leaveDetail ? (
+        <table className="issued-fields">
+          <tbody>
+            <tr><th>휴가 종류</th><td>{leaveDetail.typeLabel}</td></tr>
+            <tr><th>신청 기간</th><td>{leaveDetail.period}</td></tr>
+            <tr><th>신청 시간</th><td>{leaveDetail.hoursLabel}</td></tr>
+            <tr><th>사유</th><td>{leaveDetail.reason}</td></tr>
+          </tbody>
+        </table>
+      ) : fields.length > 0 ? (
+        <table className="issued-fields">
+          <tbody>
+            {fields.map(f => (
+              <tr key={f.key}>
+                <th>{f.label}</th>
+                <td>{doc.form_data?.[f.key] ?? '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        doc.content && <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>
+      )}
+
+      <div className="issued-footer">
+        <span>{documentType?.code ? `양식번호 ${documentType.code}` : ''}</span>
+        <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{company?.name || ''}</span>
+        <span />
       </div>
 
       {/* 이미지만 각자 새 페이지에 인쇄물로 합쳐 넣는다. PDF는 iframe으로 끼워넣으면 뷰어의
