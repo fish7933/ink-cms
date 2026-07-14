@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -24,7 +25,7 @@ const EMPLOYEE_ROLES = ['ship_manager', 'admin', 'system_admin'];
 
 type CompanyExt = Company & { company_type?: string };
 
-const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'ship_manager', company_id: '', position_id: '', hire_date: '' };
+const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'ship_manager', company_id: '', position_id: '', hire_date: '', is_executive: false };
 
 // 사용자 그룹 관리에서 분리된 화면 — 선박관리사(+관리자) 계정은 실제로는 우리회사 직원이라
 // 외부(선주/선원매닝사/선원) 사용자 관리와 분리해 "직원카드 관리"로 별도 관리한다.
@@ -95,6 +96,7 @@ export default function EmployeeCardManagementPage() {
       company_id: u.company_id || '',
       position_id: eu.position_id || '',
       hire_date: u.hire_date || '',
+      is_executive: u.is_executive || false,
     });
     setModalOpen(true);
   };
@@ -116,6 +118,7 @@ export default function EmployeeCardManagementPage() {
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
           hire_date: formData.hire_date || null,
+          is_executive: formData.is_executive,
           ...(formData.password ? { password: formData.password } : {}),
         });
       } else {
@@ -126,6 +129,7 @@ export default function EmployeeCardManagementPage() {
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
           hire_date: formData.hire_date || null,
+          is_executive: formData.is_executive,
         });
       }
       toast({ title: editId ? '수정 완료' : '등록 완료' });
@@ -205,6 +209,7 @@ export default function EmployeeCardManagementPage() {
                       <TableHead className="text-xs">이름</TableHead>
                       <TableHead className="text-xs">이메일</TableHead>
                       <TableHead className="text-xs">직급</TableHead>
+                      <TableHead className="text-xs">구분</TableHead>
                       <TableHead className="text-xs">역할</TableHead>
                       <TableHead className="text-right text-xs w-20">작업</TableHead>
                     </TableRow>
@@ -222,6 +227,11 @@ export default function EmployeeCardManagementPage() {
                           <TableCell className="text-sm">{u.name}</TableCell>
                           <TableCell className="text-sm">{u.email}</TableCell>
                           <TableCell className="text-sm">{position?.name || '-'}</TableCell>
+                          <TableCell>
+                            {u.is_executive
+                              ? <Badge className="text-xs bg-amber-500">임원</Badge>
+                              : <Badge variant="outline" className="text-xs text-gray-500">직원</Badge>}
+                          </TableCell>
                           <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-500'}`}>{ROLE_LABELS[u.role] || u.role}</Badge></TableCell>
                           <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                             {canDeleteRow && (
@@ -293,6 +303,11 @@ export default function EmployeeCardManagementPage() {
               <Label className="text-xs">입사일 <span className="text-gray-400 font-normal">(연차 산정 기준)</span></Label>
               <Input type="date" value={formData.hire_date} onChange={e => setFormData({ ...formData, hire_date: e.target.value })} className="h-8 text-sm" />
             </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox checked={formData.is_executive} onCheckedChange={c => setFormData({ ...formData, is_executive: c === true })} />
+              <span className="text-xs">임원 <span className="text-gray-400 font-normal">(체크 해제 시 일반 직원)</span></span>
+            </label>
 
             <div className="flex items-center gap-2 pt-1">
               <Label className="text-xs">역할</Label>
