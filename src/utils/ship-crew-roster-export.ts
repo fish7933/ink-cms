@@ -35,7 +35,7 @@ const border = (opts: { thickTop?: boolean; thickBottom?: boolean; thickLeft?: b
   right: { style: opts.thickRight ? 'medium' : 'thin', color: { rgb: opts.thickRight ? THICK : THIN } },
 });
 
-const HEADER_LABELS = ['No.', 'Rank', 'Name', 'Nationality', 'Date of Birth', "Seaman's Book No.", 'Passport No.', 'Passport Issue Date', 'Passport Expiry Date', 'Sign-on Date', 'Sign-off Date'];
+const HEADER_LABELS = ['No.', 'Rank', 'Name', 'Nationality', 'DOB', "Seaman's Bk No.", 'Passport No.', 'PP Issue Date', 'PP Expiry Date', 'Sign-on', 'Sign-off'];
 const COL_ALIGN: ('center' | 'left' | 'right')[] = ['center', 'center', 'left', 'center', 'center', 'center', 'center', 'center', 'center', 'center', 'center'];
 
 // 승선 현황(Crew List) 엑셀 내보내기 — 국제표준에 맞춰 전부 영문 표기

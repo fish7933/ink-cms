@@ -68,11 +68,13 @@ export default function ShipCrewListPrintPage() {
   return (
     <div style={{ padding: '28px 36px 48px' }}>
       <style>{`
+        @page { size: A4 landscape; margin: 10mm; }
         @media print {
           .print-actions { display: none !important; }
+          .crew-list-print-table { table-layout: fixed; width: 100%; font-size: 9px !important; }
+          .crew-list-print-table th, .crew-list-print-table td { padding: 3px 4px !important; white-space: normal !important; word-break: break-word; }
           .crew-list-print-table tr { break-inside: avoid; page-break-inside: avoid; }
           .crew-list-print-table thead { display: table-header-group; }
-          body { font-size: 11px; }
         }
       `}</style>
       <div className="print-actions" style={{ marginBottom: 20, textAlign: 'right' }}>

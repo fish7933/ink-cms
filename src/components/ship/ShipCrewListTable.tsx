@@ -20,13 +20,13 @@ export default function ShipCrewListTable({ roster, nationalityLabel }: ShipCrew
             <th className="px-2 py-1.5 text-left font-medium text-gray-500">Rank</th>
             <th className="px-2 py-1.5 text-left font-medium text-gray-500">Name</th>
             <th className="px-2 py-1.5 text-left font-medium text-gray-500">Nationality</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Date of Birth</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Seaman's Book No.</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">DOB</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Seaman's Bk No.</th>
             <th className="px-2 py-1.5 text-left font-medium text-gray-500">Passport No.</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Passport Issue Date</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Passport Expiry Date</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Sign-on Date</th>
-            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Sign-off Date</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">PP Issue Date</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">PP Expiry Date</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Sign-on</th>
+            <th className="px-2 py-1.5 text-left font-medium text-gray-500">Sign-off</th>
           </tr>
         </thead>
         <tbody>

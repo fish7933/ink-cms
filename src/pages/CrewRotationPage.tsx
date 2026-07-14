@@ -66,6 +66,8 @@ export function CrewRotationPage() {
   const [filterShip, setFilterShip] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [deletedCurrentPage, setDeletedCurrentPage] = useState(1);
+  const [deletedItemsPerPage, setDeletedItemsPerPage] = useState(20);
 
   // 계약만료 자동생성 다이얼로그
   const [autoGenOpen, setAutoGenOpen] = useState(false);
@@ -264,10 +266,18 @@ export function CrewRotationPage() {
     setDeletedLoading(true);
     setDeletedPlans(await rotationService.getDeletedRotationPlans());
     setDeletedSelectedIds([]);
+    setDeletedCurrentPage(1);
     setDeletedLoading(false);
   };
 
   const openDeletedView = () => { setViewingDeleted(true); loadDeletedPlans(); };
+
+  const deletedTotalPages = Math.max(1, Math.ceil(deletedPlans.length / deletedItemsPerPage));
+  const paginatedDeletedPlans = useMemo(
+    () => deletedPlans.slice((deletedCurrentPage - 1) * deletedItemsPerPage, deletedCurrentPage * deletedItemsPerPage),
+    [deletedPlans, deletedCurrentPage, deletedItemsPerPage]
+  );
+  const goToDeletedPage = (p: number) => setDeletedCurrentPage(Math.max(1, Math.min(p, deletedTotalPages)));
 
   const toggleDeletedSelect = (id: string) =>
     setDeletedSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -491,8 +501,19 @@ export function CrewRotationPage() {
       {viewingDeleted ? (
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-sm">삭제된 교대 발령 ({deletedPlans.length}건)</CardTitle>
-            <CardDescription className="text-xs">삭제된 교대 계획서 목록입니다. 영구 삭제하면 되돌릴 수 없습니다.</CardDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-sm">삭제된 교대 발령 ({deletedPlans.length}건)</CardTitle>
+                <CardDescription className="text-xs">삭제된 교대 계획서 목록입니다. 영구 삭제하면 되돌릴 수 없습니다.</CardDescription>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">페이지당</span>
+                <Select value={deletedItemsPerPage.toString()} onValueChange={v => { setDeletedItemsPerPage(+v); setDeletedCurrentPage(1); }}>
+                  <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {deletedLoading ? (
@@ -528,7 +549,7 @@ export function CrewRotationPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {deletedPlans.map(plan => (
+                  {paginatedDeletedPlans.map(plan => (
                     <TableRow key={plan.id}>
                       <TableCell><Checkbox checked={deletedSelectedIds.includes(plan.id)} onCheckedChange={() => toggleDeletedSelect(plan.id)} /></TableCell>
                       <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
@@ -546,6 +567,26 @@ export function CrewRotationPage() {
                   ))}
                 </TableBody>
               </Table>
+              {deletedTotalPages > 1 && (
+                <div className="flex justify-center items-center gap-2 py-3">
+                  <Button variant="outline" size="sm" onClick={() => goToDeletedPage(deletedCurrentPage - 1)} disabled={deletedCurrentPage === 1} className="h-8">
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  {Array.from({ length: Math.min(5, deletedTotalPages) }, (_, i) => {
+                    const p = deletedTotalPages <= 5 ? i + 1
+                      : deletedCurrentPage <= 3 ? i + 1
+                      : deletedCurrentPage >= deletedTotalPages - 2 ? deletedTotalPages - 4 + i
+                      : deletedCurrentPage - 2 + i;
+                    return (
+                      <Button key={p} variant={deletedCurrentPage === p ? 'default' : 'outline'} size="sm"
+                        onClick={() => goToDeletedPage(p)} className="h-8 w-8 p-0">{p}</Button>
+                    );
+                  })}
+                  <Button variant="outline" size="sm" onClick={() => goToDeletedPage(deletedCurrentPage + 1)} disabled={deletedCurrentPage === deletedTotalPages} className="h-8">
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
               </>
             )}
           </CardContent>
