@@ -390,9 +390,13 @@ export const approvalDocumentService = {
       await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
     }
 
+    // 수신부서는 "이 문서를 받아 보관하는 부서"이므로, 실제로 그 부서 소속 인원이 참조함에서
+    // 볼 수 있도록 참조 대상에도 자동으로 포함시킨다 — 수신으로 지정만 하고 아무도 못 보는
+    // 상황을 막기 위함.
+    const ccOrgUnitIdsWithRecipient = [...new Set([...(input.ccOrgUnitIds || []), ...(input.recipientOrgUnitId ? [input.recipientOrgUnitId] : [])])];
     const refRows = [
       ...(input.ccUserIds || []).map(user_id => ({ document_id: doc.id, user_id, org_unit_id: null })),
-      ...(input.ccOrgUnitIds || []).map(org_unit_id => ({ document_id: doc.id, user_id: null, org_unit_id })),
+      ...ccOrgUnitIdsWithRecipient.map(org_unit_id => ({ document_id: doc.id, user_id: null, org_unit_id })),
     ];
     if (refRows.length > 0) {
       const { error: refError } = await supabase.from('approval_document_references').insert(refRows);
@@ -870,11 +874,13 @@ export const approvalDocumentService = {
       .select();
     if (stepsError) throw stepsError;
 
-    // 참조(통보) 대상도 이번 상신에서 새로 지정한 값으로 교체
+    // 참조(통보) 대상도 이번 상신에서 새로 지정한 값으로 교체 — 수신부서는 실제로 그 부서
+    // 소속 인원이 참조함에서 볼 수 있도록 참조 대상에도 자동으로 포함시킨다.
     await supabase.from('approval_document_references').delete().eq('document_id', documentId);
+    const resubmitCcOrgUnitIdsWithRecipient = [...new Set([...(input.ccOrgUnitIds || []), ...(input.recipientOrgUnitId ? [input.recipientOrgUnitId] : [])])];
     const refRows = [
       ...(input.ccUserIds || []).map(user_id => ({ document_id: documentId, user_id, org_unit_id: null })),
-      ...(input.ccOrgUnitIds || []).map(org_unit_id => ({ document_id: documentId, user_id: null, org_unit_id })),
+      ...resubmitCcOrgUnitIdsWithRecipient.map(org_unit_id => ({ document_id: documentId, user_id: null, org_unit_id })),
     ];
     if (refRows.length > 0) {
       const { error: refError } = await supabase.from('approval_document_references').insert(refRows);
