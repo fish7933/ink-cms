@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { FileText, Upload, X, Archive, Clock, CheckCircle2, XCircle, Ban, PencilLine, Trash2, Sparkles, Search } from 'lucide-react';
+import { FileText, Upload, X, Archive, Clock, CheckCircle2, XCircle, Ban, PencilLine, Trash2, Sparkles, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -100,6 +100,11 @@ export default function DocumentDraftPage() {
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [boxLoading, setBoxLoading] = useState(true);
   const [boxFilter, setBoxFilter] = useState<StatusFilter>('all');
+  const [boxSearch, setBoxSearch] = useState('');
+  const [boxPage, setBoxPage] = useState(1);
+  const [boxItemsPerPage, setBoxItemsPerPage] = useState(20);
+  const [boxSelectedIds, setBoxSelectedIds] = useState<string[]>([]);
+  const [boxBulkDeleteProcessing, setBoxBulkDeleteProcessing] = useState(false);
   const [viewDoc, setViewDoc] = useState<ApprovalDocumentWithDetails | null>(null);
 
   const permissions = usePermissions('document_draft');
@@ -171,6 +176,8 @@ export default function DocumentDraftPage() {
     window.addEventListener('approval-inbox-data-changed', handler);
     return () => window.removeEventListener('approval-inbox-data-changed', handler);
   }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setBoxPage(1); setBoxSelectedIds([]); }, [boxFilter, boxSearch]);
 
   const loadDocuments = async (userId: string) => {
     setBoxLoading(true);
@@ -524,7 +531,42 @@ export default function DocumentDraftPage() {
     }
   };
 
-  const filteredDocs = boxFilter === 'all' ? documents : documents.filter(d => d.status === boxFilter);
+  const boxSearchQuery = boxSearch.trim().toLowerCase();
+  const filteredDocs = (boxFilter === 'all' ? documents : documents.filter(d => d.status === boxFilter))
+    .filter(d =>
+      !boxSearchQuery ||
+      d.title.toLowerCase().includes(boxSearchQuery) ||
+      d.document_type_name.toLowerCase().includes(boxSearchQuery) ||
+      (d.org_unit_name || '').toLowerCase().includes(boxSearchQuery)
+    );
+  const boxTotalPages = Math.max(1, Math.ceil(filteredDocs.length / boxItemsPerPage));
+  const boxPaginated = filteredDocs.slice((boxPage - 1) * boxItemsPerPage, boxPage * boxItemsPerPage);
+
+  // 임시저장은 소프트 삭제(deleteDraft), 완료된(승인/반려/취소) 문서는 완전 삭제(deleteDocument) —
+  // 결재 진행중(pending)인 문서는 취소만 가능하고 일괄삭제 대상이 아니다.
+  const canBulkDeleteDoc = (doc: ApprovalDocumentWithDetails) =>
+    doc.status === 'draft' || ((doc.status === 'approved' || doc.status === 'rejected' || doc.status === 'cancelled') && permissions.canDelete);
+  const toggleBoxSelect = (id: string) => setBoxSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleBoxSelectAll = (checked: boolean, ids: string[]) => setBoxSelectedIds(checked ? ids : []);
+
+  const handleBulkDeleteDocs = async () => {
+    if (!currentUser) return;
+    const targets = documents.filter(d => boxSelectedIds.includes(d.id) && canBulkDeleteDoc(d));
+    if (targets.length === 0) return;
+    if (!confirm(`선택한 ${targets.length}건을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    try {
+      setBoxBulkDeleteProcessing(true);
+      await Promise.all(targets.map(d => d.status === 'draft' ? approvalDocumentService.deleteDraft(d.id) : approvalDocumentService.deleteDocument(d.id)));
+      toast({ title: `${targets.length}건 삭제되었습니다.` });
+      setBoxSelectedIds([]);
+      window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
+      loadDocuments(currentUser.id);
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBoxBulkDeleteProcessing(false);
+    }
+  };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -829,6 +871,32 @@ export default function DocumentDraftPage() {
             ))}
           </div>
 
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <Input
+              value={boxSearch} onChange={e => setBoxSearch(e.target.value)}
+              placeholder="제목, 문서유형, 부서로 검색"
+              className="h-8 text-sm pl-8"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              {boxSelectedIds.length > 0 && (
+                <Button size="sm" variant="outline" className="h-8 text-xs text-red-600 border-red-300" onClick={handleBulkDeleteDocs} disabled={boxBulkDeleteProcessing}>
+                  {boxBulkDeleteProcessing ? '삭제 중...' : `선택 삭제 (${boxSelectedIds.length})`}
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">페이지당</span>
+              <Select value={boxItemsPerPage.toString()} onValueChange={v => { setBoxItemsPerPage(+v); setBoxPage(1); }}>
+                <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">문서 목록 ({filteredDocs.length})</CardTitle></CardHeader>
             <CardContent className="pt-0">
@@ -841,6 +909,13 @@ export default function DocumentDraftPage() {
                   <table className="w-full text-sm whitespace-nowrap">
                     <thead className="bg-gray-50 border-b">
                       <tr>
+                        <th className="w-8 p-2">
+                          <Checkbox
+                            checked={(() => { const ids = boxPaginated.filter(canBulkDeleteDoc).map(d => d.id); return ids.length > 0 && ids.every(id => boxSelectedIds.includes(id)); })()}
+                            onCheckedChange={checked => toggleBoxSelectAll(!!checked, boxPaginated.filter(canBulkDeleteDoc).map(d => d.id))}
+                            disabled={boxPaginated.filter(canBulkDeleteDoc).length === 0}
+                          />
+                        </th>
                         <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
                         <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
                         <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
@@ -849,7 +924,7 @@ export default function DocumentDraftPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredDocs.map(doc => {
+                      {boxPaginated.map(doc => {
                         const status = STATUS_BADGE[doc.status] || STATUS_BADGE.pending;
                         const StatusIcon = status.icon;
                         return (
@@ -858,6 +933,9 @@ export default function DocumentDraftPage() {
                             className="border-b cursor-pointer hover:bg-gray-50"
                             onClick={() => doc.status === 'draft' ? loadDraftIntoForm(doc) : setViewDoc(doc)}
                           >
+                            <td className="p-2" onClick={e => e.stopPropagation()}>
+                              {canBulkDeleteDoc(doc) && <Checkbox checked={boxSelectedIds.includes(doc.id)} onCheckedChange={() => toggleBoxSelect(doc.id)} />}
+                            </td>
                             <td className="p-2"><Badge variant="outline" className={status.className}><StatusIcon className="w-3 h-3 mr-1" />{status.label}</Badge></td>
                             <td className="p-2 font-medium">{doc.title}</td>
                             <td className="p-2 text-gray-500">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
@@ -905,6 +983,29 @@ export default function DocumentDraftPage() {
               )}
             </CardContent>
           </Card>
+
+          {boxTotalPages > 1 && (
+            <div className="flex justify-center items-center gap-2 py-2">
+              <Button variant="outline" size="sm" onClick={() => setBoxPage(p => Math.max(1, p - 1))} disabled={boxPage === 1} className="h-8">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              {Array.from({ length: Math.min(5, boxTotalPages) }, (_, i) => {
+                const p = boxTotalPages <= 5 ? i + 1
+                  : boxPage <= 3 ? i + 1
+                  : boxPage >= boxTotalPages - 2 ? boxTotalPages - 4 + i
+                  : boxPage - 2 + i;
+                return (
+                  <Button key={p} variant={boxPage === p ? 'default' : 'outline'} size="sm"
+                    onClick={() => setBoxPage(p)} className="h-8 w-8 p-0">
+                    {p}
+                  </Button>
+                );
+              })}
+              <Button variant="outline" size="sm" onClick={() => setBoxPage(p => Math.min(boxTotalPages, p + 1))} disabled={boxPage === boxTotalPages} className="h-8">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
