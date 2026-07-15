@@ -10,6 +10,7 @@ import RotationPlanPrintPage from '@/pages/RotationPlanPrintPage';
 import RotationPlanLedgerPrintPage from '@/pages/RotationPlanLedgerPrintPage';
 import ShipCrewListPrintPage from '@/pages/ShipCrewListPrintPage';
 import EmployeePayslipPrintPage from '@/pages/EmployeePayslipPrintPage';
+import EmployeePayrollLedgerPrintPage from '@/pages/EmployeePayrollLedgerPrintPage';
 import Layout from '@/components/Layout';
 import { Toaster } from '@/components/ui/toaster';
 
@@ -30,6 +31,7 @@ function App() {
           <Route path="/print/rotation-plans-ledger" element={<RotationPlanLedgerPrintPage />} />
           <Route path="/print/ships/:shipId/crew-list" element={<ShipCrewListPrintPage />} />
           <Route path="/print/employee-payslips/:id" element={<EmployeePayslipPrintPage />} />
+          <Route path="/print/employee-payroll-ledger/:periodId" element={<EmployeePayrollLedgerPrintPage />} />
           <Route path="*" element={<Layout />} />
         </Routes>
         <Toaster />

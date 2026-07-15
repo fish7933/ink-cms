@@ -10,6 +10,7 @@ import type {
   EmployeePayslipItem,
   EmployeePayslipWithDetails,
   PayrollEmployee,
+  PayrollLedgerData,
 } from '@/types/employee-salary';
 
 const sumByCategory = (items: { category: EmployeeSalaryItemCategory; amount: number }[], category: EmployeeSalaryItemCategory) =>
@@ -248,4 +249,54 @@ export async function updatePayslipItems(
 export async function deletePayslip(payslipId: string): Promise<void> {
   const { error } = await supabase.from('employee_payslips').delete().eq('id', payslipId);
   if (error) throw error;
+}
+
+// --- 급여대장 (전체 직원 표) ---
+
+// 인쇄/엑셀 출력용 — 기본급 옆에 수당/공제 항목을 열로 펼친 표 데이터를 만든다. 항목명은
+// 직원마다 직접 입력한 값이라, 그 회차 안에서 실제로 쓰인 이름들의 합집합을 컬럼으로 쓴다.
+export async function getPayrollLedgerForPeriod(periodId: string): Promise<PayrollLedgerData | null> {
+  const { data: period, error: periodError } = await supabase.from('employee_payroll_periods').select('*').eq('id', periodId).maybeSingle();
+  if (periodError) { console.error(periodError); return null; }
+  if (!period) return null;
+
+  const payslips = await getPayslipsForPeriod(periodId);
+  const { data: users } = await supabase
+    .from('users')
+    .select('id, resident_registration_number, hire_date')
+    .in('id', payslips.map(p => p.user_id));
+  const userById = new Map((users || []).map(u => [u.id, u]));
+
+  const allowanceColumns: string[] = [];
+  const deductionColumns: string[] = [];
+  for (const p of payslips) {
+    for (const item of p.items) {
+      if (item.category === 'allowance' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
+      if (item.category === 'deduction' && !deductionColumns.includes(item.name)) deductionColumns.push(item.name);
+    }
+  }
+
+  const rows = payslips.map(p => {
+    const u = userById.get(p.user_id);
+    const allowanceByName: Record<string, number> = {};
+    const deductionByName: Record<string, number> = {};
+    for (const item of p.items) {
+      if (item.category === 'allowance') allowanceByName[item.name] = (allowanceByName[item.name] || 0) + item.amount;
+      if (item.category === 'deduction') deductionByName[item.name] = (deductionByName[item.name] || 0) + item.amount;
+    }
+    return {
+      employee_id: p.user_id,
+      employee_name: p.employee_name,
+      resident_registration_number: u?.resident_registration_number || null,
+      hire_date: u?.hire_date || null,
+      base_amount: p.base_amount,
+      allowance_by_name: allowanceByName,
+      gross_amount: p.base_amount + p.total_allowance,
+      deduction_by_name: deductionByName,
+      total_deduction: p.total_deduction,
+      net_amount: p.net_amount,
+    };
+  });
+
+  return { period, allowance_columns: allowanceColumns, deduction_columns: deductionColumns, rows };
 }

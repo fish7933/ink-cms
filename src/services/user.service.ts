@@ -7,7 +7,7 @@ const SALT_ROUNDS = 10;
 export async function getUsers(): Promise<User[]> {
   const { data, error } = await supabase
     .from('users')
-    .select('id,username,name,email,role,company_id,position_id,user_group_id,hire_date,is_active,is_executive,is_leave_exempt,created_at,updated_at')
+    .select('id,username,name,email,role,company_id,position_id,user_group_id,hire_date,is_active,is_executive,is_leave_exempt,resident_registration_number,created_at,updated_at')
     .order('created_at', { ascending: false });
   if (error) { console.error('Error fetching users:', error); return []; }
   return (data || []) as User[];
@@ -41,11 +41,12 @@ export async function addUser(
       crew_member_id: user.crew_member_id || null,
       hire_date: user.hire_date || null,
       is_executive: user.is_executive || false,
+      resident_registration_number: user.resident_registration_number || null,
       is_active: true,
       created_at: now,
       updated_at: now,
     }])
-    .select('id,username,name,email,role,company_id,position_id,hire_date,is_executive,is_active,created_at,updated_at')
+    .select('id,username,name,email,role,company_id,position_id,hire_date,is_executive,resident_registration_number,is_active,created_at,updated_at')
     .single();
   if (error) { console.error('Error adding user:', error); throw error; }
   return data as User;
@@ -64,13 +65,14 @@ export async function updateUser(
   if (updates.crew_member_id !== undefined) payload.crew_member_id = updates.crew_member_id;
   if (updates.hire_date !== undefined) payload.hire_date = updates.hire_date;
   if (updates.is_executive !== undefined) payload.is_executive = updates.is_executive;
+  if (updates.resident_registration_number !== undefined) payload.resident_registration_number = updates.resident_registration_number;
   if (updates.password) payload.password = await bcrypt.hash(updates.password, SALT_ROUNDS);
 
   const { data, error } = await supabase
     .from('users')
     .update(payload)
     .eq('id', id)
-    .select('id,username,name,email,role,company_id,position_id,hire_date,is_executive,is_active,created_at,updated_at')
+    .select('id,username,name,email,role,company_id,position_id,hire_date,is_executive,resident_registration_number,is_active,created_at,updated_at')
     .single();
   if (error) { console.error('Error updating user:', error); throw error; }
   return data as User;

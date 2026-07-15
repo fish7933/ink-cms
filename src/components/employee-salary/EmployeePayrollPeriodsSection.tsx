@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Printer, Lock, Unlock, RefreshCw, X, Plus, Trash2 } from 'lucide-react';
+import { Printer, Lock, Unlock, RefreshCw, X, Plus, Trash2, FileSpreadsheet, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCurrentUser } from '@/services/auth.service';
+import { getCompanyInfo } from '@/services/company-info.service';
+import { exportPayrollLedgerToExcel } from '@/utils/employee-payroll-ledger-export';
 import {
   getPayrollPeriods,
   getOrCreatePayrollPeriod,
@@ -17,6 +19,7 @@ import {
   deletePayslip,
   confirmPayrollPeriod,
   reopenPayrollPeriod,
+  getPayrollLedgerForPeriod,
 } from '@/services/employee-salary.service';
 import type { EmployeePayrollPeriod, EmployeePayrollPeriodSummary, EmployeePayslipItem, EmployeePayslipWithDetails, EmployeeSalaryItemCategory } from '@/types/employee-salary';
 
@@ -40,6 +43,7 @@ export default function EmployeePayrollPeriodsSection() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   const [editingPayslip, setEditingPayslip] = useState<EmployeePayslipWithDetails | null>(null);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
@@ -158,6 +162,20 @@ export default function EmployeePayrollPeriodsSection() {
     }
   };
 
+  const handleExportExcel = async () => {
+    if (!currentPeriod) return;
+    try {
+      setExportingExcel(true);
+      const [ledger, company] = await Promise.all([getPayrollLedgerForPeriod(currentPeriod.id), getCompanyInfo().catch(() => null)]);
+      if (!ledger || ledger.rows.length === 0) { toast({ title: '내려받을 명세서가 없습니다.', variant: 'destructive' }); return; }
+      await exportPayrollLedgerToExcel(ledger, company?.name || '');
+    } catch (e) {
+      toast({ title: '엑셀 다운로드 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   const isDraft = currentPeriod?.status === 'draft';
   const draftTotal = (category: EmployeeSalaryItemCategory) => draftItems.filter(i => i.category === category).reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   const draftNet = draftTotal('base') + draftTotal('allowance') - draftTotal('deduction');
@@ -176,6 +194,16 @@ export default function EmployeePayrollPeriodsSection() {
           </Badge>
         )}
         <div className="flex-1" />
+        {payslips.length > 0 && (
+          <>
+            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => window.open(`/print/employee-payroll-ledger/${currentPeriod?.id}`, '_blank')}>
+              <FileText className="w-3.5 h-3.5" />급여대장 인쇄
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleExportExcel} disabled={exportingExcel}>
+              <FileSpreadsheet className="w-3.5 h-3.5" />{exportingExcel ? '다운로드 중...' : '엑셀 다운로드'}
+            </Button>
+          </>
+        )}
         {permissions.canCreate && isDraft && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleGenerate} disabled={generating || loading}>
             <RefreshCw className="w-3.5 h-3.5" />{generating ? '생성 중...' : '명세서 생성'}

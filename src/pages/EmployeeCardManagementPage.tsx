@@ -25,7 +25,15 @@ export const EMPLOYEE_ROLES = ['ship_manager', 'admin', 'system_admin'];
 
 type CompanyExt = Company & { company_type?: string };
 
-const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'ship_manager', company_id: '', position_id: '', hire_date: '', is_executive: false };
+const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'ship_manager', company_id: '', position_id: '', hire_date: '', is_executive: false, resident_registration_number: '' };
+
+// 목록에서는 뒷자리를 가려서 보여준다 — 다이얼로그(의도적으로 연 화면)에서만 전체 값을 다룬다.
+const maskRrn = (rrn?: string | null) => {
+  if (!rrn) return '-';
+  const digits = rrn.replace(/[^0-9]/g, '');
+  if (digits.length < 7) return rrn;
+  return `${digits.slice(0, 6)}-${digits[6]}${'*'.repeat(Math.max(0, digits.length - 7))}`;
+};
 
 // 사용자 그룹 관리에서 분리된 화면 — 선박관리사(+관리자) 계정은 실제로는 우리회사 직원이라
 // 외부(선주/선원매닝사/선원) 사용자 관리와 분리해 "직원카드 관리"로 별도 관리한다.
@@ -97,6 +105,7 @@ export default function EmployeeCardManagementPage() {
       position_id: eu.position_id || '',
       hire_date: u.hire_date || '',
       is_executive: u.is_executive || false,
+      resident_registration_number: u.resident_registration_number || '',
     });
     setModalOpen(true);
   };
@@ -119,6 +128,7 @@ export default function EmployeeCardManagementPage() {
           position_id: formData.position_id || null,
           hire_date: formData.hire_date || null,
           is_executive: formData.is_executive,
+          resident_registration_number: formData.resident_registration_number || null,
           ...(formData.password ? { password: formData.password } : {}),
         });
       } else {
@@ -130,6 +140,7 @@ export default function EmployeeCardManagementPage() {
           position_id: formData.position_id || null,
           hire_date: formData.hire_date || null,
           is_executive: formData.is_executive,
+          resident_registration_number: formData.resident_registration_number || null,
         });
       }
       toast({ title: editId ? '수정 완료' : '등록 완료' });
@@ -209,6 +220,7 @@ export default function EmployeeCardManagementPage() {
                       <TableHead className="text-xs">이름</TableHead>
                       <TableHead className="text-xs">이메일</TableHead>
                       <TableHead className="text-xs">직급</TableHead>
+                      <TableHead className="text-xs">주민등록번호</TableHead>
                       <TableHead className="text-xs">구분</TableHead>
                       <TableHead className="text-xs">역할</TableHead>
                       <TableHead className="text-right text-xs w-20">작업</TableHead>
@@ -227,6 +239,7 @@ export default function EmployeeCardManagementPage() {
                           <TableCell className="text-sm">{u.name}</TableCell>
                           <TableCell className="text-sm">{u.email}</TableCell>
                           <TableCell className="text-sm">{position?.name || '-'}</TableCell>
+                          <TableCell className="text-sm font-mono text-gray-500">{maskRrn(u.resident_registration_number)}</TableCell>
                           <TableCell>
                             {u.is_executive
                               ? <Badge className="text-xs bg-amber-500">임원</Badge>
@@ -299,9 +312,15 @@ export default function EmployeeCardManagementPage() {
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">입사일 <span className="text-gray-400 font-normal">(연차 산정 기준)</span></Label>
-              <Input type="date" value={formData.hire_date} onChange={e => setFormData({ ...formData, hire_date: e.target.value })} className="h-8 text-sm" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">입사일 <span className="text-gray-400 font-normal">(연차 산정 기준)</span></Label>
+                <Input type="date" value={formData.hire_date} onChange={e => setFormData({ ...formData, hire_date: e.target.value })} className="h-8 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">주민등록번호 <span className="text-gray-400 font-normal">(급여대장용)</span></Label>
+                <Input value={formData.resident_registration_number} onChange={e => setFormData({ ...formData, resident_registration_number: e.target.value })} placeholder="000000-0000000" className="h-8 text-sm" />
+              </div>
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer">
