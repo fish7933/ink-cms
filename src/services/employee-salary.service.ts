@@ -451,6 +451,18 @@ export async function cancelPayslipsForPeriod(periodId: string): Promise<void> {
   if (error) throw error;
 }
 
+// 지급 이력에서 작성중(명세서 없음) 회차를 완전히 삭제한다 — 실수로 만든 빈 회차 정리용.
+export async function deletePayrollPeriod(periodId: string): Promise<void> {
+  const { data: period, error: periodError } = await supabase.from('employee_payroll_periods').select('status').eq('id', periodId).single();
+  if (periodError) throw periodError;
+  if (period.status !== 'draft') throw new Error('작성중 상태의 회차만 삭제할 수 있습니다.');
+  const { count, error: countError } = await supabase.from('employee_payslips').select('id', { count: 'exact', head: true }).eq('period_id', periodId);
+  if (countError) throw countError;
+  if (count && count > 0) throw new Error('명세서가 있는 회차는 삭제할 수 없습니다.');
+  const { error } = await supabase.from('employee_payroll_periods').delete().eq('id', periodId);
+  if (error) throw error;
+}
+
 // --- 급여대장 (전체 직원 표) ---
 
 // 인쇄/엑셀 출력용 — 기본급 옆에 수당/공제 항목을 열로 펼친 표 데이터를 만든다. 항목명은

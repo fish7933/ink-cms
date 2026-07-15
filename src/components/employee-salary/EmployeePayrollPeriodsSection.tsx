@@ -25,6 +25,7 @@ import {
   getPayrollLedgerForPeriod,
   updatePayrollPeriodPaymentDate,
   cancelPayslipsForPeriod,
+  deletePayrollPeriod,
 } from '@/services/employee-salary.service';
 import type { EmployeePayrollPeriod, EmployeePayrollPeriodSummary, EmployeePayslipItem, EmployeePayslipWithDetails, EmployeeSalaryItemCategory } from '@/types/employee-salary';
 
@@ -123,6 +124,18 @@ export default function EmployeePayrollPeriodsSection() {
       toast({ title: '취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleDeletePeriod = async (period: EmployeePayrollPeriodSummary) => {
+    if (!confirm(`${period.year_month} 회차를 삭제하시겠습니까? (명세서가 없는 작성중 회차만 삭제 가능)`)) return;
+    try {
+      await deletePayrollPeriod(period.id);
+      toast({ title: '삭제되었습니다.' });
+      loadPeriods();
+      if (yearMonth === period.year_month) setYearMonth(currentYearMonth());
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -430,12 +443,23 @@ export default function EmployeePayrollPeriodsSection() {
           <p className="text-xs text-gray-500 mb-1.5">지급 이력</p>
           <div className="flex flex-wrap gap-1.5">
             {periods.map(p => (
-              <button
-                key={p.id} type="button" onClick={() => setYearMonth(p.year_month)}
-                className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${yearMonth === p.year_month ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-              >
-                {p.year_month} · {STATUS_LABELS[p.status]} ({p.payslip_count}명)
-              </button>
+              <div key={p.id} className="inline-flex items-stretch">
+                <button
+                  type="button" onClick={() => setYearMonth(p.year_month)}
+                  className={`px-2.5 py-1 text-xs border transition-colors ${p.status === 'draft' && p.payslip_count === 0 ? 'rounded-l-md' : 'rounded-md'} ${yearMonth === p.year_month ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                >
+                  {p.year_month} · {STATUS_LABELS[p.status]} ({p.payslip_count}명)
+                </button>
+                {p.status === 'draft' && p.payslip_count === 0 && (
+                  <button
+                    type="button" onClick={() => handleDeletePeriod(p)}
+                    title="빈 회차 삭제"
+                    className={`px-1 rounded-r-md border border-l-0 transition-colors ${yearMonth === p.year_month ? 'bg-blue-600 border-blue-600 text-blue-100 hover:text-white' : 'bg-white border-gray-200 text-gray-400 hover:text-red-600 hover:bg-gray-50'}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>
