@@ -180,25 +180,35 @@ async function attachEmployeeDetails(payslips: EmployeePayslip[], items: Employe
   if (payslips.length === 0) return [];
   const userIds = [...new Set(payslips.map(p => p.user_id))];
   const [{ data: users }, positions] = await Promise.all([
-    supabase.from('users').select('id, name, position_id').in('id', userIds),
+    supabase.from('users').select('id, name, position_id, hire_date').in('id', userIds),
     getShorePositions(),
   ]);
-  const positionNameById = new Map(positions.map(p => [p.id, p.name]));
+  const positionById = new Map(positions.map(p => [p.id, p]));
   const userById = new Map((users || []).map(u => [u.id, u]));
   const itemsByPayslip = new Map<string, EmployeePayslipItem[]>();
   for (const item of items) {
     if (!itemsByPayslip.has(item.payslip_id)) itemsByPayslip.set(item.payslip_id, []);
     itemsByPayslip.get(item.payslip_id)!.push(item);
   }
-  return payslips.map(p => {
-    const u = userById.get(p.user_id);
-    return {
-      ...p,
-      employee_name: u?.name || '알 수 없음',
-      employee_position_name: u?.position_id ? positionNameById.get(u.position_id) || null : null,
-      items: itemsByPayslip.get(p.id) || [],
-    };
-  });
+  // 직급 선임순 → 입사일순 정렬 — 이 프로젝트 전반의 직원 목록 정렬 관례와 동일하게 맞춘다.
+  return payslips
+    .map(p => {
+      const u = userById.get(p.user_id);
+      const position = u?.position_id ? positionById.get(u.position_id) : undefined;
+      return {
+        ...p,
+        employee_name: u?.name || '알 수 없음',
+        employee_position_name: position?.name || null,
+        _positionOrder: position?.display_order ?? Infinity,
+        _hireDate: u?.hire_date ?? '9999-99-99',
+        items: itemsByPayslip.get(p.id) || [],
+      };
+    })
+    .sort((a, b) => {
+      if (a._positionOrder !== b._positionOrder) return a._positionOrder - b._positionOrder;
+      return a._hireDate.localeCompare(b._hireDate);
+    })
+    .map(({ _positionOrder, _hireDate, ...rest }) => rest);
 }
 
 export async function getPayslipsForPeriod(periodId: string): Promise<EmployeePayslipWithDetails[]> {
