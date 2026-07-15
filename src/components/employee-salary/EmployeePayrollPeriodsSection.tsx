@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Printer, Unlock, RefreshCw, X, Plus, Trash2, FileSpreadsheet, FileText, UserCheck, Send, ExternalLink } from 'lucide-react';
+import { Printer, Unlock, RefreshCw, X, Plus, Trash2, FileSpreadsheet, FileText, UserCheck, Send, ExternalLink, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ import {
   reopenPayrollPeriod,
   getPayrollLedgerForPeriod,
   updatePayrollPeriodPaymentDate,
+  cancelPayslipsForPeriod,
 } from '@/services/employee-salary.service';
 import type { EmployeePayrollPeriod, EmployeePayrollPeriodSummary, EmployeePayslipItem, EmployeePayslipWithDetails, EmployeeSalaryItemCategory } from '@/types/employee-salary';
 
@@ -54,6 +55,7 @@ export default function EmployeePayrollPeriodsSection() {
   const [payslips, setPayslips] = useState<EmployeePayslipWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [requestingAck, setRequestingAck] = useState(false);
   const [submittingExpenseReport, setSubmittingExpenseReport] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -104,6 +106,21 @@ export default function EmployeePayrollPeriodsSection() {
       toast({ title: '생성 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleCancelAll = async () => {
+    if (!currentPeriod) return;
+    if (!confirm(`${currentPeriod.year_month} 명세서 ${payslips.length}건을 모두 취소하시겠습니까? "명세서 생성"을 다시 누르면 현재 급여 항목 기준으로 새로 만들 수 있습니다.`)) return;
+    try {
+      setCancelling(true);
+      await cancelPayslipsForPeriod(currentPeriod.id);
+      toast({ title: '명세서가 취소되었습니다.' });
+      await refresh();
+    } catch (e) {
+      toast({ title: '취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -301,6 +318,11 @@ export default function EmployeePayrollPeriodsSection() {
         {permissions.canCreate && isDraft && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleGenerate} disabled={generating || loading}>
             <RefreshCw className="w-3.5 h-3.5" />{generating ? '생성 중...' : '명세서 생성'}
+          </Button>
+        )}
+        {permissions.canDelete && isDraft && payslips.length > 0 && (
+          <Button size="sm" variant="outline" className="gap-1.5 h-9 text-red-600 border-red-300" onClick={handleCancelAll} disabled={cancelling || loading}>
+            <Ban className="w-3.5 h-3.5" />{cancelling ? '취소 중...' : '명세서 취소'}
           </Button>
         )}
         {permissions.canEdit && isDraft && (

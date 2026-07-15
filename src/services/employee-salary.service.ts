@@ -342,10 +342,16 @@ export async function getPayslipDetail(payslipId: string): Promise<EmployeePaysl
   const { data: payslip, error } = await supabase.from('employee_payslips').select('*').eq('id', payslipId).maybeSingle();
   if (error) { console.error(error); return null; }
   if (!payslip) return null;
-  const { data: items, error: itemsError } = await supabase.from('employee_payslip_items').select('*').eq('payslip_id', payslipId).order('display_order');
+  const [{ data: items, error: itemsError }, { data: period }] = await Promise.all([
+    supabase.from('employee_payslip_items').select('*').eq('payslip_id', payslipId).order('display_order'),
+    supabase.from('employee_payroll_periods').select('year_month, status').eq('id', payslip.period_id).maybeSingle(),
+  ]);
   if (itemsError) { console.error(itemsError); return null; }
   const [detail] = await attachEmployeeDetails([payslip], items || []);
-  return detail || null;
+  if (!detail) return null;
+  // 실제 급여월(회차 기준)을 붙인다 — payslip.created_at(행 생성 시각)과는 다를 수 있어
+  // 인쇄물에서 잘못된 월이 찍히던 문제의 원인이었다.
+  return { ...detail, period_year_month: period?.year_month, period_status: period?.status };
 }
 
 // "내 급여명세서" 페이지용 — 담당자가 직원 확인을 요청한(draft를 벗어난) 명세서만 보인다.
@@ -431,6 +437,17 @@ export async function updatePayslipItems(
 // draft 기간에서 특정 직원의 명세서를 제외 — 이후 "명세서 생성"을 다시 누르면 그 직원만 재생성된다.
 export async function deletePayslip(payslipId: string): Promise<void> {
   const { error } = await supabase.from('employee_payslips').delete().eq('id', payslipId);
+  if (error) throw error;
+}
+
+// draft 상태(아직 직원 확인 요청 전 = 집행 전)인 회차의 명세서를 전부 취소한다 — 급여
+// 항목이 바뀐 뒤 "명세서 생성"을 다시 눌러 최신 값 기준으로 새로 만들 수 있게 해준다
+// (generatePayslipsForPeriod는 이미 있는 명세서는 건너뛰므로, 재생성하려면 먼저 비워야 함).
+export async function cancelPayslipsForPeriod(periodId: string): Promise<void> {
+  const { data: period, error: periodError } = await supabase.from('employee_payroll_periods').select('status').eq('id', periodId).single();
+  if (periodError) throw periodError;
+  if (period.status !== 'draft') throw new Error('작성중 상태의 회차만 명세서를 취소할 수 있습니다.');
+  const { error } = await supabase.from('employee_payslips').delete().eq('period_id', periodId);
   if (error) throw error;
 }
 
