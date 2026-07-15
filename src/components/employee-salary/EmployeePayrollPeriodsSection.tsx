@@ -106,6 +106,10 @@ export default function EmployeePayrollPeriodsSection() {
     if (currentPeriod) return currentPeriod;
     const period = await getOrCreatePayrollPeriod(yearMonth);
     setCurrentPeriod(period);
+    // 새로 생성된 회차는 차월 15일(공휴일이면 직전 평일) 기본 지급일이 계산되어 들어오므로,
+    // 화면의 지급일 입력값도 같이 맞춰준다 — 안 그러면 회차는 기본값을 갖고 있는데 입력창은
+    // 빈 채로 보이는 불일치가 생긴다.
+    setPaymentDateInput(period.payment_date || '');
     loadPeriods();
     return period;
   };
