@@ -60,7 +60,7 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
             key={tab.id}
             className={`flex items-center gap-1 px-3 cursor-pointer shrink-0 group rounded-t-md transition-[width,background-color] duration-150 ${
               isActive
-                ? 'bg-white text-slate-900 shadow-[0_-1px_4px_rgba(0,0,0,0.05)] border-t-2 border-t-slate-900 font-medium'
+                ? 'bg-white text-blue-700 shadow-[0_-1px_4px_rgba(0,0,0,0.05)] border-t-2 border-t-blue-600 font-medium'
                 : 'bg-transparent text-gray-500 hover:bg-white/60 border-t-2 border-t-transparent'
             }`}
             style={{ width: `${tabWidth}px`, height: '34px' }}

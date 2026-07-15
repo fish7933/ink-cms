@@ -119,7 +119,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
         {logoUrl ? (
           <img src={logoUrl} alt="" className="h-6 w-6 object-contain rounded" />
         ) : (
-          <div className="h-7 w-7 rounded-md bg-slate-900 flex items-center justify-center">
+          <div className="h-7 w-7 rounded-md bg-blue-600 flex items-center justify-center">
             <Ship className="h-4 w-4 text-white" />
           </div>
         )}
@@ -139,8 +139,8 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
               className={cn(
                 'h-8 px-3 text-sm shrink-0 gap-1.5 rounded-full transition-colors',
                 isSelected
-                  ? 'bg-slate-900 text-white hover:bg-slate-800'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                  : 'text-gray-600 hover:bg-gray-100 border border-transparent'
               )}
               onClick={() => onCategorySelect?.(category.id)}
             >
@@ -158,7 +158,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2 h-8 px-2 rounded-full">
-              <div className="h-6 w-6 rounded-full bg-slate-900 text-white text-[11px] font-semibold flex items-center justify-center shrink-0">
+              <div className="h-6 w-6 rounded-full bg-blue-600 text-white text-[11px] font-semibold flex items-center justify-center shrink-0">
                 {initial}
               </div>
               <span className="text-sm font-medium">{currentUser.name}</span>
