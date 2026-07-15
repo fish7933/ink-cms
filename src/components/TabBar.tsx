@@ -49,7 +49,7 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
     : uiSettings.tabMaxWidth;
 
   return (
-    <div ref={containerRef} className="bg-white border-b flex overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
+    <div ref={containerRef} className="bg-gray-100 border-b border-gray-200 flex items-end gap-0.5 px-1.5 pt-1.5 overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
       {tabs.map(tab => {
         const isActive = tab.id === activeTabId;
         const isHovered = hoveredTabId === tab.id;
@@ -58,12 +58,12 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
         return (
           <div
             key={tab.id}
-            className={`flex items-center gap-1 px-3 border-r cursor-pointer shrink-0 group transition-[width,background-color] duration-150 ${
+            className={`flex items-center gap-1 px-3 cursor-pointer shrink-0 group rounded-t-md transition-[width,background-color] duration-150 ${
               isActive
-                ? 'bg-blue-50 border-b-2 border-b-blue-600 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-50'
+                ? 'bg-white text-slate-900 shadow-[0_-1px_4px_rgba(0,0,0,0.05)] border-t-2 border-t-slate-900 font-medium'
+                : 'bg-transparent text-gray-500 hover:bg-white/60 border-t-2 border-t-transparent'
             }`}
-            style={{ width: `${tabWidth}px`, height: '36px' }}
+            style={{ width: `${tabWidth}px`, height: '34px' }}
             onClick={() => activateTab(tab.id)}
             onMouseEnter={() => setHoveredTabId(tab.id)}
             onMouseLeave={() => setHoveredTabId(null)}
@@ -76,7 +76,7 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
             )}
             <button
               className={`shrink-0 rounded p-0.5 transition-colors opacity-0 group-hover:opacity-100 ${
-                isActive ? 'hover:bg-blue-100 text-blue-500' : 'hover:bg-gray-200 text-gray-400'
+                isActive ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-gray-200 text-gray-400'
               }`}
               onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
               title="이 탭 닫기"
@@ -87,9 +87,9 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
         );
       })}
 
-      <div className="flex items-center gap-0.5 px-2 ml-auto shrink-0 border-l bg-white sticky right-0">
+      <div className="flex items-center gap-0.5 px-2 pb-1.5 ml-auto shrink-0 sticky right-0 bg-gray-100">
         <button
-          className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-800 hover:bg-white transition-colors"
           onClick={closeLastTab}
           title="마지막 탭 닫기"
         >

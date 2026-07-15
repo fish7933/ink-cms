@@ -93,33 +93,37 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
 
   if (loading || !currentUser) {
     return (
-      <header className="bg-white border-b h-14 flex items-center px-6 shadow-sm shrink-0">
+      <header className="bg-white border-b border-gray-200 h-14 flex items-center px-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] shrink-0">
         <div className="flex items-center gap-2">
           {logoUrl ? (
             <img src={logoUrl} alt="" className="h-6 w-6 object-contain rounded" />
           ) : (
             <Ship className="h-5 w-5 text-blue-600" />
           )}
-          <span className="text-lg font-bold text-gray-900">선원 관리 시스템</span>
+          <span className="text-lg font-semibold text-gray-900 tracking-tight">선원 관리 시스템</span>
         </div>
       </header>
     );
   }
 
+  const initial = currentUser.name?.trim()?.[0] || '?';
+
   return (
-    <header className="bg-white border-b h-14 flex items-center px-4 shadow-sm shrink-0 gap-2">
+    <header className="bg-white border-b border-gray-200 h-14 flex items-center px-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] shrink-0 gap-2 relative z-20">
       {/* 로고 */}
       <button
         type="button"
         onClick={goHome}
-        className="flex items-center gap-2 mr-4 shrink-0 hover:opacity-75 transition-opacity"
+        className="flex items-center gap-2 mr-5 shrink-0 hover:opacity-75 transition-opacity"
       >
         {logoUrl ? (
           <img src={logoUrl} alt="" className="h-6 w-6 object-contain rounded" />
         ) : (
-          <Ship className="h-5 w-5 text-blue-600" />
+          <div className="h-7 w-7 rounded-md bg-slate-900 flex items-center justify-center">
+            <Ship className="h-4 w-4 text-white" />
+          </div>
         )}
-        <span className="text-base font-bold text-gray-900 whitespace-nowrap">선원 관리 시스템</span>
+        <span className="text-[15px] font-semibold text-gray-900 tracking-tight whitespace-nowrap">선원 관리 시스템</span>
       </button>
 
       {/* 카테고리 버튼들 - 클릭 시 좌측 사이드바 즉시 변경 */}
@@ -133,9 +137,9 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
               variant="ghost"
               size="sm"
               className={cn(
-                'h-8 px-3 text-sm shrink-0 gap-1.5',
+                'h-8 px-3 text-sm shrink-0 gap-1.5 rounded-full transition-colors',
                 isSelected
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-slate-900 text-white hover:bg-slate-800'
                   : 'text-gray-600 hover:bg-gray-100'
               )}
               onClick={() => onCategorySelect?.(category.id)}
@@ -153,10 +157,12 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-1.5 h-8 px-2">
-              <UserIcon className="h-4 w-4" />
+            <Button variant="ghost" size="sm" className="gap-2 h-8 px-2 rounded-full">
+              <div className="h-6 w-6 rounded-full bg-slate-900 text-white text-[11px] font-semibold flex items-center justify-center shrink-0">
+                {initial}
+              </div>
               <span className="text-sm font-medium">{currentUser.name}</span>
-              <span className="text-xs text-gray-500">({roleLabels[currentUser.role] ?? currentUser.role})</span>
+              <span className="text-xs text-gray-400">({roleLabels[currentUser.role] ?? currentUser.role})</span>
               <ChevronDown className="h-3 w-3 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
