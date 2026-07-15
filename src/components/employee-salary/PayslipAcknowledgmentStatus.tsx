@@ -57,7 +57,7 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
       </p>
       <div className="space-y-0.5">
         {entries.map(e => (
-          <div key={e.payslip_id} className="grid grid-cols-[14px_84px_minmax(0,220px)_auto] items-center gap-x-1.5 text-xs">
+          <div key={e.payslip_id} className="grid grid-cols-[14px_104px_minmax(0,220px)_auto] items-center gap-x-1.5 text-xs">
             {e.ack_status === 'approved' ? (
               <CheckCircle2 className="w-3 h-3 text-green-600" />
             ) : e.ack_status === 'disputed' ? (
@@ -65,9 +65,11 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
             ) : (
               <Clock className="w-3 h-3 text-gray-300" />
             )}
-            <span className="font-medium truncate">{e.employee_name}</span>
+            <span className="font-medium truncate">
+              {e.employee_position_name && <span className="text-gray-500 font-normal">{e.employee_position_name} </span>}
+              {e.employee_name}
+            </span>
             <span className="flex items-center gap-1.5 min-w-0 truncate">
-              {e.employee_position_name && <span className="text-[11px] text-gray-400 shrink-0">{e.employee_position_name}</span>}
               {e.ack_status === 'disputed' && e.ack_comment && (
                 <span className="text-[11px] text-amber-700 truncate">이의제기: {e.ack_comment}</span>
               )}
