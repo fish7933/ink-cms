@@ -77,7 +77,7 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
                 <span className="text-[11px] text-purple-700 flex items-center gap-0.5 truncate"><ShieldCheck className="w-2.5 h-2.5 shrink-0" />{FORCE_APPROVE_NOTE}</span>
               )}
             </span>
-            <span className="text-[11px] shrink-0 flex items-center gap-1.5">
+            <span className="text-[11px] shrink-0 flex items-center gap-0.5">
               {e.ack_status === 'approved' ? (
                 <span className="text-green-600">{e.ack_at && `${format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })} `}승인</span>
               ) : e.ack_status === 'disputed' ? (
