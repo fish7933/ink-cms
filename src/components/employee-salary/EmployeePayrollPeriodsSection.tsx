@@ -14,6 +14,7 @@ import PayslipAcknowledgmentStatus from '@/components/employee-salary/PayslipAck
 import EmployeePayslipDetailView from '@/components/employee-salary/EmployeePayslipDetailView';
 import {
   getPayrollPeriods,
+  getPayrollPeriodByYearMonth,
   getOrCreatePayrollPeriod,
   getPayslipsForPeriod,
   generatePayslipsForPeriod,
@@ -72,13 +73,16 @@ export default function EmployeePayrollPeriodsSection() {
 
   const loadPeriods = useCallback(() => { getPayrollPeriods().then(setPeriods); }, []);
 
+  // 조회는 읽기 전용으로만 한다 — getOrCreatePayrollPeriod로 조회하면 페이지를 여는 것만으로도
+  // (기본 선택월 = 이번 달) 빈 회차가 지급 이력에 계속 쌓이는 문제가 있었다. 회차는 "명세서
+  // 생성"이나 "지급일 저장" 등 실제 액션을 할 때만 lazy하게 만든다(ensurePeriod).
   const loadPeriodAndPayslips = useCallback(async (ym: string) => {
     setLoading(true);
     try {
-      const period = await getOrCreatePayrollPeriod(ym);
+      const period = await getPayrollPeriodByYearMonth(ym);
       setCurrentPeriod(period);
-      setPaymentDateInput(period.payment_date || '');
-      setPayslips(await getPayslipsForPeriod(period.id));
+      setPaymentDateInput(period?.payment_date || '');
+      setPayslips(period ? await getPayslipsForPeriod(period.id) : []);
       setAckRefreshKey(k => k + 1);
     } catch (e) {
       toast({ title: '조회 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
@@ -98,13 +102,23 @@ export default function EmployeePayrollPeriodsSection() {
     loadPeriods();
   };
 
+  const ensurePeriod = async () => {
+    if (currentPeriod) return currentPeriod;
+    const period = await getOrCreatePayrollPeriod(yearMonth);
+    setCurrentPeriod(period);
+    loadPeriods();
+    return period;
+  };
+
   const handleGenerate = async () => {
-    if (!currentPeriod) return;
     try {
       setGenerating(true);
-      const result = await generatePayslipsForPeriod(currentPeriod.id);
+      const period = await ensurePeriod();
+      const result = await generatePayslipsForPeriod(period.id);
       toast({ title: `${result.created}건 생성되었습니다.`, description: result.skipped > 0 ? `이미 존재하는 ${result.skipped}건은 건너뛰었습니다.` : undefined });
-      await refresh();
+      setPayslips(await getPayslipsForPeriod(period.id));
+      setAckRefreshKey(k => k + 1);
+      loadPeriods();
     } catch (e) {
       toast({ title: '생성 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
@@ -201,11 +215,11 @@ export default function EmployeePayrollPeriodsSection() {
   };
 
   const handleSavePaymentDate = async () => {
-    if (!currentPeriod) return;
     try {
       setSavingPaymentDate(true);
-      await updatePayrollPeriodPaymentDate(currentPeriod.id, paymentDateInput || null);
-      setCurrentPeriod({ ...currentPeriod, payment_date: paymentDateInput || null });
+      const period = await ensurePeriod();
+      await updatePayrollPeriodPaymentDate(period.id, paymentDateInput || null);
+      setCurrentPeriod({ ...period, payment_date: paymentDateInput || null });
       toast({ title: '지급일이 저장되었습니다.' });
     } catch (e) {
       toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
@@ -260,9 +274,11 @@ export default function EmployeePayrollPeriodsSection() {
     }
   };
 
-  const isDraft = currentPeriod?.status === 'draft';
-  const isPendingAck = currentPeriod?.status === 'pending_ack';
-  const isPendingApproval = currentPeriod?.status === 'pending_approval';
+  // 아직 회차 행이 없으면(방금 이 달을 선택했을 뿐 아무 액션도 안 한 상태) "작성중"으로 취급한다.
+  const periodStatus = currentPeriod?.status ?? 'draft';
+  const isDraft = periodStatus === 'draft';
+  const isPendingAck = periodStatus === 'pending_ack';
+  const isPendingApproval = periodStatus === 'pending_approval';
   const allAcked = payslips.length > 0 && payslips.every(p => p.ack_status !== 'pending');
   const draftTotal = (category: EmployeeSalaryItemCategory) => draftItems.filter(i => i.category === category).reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   const draftNet = draftTotal('base') + draftTotal('allowance') - draftTotal('deduction');
@@ -298,27 +314,23 @@ export default function EmployeePayrollPeriodsSection() {
           <Label className="text-xs">지급 월</Label>
           <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-9 text-sm w-40" />
         </div>
-        {currentPeriod && (
-          <>
-            <div className="space-y-1.5">
-              <Label className="text-xs">지급(예정)일</Label>
-              <div className="flex items-center gap-1.5">
-                <Input
-                  type="date" value={paymentDateInput} onChange={e => setPaymentDateInput(e.target.value)}
-                  className="h-9 text-sm w-36" disabled={!permissions.canEdit || savingPaymentDate}
-                />
-                {permissions.canEdit && paymentDateInput !== (currentPeriod.payment_date || '') && (
-                  <Button size="sm" className="h-9" onClick={handleSavePaymentDate} disabled={savingPaymentDate}>
-                    {savingPaymentDate ? '저장 중...' : '저장'}
-                  </Button>
-                )}
-              </div>
-            </div>
-            <Badge variant="outline" className={STATUS_COLORS[currentPeriod.status]}>
-              {STATUS_LABELS[currentPeriod.status]}
-            </Badge>
-          </>
-        )}
+        <div className="space-y-1.5">
+          <Label className="text-xs">지급(예정)일</Label>
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date" value={paymentDateInput} onChange={e => setPaymentDateInput(e.target.value)}
+              className="h-9 text-sm w-36" disabled={!permissions.canEdit || savingPaymentDate}
+            />
+            {permissions.canEdit && paymentDateInput !== (currentPeriod?.payment_date || '') && (
+              <Button size="sm" className="h-9" onClick={handleSavePaymentDate} disabled={savingPaymentDate}>
+                {savingPaymentDate ? '저장 중...' : '저장'}
+              </Button>
+            )}
+          </div>
+        </div>
+        <Badge variant="outline" className={STATUS_COLORS[periodStatus]}>
+          {STATUS_LABELS[periodStatus]}
+        </Badge>
         <div className="flex-1" />
         {payslips.length > 0 && (
           <>
