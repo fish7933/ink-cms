@@ -93,7 +93,7 @@ export default function EmployeeSalaryCatalogSection() {
   if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {CATEGORIES.map(category => (
         <CategoryCatalogTable
           key={category}
@@ -167,24 +167,24 @@ function CategoryCatalogTable({ category, entries, setEntries, canCreate, canEdi
 
   return (
     <div className="rounded-md border overflow-hidden">
-      <div className="flex items-center justify-between bg-gray-50 border-b px-3 py-2">
-        <span className="text-sm font-semibold">{CATEGORY_LABELS[category]}</span>
+      <div className="flex items-center justify-between bg-gray-50 border-b px-2.5 py-1.5">
+        <span className="text-xs font-semibold">{CATEGORY_LABELS[category]}</span>
         {canCreate && (
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={onAdd}>
-            <Plus className="w-3.5 h-3.5" />추가
+          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs gap-1" onClick={onAdd}>
+            <Plus className="w-3 h-3" />추가
           </Button>
         )}
       </div>
       {entries.length === 0 ? (
-        <div className="text-center py-4 text-xs text-gray-400">등록된 항목이 없습니다.</div>
+        <div className="text-center py-2.5 text-xs text-gray-400">등록된 항목이 없습니다.</div>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs w-10"></TableHead>
-              <TableHead className="text-xs">항목명</TableHead>
-              {category === 'allowance' && <TableHead className="text-xs w-28">구분</TableHead>}
-              <TableHead className="text-right text-xs w-20">작업</TableHead>
+              <TableHead className="text-xs h-7 px-2 w-8"></TableHead>
+              <TableHead className="text-xs h-7 px-2">항목명</TableHead>
+              {category === 'allowance' && <TableHead className="text-xs h-7 px-2 w-24">구분</TableHead>}
+              <TableHead className="text-right text-xs h-7 px-2 w-16">작업</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -192,14 +192,14 @@ function CategoryCatalogTable({ category, entries, setEntries, canCreate, canEdi
               <SortableContext items={entries.map(e => e.id)} strategy={verticalListSortingStrategy}>
                 {entries.map(entry => (
                   <SortableTableRow key={entry.id} id={entry.id} onClick={() => canEdit && onEdit(entry)}>
-                    <TableCell className="text-sm font-medium">{entry.name}</TableCell>
+                    <TableCell className="text-xs font-medium py-1 px-2">{entry.name}</TableCell>
                     {category === 'allowance' && (
-                      <TableCell className="text-xs text-gray-500">{entry.pay_group ? PAY_GROUP_LABELS[entry.pay_group] : '수당(변동)'}</TableCell>
+                      <TableCell className="text-xs text-gray-500 py-1 px-2">{entry.pay_group ? PAY_GROUP_LABELS[entry.pay_group] : '수당(변동)'}</TableCell>
                     )}
-                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                    <TableCell className="text-right py-1 px-2" onClick={e => e.stopPropagation()}>
                       {canDelete && (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" onClick={() => onDelete(entry)}>
-                          <Trash2 className="w-3.5 h-3.5" />
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-red-600" onClick={() => onDelete(entry)}>
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       )}
                     </TableCell>

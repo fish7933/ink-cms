@@ -147,11 +147,11 @@ export default function EmployeeSalaryItemsSection() {
   if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
 
   return (
-    <div className="space-y-4">
-      <div className="max-w-xs space-y-1.5">
+    <div className="space-y-2">
+      <div className="max-w-xs space-y-1">
         <Label className="text-xs">직원 선택</Label>
         <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-          <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직원 선택" /></SelectTrigger>
+          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="직원 선택" /></SelectTrigger>
           <SelectContent>
             {employees.length === 0
               ? <div className="px-2 py-1.5 text-sm text-gray-500">등록된 직원이 없습니다</div>
@@ -161,50 +161,50 @@ export default function EmployeeSalaryItemsSection() {
       </div>
 
       {!selectedEmployeeId ? (
-        <div className="text-center py-12 text-sm text-gray-400">직원을 선택해주세요.</div>
+        <div className="text-center py-6 text-xs text-gray-400">직원을 선택해주세요.</div>
       ) : itemsLoading ? (
-        <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+        <div className="flex items-center justify-center py-6"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" /></div>
       ) : (
         <>
           {CATEGORIES.map(category => {
             const categoryItems = items.filter(i => i.category === category);
             return (
               <div key={category} className="rounded-md border overflow-hidden">
-                <div className="flex items-center justify-between bg-gray-50 border-b px-3 py-2">
-                  <span className="text-sm font-semibold">{CATEGORY_LABELS[category]}</span>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-sm font-mono ${category === 'deduction' ? 'text-red-600' : 'text-gray-700'}`}>
+                <div className="flex items-center justify-between bg-gray-50 border-b px-2.5 py-1.5">
+                  <span className="text-xs font-semibold">{CATEGORY_LABELS[category]}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-mono ${category === 'deduction' ? 'text-red-600' : 'text-gray-700'}`}>
                       {category === 'deduction' ? '-' : ''}{fmt(totalByCategory(category))}원
                     </span>
                     {permissions.canCreate && (
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => openAddDialog(category)}>
-                        <Plus className="w-3.5 h-3.5" />추가
+                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs gap-1" onClick={() => openAddDialog(category)}>
+                        <Plus className="w-3 h-3" />추가
                       </Button>
                     )}
                   </div>
                 </div>
                 {categoryItems.length === 0 ? (
-                  <div className="text-center py-4 text-xs text-gray-400">등록된 항목이 없습니다.</div>
+                  <div className="text-center py-2.5 text-xs text-gray-400">등록된 항목이 없습니다.</div>
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className="w-full text-xs">
                     <tbody>
                       {categoryItems.map(item => (
                         <tr key={item.id} className="border-b last:border-b-0 hover:bg-gray-50">
-                          <td className="p-2 pl-3">
+                          <td className="py-1 px-2.5">
                             {item.name}
                             {!item.catalog_id && <span className="ml-1.5 text-[10px] text-gray-400 align-middle">(직접입력)</span>}
                           </td>
-                          <td className="p-2 text-right font-mono">{fmt(item.amount)}원</td>
-                          <td className="p-2 text-right w-20">
+                          <td className="py-1 px-2 text-right font-mono">{fmt(item.amount)}원</td>
+                          <td className="py-1 px-2 text-right w-16">
                             <div className="flex justify-end gap-0.5">
                               {permissions.canEdit && (
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-gray-700" onClick={() => openEditDialog(item)}>
-                                  <Pencil className="w-3.5 h-3.5" />
+                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-gray-400 hover:text-gray-700" onClick={() => openEditDialog(item)}>
+                                  <Pencil className="w-3 h-3" />
                                 </Button>
                               )}
                               {permissions.canDelete && (
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(item)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(item)}>
+                                  <Trash2 className="w-3 h-3" />
                                 </Button>
                               )}
                             </div>
@@ -218,9 +218,9 @@ export default function EmployeeSalaryItemsSection() {
             );
           })}
 
-          <div className="rounded-md border bg-blue-50 border-blue-200 px-3 py-2.5 flex items-center justify-between">
-            <span className="text-sm font-semibold text-blue-900">월 예상 실지급액 (기본급+수당-공제)</span>
-            <span className="text-base font-bold font-mono text-blue-900">{fmt(netTotal)}원</span>
+          <div className="rounded-md border bg-blue-50 border-blue-200 px-2.5 py-1.5 flex items-center justify-between">
+            <span className="text-xs font-semibold text-blue-900">월 예상 실지급액 (기본급+수당-공제)</span>
+            <span className="text-sm font-bold font-mono text-blue-900">{fmt(netTotal)}원</span>
           </div>
         </>
       )}

@@ -1,13 +1,14 @@
 import * as XLSX from 'xlsx-js-style';
 import type { PayrollLedgerData } from '@/types/employee-salary';
 
-// 스타일 컨벤션은 salary-template-export.ts와 맞춤
-const HEADER = { bg: 'DBEAFE', fg: '1E40AF' };
-const DEDUCTION_HEADER = { bg: 'FEE2E2', fg: 'B91C1C' };
-const RESULT_HEADER = { bg: 'E5E7EB', fg: '374151' };
-const TOTAL_ROW_BG = 'F5F5F5';
+// 급여명세서(EmployeePayslipDetailView)와 같은 흑백 위주의 정형화된 서식 톤에 맞춘다 —
+// 색 블록 대신 옅은 회색 배경 + 공제 항목만 빨간 글자로 구분.
+const HEADER = { bg: 'F5F5F5', fg: '333333' };
+const DEDUCTION_HEADER = { bg: 'F5F5F5', fg: 'A33333' };
+const RESULT_HEADER = { bg: 'EFEFEF', fg: '222222' };
+const TOTAL_ROW_BG = 'F7F7F7';
 const THIN = 'CCCCCC';
-const THICK = '333333';
+const THICK = '888888';
 const BASE_SZ = 9;
 
 const border = (opts: { thickTop?: boolean; thickBottom?: boolean } = {}) => ({
@@ -40,7 +41,7 @@ export function buildPayrollLedgerWorkbook(ledger: PayrollLedgerData, companyNam
   const aoa: ReturnType<typeof cell>[][] = [];
 
   aoa.push([
-    cell(`${companyName}  ${period.year_month} 급여대장`, { font: { bold: true, sz: 14 }, alignment: { horizontal: 'center' } }),
+    cell(`${companyName}  ${period.year_month} 급여대장`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   aoa.push(Array.from({ length: colCount }, () => cell('', {})));
