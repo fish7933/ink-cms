@@ -62,6 +62,7 @@ export default function EmployeePayrollPeriodsSection() {
   const [ackRefreshKey, setAckRefreshKey] = useState(0);
   const [paymentDateInput, setPaymentDateInput] = useState('');
   const [savingPaymentDate, setSavingPaymentDate] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   const [editingPayslip, setEditingPayslip] = useState<EmployeePayslipWithDetails | null>(null);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
@@ -87,6 +88,7 @@ export default function EmployeePayrollPeriodsSection() {
 
   useEffect(() => { loadPeriods(); }, [loadPeriods]);
   useEffect(() => { loadPeriodAndPayslips(yearMonth); }, [yearMonth, loadPeriodAndPayslips]);
+  useEffect(() => { getCurrentUser().then(u => setCurrentUserRole(u?.role || null)); }, []);
 
   const refresh = async () => {
     if (!currentPeriod) return;
@@ -348,7 +350,11 @@ export default function EmployeePayrollPeriodsSection() {
       </div>
 
       {currentPeriod && currentPeriod.status !== 'draft' && payslips.length > 0 && (
-        <PayslipAcknowledgmentStatus periodId={currentPeriod.id} refreshKey={ackRefreshKey} />
+        <PayslipAcknowledgmentStatus
+          periodId={currentPeriod.id} refreshKey={ackRefreshKey}
+          canForceApprove={currentUserRole === 'admin'}
+          onChanged={refresh}
+        />
       )}
 
       {loading ? (
