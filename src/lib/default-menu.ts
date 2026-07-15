@@ -279,6 +279,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 4,
         is_active: true,
       },
+      {
+        id: 'employee-salary',
+        label: '직원 급여관리',
+        path: '/employee-salary',
+        icon: 'Wallet',
+        roles: ['ship_manager'],
+        order: 5,
+        is_active: true,
+      },
     ],
   },
   {

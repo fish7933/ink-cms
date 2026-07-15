@@ -1,0 +1,213 @@
+import { useState, useEffect } from 'react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
+import {
+  getPayrollEligibleEmployees,
+  getEmployeeSalaryItems,
+  addEmployeeSalaryItem,
+  updateEmployeeSalaryItem,
+  deleteEmployeeSalaryItem,
+} from '@/services/employee-salary.service';
+import type { EmployeeSalaryItem, EmployeeSalaryItemCategory, PayrollEmployee } from '@/types/employee-salary';
+
+const CATEGORY_LABELS: Record<EmployeeSalaryItemCategory, string> = { base: '기본급', allowance: '수당', deduction: '공제' };
+const CATEGORIES: EmployeeSalaryItemCategory[] = ['base', 'allowance', 'deduction'];
+
+const fmt = (n: number) => n.toLocaleString('ko-KR');
+
+// 직원별 급여 항목(정보관리) — 재사용 템플릿 없이 직원마다 기본급/수당/공제 항목을 직접 입력한다.
+export default function EmployeeSalaryItemsSection() {
+  const { toast } = useToast();
+  const permissions = usePermissions('employee_salary');
+
+  const [employees, setEmployees] = useState<PayrollEmployee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [items, setItems] = useState<EmployeeSalaryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [itemsLoading, setItemsLoading] = useState(false);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<EmployeeSalaryItem | null>(null);
+  const [dialogCategory, setDialogCategory] = useState<EmployeeSalaryItemCategory>('base');
+  const [form, setForm] = useState({ name: '', amount: '' });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getPayrollEligibleEmployees().then(list => {
+      setEmployees(list);
+      if (list[0]) setSelectedEmployeeId(list[0].id);
+      setLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEmployeeId) { setItems([]); return; }
+    setItemsLoading(true);
+    getEmployeeSalaryItems(selectedEmployeeId).then(list => { setItems(list); setItemsLoading(false); });
+  }, [selectedEmployeeId]);
+
+  const reloadItems = () => {
+    if (!selectedEmployeeId) return;
+    getEmployeeSalaryItems(selectedEmployeeId).then(setItems);
+  };
+
+  const openAddDialog = (category: EmployeeSalaryItemCategory) => {
+    setEditingItem(null);
+    setDialogCategory(category);
+    setForm({ name: '', amount: '' });
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (item: EmployeeSalaryItem) => {
+    setEditingItem(item);
+    setDialogCategory(item.category);
+    setForm({ name: item.name, amount: String(item.amount) });
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { toast({ title: '항목명을 입력해주세요.', variant: 'destructive' }); return; }
+    const amount = Number(form.amount);
+    if (!Number.isFinite(amount)) { toast({ title: '금액을 올바르게 입력해주세요.', variant: 'destructive' }); return; }
+    try {
+      setSaving(true);
+      if (editingItem) {
+        await updateEmployeeSalaryItem(editingItem.id, { name: form.name.trim(), amount });
+      } else {
+        const displayOrder = items.filter(i => i.category === dialogCategory).length;
+        await addEmployeeSalaryItem({ user_id: selectedEmployeeId, category: dialogCategory, name: form.name.trim(), amount, display_order: displayOrder, is_active: true });
+      }
+      toast({ title: '저장되었습니다.' });
+      setDialogOpen(false);
+      reloadItems();
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (item: EmployeeSalaryItem) => {
+    if (!confirm(`"${item.name}" 항목을 삭제하시겠습니까?`)) return;
+    try {
+      await deleteEmployeeSalaryItem(item.id);
+      toast({ title: '삭제되었습니다.' });
+      reloadItems();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const totalByCategory = (category: EmployeeSalaryItemCategory) => items.filter(i => i.category === category).reduce((sum, i) => sum + i.amount, 0);
+  const netTotal = totalByCategory('base') + totalByCategory('allowance') - totalByCategory('deduction');
+
+  if (loading) return <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="max-w-xs space-y-1.5">
+        <Label className="text-xs">직원 선택</Label>
+        <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+          <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직원 선택" /></SelectTrigger>
+          <SelectContent>
+            {employees.length === 0
+              ? <div className="px-2 py-1.5 text-sm text-gray-500">등록된 직원이 없습니다</div>
+              : employees.map(e => <SelectItem key={e.id} value={e.id} className="text-sm">{e.name}{e.position_name ? ` · ${e.position_name}` : ''}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {!selectedEmployeeId ? (
+        <div className="text-center py-12 text-sm text-gray-400">직원을 선택해주세요.</div>
+      ) : itemsLoading ? (
+        <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+      ) : (
+        <>
+          {CATEGORIES.map(category => {
+            const categoryItems = items.filter(i => i.category === category);
+            return (
+              <div key={category} className="rounded-md border overflow-hidden">
+                <div className="flex items-center justify-between bg-gray-50 border-b px-3 py-2">
+                  <span className="text-sm font-semibold">{CATEGORY_LABELS[category]}</span>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-mono ${category === 'deduction' ? 'text-red-600' : 'text-gray-700'}`}>
+                      {category === 'deduction' ? '-' : ''}{fmt(totalByCategory(category))}원
+                    </span>
+                    {permissions.canCreate && (
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => openAddDialog(category)}>
+                        <Plus className="w-3.5 h-3.5" />추가
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {categoryItems.length === 0 ? (
+                  <div className="text-center py-4 text-xs text-gray-400">등록된 항목이 없습니다.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {categoryItems.map(item => (
+                        <tr key={item.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                          <td className="p-2 pl-3">{item.name}</td>
+                          <td className="p-2 text-right font-mono">{fmt(item.amount)}원</td>
+                          <td className="p-2 text-right w-20">
+                            <div className="flex justify-end gap-0.5">
+                              {permissions.canEdit && (
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-gray-700" onClick={() => openEditDialog(item)}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                              {permissions.canDelete && (
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(item)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })}
+
+          <div className="rounded-md border bg-blue-50 border-blue-200 px-3 py-2.5 flex items-center justify-between">
+            <span className="text-sm font-semibold text-blue-900">월 예상 실지급액 (기본급+수당-공제)</span>
+            <span className="text-base font-bold font-mono text-blue-900">{fmt(netTotal)}원</span>
+          </div>
+        </>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={o => !saving && setDialogOpen(o)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {CATEGORY_LABELS[dialogCategory]} {editingItem ? '수정' : '추가'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label className="text-xs">항목명 *</Label>
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 기본급, 직책수당, 국민연금" className="h-9 text-sm" disabled={saving} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">금액 *</Label>
+              <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" className="h-9 text-sm" disabled={saving} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} disabled={saving}>취소</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? '저장 중...' : '저장'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

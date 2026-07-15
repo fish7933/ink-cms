@@ -41,6 +41,7 @@ import {
   ArrowUpCircle,
   Folder,
   IdCard,
+  Wallet,
   LucideIcon,
 } from 'lucide-react';
 
@@ -87,6 +88,7 @@ const iconMap: Record<string, LucideIcon> = {
   ArrowUpCircle,
   Folder,
   IdCard,
+  Wallet,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {

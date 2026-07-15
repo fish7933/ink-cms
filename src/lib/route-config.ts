@@ -53,6 +53,7 @@ const ReportsPage = lazy(() => import('@/pages/ReportsPage'));
 const CrewEvaluationPage = lazy(() => import('@/pages/CrewEvaluationPage'));
 const CrewMedicalPage = lazy(() => import('@/pages/CrewMedicalPage'));
 const AllotmentManagementPage = lazy(() => import('@/pages/AllotmentManagementPage'));
+const EmployeeSalaryManagementPage = lazy(() => import('@/pages/EmployeeSalaryManagementPage'));
 const ContractManagementPage = lazy(() => import('@/pages/ContractManagementPage'));
 const SignOffReasonsPage = lazy(() => import('@/pages/SignOffReasonsPage'));
 const CrewManagementSettingsPage = lazy(() => import('@/pages/CrewManagementSettingsPage'));
@@ -134,6 +135,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew-evaluations', component: CrewEvaluationPage },
   { path: '/crew-medical', component: CrewMedicalPage },
   { path: '/allotment-management', component: AllotmentManagementPage },
+  { path: '/employee-salary', component: EmployeeSalaryManagementPage },
   { path: '/contract-management', component: ContractManagementPage },
   { path: '/allowance-types', component: AllowanceTypesManagementPage },
   { path: '/sign-off-reasons', component: SignOffReasonsPage },

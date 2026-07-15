@@ -21,7 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 const ROLE_LABELS: Record<string, string> = { ship_manager: '일반사용자', admin: '슈퍼관리자', system_admin: '시스템관리자' };
 const ROLE_COLORS: Record<string, string> = { ship_manager: 'bg-blue-500', admin: 'bg-red-500', system_admin: 'bg-indigo-500' };
 // 우리회사(선박관리사) 내부 직원 = 선박관리사 + 관리자 계정
-const EMPLOYEE_ROLES = ['ship_manager', 'admin', 'system_admin'];
+export const EMPLOYEE_ROLES = ['ship_manager', 'admin', 'system_admin'];
 
 type CompanyExt = Company & { company_type?: string };
 
