@@ -69,8 +69,8 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
       <ScrollArea className="flex-1">
         <div className="p-2.5 space-y-0.5">
           {currentCategory && (
-            <div className="px-2.5 pt-2 pb-2.5 mb-0.5">
-              <h3 className="text-[10.5px] font-semibold text-gray-400 uppercase tracking-widest">
+            <div className="px-2.5 pt-2.5 pb-2 mb-1">
+              <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 {currentCategory.label}
               </h3>
             </div>
@@ -91,10 +91,10 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
                     key={item.id}
                     variant="ghost"
                     className={cn(
-                      'w-full justify-start h-8 px-2.5 text-sm rounded-md transition-colors',
+                      'w-full justify-start h-9 px-2.5 text-[13.5px] font-normal rounded-md transition-colors',
                       isActive
-                        ? 'bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-600 pl-2 hover:bg-blue-100'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        ? 'bg-blue-50 text-blue-700 font-semibold border-l-2 border-blue-600 pl-2 hover:bg-blue-100'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     )}
                     onClick={() => item.path && openTab(item.path, item.label)}
                   >

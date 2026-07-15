@@ -137,10 +137,10 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
               variant="ghost"
               size="sm"
               className={cn(
-                'h-8 px-3 text-sm shrink-0 gap-1.5 rounded-full transition-colors',
+                'h-8 px-3 text-[13.5px] shrink-0 gap-1.5 rounded-full transition-colors',
                 isSelected
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
-                  : 'text-gray-600 hover:bg-gray-100 border border-transparent'
+                  ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-200 hover:bg-blue-100'
+                  : 'text-gray-600 font-normal hover:bg-gray-100 border border-transparent'
               )}
               onClick={() => onCategorySelect?.(category.id)}
             >
