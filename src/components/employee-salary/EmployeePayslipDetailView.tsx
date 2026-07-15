@@ -78,66 +78,66 @@ export default function EmployeePayslipDetailView({ payslip, showTitle = true }:
     <div style={{ fontFamily: "'Malgun Gothic', 'Segoe UI', Pretendard, sans-serif", color: '#222' }}>
       <style>{`
         table.paygrid { border-collapse: collapse; width: 100%; table-layout: fixed; }
-        table.paygrid th, table.paygrid td { border: 1px solid #ccc; padding: 5px 4px; font-size: 11px; text-align: center; }
+        table.paygrid th, table.paygrid td { border: 1px solid #ccc; padding: 3px 4px; font-size: 10px; line-height: 1.3; text-align: center; }
         table.paygrid th { font-weight: 500; color: #444; background: #fafafa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        table.paygrid th.group-label { width: 56px; color: #222; font-weight: 600; background: #f0f0f0; }
+        table.paygrid th.group-label { width: 50px; color: #222; font-weight: 600; background: #f0f0f0; }
         table.paygrid td { font-variant-numeric: tabular-nums; color: #222; }
         table.paygrid td.neg { color: #a33; }
         table.paygrid th.empty, table.paygrid td.empty { background: #fdfdfd; border-color: #e5e5e5; }
         table.paygrid tr.total-row td { background: #f7f7f7; border-color: #999; border-top: 2px solid #888; padding: 0; }
-        table.paygrid .total-line { display: flex; justify-content: space-between; padding: 6px 12px; font-weight: 600; font-size: 11.5px; }
+        table.paygrid .total-line { display: flex; justify-content: space-between; padding: 4px 12px; font-weight: 600; font-size: 10.5px; }
         table.attendance-grid { border-collapse: collapse; width: 100%; }
-        table.attendance-grid th, table.attendance-grid td { border: 1px solid #ccc; padding: 5px 6px; font-size: 11px; text-align: center; }
+        table.attendance-grid th, table.attendance-grid td { border: 1px solid #ccc; padding: 3px 5px; font-size: 10px; line-height: 1.3; text-align: center; }
         table.attendance-grid th { background: #fafafa; font-weight: 500; color: #444; }
         table.attendance-grid th.empty, table.attendance-grid td.empty { background: #fdfdfd; border-color: #e5e5e5; }
       `}</style>
 
       {showTitle && (
-        <div style={{ textAlign: 'center', margin: '2px 0 18px' }}>
-          <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: 2 }}>급 여 명 세 서</div>
-          <div style={{ fontSize: 11.5, color: '#777', marginTop: 3 }}>{payslip.period_year_month || payslip.created_at.slice(0, 7)}</div>
+        <div style={{ textAlign: 'center', margin: '0 0 12px' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: 2 }}>급 여 명 세 서</div>
+          <div style={{ fontSize: 10.5, color: '#777', marginTop: 2 }}>{payslip.period_year_month || payslip.created_at.slice(0, 7)}</div>
         </div>
       )}
 
-      <div style={{ border: '1px solid #999', padding: '8px 14px', marginBottom: 16, fontSize: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2.5px 0' }}>
+      <div style={{ border: '1px solid #999', padding: '6px 12px', marginBottom: 10, fontSize: 11 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
           <span><span style={{ color: '#777' }}>성명</span>&nbsp;&nbsp;{payslip.employee_name}</span>
           <span><span style={{ color: '#777' }}>직무</span>&nbsp;&nbsp;{payslip.employee_position_name || '-'}</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2.5px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
           <span><span style={{ color: '#777' }}>생년월일</span>&nbsp;&nbsp;{payslip.employee_birth_date || '-'}</span>
           <span><span style={{ color: '#777' }}>입사일자</span>&nbsp;&nbsp;{payslip.employee_hire_date || '-'}</span>
         </div>
         {payslip.payment_date && (
-          <div style={{ padding: '2.5px 0' }}><span style={{ color: '#777' }}>지급일</span>&nbsp;&nbsp;{payslip.payment_date}</div>
+          <div style={{ padding: '1.5px 0' }}><span style={{ color: '#777' }}>지급일</span>&nbsp;&nbsp;{payslip.payment_date}</div>
         )}
       </div>
 
-      <div style={{ fontSize: 12, fontWeight: 600, margin: '4px 0 6px', color: '#333' }}>지급내역</div>
+      <div style={{ fontSize: 11, fontWeight: 600, margin: '0 0 4px', color: '#333' }}>지급내역</div>
       {paymentGroups.length === 0 ? (
-        <p style={{ fontSize: 11, color: '#999', textAlign: 'center', padding: '6px 0' }}>등록된 지급 항목이 없습니다.</p>
+        <p style={{ fontSize: 10.5, color: '#999', textAlign: 'center', padding: '4px 0' }}>등록된 지급 항목이 없습니다.</p>
       ) : (
         <BorderedTable><PayGridTable groups={paymentGroups} totalLabel="지급액 합계" totalValue={payslip.base_amount + payslip.total_allowance} /></BorderedTable>
       )}
 
-      <div style={{ fontSize: 12, fontWeight: 600, margin: '16px 0 6px', color: '#333' }}>공제내역</div>
+      <div style={{ fontSize: 11, fontWeight: 600, margin: '10px 0 4px', color: '#333' }}>공제내역</div>
       {!deductionGroup || deductionGroup.items.length === 0 ? (
-        <p style={{ fontSize: 11, color: '#999', textAlign: 'center', padding: '6px 0' }}>공제 항목 없음</p>
+        <p style={{ fontSize: 10.5, color: '#999', textAlign: 'center', padding: '4px 0' }}>공제 항목 없음</p>
       ) : (
         <BorderedTable><PayGridTable groups={[deductionGroup]} negative totalLabel="공제액 합계" totalValue={payslip.total_deduction} /></BorderedTable>
       )}
 
-      <div style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', border: '1px solid #999', borderTop: '2px solid #888', background: '#f7f7f7' }}>
-        <span style={{ fontWeight: 600, fontSize: 12.5 }}>실지급액</span>
-        <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>{fmt(payslip.net_amount)} 원</span>
+      <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 12px', border: '1px solid #999', borderTop: '2px solid #888', background: '#f7f7f7' }}>
+        <span style={{ fontWeight: 600, fontSize: 11.5 }}>실지급액</span>
+        <span style={{ fontWeight: 700, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{fmt(payslip.net_amount)} 원</span>
       </div>
 
-      <div style={{ marginTop: 20 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#333' }}>근태</div>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: '#333' }}>근태</div>
         <BorderedTable>
           <table className="attendance-grid">
             <tbody>
-              {chunkPad([['소정', `${STANDARD_MONTHLY_HOURS.toFixed(2)}H`] as [string, string], ...ATTENDANCE_FIELDS.map(f => [f, '0.00H'] as [string, string])], 4).map((row, i) => (
+              {chunkPad([['소정', `${STANDARD_MONTHLY_HOURS.toFixed(2)}H`] as [string, string], ...ATTENDANCE_FIELDS.map(f => [f, '0.00H'] as [string, string])], 6).map((row, i) => (
                 <tr key={i}>
                   {row.map((cell, j) => cell ? (
                     <Fragment key={cell[0]}><th>{cell[0]}</th><td>{cell[1]}</td></Fragment>
@@ -151,8 +151,8 @@ export default function EmployeePayslipDetailView({ payslip, showTitle = true }:
         </BorderedTable>
       </div>
 
-      <div style={{ marginTop: 16, fontSize: 10.5, color: '#666', lineHeight: 1.75, border: '1px solid #ddd', padding: '10px 14px' }}>
-        <div style={{ fontWeight: 600, color: '#333', marginBottom: 2 }}>계산방법</div>
+      <div style={{ marginTop: 10, fontSize: 9.5, color: '#666', lineHeight: 1.55, border: '1px solid #ddd', padding: '6px 12px' }}>
+        <div style={{ fontWeight: 600, color: '#333', marginBottom: 1 }}>계산방법</div>
         <div>시급 {fmt(hourlyWage)}원 (소정근로시간 {STANDARD_MONTHLY_HOURS}H 기준) · 연장/휴일근로 1.5배, 휴일연장근로 2배, 야간근로 0.5배 가산</div>
         <div>임금지급일 : {payslip.payment_date ? `${payslip.payment_date} (1일부터 말일까지 정산하여 지급)` : '1일부터 말일까지 정산하여 익월 15일 지급'}</div>
         <div>원천징수액 : 관련법령에 따름</div>
@@ -160,7 +160,7 @@ export default function EmployeePayslipDetailView({ payslip, showTitle = true }:
       </div>
 
       {payslip.memo && (
-        <div style={{ marginTop: 14, fontSize: 11, color: '#555' }}><span style={{ color: '#777' }}>비고</span>&nbsp;&nbsp;{payslip.memo}</div>
+        <div style={{ marginTop: 8, fontSize: 10.5, color: '#555' }}><span style={{ color: '#777' }}>비고</span>&nbsp;&nbsp;{payslip.memo}</div>
       )}
     </div>
   );

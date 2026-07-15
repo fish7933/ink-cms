@@ -42,7 +42,7 @@ export default function EmployeePayslipPrintPage() {
           .print-actions { display: none !important; }
           .print-page-wrapper { padding: 0 !important; }
           body { margin: 0; }
-          @page { size: A4 portrait; margin: 14mm 15mm; }
+          @page { size: A4 portrait; margin: 9mm 11mm; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
       `}</style>
@@ -69,11 +69,11 @@ export default function EmployeePayslipPrintPage() {
           </div>
         )}
 
-        <div style={{ margin: '8px 0 16px', borderBottom: '2px solid #888' }} />
+        <div style={{ margin: '6px 0 10px', borderBottom: '2px solid #888' }} />
 
         <EmployeePayslipDetailView payslip={payslip} />
 
-        <div style={{ textAlign: 'center', marginTop: 40, fontSize: 12, color: '#555' }}>
+        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: '#555' }}>
           {company?.name || ''}
         </div>
       </div>
