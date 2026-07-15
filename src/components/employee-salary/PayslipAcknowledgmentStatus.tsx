@@ -80,9 +80,14 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
               <Badge variant="outline" className={`h-4 px-1.5 text-[10px] font-medium rounded-full justify-center ${STATUS_BADGE[e.ack_status]}`}>
                 {STATUS_TEXT[e.ack_status]}
               </Badge>
-              <span className="flex items-center">
+              <span className="flex items-center gap-1">
                 {e.ack_status === 'approved' ? (
-                  e.ack_at && <span className="text-[10.5px] text-gray-400">{format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })}</span>
+                  <>
+                    {e.ack_at && <span className="text-[10.5px] text-gray-400">{format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })}</span>}
+                    {e.ack_comment === FORCE_APPROVE_NOTE && (
+                      <span className="text-[10.5px] text-purple-700 flex items-center gap-0.5"><ShieldCheck className="w-2.5 h-2.5 shrink-0" />{FORCE_APPROVE_NOTE}</span>
+                    )}
+                  </>
                 ) : canForceApprove ? (
                   <Button
                     size="sm" variant="outline" className="h-5 px-1.5 text-[10px] gap-1 text-purple-700 border-purple-300 hover:bg-purple-50"
@@ -95,9 +100,6 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
             </div>
             {e.ack_status === 'disputed' && e.ack_comment && (
               <div className="pl-[18px] text-[11px] text-amber-700 truncate">이의제기: {e.ack_comment}</div>
-            )}
-            {e.ack_status === 'approved' && e.ack_comment === FORCE_APPROVE_NOTE && (
-              <div className="pl-[18px] text-[11px] text-purple-700 flex items-center gap-0.5"><ShieldCheck className="w-2.5 h-2.5 shrink-0" />{FORCE_APPROVE_NOTE}</div>
             )}
           </div>
         ))}
