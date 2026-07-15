@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/lib/supabase';
 import { getShorePositions } from '@/services/shore-position.service';
+import { getHolidayDateSet } from '@/services/holiday.service';
 import { EMPLOYEE_ROLES } from '@/pages/EmployeeCardManagementPage';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
@@ -99,10 +100,24 @@ export async function getPayrollPeriodByYearMonth(yearMonth: string): Promise<Em
   return data;
 }
 
+// 지급(예정)일 기본값 = 차월 15일 — 주말/공휴일이면 그 이전 평일로 당긴다("매월 15일 지급"
+// 기준, 해당 월분을 정산해 다음 달 15일에 지급하는 통상적인 급여 규정을 따른다).
+async function calcDefaultPaymentDate(yearMonth: string): Promise<string> {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const date = new Date(year, month, 15); // month는 1-based 값이라 그대로 넘기면 Date 생성자 기준 차월이 된다.
+  const holidays = await getHolidayDateSet();
+  const toStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  while (date.getDay() === 0 || date.getDay() === 6 || holidays.has(toStr(date))) {
+    date.setDate(date.getDate() - 1);
+  }
+  return toStr(date);
+}
+
 export async function getOrCreatePayrollPeriod(yearMonth: string): Promise<EmployeePayrollPeriod> {
   const existing = await getPayrollPeriodByYearMonth(yearMonth);
   if (existing) return existing;
-  const { data, error } = await supabase.from('employee_payroll_periods').insert({ year_month: yearMonth }).select().single();
+  const paymentDate = await calcDefaultPaymentDate(yearMonth);
+  const { data, error } = await supabase.from('employee_payroll_periods').insert({ year_month: yearMonth, payment_date: paymentDate }).select().single();
   if (error) throw error;
   return data;
 }
