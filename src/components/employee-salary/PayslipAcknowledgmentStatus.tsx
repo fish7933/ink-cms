@@ -51,29 +51,29 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
   const doneCount = entries.filter(e => e.ack_status !== 'pending').length;
 
   return (
-    <div className="bg-gray-50 p-3 rounded">
-      <p className="text-sm font-semibold mb-1.5 flex items-center gap-1">
-        <Users className="w-3.5 h-3.5" />직원 확인 현황 <span className="text-gray-400 font-normal">({doneCount}/{entries.length}명 확인)</span>
+    <div className="bg-gray-50 p-2.5 rounded">
+      <p className="text-xs font-semibold mb-1 flex items-center gap-1">
+        <Users className="w-3 h-3" />직원 확인 현황 <span className="text-gray-400 font-normal">({doneCount}/{entries.length}명 확인)</span>
       </p>
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {entries.map(e => (
-          <div key={e.payslip_id} className="flex items-center gap-2 text-sm">
+          <div key={e.payslip_id} className="flex items-center gap-1.5 text-xs">
             {e.ack_status === 'approved' ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+              <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />
             ) : e.ack_status === 'disputed' ? (
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
             ) : (
-              <Clock className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+              <Clock className="w-3 h-3 text-gray-300 shrink-0" />
             )}
             <span className="font-medium">{e.employee_name}</span>
-            {e.employee_position_name && <span className="text-xs text-gray-400">{e.employee_position_name}</span>}
+            {e.employee_position_name && <span className="text-[11px] text-gray-400">{e.employee_position_name}</span>}
             {e.ack_status === 'disputed' && e.ack_comment && (
-              <span className="text-xs text-amber-700 truncate max-w-xs">이의제기: {e.ack_comment}</span>
+              <span className="text-[11px] text-amber-700 truncate max-w-xs">이의제기: {e.ack_comment}</span>
             )}
             {e.ack_status === 'approved' && e.ack_comment === FORCE_APPROVE_NOTE && (
-              <span className="text-xs text-purple-700 flex items-center gap-0.5 truncate max-w-xs"><ShieldCheck className="w-3 h-3 shrink-0" />{FORCE_APPROVE_NOTE}</span>
+              <span className="text-[11px] text-purple-700 flex items-center gap-0.5 truncate max-w-xs"><ShieldCheck className="w-2.5 h-2.5 shrink-0" />{FORCE_APPROVE_NOTE}</span>
             )}
-            <span className="text-xs ml-auto shrink-0 flex items-center gap-2">
+            <span className="text-[11px] ml-auto shrink-0 flex items-center gap-1.5">
               {e.ack_status === 'approved' ? (
                 <span className="text-green-600">{e.ack_at && `${format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })} `}승인</span>
               ) : e.ack_status === 'disputed' ? (
@@ -83,10 +83,10 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
               )}
               {canForceApprove && e.ack_status !== 'approved' && (
                 <Button
-                  size="sm" variant="outline" className="h-6 px-1.5 text-[11px] gap-1 text-purple-700 border-purple-300 hover:bg-purple-50"
+                  size="sm" variant="outline" className="h-5 px-1.5 text-[10px] gap-1 text-purple-700 border-purple-300 hover:bg-purple-50"
                   onClick={() => handleForceApprove(e)} disabled={forcingId === e.payslip_id}
                 >
-                  <ShieldCheck className="w-3 h-3" />{forcingId === e.payslip_id ? '처리 중...' : '강제 승인'}
+                  <ShieldCheck className="w-2.5 h-2.5" />{forcingId === e.payslip_id ? '처리 중...' : '강제 승인'}
                 </Button>
               )}
             </span>
