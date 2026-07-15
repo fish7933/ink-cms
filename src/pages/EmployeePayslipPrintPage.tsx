@@ -50,30 +50,30 @@ export default function EmployeePayslipPrintPage() {
       <div className="print-actions" style={{ marginBottom: 20, display: 'flex', justifyContent: 'flex-end' }}>
         <button
           onClick={() => window.print()}
-          style={{ padding: '8px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, cursor: 'pointer' }}
+          style={{ padding: '7px 14px', background: '#fff', color: '#333', border: '1px solid #999', borderRadius: 4, fontSize: 12.5, cursor: 'pointer' }}
         >
           인쇄 / PDF 저장
         </button>
       </div>
 
-      <div style={{ maxWidth: 700, margin: '0 auto', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
+      <div style={{ maxWidth: 700, margin: '0 auto', fontFamily: "'Malgun Gothic', 'Segoe UI', Pretendard, sans-serif", color: '#222' }}>
         {company && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 40 }} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 32 }} />}
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{company.name}</div>
-              <div style={{ fontSize: 10.5, color: '#666', marginTop: 2 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{company.name}</div>
+              <div style={{ fontSize: 10, color: '#777', marginTop: 1 }}>
                 {[company.address, company.phone && `Tel. ${company.phone}`].filter(Boolean).join('  ·  ')}
               </div>
             </div>
           </div>
         )}
 
-        <div style={{ margin: '10px 0 18px', borderBottom: '3px solid #1a1a1a' }} />
+        <div style={{ margin: '8px 0 16px', borderBottom: '2px solid #888' }} />
 
         <EmployeePayslipDetailView payslip={payslip} />
 
-        <div style={{ textAlign: 'center', marginTop: 48, fontSize: 15, fontWeight: 600 }}>
+        <div style={{ textAlign: 'center', marginTop: 40, fontSize: 12, color: '#555' }}>
           {company?.name || ''}
         </div>
       </div>
