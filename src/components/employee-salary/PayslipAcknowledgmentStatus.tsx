@@ -57,23 +57,25 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
       </p>
       <div className="space-y-0.5">
         {entries.map(e => (
-          <div key={e.payslip_id} className="flex items-center gap-1.5 text-xs">
+          <div key={e.payslip_id} className="grid grid-cols-[14px_84px_minmax(0,220px)_auto] items-center gap-x-1.5 text-xs">
             {e.ack_status === 'approved' ? (
-              <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />
+              <CheckCircle2 className="w-3 h-3 text-green-600" />
             ) : e.ack_status === 'disputed' ? (
-              <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+              <AlertTriangle className="w-3 h-3 text-amber-500" />
             ) : (
-              <Clock className="w-3 h-3 text-gray-300 shrink-0" />
+              <Clock className="w-3 h-3 text-gray-300" />
             )}
-            <span className="font-medium">{e.employee_name}</span>
-            {e.employee_position_name && <span className="text-[11px] text-gray-400">{e.employee_position_name}</span>}
-            {e.ack_status === 'disputed' && e.ack_comment && (
-              <span className="text-[11px] text-amber-700 truncate max-w-xs">이의제기: {e.ack_comment}</span>
-            )}
-            {e.ack_status === 'approved' && e.ack_comment === FORCE_APPROVE_NOTE && (
-              <span className="text-[11px] text-purple-700 flex items-center gap-0.5 truncate max-w-xs"><ShieldCheck className="w-2.5 h-2.5 shrink-0" />{FORCE_APPROVE_NOTE}</span>
-            )}
-            <span className="text-[11px] ml-auto shrink-0 flex items-center gap-1.5">
+            <span className="font-medium truncate">{e.employee_name}</span>
+            <span className="flex items-center gap-1.5 min-w-0 truncate">
+              {e.employee_position_name && <span className="text-[11px] text-gray-400 shrink-0">{e.employee_position_name}</span>}
+              {e.ack_status === 'disputed' && e.ack_comment && (
+                <span className="text-[11px] text-amber-700 truncate">이의제기: {e.ack_comment}</span>
+              )}
+              {e.ack_status === 'approved' && e.ack_comment === FORCE_APPROVE_NOTE && (
+                <span className="text-[11px] text-purple-700 flex items-center gap-0.5 truncate"><ShieldCheck className="w-2.5 h-2.5 shrink-0" />{FORCE_APPROVE_NOTE}</span>
+              )}
+            </span>
+            <span className="text-[11px] shrink-0 flex items-center gap-1.5">
               {e.ack_status === 'approved' ? (
                 <span className="text-green-600">{e.ack_at && `${format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })} `}승인</span>
               ) : e.ack_status === 'disputed' ? (
