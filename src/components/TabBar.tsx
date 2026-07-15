@@ -49,7 +49,7 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
     : uiSettings.tabMaxWidth;
 
   return (
-    <div ref={containerRef} className="bg-gray-100 border-b border-gray-200 flex items-end gap-0.5 px-1.5 pt-1.5 overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
+    <div ref={containerRef} className="bg-gray-100 border-b border-gray-200 flex items-end gap-1.5 px-2 pt-1.5 overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
       {tabs.map(tab => {
         const isActive = tab.id === activeTabId;
         const isHovered = hoveredTabId === tab.id;
@@ -58,10 +58,10 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
         return (
           <div
             key={tab.id}
-            className={`flex items-center gap-1 px-3 cursor-pointer shrink-0 group rounded-t-md transition-[width,background-color] duration-150 ${
+            className={`flex items-center gap-1 px-3 cursor-pointer shrink-0 group rounded-t-md border border-b-0 transition-[width,background-color] duration-150 ${
               isActive
-                ? 'bg-white text-blue-700 shadow-[0_-1px_4px_rgba(0,0,0,0.05)] border-t-2 border-t-blue-600 font-medium'
-                : 'bg-transparent text-gray-500 hover:bg-white/60 border-t-2 border-t-transparent'
+                ? 'bg-white text-blue-700 shadow-[0_-1px_4px_rgba(0,0,0,0.05)] border-gray-200 border-t-2 border-t-blue-600 font-medium'
+                : 'bg-gray-50 text-gray-500 border-gray-200 border-t-2 border-t-transparent hover:bg-white hover:text-gray-700'
             }`}
             style={{ width: `${tabWidth}px`, height: '34px' }}
             onClick={() => activateTab(tab.id)}
