@@ -150,12 +150,17 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
       ) : fields.length > 0 ? (
         <table className="issued-fields">
           <tbody>
-            {fields.map(f => (
-              <tr key={f.key}>
-                <th>{f.label}</th>
-                <td>{doc.form_data?.[f.key] ?? '-'}</td>
-              </tr>
-            ))}
+            {fields.map(f => {
+              const raw = doc.form_data?.[f.key];
+              const isEmpty = raw === null || raw === undefined || raw === '';
+              const display = isEmpty ? '-' : f.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
+              return (
+                <tr key={f.key}>
+                  <th>{f.label}</th>
+                  <td style={f.type === 'textarea' ? { whiteSpace: 'pre-wrap' } : undefined}>{display}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : (

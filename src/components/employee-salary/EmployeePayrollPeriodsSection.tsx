@@ -11,6 +11,7 @@ import { getCurrentUser } from '@/services/auth.service';
 import { getCompanyInfo } from '@/services/company-info.service';
 import { exportPayrollLedgerToExcel } from '@/utils/employee-payroll-ledger-export';
 import PayslipAcknowledgmentStatus from '@/components/employee-salary/PayslipAcknowledgmentStatus';
+import { groupPayslipItems, isDeductionGroup } from '@/lib/employee-payslip-groups';
 import {
   getPayrollPeriods,
   getOrCreatePayrollPeriod,
@@ -22,6 +23,7 @@ import {
   submitPayrollExpenseReport,
   reopenPayrollPeriod,
   getPayrollLedgerForPeriod,
+  updatePayrollPeriodPaymentDate,
 } from '@/services/employee-salary.service';
 import type { EmployeePayrollPeriod, EmployeePayrollPeriodSummary, EmployeePayslipItem, EmployeePayslipWithDetails, EmployeeSalaryItemCategory } from '@/types/employee-salary';
 
@@ -56,6 +58,8 @@ export default function EmployeePayrollPeriodsSection() {
   const [submittingExpenseReport, setSubmittingExpenseReport] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [ackRefreshKey, setAckRefreshKey] = useState(0);
+  const [paymentDateInput, setPaymentDateInput] = useState('');
+  const [savingPaymentDate, setSavingPaymentDate] = useState(false);
 
   const [editingPayslip, setEditingPayslip] = useState<EmployeePayslipWithDetails | null>(null);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
@@ -69,6 +73,7 @@ export default function EmployeePayrollPeriodsSection() {
     try {
       const period = await getOrCreatePayrollPeriod(ym);
       setCurrentPeriod(period);
+      setPaymentDateInput(period.payment_date || '');
       setPayslips(await getPayslipsForPeriod(period.id));
       setAckRefreshKey(k => k + 1);
     } catch (e) {
@@ -121,6 +126,7 @@ export default function EmployeePayrollPeriodsSection() {
       setRequestingAck(true);
       await requestEmployeeAcknowledgment(currentPeriod.id);
       toast({ title: '직원 확인을 요청했습니다.' });
+      window.dispatchEvent(new Event('my-payslips-data-changed'));
       await loadPeriodAndPayslips(yearMonth);
       loadPeriods();
     } catch (e) {
@@ -154,10 +160,25 @@ export default function EmployeePayrollPeriodsSection() {
     try {
       await reopenPayrollPeriod(currentPeriod.id);
       toast({ title: '재오픈되었습니다.' });
+      window.dispatchEvent(new Event('my-payslips-data-changed'));
       await loadPeriodAndPayslips(yearMonth);
       loadPeriods();
     } catch (e) {
       toast({ title: '실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const handleSavePaymentDate = async () => {
+    if (!currentPeriod) return;
+    try {
+      setSavingPaymentDate(true);
+      await updatePayrollPeriodPaymentDate(currentPeriod.id, paymentDateInput || null);
+      setCurrentPeriod({ ...currentPeriod, payment_date: paymentDateInput || null });
+      toast({ title: '지급일이 저장되었습니다.' });
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSavingPaymentDate(false);
     }
   };
 
@@ -239,9 +260,25 @@ export default function EmployeePayrollPeriodsSection() {
           <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-9 text-sm w-40" />
         </div>
         {currentPeriod && (
-          <Badge variant="outline" className={STATUS_COLORS[currentPeriod.status]}>
-            {STATUS_LABELS[currentPeriod.status]}
-          </Badge>
+          <>
+            <div className="space-y-1.5">
+              <Label className="text-xs">지급(예정)일</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="date" value={paymentDateInput} onChange={e => setPaymentDateInput(e.target.value)}
+                  className="h-9 text-sm w-36" disabled={!permissions.canEdit || savingPaymentDate}
+                />
+                {permissions.canEdit && paymentDateInput !== (currentPeriod.payment_date || '') && (
+                  <Button size="sm" className="h-9" onClick={handleSavePaymentDate} disabled={savingPaymentDate}>
+                    {savingPaymentDate ? '저장 중...' : '저장'}
+                  </Button>
+                )}
+              </div>
+            </div>
+            <Badge variant="outline" className={STATUS_COLORS[currentPeriod.status]}>
+              {STATUS_LABELS[currentPeriod.status]}
+            </Badge>
+          </>
         )}
         <div className="flex-1" />
         {payslips.length > 0 && (
@@ -421,23 +458,19 @@ export default function EmployeePayrollPeriodsSection() {
           </DialogHeader>
           {viewingPayslip && (
             <div className="space-y-3 py-1">
-              {CATEGORIES.map(category => {
-                const categoryItems = viewingPayslip.items.filter(i => i.category === category);
-                if (categoryItems.length === 0) return null;
-                return (
-                  <div key={category} className="space-y-1">
-                    <Label className="text-xs">{CATEGORY_LABELS[category]}</Label>
-                    <div className="rounded-md border overflow-hidden">
-                      {categoryItems.map(item => (
-                        <div key={item.id} className="flex items-center justify-between px-3 py-1.5 text-sm border-b last:border-b-0">
-                          <span>{item.name}</span>
-                          <span className={`font-mono ${category === 'deduction' ? 'text-red-600' : ''}`}>{category === 'deduction' ? '-' : ''}{fmt(item.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
+              {groupPayslipItems(viewingPayslip.items).map(group => (
+                <div key={group.key} className="space-y-1">
+                  <Label className="text-xs">{group.label}</Label>
+                  <div className="rounded-md border overflow-hidden">
+                    {group.items.map(item => (
+                      <div key={item.id} className="flex items-center justify-between px-3 py-1.5 text-sm border-b last:border-b-0">
+                        <span>{item.name}</span>
+                        <span className={`font-mono ${isDeductionGroup(group) ? 'text-red-600' : ''}`}>{isDeductionGroup(group) ? '-' : ''}{fmt(item.amount)}</span>
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              ))}
               <div className="rounded-md border bg-blue-50 border-blue-200 px-3 py-2 flex items-center justify-between text-sm">
                 <span className="font-medium text-blue-900">실지급액</span>
                 <span className="font-bold font-mono text-blue-900">{fmt(viewingPayslip.net_amount)}원</span>

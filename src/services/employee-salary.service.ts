@@ -107,6 +107,36 @@ export async function getOrCreatePayrollPeriod(yearMonth: string): Promise<Emplo
   return data;
 }
 
+// 급여 지급(예정)일을 관리한다 — 지출결의서 자동 상신 시 "지출일" 필드로 쓰인다. 이미 명세서가
+// 생성되어 있으면 각 명세서의 payment_date도 함께 맞추고, 이미 지출결의서가 상신된 회차라면
+// 그 문서의 form_data.expense_date도 같이 갱신한다(금액 등 다른 필드는 건드리지 않음).
+export async function updatePayrollPeriodPaymentDate(periodId: string, paymentDate: string | null): Promise<void> {
+  const { data: period, error } = await supabase
+    .from('employee_payroll_periods')
+    .update({ payment_date: paymentDate, updated_at: new Date().toISOString() })
+    .eq('id', periodId)
+    .select()
+    .single();
+  if (error) throw error;
+
+  const { error: payslipError } = await supabase
+    .from('employee_payslips')
+    .update({ payment_date: paymentDate, updated_at: new Date().toISOString() })
+    .eq('period_id', periodId);
+  if (payslipError) throw payslipError;
+
+  if (period.approval_document_id) {
+    const { data: doc } = await supabase.from('approval_documents').select('form_data').eq('id', period.approval_document_id).maybeSingle();
+    if (doc) {
+      const { error: docError } = await supabase
+        .from('approval_documents')
+        .update({ form_data: { ...(doc.form_data || {}), expense_date: paymentDate } })
+        .eq('id', period.approval_document_id);
+      if (docError) throw docError;
+    }
+  }
+}
+
 // 담당자가 급여 항목 입력/명세서 생성을 마쳤을 때 — 이후 항목은 잠기고, 각 직원이 본인
 // 명세서를 확인(승인/이의제기)할 수 있는 단계로 넘어간다.
 export async function requestEmployeeAcknowledgment(periodId: string): Promise<void> {
@@ -140,10 +170,12 @@ export async function reopenPayrollPeriod(periodId: string): Promise<void> {
 // 이 기간에 아직 명세서가 없는 대상 직원마다, 현재 급여 항목(employee_salary_items)을
 // 스냅샷으로 복사해 명세서를 생성한다. 이미 명세서가 있는 직원은 건너뛴다(중복 생성 방지).
 export async function generatePayslipsForPeriod(periodId: string): Promise<{ created: number; skipped: number }> {
-  const [{ data: existing, error: existingError }, employees] = await Promise.all([
+  const [{ data: period, error: periodError }, { data: existing, error: existingError }, employees] = await Promise.all([
+    supabase.from('employee_payroll_periods').select('payment_date').eq('id', periodId).single(),
     supabase.from('employee_payslips').select('user_id').eq('period_id', periodId),
     getPayrollEligibleEmployees(),
   ]);
+  if (periodError) throw periodError;
   if (existingError) throw existingError;
   const existingUserIds = new Set((existing || []).map(p => p.user_id));
   const targets = employees.filter(e => !existingUserIds.has(e.id));
@@ -177,6 +209,7 @@ export async function generatePayslipsForPeriod(periodId: string): Promise<{ cre
         total_allowance: allowance,
         total_deduction: deduction,
         net_amount: base + allowance - deduction,
+        payment_date: period.payment_date,
         created_at: now,
         updated_at: now,
       })
@@ -194,11 +227,24 @@ export async function generatePayslipsForPeriod(periodId: string): Promise<{ cre
   return { created: targets.length, skipped: employees.length - targets.length };
 }
 
+// 주민등록번호 앞 7자리에서 생년월일을 계산한다 — 이 프로젝트에는 별도 생년월일 필드가 없고
+// 직원 카드 관리에서 입력하는 주민등록번호가 유일한 출처다.
+function birthDateFromRrn(rrn: string | null | undefined): string | null {
+  if (!rrn) return null;
+  const digits = rrn.replace(/[^0-9]/g, '');
+  if (digits.length < 7) return null;
+  const century = ['9', '0'].includes(digits[6]) ? 1800 : ['1', '2'].includes(digits[6]) ? 1900 : 2000;
+  const year = century + Number(digits.slice(0, 2));
+  const month = digits.slice(2, 4);
+  const day = digits.slice(4, 6);
+  return `${year}-${month}-${day}`;
+}
+
 async function attachEmployeeDetails(payslips: EmployeePayslip[], items: EmployeePayslipItem[]): Promise<EmployeePayslipWithDetails[]> {
   if (payslips.length === 0) return [];
   const userIds = [...new Set(payslips.map(p => p.user_id))];
   const [{ data: users }, positions] = await Promise.all([
-    supabase.from('users').select('id, name, position_id, hire_date').in('id', userIds),
+    supabase.from('users').select('id, name, position_id, hire_date, resident_registration_number').in('id', userIds),
     getShorePositions(),
   ]);
   const positionById = new Map(positions.map(p => [p.id, p]));
@@ -217,6 +263,8 @@ async function attachEmployeeDetails(payslips: EmployeePayslip[], items: Employe
         ...p,
         employee_name: u?.name || '알 수 없음',
         employee_position_name: position?.name || null,
+        employee_hire_date: u?.hire_date || null,
+        employee_birth_date: birthDateFromRrn(u?.resident_registration_number),
         _positionOrder: position?.display_order ?? Infinity,
         _hireDate: u?.hire_date ?? '9999-99-99',
         items: itemsByPayslip.get(p.id) || [],
@@ -276,6 +324,22 @@ export async function getMyPayslips(userId: string): Promise<EmployeePayslipWith
     const period = periodById.get(d.period_id);
     return { ...d, period_year_month: period?.year_month, period_status: period?.status };
   });
+}
+
+// "내 급여명세서" 메뉴/대시보드 배지용 — draft 회차는 아직 직원에게 노출되지 않으므로 제외한다.
+export async function getMyPendingPayslipCount(userId: string): Promise<number> {
+  const { data: periods, error: periodsError } = await supabase.from('employee_payroll_periods').select('id').neq('status', 'draft');
+  if (periodsError) { console.error(periodsError); return 0; }
+  const periodIds = (periods || []).map(p => p.id);
+  if (periodIds.length === 0) return 0;
+  const { count, error } = await supabase
+    .from('employee_payslips')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('ack_status', 'pending')
+    .in('period_id', periodIds);
+  if (error) { console.error(error); return 0; }
+  return count || 0;
 }
 
 // 직원 본인이 명세서를 승인하거나 이의를 제기한다 — 이의제기도 "확인 완료"로 취급되어
@@ -387,6 +451,7 @@ export async function submitPayrollExpenseReport(periodId: string, submittedByUs
   const { data: period, error: periodError } = await supabase.from('employee_payroll_periods').select('*').eq('id', periodId).single();
   if (periodError) throw periodError;
   if (period.status !== 'pending_ack') throw new Error('직원 확인 단계의 회차만 상신할 수 있습니다.');
+  if (!period.payment_date) throw new Error('먼저 급여 지급(예정)일을 설정해주세요.');
 
   const payslips = await getPayslipsForPeriod(periodId);
   if (payslips.length === 0) throw new Error('명세서가 없습니다.');
@@ -431,6 +496,14 @@ export async function submitPayrollExpenseReport(periodId: string, submittedByUs
     document_type_id: docType.id,
     title: `${period.year_month} 급여 지출결의서`,
     content,
+    form_data: {
+      expense_date: period.payment_date,
+      expense_category: '급여',
+      purpose: `${period.year_month} 급여 지급 (${ledger.rows.length}명)`,
+      amount: totalGross,
+      vendor: '임직원 급여계좌 일괄이체',
+      notes: content,
+    },
     attachments: [{ name: `${period.year_month}_급여대장.xlsx`, path, size: blob.size, type: blob.type }],
     org_unit_id: orgUnitId,
     created_by: submittedByUserId,

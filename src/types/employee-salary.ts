@@ -18,6 +18,7 @@ export interface EmployeePayrollPeriod {
   id: string;
   year_month: string; // 'YYYY-MM'
   status: EmployeePayrollPeriodStatus;
+  payment_date: string | null;
   confirmed_at: string | null;
   confirmed_by: string | null;
   approval_document_id: string | null;
@@ -62,6 +63,8 @@ export interface EmployeePayslipItem {
 export interface EmployeePayslipWithDetails extends EmployeePayslip {
   employee_name: string;
   employee_position_name: string | null;
+  employee_hire_date: string | null;
+  employee_birth_date: string | null;
   items: EmployeePayslipItem[];
   period_year_month?: string;
   period_status?: EmployeePayrollPeriodStatus;

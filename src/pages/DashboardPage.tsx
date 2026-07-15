@@ -3,7 +3,7 @@ import { getShips, getCrewMembers, getJobPostings, getJobApplications, getCurren
 import type { User, Ship, CrewMember, JobPosting, JobApplication } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Ship as ShipIcon, Users, Briefcase, FileText, AlertTriangle, Inbox, ChevronRight } from 'lucide-react';
+import { Ship as ShipIcon, Users, Briefcase, FileText, AlertTriangle, Inbox, ChevronRight, Wallet } from 'lucide-react';
 import { UrgentBadge } from '@/components/ui/urgent-badge';
 import { useTabContext } from '@/contexts/TabContext';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
@@ -11,7 +11,12 @@ import { crewRecommendationService } from '@/services/crew-recommendation.servic
 import { approvalService } from '@/services/approval.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
+import { EMPLOYEE_ROLES } from '@/pages/EmployeeCardManagementPage';
+import { getMyPayslips } from '@/services/employee-salary.service';
+import type { EmployeePayslipWithDetails } from '@/types/employee-salary';
 import type { JobPostingGroupWithDetails, CrewRecommendationWithDetails } from '@/types/models';
+
+const fmtWon = (n: number) => n.toLocaleString('ko-KR');
 
 interface MyPendingItem {
   id: string;
@@ -44,6 +49,9 @@ export default function DashboardPage() {
 
   // 내 결재함 위젯 — 지금 내 차례인 결재 건 (선원추천 + 일반 문서)
   const [myPendingApprovals, setMyPendingApprovals] = useState<MyPendingItem[]>([]);
+
+  // 확인 필요한 급여명세서 위젯 — 담당자가 확인 요청했지만 아직 승인/이의제기하지 않은 명세서
+  const [pendingPayslips, setPendingPayslips] = useState<EmployeePayslipWithDetails[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -80,6 +88,9 @@ export default function DashboardPage() {
         // 결재라인상 실제 담당자는 별개다(결재함 화면과 동일한 기준).
         if (['ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(user.role)) {
           await loadMyPendingApprovals(user);
+        }
+        if (EMPLOYEE_ROLES.includes(user.role)) {
+          await loadPendingPayslips(user);
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -128,6 +139,18 @@ export default function DashboardPage() {
       window.removeEventListener('approval-inbox-data-changed', handler);
       window.removeEventListener('dispatch-approval-inbox-data-changed', handler);
     };
+  }, [currentUser]);
+
+  const loadPendingPayslips = async (user: User) => {
+    const mine = await getMyPayslips(user.id);
+    setPendingPayslips(mine.filter(p => p.ack_status === 'pending'));
+  };
+
+  useEffect(() => {
+    if (!currentUser || !EMPLOYEE_ROLES.includes(currentUser.role)) return;
+    const handler = () => loadPendingPayslips(currentUser).catch(e => console.error('급여명세서 위젯 갱신 실패', e));
+    window.addEventListener('my-payslips-data-changed', handler);
+    return () => window.removeEventListener('my-payslips-data-changed', handler);
   }, [currentUser]);
 
   // 공고별 내 추천 현황 (상태별 건수) — 채용과정 표시용
@@ -275,6 +298,43 @@ export default function DashboardPage() {
                   )}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 확인 필요한 급여명세서 — 담당자가 확인 요청했지만 아직 승인/이의제기하지 않은 명세서 */}
+        {EMPLOYEE_ROLES.includes(currentUser.role) && pendingPayslips.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Wallet className="w-4 h-4" />확인 필요한 급여명세서 ({pendingPayslips.length})
+                </CardTitle>
+                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => openNewTab('/my-payslips', '내 급여명세서')}>
+                  전체 보기<ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="space-y-1.5">
+                {pendingPayslips.slice(0, 5).map(p => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-2.5 border rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => openNewTab('/my-payslips', '내 급여명세서')}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Wallet className="w-4 h-4 text-blue-500 shrink-0" />
+                      <span className="text-sm font-medium truncate">{p.period_year_month} 급여명세서</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-amber-100 text-amber-700">확인 필요</span>
+                    </div>
+                    <span className="text-xs text-gray-500 font-mono shrink-0">{fmtWon(p.net_amount)}원</span>
+                  </div>
+                ))}
+                {pendingPayslips.length > 5 && (
+                  <p className="text-xs text-gray-400 text-center pt-1">외 {pendingPayslips.length - 5}건 더 있습니다.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}

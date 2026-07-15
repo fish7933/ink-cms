@@ -3,9 +3,9 @@ import { useParams } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/store';
 import { getPayslipDetail } from '@/services/employee-salary.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
-import type { EmployeePayslipWithDetails, EmployeeSalaryItemCategory } from '@/types/employee-salary';
+import { groupPayslipItems, isDeductionGroup } from '@/lib/employee-payslip-groups';
+import type { EmployeePayslipWithDetails } from '@/types/employee-salary';
 
-const CATEGORY_LABELS: Record<EmployeeSalaryItemCategory, string> = { base: '기본급', allowance: '수당', deduction: '공제' };
 const fmt = (n: number) => n.toLocaleString('ko-KR');
 
 // 사이드바/헤더/탭바 없이 순수 명세서만 렌더링되는 독립 인쇄 페이지 (App.tsx 최상위 라우트, Layout 우회).
@@ -37,9 +37,9 @@ export default function EmployeePayslipPrintPage() {
   if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>로그인이 필요합니다.</div>;
   if (!payslip) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>급여명세서를 찾을 수 없습니다.</div>;
 
-  const base = payslip.items.filter(i => i.category === 'base');
-  const allowance = payslip.items.filter(i => i.category === 'allowance');
-  const deduction = payslip.items.filter(i => i.category === 'deduction');
+  const groups = groupPayslipItems(payslip.items);
+  const paymentGroups = groups.filter(g => !isDeductionGroup(g));
+  const deductionGroup = groups.find(isDeductionGroup);
 
   return (
     <div className="print-page-wrapper" style={{ padding: '28px 36px 48px' }}>
@@ -89,7 +89,11 @@ export default function EmployeePayslipPrintPage() {
           <tbody>
             <tr>
               <td style={{ padding: '3px 0' }}><b>성명</b>&nbsp;&nbsp;{payslip.employee_name}</td>
-              <td style={{ padding: '3px 0', textAlign: 'right' }}><b>직급</b>&nbsp;&nbsp;{payslip.employee_position_name || '-'}</td>
+              <td style={{ padding: '3px 0', textAlign: 'right' }}><b>직무</b>&nbsp;&nbsp;{payslip.employee_position_name || '-'}</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '3px 0' }}><b>생년월일</b>&nbsp;&nbsp;{payslip.employee_birth_date || '-'}</td>
+              <td style={{ padding: '3px 0', textAlign: 'right' }}><b>입사일자</b>&nbsp;&nbsp;{payslip.employee_hire_date || '-'}</td>
             </tr>
             {payslip.payment_date && (
               <tr>
@@ -104,27 +108,27 @@ export default function EmployeePayslipPrintPage() {
             <tr><th style={{ width: '20%' }}>구분</th><th>항목</th><th style={{ width: '30%', textAlign: 'right' }}>금액</th></tr>
           </thead>
           <tbody>
-            {base.length === 0 && allowance.length === 0 ? (
+            {paymentGroups.length === 0 ? (
               <tr><td colSpan={3} style={{ textAlign: 'center', color: '#999' }}>등록된 지급 항목이 없습니다.</td></tr>
             ) : (
-              [...base, ...allowance].map(item => (
+              paymentGroups.flatMap(group => group.items.map(item => (
                 <tr key={item.id}>
-                  <td>{CATEGORY_LABELS[item.category]}</td>
+                  <td>{group.label}</td>
                   <td>{item.name}</td>
                   <td className="amount">{fmt(item.amount)}</td>
                 </tr>
-              ))
+              )))
             )}
             <tr>
               <td colSpan={2} style={{ fontWeight: 600, background: '#fafafa' }}>지급액 합계</td>
               <td className="amount" style={{ fontWeight: 600, background: '#fafafa' }}>{fmt(payslip.base_amount + payslip.total_allowance)}</td>
             </tr>
-            {deduction.length === 0 ? (
+            {!deductionGroup || deductionGroup.items.length === 0 ? (
               <tr><td colSpan={3} style={{ textAlign: 'center', color: '#999' }}>공제 항목 없음</td></tr>
             ) : (
-              deduction.map(item => (
+              deductionGroup.items.map(item => (
                 <tr key={item.id}>
-                  <td>{CATEGORY_LABELS[item.category]}</td>
+                  <td>{deductionGroup.label}</td>
                   <td>{item.name}</td>
                   <td className="amount" style={{ color: '#b91c1c' }}>-{fmt(item.amount)}</td>
                 </tr>

@@ -15,6 +15,7 @@ import { routeConfig } from '@/lib/route-config';
 import { useDispatchApprovalPendingCount } from '@/hooks/useDispatchApprovalPendingCount';
 import { useRotationPlanActionCount } from '@/hooks/useRotationPlanActionCount';
 import { useApprovalInboxBadgeCount } from '@/hooks/useApprovalInboxBadgeCount';
+import { useMyPayslipsPendingCount } from '@/hooks/useMyPayslipsPendingCount';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function Layout() {
   const dispatchApprovalPendingCount = useDispatchApprovalPendingCount();
   const rotationPlanActionCount = useRotationPlanActionCount();
   const approvalInboxBadgeCount = useApprovalInboxBadgeCount();
+  const myPayslipsPendingCount = useMyPayslipsPendingCount();
 
   useEffect(() => {
     let isMounted = true;
@@ -95,7 +97,7 @@ export default function Layout() {
           currentRole={currentUser?.role || 'crew'}
           permissions={permissions}
           selectedCategoryId={selectedCategoryId}
-          badgeCounts={{ 'dispatch-approval-inbox': dispatchApprovalPendingCount, 'crew-rotation': rotationPlanActionCount, 'approval-inbox': approvalInboxBadgeCount }}
+          badgeCounts={{ 'dispatch-approval-inbox': dispatchApprovalPendingCount, 'crew-rotation': rotationPlanActionCount, 'approval-inbox': approvalInboxBadgeCount, 'my-payslips': myPayslipsPendingCount }}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           <TabBar pathBadgeCounts={{ '/approval-inbox': approvalInboxBadgeCount }} />
