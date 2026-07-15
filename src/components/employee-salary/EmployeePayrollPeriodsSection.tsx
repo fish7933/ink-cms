@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Printer, Lock, Unlock, RefreshCw, X, Plus, Trash2, FileSpreadsheet, FileText } from 'lucide-react';
+import { Printer, Unlock, RefreshCw, X, Plus, Trash2, FileSpreadsheet, FileText, UserCheck, Send, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { getCurrentUser } from '@/services/auth.service';
 import { getCompanyInfo } from '@/services/company-info.service';
 import { exportPayrollLedgerToExcel } from '@/utils/employee-payroll-ledger-export';
+import PayslipAcknowledgmentStatus from '@/components/employee-salary/PayslipAcknowledgmentStatus';
 import {
   getPayrollPeriods,
   getOrCreatePayrollPeriod,
@@ -17,7 +18,8 @@ import {
   generatePayslipsForPeriod,
   updatePayslipItems,
   deletePayslip,
-  confirmPayrollPeriod,
+  requestEmployeeAcknowledgment,
+  submitPayrollExpenseReport,
   reopenPayrollPeriod,
   getPayrollLedgerForPeriod,
 } from '@/services/employee-salary.service';
@@ -25,13 +27,21 @@ import type { EmployeePayrollPeriod, EmployeePayrollPeriodSummary, EmployeePaysl
 
 const CATEGORY_LABELS: Record<EmployeeSalaryItemCategory, string> = { base: '기본급', allowance: '수당', deduction: '공제' };
 const CATEGORIES: EmployeeSalaryItemCategory[] = ['base', 'allowance', 'deduction'];
+const STATUS_LABELS: Record<string, string> = { draft: '작성중', pending_ack: '직원 확인중', pending_approval: '결재 진행중', confirmed: '확정됨' };
+const STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  pending_ack: 'bg-blue-50 text-blue-700 border-blue-200',
+  pending_approval: 'bg-purple-50 text-purple-700 border-purple-200',
+  confirmed: 'bg-green-50 text-green-700 border-green-200',
+};
 const fmt = (n: number) => n.toLocaleString('ko-KR');
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
 type DraftItem = { key: number; category: EmployeeSalaryItemCategory; name: string; amount: string };
 
-// 월별 급여 지급 처리 — 급여 항목 관리 탭에서 입력한 "현재" 급여 항목을 스냅샷으로 생성해
-// 명세서로 확정한다. 결재 연동 없이 관리자가 직접 확정 처리한다.
+// 월별 급여 지급 처리 — 급여 항목 관리 탭에서 입력한 "현재" 급여 항목을 스냅샷으로 생성한
+// 뒤, 각 직원의 확인(승인/이의제기)을 거쳐 지출결의서로 결재 상신하고, 결재가 승인되면
+// 자동으로 지급확정된다 (applyReferenceSideEffect에서 처리).
 export default function EmployeePayrollPeriodsSection() {
   const { toast } = useToast();
   const permissions = usePermissions('employee_salary');
@@ -42,8 +52,10 @@ export default function EmployeePayrollPeriodsSection() {
   const [payslips, setPayslips] = useState<EmployeePayslipWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [requestingAck, setRequestingAck] = useState(false);
+  const [submittingExpenseReport, setSubmittingExpenseReport] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
+  const [ackRefreshKey, setAckRefreshKey] = useState(0);
 
   const [editingPayslip, setEditingPayslip] = useState<EmployeePayslipWithDetails | null>(null);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
@@ -58,6 +70,7 @@ export default function EmployeePayrollPeriodsSection() {
       const period = await getOrCreatePayrollPeriod(ym);
       setCurrentPeriod(period);
       setPayslips(await getPayslipsForPeriod(period.id));
+      setAckRefreshKey(k => k + 1);
     } catch (e) {
       toast({ title: '조회 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
@@ -71,6 +84,7 @@ export default function EmployeePayrollPeriodsSection() {
   const refresh = async () => {
     if (!currentPeriod) return;
     setPayslips(await getPayslipsForPeriod(currentPeriod.id));
+    setAckRefreshKey(k => k + 1);
     loadPeriods();
   };
 
@@ -99,22 +113,38 @@ export default function EmployeePayrollPeriodsSection() {
     }
   };
 
-  const handleConfirm = async () => {
+  const handleRequestAck = async () => {
     if (!currentPeriod) return;
     if (payslips.length === 0) { toast({ title: '먼저 명세서를 생성해주세요.', variant: 'destructive' }); return; }
-    if (!confirm(`${currentPeriod.year_month} 급여를 확정하시겠습니까? 확정 후에는 항목을 수정할 수 없습니다.`)) return;
+    if (!confirm(`${currentPeriod.year_month} 명세서를 각 직원에게 확인 요청하시겠습니까? 이후 항목 편집은 잠깁니다.`)) return;
     try {
-      setConfirming(true);
-      const user = await getCurrentUser();
-      if (!user) return;
-      await confirmPayrollPeriod(currentPeriod.id, user.id);
-      toast({ title: '확정되었습니다.' });
+      setRequestingAck(true);
+      await requestEmployeeAcknowledgment(currentPeriod.id);
+      toast({ title: '직원 확인을 요청했습니다.' });
       await loadPeriodAndPayslips(yearMonth);
       loadPeriods();
     } catch (e) {
-      toast({ title: '확정 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: '요청 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
-      setConfirming(false);
+      setRequestingAck(false);
+    }
+  };
+
+  const handleSubmitExpenseReport = async () => {
+    if (!currentPeriod) return;
+    if (!confirm(`${currentPeriod.year_month} 급여대장을 지출결의서로 결재 상신하시겠습니까?`)) return;
+    try {
+      setSubmittingExpenseReport(true);
+      const user = await getCurrentUser();
+      if (!user) return;
+      await submitPayrollExpenseReport(currentPeriod.id, user.id);
+      toast({ title: '지출결의서를 상신했습니다.' });
+      await loadPeriodAndPayslips(yearMonth);
+      loadPeriods();
+    } catch (e) {
+      toast({ title: '상신 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSubmittingExpenseReport(false);
     }
   };
 
@@ -178,6 +208,9 @@ export default function EmployeePayrollPeriodsSection() {
   };
 
   const isDraft = currentPeriod?.status === 'draft';
+  const isPendingAck = currentPeriod?.status === 'pending_ack';
+  const isPendingApproval = currentPeriod?.status === 'pending_approval';
+  const allAcked = payslips.length > 0 && payslips.every(p => p.ack_status !== 'pending');
   const draftTotal = (category: EmployeeSalaryItemCategory) => draftItems.filter(i => i.category === category).reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   const draftNet = draftTotal('base') + draftTotal('allowance') - draftTotal('deduction');
 
@@ -206,8 +239,8 @@ export default function EmployeePayrollPeriodsSection() {
           <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-9 text-sm w-40" />
         </div>
         {currentPeriod && (
-          <Badge variant="outline" className={isDraft ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-green-50 text-green-700 border-green-200'}>
-            {isDraft ? '작성중' : '확정됨'}
+          <Badge variant="outline" className={STATUS_COLORS[currentPeriod.status]}>
+            {STATUS_LABELS[currentPeriod.status]}
           </Badge>
         )}
         <div className="flex-1" />
@@ -227,16 +260,30 @@ export default function EmployeePayrollPeriodsSection() {
           </Button>
         )}
         {permissions.canEdit && isDraft && (
-          <Button size="sm" className="gap-1.5 h-9" onClick={handleConfirm} disabled={confirming || loading}>
-            <Lock className="w-3.5 h-3.5" />{confirming ? '확정 중...' : '지급 확정'}
+          <Button size="sm" className="gap-1.5 h-9" onClick={handleRequestAck} disabled={requestingAck || loading || payslips.length === 0}>
+            <UserCheck className="w-3.5 h-3.5" />{requestingAck ? '요청 중...' : '직원 확인 요청'}
           </Button>
         )}
-        {permissions.canEdit && !isDraft && (
+        {permissions.canEdit && isPendingAck && (
+          <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmitExpenseReport} disabled={submittingExpenseReport || !allAcked} title={!allAcked ? '아직 확인하지 않은 직원이 있습니다.' : undefined}>
+            <Send className="w-3.5 h-3.5" />{submittingExpenseReport ? '상신 중...' : allAcked ? '지출결의서 상신' : `지출결의서 상신 (${payslips.filter(p => p.ack_status !== 'pending').length}/${payslips.length}명 확인)`}
+          </Button>
+        )}
+        {isPendingApproval && currentPeriod?.approval_document_id && (
+          <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => window.open(`/documents/${currentPeriod.approval_document_id}`, '_blank')}>
+            <ExternalLink className="w-3.5 h-3.5" />결재 진행 상황 보기
+          </Button>
+        )}
+        {permissions.canEdit && currentPeriod && currentPeriod.status !== 'draft' && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9 text-amber-600 border-amber-300" onClick={handleReopen}>
             <Unlock className="w-3.5 h-3.5" />재오픈
           </Button>
         )}
       </div>
+
+      {currentPeriod && currentPeriod.status !== 'draft' && payslips.length > 0 && (
+        <PayslipAcknowledgmentStatus periodId={currentPeriod.id} refreshKey={ackRefreshKey} />
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
@@ -315,7 +362,7 @@ export default function EmployeePayrollPeriodsSection() {
                 key={p.id} type="button" onClick={() => setYearMonth(p.year_month)}
                 className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${yearMonth === p.year_month ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
               >
-                {p.year_month} {p.status === 'confirmed' ? '· 확정' : '· 작성중'} ({p.payslip_count}명)
+                {p.year_month} · {STATUS_LABELS[p.status]} ({p.payslip_count}명)
               </button>
             ))}
           </div>

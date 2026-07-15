@@ -12,12 +12,15 @@ export interface EmployeeSalaryItem {
   updated_at: string;
 }
 
+export type EmployeePayrollPeriodStatus = 'draft' | 'pending_ack' | 'pending_approval' | 'confirmed';
+
 export interface EmployeePayrollPeriod {
   id: string;
   year_month: string; // 'YYYY-MM'
-  status: 'draft' | 'confirmed';
+  status: EmployeePayrollPeriodStatus;
   confirmed_at: string | null;
   confirmed_by: string | null;
+  approval_document_id: string | null;
   memo: string | null;
   created_at: string;
   updated_at: string;
@@ -27,6 +30,8 @@ export interface EmployeePayrollPeriodSummary extends EmployeePayrollPeriod {
   payslip_count: number;
   total_net_amount: number;
 }
+
+export type PayslipAckStatus = 'pending' | 'approved' | 'disputed';
 
 export interface EmployeePayslip {
   id: string;
@@ -38,6 +43,9 @@ export interface EmployeePayslip {
   net_amount: number;
   payment_date: string | null;
   memo: string | null;
+  ack_status: PayslipAckStatus;
+  ack_comment: string | null;
+  ack_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -55,6 +63,19 @@ export interface EmployeePayslipWithDetails extends EmployeePayslip {
   employee_name: string;
   employee_position_name: string | null;
   items: EmployeePayslipItem[];
+  period_year_month?: string;
+  period_status?: EmployeePayrollPeriodStatus;
+}
+
+// "직원 확인 현황" 위젯용 — ReferenceReadStatus.tsx와 같은 형태로 쓴다.
+export interface PayslipAcknowledgmentEntry {
+  payslip_id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_position_name: string | null;
+  ack_status: PayslipAckStatus;
+  ack_comment: string | null;
+  ack_at: string | null;
 }
 
 export interface PayrollEmployee {

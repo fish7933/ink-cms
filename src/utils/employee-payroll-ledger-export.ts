@@ -30,7 +30,8 @@ interface SaveFilePickerWindow extends Window {
   }>;
 }
 
-export async function exportPayrollLedgerToExcel(ledger: PayrollLedgerData, companyName: string): Promise<void> {
+// 워크북 생성만 담당 — 파일 저장(다운로드 버튼)과 결재 첨부 업로드(지출결의서 상신) 양쪽에서 재사용.
+export function buildPayrollLedgerWorkbook(ledger: PayrollLedgerData, companyName: string): XLSX.WorkBook {
   const { period, allowance_columns, deduction_columns, rows } = ledger;
   const headerLabels = ['사번', '이름', '주민등록번호', '입사일', '기본급', ...allowance_columns, '합계', ...deduction_columns, '공제합계', '차인지급액'];
   const colCount = headerLabels.length;
@@ -97,7 +98,12 @@ export async function exportPayrollLedgerToExcel(ledger: PayrollLedgerData, comp
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, `${period.year_month} 급여대장`);
-  const fileName = `${companyName}_${period.year_month}_급여대장.xlsx`;
+  return workbook;
+}
+
+export async function exportPayrollLedgerToExcel(ledger: PayrollLedgerData, companyName: string): Promise<void> {
+  const workbook = buildPayrollLedgerWorkbook(ledger, companyName);
+  const fileName = `${companyName}_${ledger.period.year_month}_급여대장.xlsx`;
 
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
   if (picker) {

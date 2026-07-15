@@ -142,6 +142,26 @@ async function applyReferenceSideEffect(
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', referenceId);
   }
+  if (referenceType === 'employee_payroll_period') {
+    if (newStatus === 'approved') {
+      await supabase
+        .from('employee_payroll_periods')
+        .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+    } else if (newStatus === 'rejected') {
+      // 지출결의서가 반려되면 담당자가 다시 손볼 수 있도록 작성중 상태로 되돌리고, 직원 확인
+      // 상태도 함께 초기화한다 — employee-salary.service.ts의 reopenPayrollPeriod와 같은 리셋
+      // 이지만, 순환 import를 피하기 위해 여기서 직접 처리한다.
+      await supabase
+        .from('employee_payroll_periods')
+        .update({ status: 'draft', confirmed_at: null, confirmed_by: null, approval_document_id: null, updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+      await supabase
+        .from('employee_payslips')
+        .update({ ack_status: 'pending', ack_comment: null, ack_at: null, updated_at: new Date().toISOString() })
+        .eq('period_id', referenceId);
+    }
+  }
 }
 
 // 전결규정에 지정된 직급의 position_order(선임도 기준값)를 조회

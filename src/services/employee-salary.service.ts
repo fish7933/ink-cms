@@ -1,6 +1,11 @@
+import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/lib/supabase';
 import { getShorePositions } from '@/services/shore-position.service';
 import { EMPLOYEE_ROLES } from '@/pages/EmployeeCardManagementPage';
+import { approvalDocumentService } from '@/services/approval-document.service';
+import { orgChartService } from '@/services/org-chart.service';
+import { getCompanyInfo } from '@/services/company-info.service';
+import { buildPayrollLedgerWorkbook } from '@/utils/employee-payroll-ledger-export';
 import type {
   EmployeeSalaryItem,
   EmployeeSalaryItemCategory,
@@ -11,6 +16,7 @@ import type {
   EmployeePayslipWithDetails,
   PayrollEmployee,
   PayrollLedgerData,
+  PayslipAcknowledgmentEntry,
 } from '@/types/employee-salary';
 
 const sumByCategory = (items: { category: EmployeeSalaryItemCategory; amount: number }[], category: EmployeeSalaryItemCategory) =>
@@ -101,20 +107,32 @@ export async function getOrCreatePayrollPeriod(yearMonth: string): Promise<Emplo
   return data;
 }
 
-export async function confirmPayrollPeriod(periodId: string, userId: string): Promise<void> {
+// 담당자가 급여 항목 입력/명세서 생성을 마쳤을 때 — 이후 항목은 잠기고, 각 직원이 본인
+// 명세서를 확인(승인/이의제기)할 수 있는 단계로 넘어간다.
+export async function requestEmployeeAcknowledgment(periodId: string): Promise<void> {
+  const { count } = await supabase.from('employee_payslips').select('id', { count: 'exact', head: true }).eq('period_id', periodId);
+  if (!count) throw new Error('먼저 명세서를 생성해주세요.');
   const { error } = await supabase
     .from('employee_payroll_periods')
-    .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_by: userId, updated_at: new Date().toISOString() })
-    .eq('id', periodId);
+    .update({ status: 'pending_ack', updated_at: new Date().toISOString() })
+    .eq('id', periodId)
+    .eq('status', 'draft');
   if (error) throw error;
 }
 
+// draft로 되돌린다 — 항목이 달라질 수 있으므로 그 기간의 모든 직원 확인 상태와 지출결의서
+// 연결도 함께 초기화한다(지출결의서 문서 자체는 결재 이력으로 남기고 링크만 끊음).
 export async function reopenPayrollPeriod(periodId: string): Promise<void> {
   const { error } = await supabase
     .from('employee_payroll_periods')
-    .update({ status: 'draft', confirmed_at: null, confirmed_by: null, updated_at: new Date().toISOString() })
+    .update({ status: 'draft', confirmed_at: null, confirmed_by: null, approval_document_id: null, updated_at: new Date().toISOString() })
     .eq('id', periodId);
   if (error) throw error;
+  const { error: ackResetError } = await supabase
+    .from('employee_payslips')
+    .update({ ack_status: 'pending', ack_comment: null, ack_at: null, updated_at: new Date().toISOString() })
+    .eq('period_id', periodId);
+  if (ackResetError) throw ackResetError;
 }
 
 // --- 급여명세서 ---
@@ -234,6 +252,42 @@ export async function getPayslipDetail(payslipId: string): Promise<EmployeePaysl
   return detail || null;
 }
 
+// "내 급여명세서" 페이지용 — 담당자가 직원 확인을 요청한(draft를 벗어난) 명세서만 보인다.
+export async function getMyPayslips(userId: string): Promise<EmployeePayslipWithDetails[]> {
+  const { data: payslips, error } = await supabase.from('employee_payslips').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+  if (error) { console.error(error); return []; }
+  if (!payslips || payslips.length === 0) return [];
+
+  const periodIds = [...new Set(payslips.map(p => p.period_id))];
+  const { data: periods } = await supabase.from('employee_payroll_periods').select('id, year_month, status').in('id', periodIds);
+  const periodById = new Map((periods || []).map(p => [p.id, p]));
+  const visible = payslips.filter(p => periodById.get(p.period_id)?.status !== 'draft');
+  if (visible.length === 0) return [];
+
+  const { data: items, error: itemsError } = await supabase
+    .from('employee_payslip_items')
+    .select('*')
+    .in('payslip_id', visible.map(p => p.id))
+    .order('display_order');
+  if (itemsError) { console.error(itemsError); return []; }
+
+  const details = await attachEmployeeDetails(visible, items || []);
+  return details.map(d => {
+    const period = periodById.get(d.period_id);
+    return { ...d, period_year_month: period?.year_month, period_status: period?.status };
+  });
+}
+
+// 직원 본인이 명세서를 승인하거나 이의를 제기한다 — 이의제기도 "확인 완료"로 취급되어
+// 담당자의 지출결의서 상신을 막지 않는다(담당자에게 사유가 보일 뿐).
+export async function acknowledgePayslip(payslipId: string, status: 'approved' | 'disputed', comment?: string): Promise<void> {
+  const { error } = await supabase
+    .from('employee_payslips')
+    .update({ ack_status: status, ack_comment: comment || null, ack_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', payslipId);
+  if (error) throw error;
+}
+
 // draft 상태인 기간에서만 화면에서 호출되어야 한다 — 전량 delete-then-insert 후 합계를 다시 계산한다.
 export async function updatePayslipItems(
   payslipId: string,
@@ -309,4 +363,84 @@ export async function getPayrollLedgerForPeriod(periodId: string): Promise<Payro
   });
 
   return { period, allowance_columns: allowanceColumns, deduction_columns: deductionColumns, rows };
+}
+
+// --- 직원 확인 / 지출결의서 결재 상신 ---
+
+export async function getAcknowledgmentStatus(periodId: string): Promise<PayslipAcknowledgmentEntry[]> {
+  const payslips = await getPayslipsForPeriod(periodId);
+  return payslips.map(p => ({
+    payslip_id: p.id,
+    employee_id: p.user_id,
+    employee_name: p.employee_name,
+    employee_position_name: p.employee_position_name,
+    ack_status: p.ack_status,
+    ack_comment: p.ack_comment,
+    ack_at: p.ack_at,
+  }));
+}
+
+// 전 직원 확인이 끝난 급여대장을 지출결의서로 결재 상신한다 — 급여대장 엑셀을 첨부로 붙여
+// 결재자가 상세 내역을 바로 열람할 수 있게 하고, 결재선은 상신자의 조직도 기준으로 자동
+// 계산된다(기안서 작성 화면의 previewChain과 동일한 기준, createDocument 내부에서 처리).
+export async function submitPayrollExpenseReport(periodId: string, submittedByUserId: string): Promise<void> {
+  const { data: period, error: periodError } = await supabase.from('employee_payroll_periods').select('*').eq('id', periodId).single();
+  if (periodError) throw periodError;
+  if (period.status !== 'pending_ack') throw new Error('직원 확인 단계의 회차만 상신할 수 있습니다.');
+
+  const payslips = await getPayslipsForPeriod(periodId);
+  if (payslips.length === 0) throw new Error('명세서가 없습니다.');
+  if (payslips.some(p => p.ack_status === 'pending')) throw new Error('아직 확인하지 않은 직원이 있습니다.');
+
+  const ledger = await getPayrollLedgerForPeriod(periodId);
+  if (!ledger) throw new Error('급여대장을 만들 수 없습니다.');
+
+  const [{ data: docType, error: docTypeError }, company, members] = await Promise.all([
+    supabase.from('approval_document_types').select('id').eq('code', 'expense_report').maybeSingle(),
+    getCompanyInfo().catch(() => null),
+    orgChartService.getOrgMembers(),
+  ]);
+  if (docTypeError) throw docTypeError;
+  if (!docType) throw new Error('지출결의서 문서유형을 찾을 수 없습니다. 문서유형 관리에서 확인해주세요.');
+
+  const submitter = members.find(m => m.id === submittedByUserId);
+  const orgUnitId = submitter?.org_unit_ids?.[0];
+  if (!orgUnitId) throw new Error('소속 부서가 없어 결재라인을 구성할 수 없습니다.');
+
+  const totalGross = ledger.rows.reduce((s, r) => s + r.gross_amount, 0);
+  const totalDeduction = ledger.rows.reduce((s, r) => s + r.total_deduction, 0);
+  const totalNet = ledger.rows.reduce((s, r) => s + r.net_amount, 0);
+  const content = [
+    `${period.year_month} 급여 지출결의서`,
+    `대상 인원: ${ledger.rows.length}명`,
+    `급여 합계: ${totalGross.toLocaleString('ko-KR')}원`,
+    `공제 합계: ${totalDeduction.toLocaleString('ko-KR')}원`,
+    `실지급액 합계: ${totalNet.toLocaleString('ko-KR')}원`,
+    '',
+    '상세 내역은 첨부된 급여대장을 참고해주세요.',
+  ].join('\n');
+
+  const workbook = buildPayrollLedgerWorkbook(ledger, company?.name || '');
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const path = `approval-documents/${Date.now()}_${Math.random().toString(36).substring(7)}.xlsx`;
+  const { error: uploadError } = await supabase.storage.from('documents').upload(path, blob);
+  if (uploadError) throw uploadError;
+
+  const doc = await approvalDocumentService.createDocument({
+    document_type_id: docType.id,
+    title: `${period.year_month} 급여 지출결의서`,
+    content,
+    attachments: [{ name: `${period.year_month}_급여대장.xlsx`, path, size: blob.size, type: blob.type }],
+    org_unit_id: orgUnitId,
+    created_by: submittedByUserId,
+    reference_type: 'employee_payroll_period',
+    reference_id: periodId,
+  });
+
+  const { error: updateError } = await supabase
+    .from('employee_payroll_periods')
+    .update({ status: 'pending_approval', approval_document_id: doc.id, updated_at: new Date().toISOString() })
+    .eq('id', periodId);
+  if (updateError) throw updateError;
 }
