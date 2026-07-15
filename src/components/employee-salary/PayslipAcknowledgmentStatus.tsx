@@ -58,15 +58,15 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
       <div className="space-y-0.5">
         {entries.map(e => (
           <div key={e.payslip_id} className="text-xs">
-            <div className="flex items-center gap-1.5">
+            <div className="grid grid-cols-[12px_104px_auto] items-center gap-x-1.5">
               {e.ack_status === 'approved' ? (
-                <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" />
+                <CheckCircle2 className="w-3 h-3 text-green-600" />
               ) : e.ack_status === 'disputed' ? (
-                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
               ) : (
-                <Clock className="w-3 h-3 text-gray-300 shrink-0" />
+                <Clock className="w-3 h-3 text-gray-300" />
               )}
-              <span className="font-medium">
+              <span className="font-medium truncate">
                 {e.employee_position_name && <span className="text-gray-500 font-normal">{e.employee_position_name} </span>}
                 {e.employee_name}
               </span>
