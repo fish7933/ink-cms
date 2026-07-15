@@ -10,6 +10,8 @@ import { buildPayrollLedgerWorkbook } from '@/utils/employee-payroll-ledger-expo
 import type {
   EmployeeSalaryItem,
   EmployeeSalaryItemCategory,
+  EmployeeSalaryItemPayGroup,
+  EmployeeSalaryItemCatalogEntry,
   EmployeePayrollPeriod,
   EmployeePayrollPeriodSummary,
   EmployeePayslip,
@@ -44,6 +46,40 @@ export async function getPayrollEligibleEmployees(): Promise<PayrollEmployee[]> 
       const hireB = b.hire_date ?? '9999-99-99';
       return hireA.localeCompare(hireB);
     });
+}
+
+// --- 급여 항목 카탈로그 (회사 공통) ---
+// 직원마다 항목명을 자유 입력하던 방식 대신, 여기서 관리하는 공통 목록을 각 직원의
+// 급여표에서 골라 쓴다. src/lib/salary-store.ts의 salary_components(선원 급여) CRUD와
+// 동일한 패턴 — 삭제는 항상 소프트 삭제(is_active=false)로, 이미 배정된 직원 항목은
+// catalog_id가 남아있어도 그대로 동작한다(목록/선택 드롭다운에서만 사라짐).
+
+export async function getSalaryItemCatalog(): Promise<EmployeeSalaryItemCatalogEntry[]> {
+  const { data, error } = await supabase
+    .from('employee_salary_item_catalog')
+    .select('*')
+    .eq('is_active', true)
+    .order('category')
+    .order('display_order');
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+export async function addSalaryItemCatalogEntry(data: Omit<EmployeeSalaryItemCatalogEntry, 'id' | 'created_at' | 'updated_at'>): Promise<EmployeeSalaryItemCatalogEntry> {
+  const now = new Date().toISOString();
+  const { data: result, error } = await supabase.from('employee_salary_item_catalog').insert({ ...data, created_at: now, updated_at: now }).select().single();
+  if (error) throw error;
+  return result;
+}
+
+export async function updateSalaryItemCatalogEntry(id: string, data: Partial<Pick<EmployeeSalaryItemCatalogEntry, 'name' | 'pay_group' | 'display_order'>>): Promise<void> {
+  const { error } = await supabase.from('employee_salary_item_catalog').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deactivateSalaryItemCatalogEntry(id: string): Promise<void> {
+  const { error } = await supabase.from('employee_salary_item_catalog').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
 }
 
 // --- 급여 항목 (정보관리) ---
@@ -165,19 +201,16 @@ export async function requestEmployeeAcknowledgment(periodId: string): Promise<v
   if (error) throw error;
 }
 
-// draft로 되돌린다 — 항목이 달라질 수 있으므로 그 기간의 모든 직원 확인 상태와 지출결의서
-// 연결도 함께 초기화한다(지출결의서 문서 자체는 결재 이력으로 남기고 링크만 끊음).
+// draft로 되돌려 항목 편집을 다시 열어준다 — 지출결의서 연결은 끊는다(문서 자체는 결재
+// 이력으로 남기고 링크만 끊음). 직원 확인 상태는 여기서 일괄 초기화하지 않는다 — 실제로
+// 항목이 바뀐 명세서만 updatePayslipItems에서 개별적으로 재확인 필요 상태가 되므로,
+// 이미 승인/이의제기한 직원이 손대지 않은 명세서까지 다시 확인하게 만들지 않는다.
 export async function reopenPayrollPeriod(periodId: string): Promise<void> {
   const { error } = await supabase
     .from('employee_payroll_periods')
     .update({ status: 'draft', confirmed_at: null, confirmed_by: null, approval_document_id: null, updated_at: new Date().toISOString() })
     .eq('id', periodId);
   if (error) throw error;
-  const { error: ackResetError } = await supabase
-    .from('employee_payslips')
-    .update({ ack_status: 'pending', ack_comment: null, ack_at: null, updated_at: new Date().toISOString() })
-    .eq('period_id', periodId);
-  if (ackResetError) throw ackResetError;
 }
 
 // --- 급여명세서 ---
@@ -233,7 +266,7 @@ export async function generatePayslipsForPeriod(periodId: string): Promise<{ cre
     if (payslipError) throw payslipError;
     if (items.length > 0) {
       const { error: insertItemsError } = await supabase.from('employee_payslip_items').insert(
-        items.map(i => ({ payslip_id: payslip.id, category: i.category, name: i.name, amount: i.amount, display_order: i.display_order }))
+        items.map(i => ({ payslip_id: payslip.id, category: i.category, pay_group: i.pay_group, name: i.name, amount: i.amount, display_order: i.display_order }))
       );
       if (insertItemsError) throw insertItemsError;
     }
@@ -370,20 +403,27 @@ export async function acknowledgePayslip(payslipId: string, status: 'approved' |
 // draft 상태인 기간에서만 화면에서 호출되어야 한다 — 전량 delete-then-insert 후 합계를 다시 계산한다.
 export async function updatePayslipItems(
   payslipId: string,
-  items: { category: EmployeeSalaryItemCategory; name: string; amount: number; display_order: number }[]
+  items: { category: EmployeeSalaryItemCategory; pay_group?: EmployeeSalaryItemPayGroup | null; name: string; amount: number; display_order: number }[]
 ): Promise<void> {
   const { error: deleteError } = await supabase.from('employee_payslip_items').delete().eq('payslip_id', payslipId);
   if (deleteError) throw deleteError;
   if (items.length > 0) {
-    const { error: insertError } = await supabase.from('employee_payslip_items').insert(items.map(i => ({ ...i, payslip_id: payslipId })));
+    const { error: insertError } = await supabase.from('employee_payslip_items').insert(items.map(i => ({ ...i, pay_group: i.pay_group ?? null, payslip_id: payslipId })));
     if (insertError) throw insertError;
   }
   const base = sumByCategory(items, 'base');
   const allowance = sumByCategory(items, 'allowance');
   const deduction = sumByCategory(items, 'deduction');
+  // 항목이 수정됐으므로 이 명세서만 재확인 필요 상태로 되돌린다 — 지출결의서가 반려되거나
+  // 회차를 재오픈해도 다른 직원의 이미 완료된 확인 상태는 건드리지 않기 위함(반려 시 전원
+  // 재승인을 요구하던 문제 수정).
   const { error: updateError } = await supabase
     .from('employee_payslips')
-    .update({ base_amount: base, total_allowance: allowance, total_deduction: deduction, net_amount: base + allowance - deduction, updated_at: new Date().toISOString() })
+    .update({
+      base_amount: base, total_allowance: allowance, total_deduction: deduction, net_amount: base + allowance - deduction,
+      ack_status: 'pending', ack_comment: null, ack_at: null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', payslipId);
   if (updateError) throw updateError;
 }

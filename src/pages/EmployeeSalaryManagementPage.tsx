@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getCurrentUser } from '@/services/auth.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { EMPLOYEE_ROLES } from '@/pages/EmployeeCardManagementPage';
+import EmployeeSalaryCatalogSection from '@/components/employee-salary/EmployeeSalaryCatalogSection';
 import EmployeeSalaryItemsSection from '@/components/employee-salary/EmployeeSalaryItemsSection';
 import EmployeePayrollPeriodsSection from '@/components/employee-salary/EmployeePayrollPeriodsSection';
 
@@ -46,11 +47,15 @@ export default function EmployeeSalaryManagementPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <Tabs defaultValue="items">
+          <Tabs defaultValue="catalog">
             <TabsList>
-              <TabsTrigger value="items">급여 항목 관리</TabsTrigger>
+              <TabsTrigger value="catalog">급여 항목 관리</TabsTrigger>
+              <TabsTrigger value="items">직원별 급여표</TabsTrigger>
               <TabsTrigger value="periods">월별 지급 처리</TabsTrigger>
             </TabsList>
+            <TabsContent value="catalog" className="mt-3">
+              <EmployeeSalaryCatalogSection />
+            </TabsContent>
             <TabsContent value="items" className="mt-3">
               <EmployeeSalaryItemsSection />
             </TabsContent>

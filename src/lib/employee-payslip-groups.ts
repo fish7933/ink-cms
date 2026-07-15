@@ -2,8 +2,8 @@ import type { EmployeePayslipItem, EmployeeSalaryItemCategory } from '@/types/em
 
 // 실제 회사 급여명세서 양식(고정급여/수당/비과세/기타급여/공제)에 맞춰 "보여주기만" 그룹핑한다.
 // DB 카테고리는 그대로 base/allowance/deduction 3개를 유지하고(스키마 변경 없음), allowance
-// 항목은 이름으로 수당/비과세/기타급여 중 어디에 속하는지 판별한다 — 셋 중 어디에도 없는
-// 이름(담당자가 새로 만든 커스텀 항목)은 "수당"으로 묶인다.
+// 항목은 pay_group(카탈로그에서 지정된 값)으로 수당/비과세/기타급여를 구분한다. pay_group이
+// 없는 항목(카탈로그 도입 이전 데이터, 또는 직접입력한 일회성 항목)은 이름 매칭으로 폴백한다.
 const NONTAX_NAMES = new Set(['식대', '차량유지비', '해외출장일비']);
 const OTHER_PAY_NAMES = new Set(['근태공제', '경영성과급', '생일축하금']);
 
@@ -13,9 +13,16 @@ export interface PayslipGroup {
   items: EmployeePayslipItem[];
 }
 
-function groupLabelForItem(item: { category: EmployeeSalaryItemCategory; name: string }): { key: string; label: string } {
+const PAY_GROUP_LABELS: Record<string, { key: string; label: string }> = {
+  variable: { key: 'variable', label: '수당' },
+  nontax: { key: 'nontax', label: '비과세' },
+  other: { key: 'other', label: '기타급여' },
+};
+
+function groupLabelForItem(item: { category: EmployeeSalaryItemCategory; pay_group?: string | null; name: string }): { key: string; label: string } {
   if (item.category === 'base') return { key: 'fixed', label: '고정급여' };
   if (item.category === 'deduction') return { key: 'deduction', label: '공제' };
+  if (item.pay_group && PAY_GROUP_LABELS[item.pay_group]) return PAY_GROUP_LABELS[item.pay_group];
   if (NONTAX_NAMES.has(item.name)) return { key: 'nontax', label: '비과세' };
   if (OTHER_PAY_NAMES.has(item.name)) return { key: 'other', label: '기타급여' };
   return { key: 'variable', label: '수당' };

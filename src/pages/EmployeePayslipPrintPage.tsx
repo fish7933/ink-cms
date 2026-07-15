@@ -3,10 +3,8 @@ import { useParams } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/store';
 import { getPayslipDetail } from '@/services/employee-salary.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
-import { groupPayslipItems, isDeductionGroup } from '@/lib/employee-payslip-groups';
+import EmployeePayslipDetailView from '@/components/employee-salary/EmployeePayslipDetailView';
 import type { EmployeePayslipWithDetails } from '@/types/employee-salary';
-
-const fmt = (n: number) => n.toLocaleString('ko-KR');
 
 // 사이드바/헤더/탭바 없이 순수 명세서만 렌더링되는 독립 인쇄 페이지 (App.tsx 최상위 라우트, Layout 우회).
 // 별도 브라우저 탭에서 열려서, 인쇄하거나 닫아도 원래 작업 중이던 탭/화면에는 전혀 영향을 주지 않는다.
@@ -37,10 +35,6 @@ export default function EmployeePayslipPrintPage() {
   if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>로그인이 필요합니다.</div>;
   if (!payslip) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>급여명세서를 찾을 수 없습니다.</div>;
 
-  const groups = groupPayslipItems(payslip.items);
-  const paymentGroups = groups.filter(g => !isDeductionGroup(g));
-  const deductionGroup = groups.find(isDeductionGroup);
-
   return (
     <div className="print-page-wrapper" style={{ padding: '28px 36px 48px' }}>
       <style>{`
@@ -51,10 +45,6 @@ export default function EmployeePayslipPrintPage() {
           @page { size: A4 portrait; margin: 14mm 15mm; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
-        table.payslip-items { border-collapse: collapse; width: 100%; }
-        table.payslip-items th, table.payslip-items td { border: 1px solid #999; padding: 7px 10px; font-size: 13px; }
-        table.payslip-items th { background: #f5f5f5; font-weight: 600; text-align: left; }
-        table.payslip-items td.amount { text-align: right; font-variant-numeric: tabular-nums; }
       `}</style>
 
       <div className="print-actions" style={{ marginBottom: 20, display: 'flex', justifyContent: 'flex-end' }}>
@@ -81,74 +71,7 @@ export default function EmployeePayslipPrintPage() {
 
         <div style={{ margin: '10px 0 18px', borderBottom: '3px solid #1a1a1a' }} />
 
-        <div style={{ fontSize: 18, fontWeight: 700, textAlign: 'center', margin: '10px 0 20px' }}>
-          급여명세서 ({payslip.created_at.slice(0, 7)})
-        </div>
-
-        <table style={{ width: '100%', fontSize: 13, marginBottom: 18 }}>
-          <tbody>
-            <tr>
-              <td style={{ padding: '3px 0' }}><b>성명</b>&nbsp;&nbsp;{payslip.employee_name}</td>
-              <td style={{ padding: '3px 0', textAlign: 'right' }}><b>직무</b>&nbsp;&nbsp;{payslip.employee_position_name || '-'}</td>
-            </tr>
-            <tr>
-              <td style={{ padding: '3px 0' }}><b>생년월일</b>&nbsp;&nbsp;{payslip.employee_birth_date || '-'}</td>
-              <td style={{ padding: '3px 0', textAlign: 'right' }}><b>입사일자</b>&nbsp;&nbsp;{payslip.employee_hire_date || '-'}</td>
-            </tr>
-            {payslip.payment_date && (
-              <tr>
-                <td style={{ padding: '3px 0' }} colSpan={2}><b>지급일</b>&nbsp;&nbsp;{payslip.payment_date}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        <table className="payslip-items">
-          <thead>
-            <tr><th style={{ width: '20%' }}>구분</th><th>항목</th><th style={{ width: '30%', textAlign: 'right' }}>금액</th></tr>
-          </thead>
-          <tbody>
-            {paymentGroups.length === 0 ? (
-              <tr><td colSpan={3} style={{ textAlign: 'center', color: '#999' }}>등록된 지급 항목이 없습니다.</td></tr>
-            ) : (
-              paymentGroups.flatMap(group => group.items.map(item => (
-                <tr key={item.id}>
-                  <td>{group.label}</td>
-                  <td>{item.name}</td>
-                  <td className="amount">{fmt(item.amount)}</td>
-                </tr>
-              )))
-            )}
-            <tr>
-              <td colSpan={2} style={{ fontWeight: 600, background: '#fafafa' }}>지급액 합계</td>
-              <td className="amount" style={{ fontWeight: 600, background: '#fafafa' }}>{fmt(payslip.base_amount + payslip.total_allowance)}</td>
-            </tr>
-            {!deductionGroup || deductionGroup.items.length === 0 ? (
-              <tr><td colSpan={3} style={{ textAlign: 'center', color: '#999' }}>공제 항목 없음</td></tr>
-            ) : (
-              deductionGroup.items.map(item => (
-                <tr key={item.id}>
-                  <td>{deductionGroup.label}</td>
-                  <td>{item.name}</td>
-                  <td className="amount" style={{ color: '#b91c1c' }}>-{fmt(item.amount)}</td>
-                </tr>
-              ))
-            )}
-            <tr>
-              <td colSpan={2} style={{ fontWeight: 600, background: '#fafafa' }}>공제액 합계</td>
-              <td className="amount" style={{ fontWeight: 600, background: '#fafafa', color: '#b91c1c' }}>-{fmt(payslip.total_deduction)}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6 }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>실지급액</span>
-          <span style={{ fontWeight: 700, fontSize: 17, fontVariantNumeric: 'tabular-nums' }}>{fmt(payslip.net_amount)} 원</span>
-        </div>
-
-        {payslip.memo && (
-          <div style={{ marginTop: 16, fontSize: 12, color: '#555' }}><b>비고</b>&nbsp;&nbsp;{payslip.memo}</div>
-        )}
+        <EmployeePayslipDetailView payslip={payslip} />
 
         <div style={{ textAlign: 'center', marginTop: 48, fontSize: 15, fontWeight: 600 }}>
           {company?.name || ''}

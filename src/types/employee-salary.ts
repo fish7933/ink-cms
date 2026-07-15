@@ -1,8 +1,26 @@
 export type EmployeeSalaryItemCategory = 'base' | 'allowance' | 'deduction';
 
+// category가 'allowance'일 때만 의미 있음 — 수당(변동)/비과세/기타급여 표시 그룹 구분용.
+// base는 항상 "고정급여", deduction은 항상 "공제"로 표시되므로 별도 값이 필요 없다.
+export type EmployeeSalaryItemPayGroup = 'variable' | 'nontax' | 'other';
+
+// 회사 공통 급여 항목 카탈로그 — 직원마다 항목을 자유 입력하지 않고 여기서 골라 쓴다.
+export interface EmployeeSalaryItemCatalogEntry {
+  id: string;
+  category: EmployeeSalaryItemCategory;
+  pay_group: EmployeeSalaryItemPayGroup | null;
+  name: string;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EmployeeSalaryItem {
   id: string;
   user_id: string;
+  catalog_id: string | null;
+  pay_group: EmployeeSalaryItemPayGroup | null;
   category: EmployeeSalaryItemCategory;
   name: string;
   amount: number;
@@ -55,6 +73,7 @@ export interface EmployeePayslipItem {
   id: string;
   payslip_id: string;
   category: EmployeeSalaryItemCategory;
+  pay_group: EmployeeSalaryItemPayGroup | null;
   name: string;
   amount: number;
   display_order: number;

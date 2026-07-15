@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -13,15 +14,17 @@ import {
   addEmployeeSalaryItem,
   updateEmployeeSalaryItem,
   deleteEmployeeSalaryItem,
+  getSalaryItemCatalog,
 } from '@/services/employee-salary.service';
-import type { EmployeeSalaryItem, EmployeeSalaryItemCategory, PayrollEmployee } from '@/types/employee-salary';
+import type { EmployeeSalaryItem, EmployeeSalaryItemCatalogEntry, EmployeeSalaryItemCategory, PayrollEmployee } from '@/types/employee-salary';
 
 const CATEGORY_LABELS: Record<EmployeeSalaryItemCategory, string> = { base: '기본급', allowance: '수당', deduction: '공제' };
 const CATEGORIES: EmployeeSalaryItemCategory[] = ['base', 'allowance', 'deduction'];
 
 const fmt = (n: number) => n.toLocaleString('ko-KR');
 
-// 직원별 급여 항목(정보관리) — 재사용 템플릿 없이 직원마다 기본급/수당/공제 항목을 직접 입력한다.
+// 직원별 급여표 — 회사 공통 급여 항목 카탈로그(EmployeeSalaryCatalogSection)에서 항목을 골라
+// 개인별 금액을 입력한다. 카탈로그에 없는 일회성 항목은 "직접 입력"으로도 추가할 수 있다.
 export default function EmployeeSalaryItemsSection() {
   const { toast } = useToast();
   const permissions = usePermissions('employee_salary');
@@ -29,19 +32,23 @@ export default function EmployeeSalaryItemsSection() {
   const [employees, setEmployees] = useState<PayrollEmployee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [items, setItems] = useState<EmployeeSalaryItem[]>([]);
+  const [catalog, setCatalog] = useState<EmployeeSalaryItemCatalogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<EmployeeSalaryItem | null>(null);
   const [dialogCategory, setDialogCategory] = useState<EmployeeSalaryItemCategory>('base');
+  const [useCustomName, setUseCustomName] = useState(false);
+  const [selectedCatalogId, setSelectedCatalogId] = useState('');
   const [form, setForm] = useState({ name: '', amount: '' });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getPayrollEligibleEmployees().then(list => {
+    Promise.all([getPayrollEligibleEmployees(), getSalaryItemCatalog()]).then(([list, catalogList]) => {
       setEmployees(list);
       if (list[0]) setSelectedEmployeeId(list[0].id);
+      setCatalog(catalogList);
       setLoading(false);
     });
   }, []);
@@ -57,9 +64,17 @@ export default function EmployeeSalaryItemsSection() {
     getEmployeeSalaryItems(selectedEmployeeId).then(setItems);
   };
 
+  const availableCatalogEntries = (category: EmployeeSalaryItemCategory) => {
+    const usedCatalogIds = new Set(items.filter(i => i.category === category && i.catalog_id).map(i => i.catalog_id));
+    return catalog.filter(c => c.category === category && !usedCatalogIds.has(c.id));
+  };
+
   const openAddDialog = (category: EmployeeSalaryItemCategory) => {
     setEditingItem(null);
     setDialogCategory(category);
+    const options = availableCatalogEntries(category);
+    setUseCustomName(options.length === 0);
+    setSelectedCatalogId(options[0]?.id || '');
     setForm({ name: '', amount: '' });
     setDialogOpen(true);
   };
@@ -67,21 +82,43 @@ export default function EmployeeSalaryItemsSection() {
   const openEditDialog = (item: EmployeeSalaryItem) => {
     setEditingItem(item);
     setDialogCategory(item.category);
+    setUseCustomName(!item.catalog_id);
+    setSelectedCatalogId(item.catalog_id || '');
     setForm({ name: item.name, amount: String(item.amount) });
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { toast({ title: '항목명을 입력해주세요.', variant: 'destructive' }); return; }
     const amount = Number(form.amount);
     if (!Number.isFinite(amount)) { toast({ title: '금액을 올바르게 입력해주세요.', variant: 'destructive' }); return; }
+
+    let name = form.name.trim();
+    let catalogId: string | null = null;
+    let payGroup: EmployeeSalaryItem['pay_group'] = null;
+    if (!editingItem || !editingItem.catalog_id) {
+      if (useCustomName) {
+        if (!name) { toast({ title: '항목명을 입력해주세요.', variant: 'destructive' }); return; }
+      } else {
+        const entry = catalog.find(c => c.id === selectedCatalogId);
+        if (!entry) { toast({ title: '항목을 선택해주세요.', variant: 'destructive' }); return; }
+        name = entry.name;
+        catalogId = entry.id;
+        payGroup = entry.pay_group;
+      }
+    } else {
+      // 카탈로그 항목 편집 — 이름/구분은 카탈로그 기준을 그대로 유지하고 금액만 바꾼다.
+      name = editingItem.name;
+      catalogId = editingItem.catalog_id;
+      payGroup = editingItem.pay_group;
+    }
+
     try {
       setSaving(true);
       if (editingItem) {
-        await updateEmployeeSalaryItem(editingItem.id, { name: form.name.trim(), amount });
+        await updateEmployeeSalaryItem(editingItem.id, { amount });
       } else {
         const displayOrder = items.filter(i => i.category === dialogCategory).length;
-        await addEmployeeSalaryItem({ user_id: selectedEmployeeId, category: dialogCategory, name: form.name.trim(), amount, display_order: displayOrder, is_active: true });
+        await addEmployeeSalaryItem({ user_id: selectedEmployeeId, catalog_id: catalogId, pay_group: payGroup, category: dialogCategory, name, amount, display_order: displayOrder, is_active: true });
       }
       toast({ title: '저장되었습니다.' });
       setDialogOpen(false);
@@ -153,7 +190,10 @@ export default function EmployeeSalaryItemsSection() {
                     <tbody>
                       {categoryItems.map(item => (
                         <tr key={item.id} className="border-b last:border-b-0 hover:bg-gray-50">
-                          <td className="p-2 pl-3">{item.name}</td>
+                          <td className="p-2 pl-3">
+                            {item.name}
+                            {!item.catalog_id && <span className="ml-1.5 text-[10px] text-gray-400 align-middle">(직접입력)</span>}
+                          </td>
                           <td className="p-2 text-right font-mono">{fmt(item.amount)}원</td>
                           <td className="p-2 text-right w-20">
                             <div className="flex justify-end gap-0.5">
@@ -193,18 +233,49 @@ export default function EmployeeSalaryItemsSection() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label className="text-xs">항목명 *</Label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 기본급, 직책수당, 국민연금" className="h-9 text-sm" disabled={saving} />
-            </div>
+            {editingItem?.catalog_id ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs">항목명</Label>
+                <p className="text-sm px-3 py-2 rounded-md bg-gray-50 border">{editingItem.name}</p>
+              </div>
+            ) : (
+              <>
+                {!editingItem && (
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="custom-name" checked={useCustomName} onCheckedChange={c => setUseCustomName(!!c)} disabled={saving} />
+                    <Label htmlFor="custom-name" className="text-xs font-normal cursor-pointer">카탈로그에 없는 항목 직접 입력</Label>
+                  </div>
+                )}
+                {useCustomName ? (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">항목명 *</Label>
+                    <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 이번 달 특별 수당" className="h-9 text-sm" disabled={saving} />
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">항목 선택 *</Label>
+                    {availableCatalogEntries(dialogCategory).length === 0 ? (
+                      <p className="text-xs text-gray-400">추가할 수 있는 카탈로그 항목이 없습니다. "급여 항목 관리"에서 먼저 등록해주세요.</p>
+                    ) : (
+                      <Select value={selectedCatalogId} onValueChange={setSelectedCatalogId} disabled={saving}>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="항목 선택" /></SelectTrigger>
+                        <SelectContent>
+                          {availableCatalogEntries(dialogCategory).map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">금액 *</Label>
               <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" className="h-9 text-sm" disabled={saving} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} disabled={saving}>취소</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? '저장 중...' : '저장'}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setDialogOpen(false)} disabled={saving}>취소</Button>
+            <Button type="button" size="sm" onClick={handleSave} disabled={saving}>{saving ? '저장 중...' : '저장'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

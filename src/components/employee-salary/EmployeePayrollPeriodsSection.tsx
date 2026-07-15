@@ -11,7 +11,7 @@ import { getCurrentUser } from '@/services/auth.service';
 import { getCompanyInfo } from '@/services/company-info.service';
 import { exportPayrollLedgerToExcel } from '@/utils/employee-payroll-ledger-export';
 import PayslipAcknowledgmentStatus from '@/components/employee-salary/PayslipAcknowledgmentStatus';
-import { groupPayslipItems, isDeductionGroup } from '@/lib/employee-payslip-groups';
+import EmployeePayslipDetailView from '@/components/employee-salary/EmployeePayslipDetailView';
 import {
   getPayrollPeriods,
   getOrCreatePayrollPeriod,
@@ -201,7 +201,7 @@ export default function EmployeePayrollPeriodsSection() {
     try {
       setSavingItems(true);
       const items: Omit<EmployeePayslipItem, 'id' | 'payslip_id'>[] = CATEGORIES.flatMap(category =>
-        draftItems.filter(i => i.category === category).map((i, idx) => ({ category, name: i.name.trim(), amount: Number(i.amount) || 0, display_order: idx }))
+        draftItems.filter(i => i.category === category).map((i, idx) => ({ category, pay_group: null, name: i.name.trim(), amount: Number(i.amount) || 0, display_order: idx }))
       );
       await updatePayslipItems(editingPayslip.id, items);
       toast({ title: '저장되었습니다.' });
@@ -450,32 +450,16 @@ export default function EmployeePayrollPeriodsSection() {
       </Dialog>
 
       <Dialog open={!!viewingPayslip} onOpenChange={o => !o && setViewingPayslip(null)}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base">
               {viewingPayslip?.employee_name}{viewingPayslip?.employee_position_name ? ` · ${viewingPayslip.employee_position_name}` : ''} — {currentPeriod?.year_month} 급여명세서
             </DialogTitle>
           </DialogHeader>
           {viewingPayslip && (
-            <div className="space-y-3 py-1">
-              {groupPayslipItems(viewingPayslip.items).map(group => (
-                <div key={group.key} className="space-y-1">
-                  <Label className="text-xs">{group.label}</Label>
-                  <div className="rounded-md border overflow-hidden">
-                    {group.items.map(item => (
-                      <div key={item.id} className="flex items-center justify-between px-3 py-1.5 text-sm border-b last:border-b-0">
-                        <span>{item.name}</span>
-                        <span className={`font-mono ${isDeductionGroup(group) ? 'text-red-600' : ''}`}>{isDeductionGroup(group) ? '-' : ''}{fmt(item.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div className="rounded-md border bg-blue-50 border-blue-200 px-3 py-2 flex items-center justify-between text-sm">
-                <span className="font-medium text-blue-900">실지급액</span>
-                <span className="font-bold font-mono text-blue-900">{fmt(viewingPayslip.net_amount)}원</span>
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
+            <div className="py-1">
+              <EmployeePayslipDetailView payslip={viewingPayslip} showTitle={false} />
+              <div className="flex justify-end gap-2 pt-3">
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.open(`/print/employee-payslips/${viewingPayslip.id}`, '_blank')}>
                   <Printer className="w-3.5 h-3.5" />인쇄
                 </Button>
