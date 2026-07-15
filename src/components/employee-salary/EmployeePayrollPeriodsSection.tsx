@@ -48,6 +48,7 @@ export default function EmployeePayrollPeriodsSection() {
   const [editingPayslip, setEditingPayslip] = useState<EmployeePayslipWithDetails | null>(null);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
   const [savingItems, setSavingItems] = useState(false);
+  const [viewingPayslip, setViewingPayslip] = useState<EmployeePayslipWithDetails | null>(null);
 
   const loadPeriods = useCallback(() => { getPayrollPeriods().then(setPeriods); }, []);
 
@@ -179,6 +180,22 @@ export default function EmployeePayrollPeriodsSection() {
   const isDraft = currentPeriod?.status === 'draft';
   const draftTotal = (category: EmployeeSalaryItemCategory) => draftItems.filter(i => i.category === category).reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   const draftNet = draftTotal('base') + draftTotal('allowance') - draftTotal('deduction');
+
+  // 급여대장처럼 한눈에 보이게 — 항목명은 직원마다 직접 입력한 값이라, 이번 회차에 실제로
+  // 쓰인 이름들의 합집합을 열(컬럼)로 펼친다 (인쇄/엑셀 출력과 동일한 방식).
+  const allowanceColumns: string[] = [];
+  const deductionColumns: string[] = [];
+  for (const p of payslips) {
+    for (const item of p.items) {
+      if (item.category === 'allowance' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
+      if (item.category === 'deduction' && !deductionColumns.includes(item.name)) deductionColumns.push(item.name);
+    }
+  }
+  const amountByName = (p: EmployeePayslipWithDetails, category: EmployeeSalaryItemCategory, name: string) =>
+    p.items.filter(i => i.category === category && i.name === name).reduce((sum, i) => sum + i.amount, 0);
+  const sumColumn = (f: (p: EmployeePayslipWithDetails) => number) => payslips.reduce((sum, p) => sum + f(p), 0);
+  const periodTotalGross = payslips.reduce((sum, p) => sum + p.base_amount + p.total_allowance, 0);
+  const periodTotalDeduction = payslips.reduce((sum, p) => sum + p.total_deduction, 0);
   const periodTotalNet = payslips.reduce((sum, p) => sum + p.net_amount, 0);
 
   return (
@@ -229,29 +246,33 @@ export default function EmployeePayrollPeriodsSection() {
         </div>
       ) : (
         <div className="rounded-md border overflow-hidden overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
+          <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left p-2 text-xs font-medium text-gray-600">직원</th>
-                <th className="text-right p-2 text-xs font-medium text-gray-600">기본급</th>
-                <th className="text-right p-2 text-xs font-medium text-gray-600">수당</th>
-                <th className="text-right p-2 text-xs font-medium text-gray-600">공제</th>
-                <th className="text-right p-2 text-xs font-medium text-gray-600">실지급액</th>
-                <th className="text-right p-2 text-xs font-medium text-gray-600 w-40">작업</th>
+                <th className="text-left p-2 font-medium text-gray-600">직원</th>
+                <th className="text-right p-2 font-medium text-gray-600">기본급</th>
+                {allowanceColumns.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
+                <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">급여합계</th>
+                {deductionColumns.map(name => <th key={name} className="text-right p-2 font-medium text-red-500">{name}</th>)}
+                <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">공제합계</th>
+                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60">실지급액</th>
+                <th className="text-right p-2 font-medium text-gray-600 w-36">작업</th>
               </tr>
             </thead>
             <tbody>
               {payslips.map(p => (
-                <tr key={p.id} className="border-b hover:bg-gray-50">
+                <tr key={p.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setViewingPayslip(p)}>
                   <td className="p-2">
                     <div className="font-medium">{p.employee_name}</div>
-                    {p.employee_position_name && <div className="text-xs text-gray-400">{p.employee_position_name}</div>}
+                    {p.employee_position_name && <div className="text-[10px] text-gray-400">{p.employee_position_name}</div>}
                   </td>
                   <td className="p-2 text-right font-mono">{fmt(p.base_amount)}</td>
-                  <td className="p-2 text-right font-mono">{fmt(p.total_allowance)}</td>
-                  <td className="p-2 text-right font-mono text-red-600">{fmt(p.total_deduction)}</td>
-                  <td className="p-2 text-right font-mono font-semibold">{fmt(p.net_amount)}</td>
-                  <td className="p-2 text-right">
+                  {allowanceColumns.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(amountByName(p, 'allowance', name))}</td>)}
+                  <td className="p-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>
+                  {deductionColumns.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(amountByName(p, 'deduction', name))}</td>)}
+                  <td className="p-2 text-right font-mono font-semibold text-red-600 bg-red-50/60">{fmt(p.total_deduction)}</td>
+                  <td className="p-2 text-right font-mono font-bold bg-green-50/60">{fmt(p.net_amount)}</td>
+                  <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
                       {permissions.canEdit && isDraft && (
                         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEditDialog(p)}>편집</Button>
@@ -271,8 +292,13 @@ export default function EmployeePayrollPeriodsSection() {
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t font-semibold">
-                <td className="p-2" colSpan={4}>합계 ({payslips.length}명)</td>
-                <td className="p-2 text-right font-mono">{fmt(periodTotalNet)}</td>
+                <td className="p-2">합계 ({payslips.length}명)</td>
+                <td className="p-2 text-right font-mono">{fmt(sumColumn(p => p.base_amount))}</td>
+                {allowanceColumns.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(sumColumn(p => amountByName(p, 'allowance', name)))}</td>)}
+                <td className="p-2 text-right font-mono bg-blue-50/60">{fmt(periodTotalGross)}</td>
+                {deductionColumns.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(sumColumn(p => amountByName(p, 'deduction', name)))}</td>)}
+                <td className="p-2 text-right font-mono text-red-600 bg-red-50/60">{fmt(periodTotalDeduction)}</td>
+                <td className="p-2 text-right font-mono bg-green-50/60">{fmt(periodTotalNet)}</td>
                 <td className="p-2" />
               </tr>
             </tfoot>
@@ -336,6 +362,46 @@ export default function EmployeePayrollPeriodsSection() {
             <Button variant="outline" size="sm" onClick={() => setEditingPayslip(null)} disabled={savingItems}>취소</Button>
             <Button size="sm" onClick={handleSaveItems} disabled={savingItems}>{savingItems ? '저장 중...' : '저장'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingPayslip} onOpenChange={o => !o && setViewingPayslip(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {viewingPayslip?.employee_name}{viewingPayslip?.employee_position_name ? ` · ${viewingPayslip.employee_position_name}` : ''} — {currentPeriod?.year_month} 급여명세서
+            </DialogTitle>
+          </DialogHeader>
+          {viewingPayslip && (
+            <div className="space-y-3 py-1">
+              {CATEGORIES.map(category => {
+                const categoryItems = viewingPayslip.items.filter(i => i.category === category);
+                if (categoryItems.length === 0) return null;
+                return (
+                  <div key={category} className="space-y-1">
+                    <Label className="text-xs">{CATEGORY_LABELS[category]}</Label>
+                    <div className="rounded-md border overflow-hidden">
+                      {categoryItems.map(item => (
+                        <div key={item.id} className="flex items-center justify-between px-3 py-1.5 text-sm border-b last:border-b-0">
+                          <span>{item.name}</span>
+                          <span className={`font-mono ${category === 'deduction' ? 'text-red-600' : ''}`}>{category === 'deduction' ? '-' : ''}{fmt(item.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="rounded-md border bg-blue-50 border-blue-200 px-3 py-2 flex items-center justify-between text-sm">
+                <span className="font-medium text-blue-900">실지급액</span>
+                <span className="font-bold font-mono text-blue-900">{fmt(viewingPayslip.net_amount)}원</span>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.open(`/print/employee-payslips/${viewingPayslip.id}`, '_blank')}>
+                  <Printer className="w-3.5 h-3.5" />인쇄
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
