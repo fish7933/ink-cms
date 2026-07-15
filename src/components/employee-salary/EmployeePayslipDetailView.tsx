@@ -75,7 +75,7 @@ export default function EmployeePayslipDetailView({ payslip, showTitle = true }:
   const hourlyWage = payslip.base_amount > 0 ? Math.round(payslip.base_amount / STANDARD_MONTHLY_HOURS) : 0;
 
   return (
-    <div style={{ fontFamily: "'Malgun Gothic', 'Segoe UI', Pretendard, sans-serif", color: '#222' }}>
+    <div style={{ fontFamily: "Pretendard, 'Segoe UI', sans-serif", color: '#222' }}>
       <style>{`
         table.paygrid { border-collapse: collapse; width: 100%; table-layout: fixed; }
         table.paygrid th, table.paygrid td { border: 1px solid #ccc; padding: 3px 4px; font-size: 10px; line-height: 1.3; text-align: center; }

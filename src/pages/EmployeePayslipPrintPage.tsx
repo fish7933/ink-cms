@@ -56,24 +56,22 @@ export default function EmployeePayslipPrintPage() {
         </button>
       </div>
 
-      <div style={{ maxWidth: 700, margin: '0 auto', fontFamily: "'Malgun Gothic', 'Segoe UI', Pretendard, sans-serif", color: '#222' }}>
+      <div style={{ maxWidth: 700, margin: '0 auto', fontFamily: "Pretendard, 'Segoe UI', sans-serif", color: '#222' }}>
         {company && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 32 }} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 28 }} />}
             <div>
-              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{company.name}</div>
-              <div style={{ fontSize: 10, color: '#777', marginTop: 1 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#333' }}>{company.name}</div>
+              <div style={{ fontSize: 9.5, color: '#999', marginTop: 1 }}>
                 {[company.address, company.phone && `Tel. ${company.phone}`].filter(Boolean).join('  ·  ')}
               </div>
             </div>
           </div>
         )}
 
-        <div style={{ margin: '6px 0 10px', borderBottom: '2px solid #888' }} />
-
         <EmployeePayslipDetailView payslip={payslip} />
 
-        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: '#555' }}>
+        <div style={{ textAlign: 'center', marginTop: 14, fontSize: 10, color: '#999' }}>
           {company?.name || ''}
         </div>
       </div>

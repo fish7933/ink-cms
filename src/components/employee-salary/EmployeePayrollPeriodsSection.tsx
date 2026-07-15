@@ -371,7 +371,7 @@ export default function EmployeePayrollPeriodsSection() {
             <ExternalLink className="w-3.5 h-3.5" />결재 진행 상황 보기
           </Button>
         )}
-        {permissions.canEdit && currentPeriod && currentPeriod.status !== 'draft' && (
+        {permissions.canEdit && currentPeriod && currentPeriod.status !== 'draft' && (currentPeriod.status !== 'confirmed' || currentUserRole === 'admin') && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9 text-amber-600 border-amber-300" onClick={handleReopen}>
             <Unlock className="w-3.5 h-3.5" />재오픈
           </Button>
