@@ -17,6 +17,35 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
+// 실제 회사 급여명세서 양식과 같은 모양 — 구분(고정급여/수당/비과세/기타급여/공제) 라벨 옆에
+// 항목명을 가로로 나열한 헤더 행, 그 아래 금액 행으로 된 그리드. 세로로 항목을 나열하는 표가
+// 아니라, 실제 서식처럼 항목명이 컬럼 헤더로 펼쳐지는 형태여야 한다.
+function GroupGrid({ label, items, negative = false }: { label: string; items: { id: string; name: string; amount: number }[]; negative?: boolean }) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      {chunk(items, 6).map((row, i) => (
+        <table className="paygrid" key={i}>
+          <tbody>
+            <tr>
+              <th className="group-label">{label}</th>
+              {row.map(item => <th key={item.id}>{item.name}</th>)}
+            </tr>
+            <tr>
+              <td></td>
+              {row.map(item => (
+                <td key={item.id} className={negative ? 'neg' : ''}>
+                  {item.amount === 0 ? '-' : `${negative ? '-' : ''}${fmt(item.amount)}`}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      ))}
+    </>
+  );
+}
+
 interface Props {
   payslip: EmployeePayslipWithDetails;
   showTitle?: boolean;
@@ -31,10 +60,12 @@ export default function EmployeePayslipDetailView({ payslip, showTitle = true }:
   return (
     <div style={{ fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
       <style>{`
-        table.payslip-items { border-collapse: collapse; width: 100%; }
-        table.payslip-items th, table.payslip-items td { border: 1px solid #999; padding: 7px 10px; font-size: 13px; }
-        table.payslip-items th { background: #f5f5f5; font-weight: 600; text-align: left; }
-        table.payslip-items td.amount { text-align: right; font-variant-numeric: tabular-nums; }
+        table.paygrid { border-collapse: collapse; width: 100%; margin-bottom: -1px; table-layout: fixed; }
+        table.paygrid th, table.paygrid td { border: 1px solid #999; padding: 6px 4px; font-size: 12px; text-align: center; }
+        table.paygrid th { background: #f5f5f5; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        table.paygrid th.group-label { background: #eef2ff; width: 64px; }
+        table.paygrid td { font-variant-numeric: tabular-nums; }
+        table.paygrid td.neg { color: #b91c1c; }
         table.attendance-grid { border-collapse: collapse; width: 100%; }
         table.attendance-grid th, table.attendance-grid td { border: 1px solid #ccc; padding: 6px 8px; font-size: 12px; text-align: center; }
         table.attendance-grid th { background: #f5f5f5; font-weight: 600; }
@@ -64,43 +95,25 @@ export default function EmployeePayslipDetailView({ payslip, showTitle = true }:
         </tbody>
       </table>
 
-      <table className="payslip-items">
-        <thead>
-          <tr><th style={{ width: '20%' }}>구분</th><th>항목</th><th style={{ width: '30%', textAlign: 'right' }}>금액</th></tr>
-        </thead>
-        <tbody>
-          {paymentGroups.length === 0 ? (
-            <tr><td colSpan={3} style={{ textAlign: 'center', color: '#999' }}>등록된 지급 항목이 없습니다.</td></tr>
-          ) : (
-            paymentGroups.flatMap(group => group.items.map(item => (
-              <tr key={item.id}>
-                <td>{group.label}</td>
-                <td>{item.name}</td>
-                <td className="amount">{fmt(item.amount)}</td>
-              </tr>
-            )))
-          )}
-          <tr>
-            <td colSpan={2} style={{ fontWeight: 600, background: '#fafafa' }}>지급액 합계</td>
-            <td className="amount" style={{ fontWeight: 600, background: '#fafafa' }}>{fmt(payslip.base_amount + payslip.total_allowance)}</td>
-          </tr>
-          {!deductionGroup || deductionGroup.items.length === 0 ? (
-            <tr><td colSpan={3} style={{ textAlign: 'center', color: '#999' }}>공제 항목 없음</td></tr>
-          ) : (
-            deductionGroup.items.map(item => (
-              <tr key={item.id}>
-                <td>{deductionGroup.label}</td>
-                <td>{item.name}</td>
-                <td className="amount" style={{ color: '#b91c1c' }}>-{fmt(item.amount)}</td>
-              </tr>
-            ))
-          )}
-          <tr>
-            <td colSpan={2} style={{ fontWeight: 600, background: '#fafafa' }}>공제액 합계</td>
-            <td className="amount" style={{ fontWeight: 600, background: '#fafafa', color: '#b91c1c' }}>-{fmt(payslip.total_deduction)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div style={{ fontSize: 13, fontWeight: 700, margin: '4px 0 6px' }}>지급내역</div>
+      {paymentGroups.length === 0 ? (
+        <p style={{ fontSize: 12, color: '#999', textAlign: 'center', padding: '8px 0' }}>등록된 지급 항목이 없습니다.</p>
+      ) : (
+        paymentGroups.map(group => <GroupGrid key={group.key} label={group.label} items={group.items} />)
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#fafafa', border: '1px solid #999', borderTop: 'none', fontSize: 12, fontWeight: 600 }}>
+        <span>지급액 합계</span><span>{fmt(payslip.base_amount + payslip.total_allowance)}</span>
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, margin: '16px 0 6px' }}>공제내역</div>
+      {!deductionGroup || deductionGroup.items.length === 0 ? (
+        <p style={{ fontSize: 12, color: '#999', textAlign: 'center', padding: '8px 0' }}>공제 항목 없음</p>
+      ) : (
+        <GroupGrid label={deductionGroup.label} items={deductionGroup.items} negative />
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: '#fafafa', border: '1px solid #999', borderTop: 'none', fontSize: 12, fontWeight: 600, color: '#b91c1c' }}>
+        <span>공제액 합계</span><span>-{fmt(payslip.total_deduction)}</span>
+      </div>
 
       <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6 }}>
         <span style={{ fontWeight: 700, fontSize: 15 }}>실지급액</span>

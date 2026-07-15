@@ -450,14 +450,22 @@ export async function getPayrollLedgerForPeriod(periodId: string): Promise<Payro
     .in('id', payslips.map(p => p.user_id));
   const userById = new Map((users || []).map(u => [u.id, u]));
 
-  const allowanceColumns: string[] = [];
-  const deductionColumns: string[] = [];
+  // 전 직원이 0원인 항목은 열에서 빼서 급여대장을 보기 좋게 만든다 — 항목 존재 여부가 아니라
+  // 실제 금액 합계 기준으로 판단(한 명이라도 0이 아니면 표시).
+  const allowanceOrder: string[] = [];
+  const deductionOrder: string[] = [];
+  const sumByName = new Map<string, number>();
   for (const p of payslips) {
     for (const item of p.items) {
-      if (item.category === 'allowance' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
-      if (item.category === 'deduction' && !deductionColumns.includes(item.name)) deductionColumns.push(item.name);
+      if (item.category === 'allowance' && !allowanceOrder.includes(item.name)) allowanceOrder.push(item.name);
+      if (item.category === 'deduction' && !deductionOrder.includes(item.name)) deductionOrder.push(item.name);
+      if (item.category === 'allowance' || item.category === 'deduction') {
+        sumByName.set(item.name, (sumByName.get(item.name) || 0) + item.amount);
+      }
     }
   }
+  const allowanceColumns = allowanceOrder.filter(name => (sumByName.get(name) || 0) !== 0);
+  const deductionColumns = deductionOrder.filter(name => (sumByName.get(name) || 0) !== 0);
 
   const rows = payslips.map(p => {
     const u = userById.get(p.user_id);
