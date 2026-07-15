@@ -3,11 +3,18 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { CheckCircle2, AlertTriangle, Clock, Users, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { getAcknowledgmentStatus, acknowledgePayslip } from '@/services/employee-salary.service';
-import type { PayslipAcknowledgmentEntry } from '@/types/employee-salary';
+import type { PayslipAckStatus, PayslipAcknowledgmentEntry } from '@/types/employee-salary';
 
 const FORCE_APPROVE_NOTE = '관리자(슈퍼관리자) 강제 승인';
+const STATUS_TEXT: Record<PayslipAckStatus, string> = { approved: '승인', disputed: '이의제기', pending: '대기' };
+const STATUS_BADGE: Record<PayslipAckStatus, string> = {
+  approved: 'bg-green-50 text-green-700 border-green-200',
+  disputed: 'bg-amber-50 text-amber-700 border-amber-300',
+  pending: 'bg-gray-50 text-gray-400 border-gray-200',
+};
 
 interface Props {
   periodId: string;
@@ -58,7 +65,7 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
       <div className="space-y-0.5">
         {entries.map(e => (
           <div key={e.payslip_id} className="text-xs">
-            <div className="grid grid-cols-[12px_104px_auto] items-center gap-x-1.5">
+            <div className="grid grid-cols-[12px_104px_54px_auto] items-center gap-x-1.5">
               {e.ack_status === 'approved' ? (
                 <CheckCircle2 className="w-3 h-3 text-green-600" />
               ) : e.ack_status === 'disputed' ? (
@@ -70,22 +77,20 @@ export default function PayslipAcknowledgmentStatus({ periodId, refreshKey, canF
                 {e.employee_position_name && <span className="text-gray-500 font-normal">{e.employee_position_name} </span>}
                 {e.employee_name}
               </span>
-              <span className="flex items-center gap-3">
+              <Badge variant="outline" className={`h-4 px-1.5 text-[10px] font-medium rounded-full justify-center ${STATUS_BADGE[e.ack_status]}`}>
+                {STATUS_TEXT[e.ack_status]}
+              </Badge>
+              <span className="flex items-center">
                 {e.ack_status === 'approved' ? (
-                  <span className="text-green-600">{e.ack_at && `${format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })} `}승인</span>
-                ) : e.ack_status === 'disputed' ? (
-                  <span className="text-amber-600">{e.ack_at && `${format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })} `}이의제기</span>
-                ) : (
-                  <span className="text-gray-400">대기</span>
-                )}
-                {canForceApprove && e.ack_status !== 'approved' && (
+                  e.ack_at && <span className="text-[10.5px] text-gray-400">{format(new Date(e.ack_at), 'MM-dd HH:mm', { locale: ko })}</span>
+                ) : canForceApprove ? (
                   <Button
                     size="sm" variant="outline" className="h-5 px-1.5 text-[10px] gap-1 text-purple-700 border-purple-300 hover:bg-purple-50"
                     onClick={() => handleForceApprove(e)} disabled={forcingId === e.payslip_id}
                   >
                     <ShieldCheck className="w-2.5 h-2.5" />{forcingId === e.payslip_id ? '처리 중...' : '강제 승인'}
                   </Button>
-                )}
+                ) : null}
               </span>
             </div>
             {e.ack_status === 'disputed' && e.ack_comment && (
