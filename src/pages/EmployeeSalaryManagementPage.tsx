@@ -47,7 +47,7 @@ export default function EmployeeSalaryManagementPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <Tabs defaultValue="catalog">
+          <Tabs defaultValue="periods">
             <TabsList>
               <TabsTrigger value="catalog">급여 항목 관리</TabsTrigger>
               <TabsTrigger value="items">직원별 급여표</TabsTrigger>
