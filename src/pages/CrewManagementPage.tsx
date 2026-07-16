@@ -675,6 +675,7 @@ export function CrewManagementPage() {
                             />
                           </th>
                           <th className="w-8 px-2 py-2 text-center font-medium text-gray-400">#</th>
+                          <th className="px-2 py-2 text-center font-medium text-gray-600">상태</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('owner')}>
                             <span className="flex items-center gap-1">선주사<SortIcon field="owner" /></span>
                           </th>
@@ -721,7 +722,7 @@ export function CrewManagementPage() {
                       </thead>
                       <tbody>
                         {paginated.length === 0 ? (
-                          <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 15 : 14) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                          <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 16 : 15) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           // 국적은 코드로 표기 (레거시로 한글 국가명이 그대로 저장된 데이터는 코드로 정규화)
@@ -733,6 +734,14 @@ export function CrewManagementPage() {
                                 <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
                               </td>
                               <td className="px-2 py-1.5 text-center text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                {c.pending_plan_status === 'draft' && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-gray-500 border-gray-300">임시저장</Badge>
+                                )}
+                                {c.pending_plan_status === 'pending_approval' && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">결재중</Badge>
+                                )}
+                              </td>
                               <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.owner_name : (c.pending_owner_name || crewExt.owner_name)}>
                                 {c.is_active_onboard
                                   ? <span className="text-gray-600">{crewExt.owner_name || '-'}</span>
@@ -751,17 +760,7 @@ export function CrewManagementPage() {
                                 {c.is_active_onboard
                                   ? <span className="font-medium">{crewExt.current_ship_name || '-'}</span>
                                   : c.pending_ship_name
-                                    ? (
-                                      <div className="flex items-center gap-1">
-                                        <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
-                                        {c.pending_plan_status === 'draft' && (
-                                          <Badge variant="outline" className="text-[10px] h-4 px-1 text-gray-500 border-gray-300">임시저장</Badge>
-                                        )}
-                                        {c.pending_plan_status === 'pending_approval' && (
-                                          <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">결재중</Badge>
-                                        )}
-                                      </div>
-                                    )
+                                    ? <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
                                     : <span className="font-medium">{crewExt.current_ship_name || '-'}</span>}
                               </td>
                               <td className="px-2 py-1.5 max-w-[80px] truncate text-gray-500" title={crewExt.manning_agency_name}>
