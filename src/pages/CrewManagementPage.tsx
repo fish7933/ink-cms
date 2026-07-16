@@ -676,13 +676,13 @@ export function CrewManagementPage() {
                           </th>
                           <th className="w-8 px-2 py-2 text-center font-medium text-gray-400">#</th>
                           <th className="px-2 py-2 text-center font-medium text-gray-600">상태</th>
-                          <th className="px-2 py-2 text-left text-sm font-semibold text-gray-700 cursor-pointer select-none" onClick={() => handleSort('owner')}>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('owner')}>
                             <span className="flex items-center gap-1">선주사<SortIcon field="owner" /></span>
                           </th>
-                          <th className="px-2 py-2 text-left text-sm font-semibold text-gray-700 cursor-pointer select-none" onClick={() => handleSort('fleet')}>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('fleet')}>
                             <span className="flex items-center gap-1">플릿<SortIcon field="fleet" /></span>
                           </th>
-                          <th className="px-2 py-2 text-left text-sm font-semibold text-gray-700 cursor-pointer select-none" onClick={() => handleSort('ship')}>
+                          <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('ship')}>
                             <span className="flex items-center gap-1">선박<SortIcon field="ship" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('manning')}>
@@ -742,26 +742,26 @@ export function CrewManagementPage() {
                                   <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">결재중</Badge>
                                 )}
                               </td>
-                              <td className="px-2 py-1.5 max-w-[110px] truncate text-sm" title={c.is_active_onboard ? crewExt.owner_name : (c.pending_owner_name || crewExt.owner_name)}>
+                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.owner_name : (c.pending_owner_name || crewExt.owner_name)}>
                                 {c.is_active_onboard
-                                  ? <span className="font-medium text-gray-700">{crewExt.owner_name || '-'}</span>
+                                  ? <span className="text-gray-600">{crewExt.owner_name || '-'}</span>
                                   : c.pending_owner_name
-                                    ? <span className="font-medium text-violet-600">{c.pending_owner_name}</span>
-                                    : <span className="font-medium text-gray-700">{crewExt.owner_name || '-'}</span>}
+                                    ? <span className="text-violet-600">{c.pending_owner_name}</span>
+                                    : <span className="text-gray-600">{crewExt.owner_name || '-'}</span>}
                               </td>
-                              <td className="px-2 py-1.5 max-w-[100px] truncate text-sm" title={c.is_active_onboard ? crewExt.fleet_name : (c.pending_fleet_name || crewExt.fleet_name)}>
+                              <td className="px-2 py-1.5 max-w-[80px] truncate" title={c.is_active_onboard ? crewExt.fleet_name : (c.pending_fleet_name || crewExt.fleet_name)}>
                                 {c.is_active_onboard
-                                  ? <span className="font-medium text-gray-600">{crewExt.fleet_name || '-'}</span>
+                                  ? <span className="text-gray-500">{crewExt.fleet_name || '-'}</span>
                                   : c.pending_fleet_name
-                                    ? <span className="font-medium text-violet-500">{c.pending_fleet_name}</span>
-                                    : <span className="font-medium text-gray-600">{crewExt.fleet_name || '-'}</span>}
+                                    ? <span className="text-violet-500">{c.pending_fleet_name}</span>
+                                    : <span className="text-gray-500">{crewExt.fleet_name || '-'}</span>}
                               </td>
-                              <td className="px-2 py-1.5 max-w-[110px] truncate text-sm" title={c.is_active_onboard ? crewExt.current_ship_name : (c.pending_ship_name || crewExt.current_ship_name)}>
+                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.current_ship_name : (c.pending_ship_name || crewExt.current_ship_name)}>
                                 {c.is_active_onboard
-                                  ? <span className="font-semibold text-gray-900">{crewExt.current_ship_name || '-'}</span>
+                                  ? <span className="font-medium">{crewExt.current_ship_name || '-'}</span>
                                   : c.pending_ship_name
-                                    ? <span className="font-semibold text-violet-700">{c.pending_ship_name}</span>
-                                    : <span className="font-semibold text-gray-900">{crewExt.current_ship_name || '-'}</span>}
+                                    ? <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
+                                    : <span className="font-medium">{crewExt.current_ship_name || '-'}</span>}
                               </td>
                               <td className="px-2 py-1.5 max-w-[80px] truncate text-gray-500" title={crewExt.manning_agency_name}>
                                 {crewExt.manning_agency_name || '-'}
