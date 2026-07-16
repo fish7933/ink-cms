@@ -218,13 +218,35 @@ export default function DocumentDraftPage() {
   }, [documentTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedManualLine = approvalLines.find(l => l.id === manualLineId) || null;
+  const myPositionOrder = members.find(m => m.id === currentUser?.id)?.position_order ?? null;
   const [manualChain, setManualChain] = useState<ApprovalChainStep[]>([]);
+  // 결재선 관리의 라인은 여러 사람이 같이 쓰는 고정 라인이라, 그 라인에 우연히 "기안자 본인"이나
+  // "기안자보다 하위 직급"인 사람이 들어있을 수 있다 — 그런 단계는 결재 의미가 없으므로(자기
+  // 결재 또는 아랫사람이 윗사람 결재) 중간 결재라인에서 통째로 제외한다.
+  const [manualChainExcluded, setManualChainExcluded] = useState<{ name: string; role: string; reason: 'self' | 'junior' }[]>([]);
   useEffect(() => {
-    if (!selectedManualLine) { setManualChain([]); return; }
+    if (!selectedManualLine) { setManualChain([]); setManualChainExcluded([]); return; }
     let cancelled = false;
-    approvalLineToChainSteps(selectedManualLine).then(chain => { if (!cancelled) setManualChain(chain); });
+    approvalLineToChainSteps(selectedManualLine).then(chain => {
+      if (cancelled) return;
+      const excluded: { name: string; role: string; reason: 'self' | 'junior' }[] = [];
+      const filtered = chain.filter(step => {
+        if (step.approver_id === currentUser?.id) {
+          excluded.push({ name: step.approver_name, role: step.approver_role, reason: 'self' });
+          return false;
+        }
+        const approverOrder = members.find(m => m.id === step.approver_id)?.position_order ?? null;
+        if (myPositionOrder != null && approverOrder != null && approverOrder > myPositionOrder) {
+          excluded.push({ name: step.approver_name, role: step.approver_role, reason: 'junior' });
+          return false;
+        }
+        return true;
+      });
+      setManualChain(filtered);
+      setManualChainExcluded(excluded);
+    });
     return () => { cancelled = true; };
-  }, [selectedManualLine]);
+  }, [selectedManualLine, members, currentUser, myPositionOrder]);
 
   // 재상신 시 직전 상신의 결재라인을 디폴트로 그대로 가져온다 — 기안 부서/문서유형을 그대로
   // 두는 한(서버의 resubmitDocument와 동일한 기준) 자동 재계산 대신 이 값을 그대로 보여준다.
@@ -478,7 +500,13 @@ export default function DocumentDraftPage() {
     if (!orgUnitId) { toast({ title: '기안 부서를 선택해주세요.', variant: 'destructive' }); return; }
     if (!title.trim()) { toast({ title: '제목을 입력해주세요.', variant: 'destructive' }); return; }
     if (useManualLine && !manualLineId) { toast({ title: '사용할 결재선을 선택해주세요.', variant: 'destructive' }); return; }
-    if (effectiveChain.length === 0) { toast({ title: useManualLine ? '선택한 결재선에 단계가 없습니다.' : '결재라인을 구성할 수 없는 부서입니다.', variant: 'destructive' }); return; }
+    // 결재선의 결재자가 전부 본인/하위직급이라 제외되어 실제 남은 단계가 0인 경우는 정상
+    // 상황(상신 즉시 승인)이므로 막지 않는다 — 라인 자체에 애초에 단계가 없는 경우만 막는다.
+    const manualLineFullyExcluded = useManualLine && manualLineId && manualChainExcluded.length > 0;
+    if (effectiveChain.length === 0 && !manualLineFullyExcluded) {
+      toast({ title: useManualLine ? '선택한 결재선에 단계가 없습니다.' : '결재라인을 구성할 수 없는 부서입니다.', variant: 'destructive' });
+      return;
+    }
     const missingField = formFields.find(f => f.required && (formValues[f.key] === undefined || formValues[f.key] === '' || formValues[f.key] === null));
     if (missingField) { toast({ title: `${missingField.label}을(를) 입력해주세요.`, variant: 'destructive' }); return; }
 
@@ -801,7 +829,7 @@ export default function DocumentDraftPage() {
                 )}
 
                 {useManualLine ? (
-                  manualLineId && manualChain.length === 0 ? (
+                  manualLineId && manualChain.length === 0 && manualChainExcluded.length === 0 ? (
                     <p className="text-xs text-red-500">선택한 결재선에 단계가 없습니다.</p>
                   ) : !manualLineId ? (
                     <p className="text-xs text-gray-400">사용할 결재선을 선택하세요.</p>
@@ -815,6 +843,13 @@ export default function DocumentDraftPage() {
                 ) : previewError ? (
                   <p className="text-xs text-red-500">{previewError}</p>
                 ) : null}
+
+                {useManualLine && manualLineId && manualChainExcluded.length > 0 && (
+                  <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded px-2 py-1.5">
+                    다음 결재자는 이 결재라인에서 제외되었습니다(본인 기안이거나 기안자보다 하위 직급): {manualChainExcluded.map(e => `${e.name}(${e.reason === 'self' ? '본인' : '하위직급'})`).join(', ')}
+                    {manualChain.length === 0 && ' — 남은 결재자가 없어 상신 즉시 승인 처리됩니다.'}
+                  </p>
+                )}
 
                 {effectiveChain.length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap">

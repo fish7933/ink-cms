@@ -350,20 +350,22 @@ export const approvalDocumentService = {
     // manualChain을 만든 결재선의 id — 반려 후 재상신 시 같은 결재선을 다시 골라주기 위해 기억해둔다.
     manualLineId?: string;
   }): Promise<ApprovalDocumentWithDetails> {
-    const chain = input.manualChain && input.manualChain.length > 0
-      ? input.manualChain
-      : await this.previewChain(input.org_unit_id, input.document_type_id);
-    if (chain.length === 0) {
+    // manualChain이 배열로 넘어왔다는 것 자체가 "결재선 관리 라인을 쓰겠다"는 명시적 선택이다 —
+    // 그 배열이 비어있어도(호출부에서 본인/하위직급 결재자를 제외하고 남은 게 없는 경우) 조직도
+    // 자동계산으로 조용히 대체하면 안 되고, "결재자 없음 = 즉시 승인"으로 처리해야 한다.
+    const usingManualLine = input.manualChain !== undefined;
+    const chain = usingManualLine ? input.manualChain! : await this.previewChain(input.org_unit_id, input.document_type_id);
+    if (!usingManualLine && chain.length === 0) {
       throw new Error('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
     }
 
     const now = new Date().toISOString();
     // 기안자 본인이 결재라인에 포함돼 있으면 그 단계는 생성 시점에 자동 승인 처리 — 단, 이건
     // 조직도 기반 자동 계산 체인에서만 의미가 있다(내 상위 직급을 거슬러 올라가다 보면 내
-    // 자리를 다시 지나칠 수 있음). 결재선 관리에서 직접 고른 결재선은 여러 사람이 공용으로
-    // 재사용하는 고정 라인이라, 그 라인의 특정 단계에 우연히 내 계정이 들어있다고 해서 실제
-    // 검토 없이 자동 승인돼버리면 안 된다.
-    const isAutoChain = !(input.manualChain && input.manualChain.length > 0);
+    // 자리를 다시 지나칠 수 있음). 결재선 관리에서 직접 고른 결재선은 본인/하위직급 결재자를
+    // 호출부(DocumentDraftPage.tsx)에서 이미 걸러내고 넘기므로, 여기서는 별도 자동승인 처리를
+    // 하지 않는다.
+    const isAutoChain = !usingManualLine;
     const stepRows = chain.map((c, i) => {
       const isSelf = isAutoChain && c.approver_id === input.created_by;
       return {
@@ -813,11 +815,14 @@ export const approvalDocumentService = {
 
     const now = new Date().toISOString();
     const deptOrTypeChanged = input.org_unit_id !== existing.org_unit_id || input.document_type_id !== existing.document_type_id;
-    const hasManualChain = !!(input.manualChain && input.manualChain.length > 0);
+    // manualChain이 배열로 넘어왔다는 것 자체가 결재선 관리 라인을 쓰겠다는 명시적 선택이다 —
+    // 그 배열이 비어있어도(호출부에서 본인/하위직급 결재자를 제외한 결과) 조직도 자동계산으로
+    // 대체하면 안 된다.
+    const usingManualLine = input.manualChain !== undefined;
 
     let stepRows: { step_order: number; approver_id: string; approver_name: string; approver_label: string | null; status: 'approved' | 'pending'; comment: string | null; acted_at: string | null }[];
     let manualLineIdForPayload: string | null;
-    if (!hasManualChain && !deptOrTypeChanged && (prevSteps || []).length > 0) {
+    if (!usingManualLine && !deptOrTypeChanged && (prevSteps || []).length > 0) {
       // 디폴트: 부서/문서유형을 바꾸지 않았으면 직전 상신의 결재라인을 그대로 재사용한다.
       // 본인 결재라 자동승인됐던 단계만 유지하고, 나머지는 전부 pending으로 되돌려 다시 검토받는다.
       manualLineIdForPayload = existing.manual_line_id;
@@ -834,11 +839,11 @@ export const approvalDocumentService = {
         };
       });
     } else {
-      const chain = hasManualChain ? input.manualChain! : await this.previewChain(input.org_unit_id, input.document_type_id);
-      if (chain.length === 0) {
+      const chain = usingManualLine ? input.manualChain! : await this.previewChain(input.org_unit_id, input.document_type_id);
+      if (!usingManualLine && chain.length === 0) {
         throw new Error('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
       }
-      const isAutoChain = !hasManualChain;
+      const isAutoChain = !usingManualLine;
       manualLineIdForPayload = isAutoChain ? null : (input.manualLineId || null);
       stepRows = chain.map((c, i) => {
         const isSelf = isAutoChain && c.approver_id === existing.created_by;
