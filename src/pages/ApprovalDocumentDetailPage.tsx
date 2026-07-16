@@ -211,9 +211,9 @@ export default function ApprovalDocumentDetailPage() {
           <Badge variant="outline" className={statusInfo.className}><StatusIcon className="w-3 h-3 mr-1" />{statusInfo.label}</Badge>
           {doc.resubmit_count > 0 && <Badge variant="outline" className="text-blue-700 border-blue-300">{doc.resubmit_count + 1}차 상신</Badge>}
           {isMyTurn && <Badge className="bg-blue-500">내 차례</Badge>}
-          {doc.status === 'approved' && (
-            <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => window.open(`/print/documents/${doc.id}`, '_blank')}><Printer className="w-3.5 h-3.5" />시행문 출력</Button>
-          )}
+          <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => window.open(`/print/documents/${doc.id}`, '_blank')}>
+            <Printer className="w-3.5 h-3.5" />{doc.status === 'approved' ? '시행문 출력' : '기안문 출력'}
+          </Button>
           {isMyTurn && !actionType && (
             <>
               <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-600" onClick={() => { setForceMode(false); setActionType('approved'); }}><CheckCircle2 className="h-4 w-4 mr-1" />승인</Button>
