@@ -75,7 +75,7 @@ function withDateSuffix(name: string, date: string): string {
 
 export default function RotationPlanFormPage() {
   const { toast } = useToast();
-  const { activeTabId, closeTab, openNewTab, tabs } = useTabContext();
+  const { activeTabId, closeTab, openTab } = useTabContext();
   const [searchParams] = useSearchParams();
   const params = useParams<{ id?: string }>();
   const editPlanId = params.id;
@@ -590,10 +590,9 @@ export default function RotationPlanFormPage() {
       } else {
         toast({ title: isEditMode ? '수정 완료' : '작성 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
       }
-      // 교대발령 목록 탭이 없으면 열어준 뒤 현재 폼 탭을 닫음
-      if (!tabs.some(t => t.path === '/crew-rotation')) {
-        openNewTab('/crew-rotation', '선원 교대 발령');
-      }
+      // 작성/수정 완료 후에는 항상 선원 교대 발령 목록으로 이동(이미 열려 있으면 그 탭을
+      // 최신 데이터로 새로고침해 활성화)한 뒤, 현재 폼 탭은 닫는다.
+      openTab('/crew-rotation', '선원 교대 발령');
       if (activeTabId) closeTab(activeTabId);
     } catch (e) {
       toast({ title: '오류', description: String(e), variant: 'destructive' });
