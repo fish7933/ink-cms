@@ -141,16 +141,22 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
     setTabs(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   }, []);
 
+  // 탭바에서 이미 열려 있는 탭을 다시 클릭했을 때도 항상 최신 데이터로 새로고침되어야 하는 경로
+  // (다른 탭에서의 액션으로 목록이 바뀔 수 있는 목록형 화면) — 그 외 탭은 입력 중인 폼 상태
+  // 유지가 더 중요하므로 재마운트하지 않는다.
+  const ALWAYS_REFRESH_ON_ACTIVATE = new Set(['/crew', '/crew/management']);
+
   const activateTab = useCallback((id: string) => {
     setTabs(current => {
       const tab = current.find(t => t.id === id);
       if (tab) {
         setActiveTabId(id);
         navigate(tab.path);
+        if (ALWAYS_REFRESH_ON_ACTIVATE.has(tab.path)) refreshTab(id);
       }
       return current;
     });
-  }, [navigate]);
+  }, [navigate, refreshTab]);
 
   return (
     <TabContext.Provider value={{ tabs, activeTabId, refreshNonces, openTab, openNewTab, closeTab, closeLastTab, closeAllTabs, updateTab, activateTab }}>

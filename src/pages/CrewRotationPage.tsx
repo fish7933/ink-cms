@@ -362,8 +362,6 @@ export function CrewRotationPage() {
     if (await rotationService.executeRotationPlan(planId)) {
       alert('발령이 실행되었습니다. 선원 상태가 업데이트되었습니다.');
       loadPlans();
-      // 선원 목록 탭 열기 (미개방 시 신규, 개방 시 활성화 - 재마운트되며 최신 데이터 로딩)
-      openNewTab('/crew', '선원 목록');
     } else alert('실행 중 오류가 발생했습니다.');
   };
 
@@ -383,7 +381,6 @@ export function CrewRotationPage() {
       });
       setSelectedIds([]);
       loadPlans();
-      openNewTab('/crew', '선원 목록');
     } finally {
       setBulkExecuting(false);
     }
