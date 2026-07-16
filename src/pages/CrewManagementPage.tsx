@@ -742,6 +742,9 @@ export function CrewManagementPage() {
                                   {c.pending_plan_status === 'pending_approval' && (
                                     <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">결재중</Badge>
                                   )}
+                                  {c.pending_plan_status === 'approved' && (
+                                    <Badge variant="outline" className="text-[10px] h-4 px-1 text-emerald-600 border-emerald-300">발령실행중</Badge>
+                                  )}
                                 </td>
                               )}
                               <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.owner_name : (c.pending_owner_name || crewExt.owner_name)}>
