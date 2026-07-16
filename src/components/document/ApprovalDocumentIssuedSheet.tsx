@@ -19,7 +19,11 @@ interface Props {
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
 export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false, leaveDetail, referenceLabels = [] }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
-  const issuedDate = doc.completed_at ? new Date(doc.completed_at) : new Date(doc.created_at);
+  // 기안일(작성/상신일)과 시행일(결재 완료일)은 서로 다른 날짜다 — 기안일은 항상 created_at,
+  // 시행일은 결재가 실제로 끝난 completed_at만 쓰고(완료 전이면 created_at으로 대체해 보여주지
+  // 않는다), 결재 진행중인 문서를 시행일이 정해진 것처럼 잘못 표기하지 않도록 한다.
+  const draftedDate = new Date(doc.created_at);
+  const issuedDate = doc.completed_at ? new Date(doc.completed_at) : null;
   const fields = documentType?.field_schema || [];
 
   // 결재란에 표시되는 approver_label은 "부서명 · 직급명" 형태로 저장되어 있어, 그 중 직급(직책)만 뽑아 쓴다.
@@ -87,7 +91,8 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         <table style={{ flex: 1, fontSize: 13 }}>
           <tbody>
             <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
-            <tr><td style={{ padding: '3px 0' }}><b>시행일자</b>&nbsp;&nbsp;{issuedDate.toLocaleDateString('ko-KR')}</td></tr>
+            <tr><td style={{ padding: '3px 0' }}><b>기안일자</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')}</td></tr>
+            <tr><td style={{ padding: '3px 0' }}><b>시행일자</b>&nbsp;&nbsp;{issuedDate ? issuedDate.toLocaleDateString('ko-KR') : '결재 진행중'}</td></tr>
             <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
             {referenceLabels.length > 0 && (
               <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
