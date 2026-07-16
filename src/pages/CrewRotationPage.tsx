@@ -561,7 +561,7 @@ export function CrewRotationPage() {
                   {paginatedDeletedPlans.map(plan => (
                     <TableRow key={plan.id}>
                       <TableCell><Checkbox checked={deletedSelectedIds.includes(plan.id)} onCheckedChange={() => toggleDeletedSelect(plan.id)} /></TableCell>
-                      <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
+                      <TableCell className="font-medium text-xs max-w-[140px] truncate" title={plan.plan_name}>{plan.plan_name}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
                       <TableCell className="text-xs">{plan.ship_name}{plan.fleet_name ? ` (${plan.fleet_name})` : ''}</TableCell>
                       <TableCell className="text-xs">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</TableCell>
@@ -780,7 +780,7 @@ export function CrewRotationPage() {
                           <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
                         </TableCell>
                         <TableCell className="text-xs text-gray-500">{format(new Date(plan.rotation_date), 'yyyy-MM', { locale: ko })}</TableCell>
-                        <TableCell className="font-medium text-xs">{plan.plan_name}</TableCell>
+                        <TableCell className="font-medium text-xs max-w-[140px] truncate" title={plan.plan_name}>{plan.plan_name}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
                         <TableCell className="text-xs">
                           <div className="flex items-center gap-1.5">
