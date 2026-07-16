@@ -155,38 +155,53 @@ export function CrewRotationPage() {
     setOwners(data || []);
   };
 
+  // 기간(시작월~종료월) — 화면 목록도 이 기간으로 필터링되고, 아래 엑셀/PDF 내보내기의
+  // 대상(전체 선박 기준)으로도 쓰인다. 개별 달을 하나씩 추가하던 방식 대신 범위로 한 번에 지정.
+  const currentYearMonth = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const [monthFrom, setMonthFrom] = useState(currentYearMonth);
+  const [monthTo, setMonthTo] = useState(currentYearMonth);
+  const pickedMonths = useMemo(() => {
+    if (!monthFrom || !monthTo) return [];
+    const [fy, fm] = monthFrom.split('-').map(Number);
+    const [ty, tm] = monthTo.split('-').map(Number);
+    let start = fy * 12 + (fm - 1);
+    let end = ty * 12 + (tm - 1);
+    if (start > end) [start, end] = [end, start]; // 거꾸로 골라도 허용
+    const months: string[] = [];
+    for (let v = start; v <= end; v++) {
+      months.push(`${Math.floor(v / 12)}-${String((v % 12) + 1).padStart(2, '0')}`);
+    }
+    return months;
+  }, [monthFrom, monthTo]);
+
   const filteredPlans = useMemo(() => {
     let list = plans;
     if (statusTab !== 'all') list = list.filter(p => p.status === statusTab);
     if (filterOwner) list = list.filter(p => p.owner_id === filterOwner);
     if (filterFleet) list = list.filter(p => p.fleet_id === filterFleet);
     if (filterShip) list = list.filter(p => p.ship_id === filterShip);
+    if (pickedMonths.length > 0) {
+      const monthSet = new Set(pickedMonths);
+      list = list.filter(p => monthSet.has(p.rotation_date.slice(0, 7)));
+    }
     // 목록/페이지네이션이 교대일(월) 기준 최신순으로 이어지도록 정렬 — 그래야 페이지가 바뀌어도
     // 월 그룹이 뒤섞이지 않고 최근월 → 과거월 순으로 차례대로 나온다.
     return [...list].sort((a, b) => b.rotation_date.localeCompare(a.rotation_date));
-  }, [plans, statusTab, filterOwner, filterFleet, filterShip]);
+  }, [plans, statusTab, filterOwner, filterFleet, filterShip, pickedMonths]);
 
-  useEffect(() => { setCurrentPage(1); }, [statusTab, filterOwner, filterFleet, filterShip]);
+  useEffect(() => { setCurrentPage(1); }, [statusTab, filterOwner, filterFleet, filterShip, pickedMonths]);
   const totalPages = Math.max(1, Math.ceil(filteredPlans.length / itemsPerPage));
   const paginatedPlans = useMemo(() => filteredPlans.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredPlans, currentPage, itemsPerPage]);
   const goToPage = (p: number) => setCurrentPage(Math.max(1, Math.min(p, totalPages)));
 
   const countByStatus = (s: StatusTab) => s === 'all' ? plans.length : plans.filter(p => p.status === s).length;
 
-  // 배승 계획 목록 엑셀/PDF — ① 상단에서 원하는 달을 여러 개 골라 그 달들에 교대일이 속한 모든 선박의
-  // 계획을 내보내거나, ② 목록에서 체크박스로 직접 고른 계획만 내보낸다. 둘 다 선주/선박/번호/승선자/
+  // 배승 계획 목록 엑셀/PDF — ① 위에서 고른 기간에 교대일이 속한 모든 선박의 계획을
+  // 내보내거나, ② 목록에서 체크박스로 직접 고른 계획만 내보낸다. 둘 다 선주/선박/번호/승선자/
   // 하선자/교대일/교대국가·도시/비고 형태의 한 표로 나가며, 같은 선박끼리는 셀이 병합된다.
-  const [monthPicker, setMonthPicker] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const [pickedMonths, setPickedMonths] = useState<string[]>([]);
-
-  const addPickedMonth = () => {
-    if (!monthPicker || pickedMonths.includes(monthPicker)) return;
-    setPickedMonths(prev => [...prev, monthPicker].sort());
-  };
-  const removePickedMonth = (m: string) => setPickedMonths(prev => prev.filter(x => x !== m));
 
   // 선박/선주/플릿 필터와 무관하게 "모든 선박"을 대상으로 하므로 filteredPlans가 아닌 전체 plans 기준
   const plansForMonths = (months: string[]) => {
@@ -602,26 +617,23 @@ export function CrewRotationPage() {
       <>
       {/* 원래 목록 화면 시작 */}
 
-      {/* 배승 계획 목록 엑셀/PDF — 여러 달을 골라서(선주/선박 필터 무관 전체 선박) 내보낸다 */}
+      {/* 배승 계획 목록 기간 — 화면 목록 필터링 + 엑셀/PDF 내보내기(선주/선박 필터 무관 전체 선박) 대상 */}
       <div className="flex items-center gap-2 rounded-md border bg-gray-50 px-3 py-2 flex-wrap">
-        <span className="text-xs font-medium text-gray-600">배승 계획 목록</span>
+        <span className="text-xs font-medium text-gray-600">기간</span>
         <input
           type="month"
-          value={monthPicker}
-          onChange={e => setMonthPicker(e.target.value)}
+          value={monthFrom}
+          onChange={e => setMonthFrom(e.target.value)}
           className="h-8 rounded-md border border-input bg-white px-2 text-xs"
         />
-        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={addPickedMonth}>+ 달 추가</Button>
-        {pickedMonths.length > 0 && (
-          <div className="flex items-center gap-1 flex-wrap">
-            {pickedMonths.map(m => (
-              <span key={m} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md text-xs bg-blue-50 text-blue-700 border border-blue-200">
-                {m}
-                <button type="button" onClick={() => removePickedMonth(m)} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
-              </span>
-            ))}
-          </div>
-        )}
+        <span className="text-xs text-gray-400">~</span>
+        <input
+          type="month"
+          value={monthTo}
+          onChange={e => setMonthTo(e.target.value)}
+          className="h-8 rounded-md border border-input bg-white px-2 text-xs"
+        />
+        <span className="text-xs text-gray-400">({pickedMonths.length}개월)</span>
         <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExportMonthsExcel} disabled={monthExporting === 'months'}>
           {monthExporting === 'months' ? '내보내는 중...' : '엑셀 다운로드'}
         </Button>
