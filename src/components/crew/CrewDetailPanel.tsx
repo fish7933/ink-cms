@@ -65,8 +65,6 @@ interface Rank {
   rank_category: 'officer' | 'rating';
 }
 
-const RANK_CATEGORY_LABELS: Record<string, string> = { officer: '사관', rating: '부원' };
-
 interface CrewDetailPanelProps {
   id?: string;
   onBack: () => void;
@@ -159,6 +157,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   // 이 선원이 현재 배정되어 있는 활성(임시저장/결재중/승인) 교대계획 — 승선 예정/하선 예정 모두 포함
   const [crewReservations, setCrewReservations] = useState<CrewReservation[]>([]);
   const [formData, setFormData] = useState(EMPTY_FORM);
+  // 등급(A/B/C 등)은 직급 자체의 속성이 아니라 "현재 배당된 선박"의 급여표에 물려있는 값이라
+  // (crew.service.ts의 getAllWithDetails와 동일한 기준) 활성 승선(발령) 기록의 rank_grade를
+  // 우선 쓰고, 없으면 crew_members.current_grade로 대체한다. 폼에서 직접 입력하는 값이 아니라
+  // 읽기 전용으로만 보여준다.
+  const [currentGrade, setCurrentGrade] = useState<string | null>(null);
 
   const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
@@ -208,6 +211,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
       setCrewStatus(data.current_status || data.status || 'registered');
       rotationService.getCrewReservationsByIds([crewId]).then(map => setCrewReservations(map.get(crewId) || []));
+      supabase.from('crew_embarkation_records').select('rank_grade').eq('crew_member_id', crewId).eq('status', 'active').maybeSingle()
+        .then(({ data: activeEmbark }) => setCurrentGrade(activeEmbark?.rank_grade || data.current_grade || null));
       setFormData({
         name: data.name || '',
         name_english: data.name_english || '',
@@ -531,11 +536,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       {/* 탭 */}
       <Tabs defaultValue="basic" onValueChange={scrollToTop}>
         <div className="space-y-1">
-          <TabsList className="grid w-full grid-cols-5 h-8">
+          <TabsList className="grid w-full grid-cols-3 h-8">
             <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
-            <TabsTrigger value="biodata" className="text-xs">Bio-Data</TabsTrigger>
-            <TabsTrigger value="lang_health" className="text-xs">언어/건강</TabsTrigger>
-            <TabsTrigger value="emergency" className="text-xs">연락처</TabsTrigger>
+            <TabsTrigger value="emergency" className="text-xs">비상연락망</TabsTrigger>
             <TabsTrigger value="certificates" className="text-xs">
               증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
             </TabsTrigger>
@@ -574,7 +577,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </div>
             <div>
               <Label className="text-xs">등급</Label>
-              <Input value={selectedRank ? RANK_CATEGORY_LABELS[selectedRank.rank_category] || '' : ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="직급 선택 시 표시" />
+              <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="배정된 선박의 급여표 기준" />
             </div>
           </div>
 
@@ -600,10 +603,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
             <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
           </div>
-        </TabsContent>
 
-        {/* Bio-Data */}
-        <TabsContent value="biodata" className="space-y-3 mt-3 data-[state=inactive]:hidden">
+          <div className="border-t pt-3">
           <p className="text-xs font-semibold text-gray-600">신체 정보</p>
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1 h-9" placeholder="예: Jakarta, Indonesia" /></div>
@@ -701,93 +702,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </div>
             </div>
           </div>
-        </TabsContent>
-
-        {/* 언어/건강 */}
-        <TabsContent value="lang_health" className="space-y-3 mt-3 data-[state=inactive]:hidden">
-          <p className="text-xs font-semibold text-gray-600">언어 능력</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">영어 - 읽기/쓰기</Label>
-              <Select value={formData.english_read_write} onValueChange={v => f('english_read_write', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="수준 선택" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">선택 안함</SelectItem>
-                  {ENGLISH_LEVELS.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">영어 - 말하기/듣기</Label>
-              <Select value={formData.english_speak_listen} onValueChange={v => f('english_speak_listen', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="수준 선택" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">선택 안함</SelectItem>
-                  {ENGLISH_LEVELS.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2">
-              <Label className="text-xs">기타 언어</Label>
-              <Input value={formData.other_languages} onChange={e => f('other_languages', e.target.value)} className="mt-1 h-9" placeholder="예: 인도네시아어 (중급), 일본어 (초급)" />
-            </div>
-            <div className="col-span-2">
-              <Label className="text-xs">업무 능력 평가</Label>
-              <Textarea value={formData.job_ability} onChange={e => f('job_ability', e.target.value)} className="mt-1 text-sm" rows={2} placeholder="업무 능력 및 경력 특이사항" />
-            </div>
-            <div className="col-span-2">
-              <Label className="text-xs">지원 동기</Label>
-              <Textarea value={formData.motivation} onChange={e => f('motivation', e.target.value)} className="mt-1 text-sm" rows={2} placeholder="승선 지원 동기" />
-            </div>
-          </div>
-
-          <div className="border-t pt-3">
-            <p className="text-xs font-semibold text-gray-600 mb-2">건강 / 신체검사</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">약물/알코올 검사일</Label><Input type="date" value={formData.drug_test_date} onChange={e => f('drug_test_date', e.target.value)} className="mt-1 h-9" /></div>
-              <div>
-                <Label className="text-xs">약물/알코올 검사 결과</Label>
-                <Select value={formData.drug_test_result} onValueChange={v => f('drug_test_result', v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">선택 안함</SelectItem>
-                    <SelectItem value="pass">합격 (Pass)</SelectItem>
-                    <SelectItem value="fail">불합격 (Fail)</SelectItem>
-                    <SelectItem value="pending">대기 중</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label className="text-xs">신체검사일</Label><Input type="date" value={formData.physical_exam_date} onChange={e => f('physical_exam_date', e.target.value)} className="mt-1 h-9" /></div>
-              <div>
-                <Label className="text-xs">신체검사 결과</Label>
-                <Select value={formData.physical_exam_result} onValueChange={v => f('physical_exam_result', v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">선택 안함</SelectItem>
-                    <SelectItem value="fit">적합 (Fit)</SelectItem>
-                    <SelectItem value="unfit">부적합 (Unfit)</SelectItem>
-                    <SelectItem value="pending">대기 중</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">황열병 예방접종</Label>
-                <Select value={formData.yellow_fever_vaccination} onValueChange={v => f('yellow_fever_vaccination', v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">선택 안함</SelectItem>
-                    <SelectItem value="yes">접종 완료</SelectItem>
-                    <SelectItem value="no">미접종</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label className="text-xs">황열병 접종일</Label><Input type="date" value={formData.yellow_fever_date} onChange={e => f('yellow_fever_date', e.target.value)} className="mt-1 h-9" disabled={formData.yellow_fever_vaccination !== 'yes'} /></div>
-              <div className="col-span-2">
-                <Label className="text-xs">기왕증 (과거 병력)</Label>
-                <Textarea value={formData.previous_illness} onChange={e => f('previous_illness', e.target.value)} className="mt-1 text-sm" rows={2} placeholder="과거 질병, 수술, 특이 병력 등" />
-              </div>
-            </div>
-          </div>
+        </div>
         </TabsContent>
 
         {/* 연락처 */}
