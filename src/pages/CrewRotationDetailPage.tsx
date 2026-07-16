@@ -50,6 +50,12 @@ export default function CrewRotationDetailPage() {
   const [saveLineDefault, setSaveLineDefault] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
+  // 비고 — 발령 실행 후에도(다른 입력부는 다 잠긴 뒤에도) 대리점/비자 정보 등 특이사항을
+  // 계속 기록할 수 있어야 하므로, 기존 내용을 덮어쓰지 않고 시각/작성자를 붙여 이어붙인다.
+  const [addingNote, setAddingNote] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+
   const loadPlan = async () => {
     if (!id) return;
     setLoading(true);
@@ -107,6 +113,26 @@ export default function CrewRotationDetailPage() {
       window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!plan || !currentUser || !newNoteText.trim()) return;
+    setSavingNote(true);
+    try {
+      const stamp = format(new Date(), 'yyyy-MM-dd HH:mm', { locale: ko });
+      const entry = `[${stamp} ${currentUser.name}] ${newNoteText.trim()}`;
+      const combined = plan.notes ? `${plan.notes}\n${entry}` : entry;
+      const updated = await rotationService.updateRotationPlan(plan.id, { notes: combined });
+      if (updated) {
+        setPlan({ ...plan, notes: combined });
+        setNewNoteText('');
+        setAddingNote(false);
+      } else {
+        toast({ title: '비고 추가 중 오류가 발생했습니다', variant: 'destructive' });
+      }
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -184,12 +210,32 @@ export default function CrewRotationDetailPage() {
               <div className="mt-0.5">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</div>
             </div>
           </div>
-          {plan.notes && (
-            <div>
-              <Label className="text-xs text-gray-500">비고</Label>
-              <p className="text-sm mt-0.5 text-gray-700 whitespace-pre-wrap">{plan.notes}</p>
-            </div>
-          )}
+          <div>
+            <Label className="text-xs text-gray-500">비고</Label>
+            {plan.notes && <p className="text-sm mt-0.5 text-gray-700 whitespace-pre-wrap">{plan.notes}</p>}
+            {addingNote ? (
+              <div className="mt-2 space-y-2">
+                <Textarea
+                  value={newNoteText}
+                  onChange={e => setNewNoteText(e.target.value)}
+                  placeholder="대리점 정보, 비자 정보 등 특이사항을 입력하세요"
+                  className="text-sm min-h-[70px]"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleAddNote} disabled={savingNote || !newNoteText.trim()}>
+                    {savingNote ? '저장 중...' : '추가'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setAddingNote(false); setNewNoteText(''); }} disabled={savingNote}>
+                    취소
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => setAddingNote(true)}>
+                + 비고 추가
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
