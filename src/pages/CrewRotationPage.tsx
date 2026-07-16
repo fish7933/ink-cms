@@ -470,7 +470,7 @@ export function CrewRotationPage() {
             salary_amount: null,
             salary_currency: 'USD',
             embark_date: c.expiry_date,
-            notes: `계약만료일: ${c.expiry_date} (${c.embark_date} + ${c.contract_months}개월)`,
+            notes: '',
           })),
         });
         if (plan) created++;

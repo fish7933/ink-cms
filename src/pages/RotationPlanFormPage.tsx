@@ -819,21 +819,14 @@ export default function RotationPlanFormPage() {
                         {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code || r.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    {(() => {
-                      const opts = gradesForRankId(row.disembarkRankId);
-                      return opts.length > 0 ? (
-                        <Select value={row.disembarkGrade || '_none'} onValueChange={v => updateRow(row.id, { disembarkGrade: v === '_none' ? null : v })}>
-                          <SelectTrigger className="h-7 text-xs w-16 shrink-0 px-1"><SelectValue placeholder="등급" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="_none">선택</SelectItem>
-                            {opts.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input value={row.disembarkGrade || ''} onChange={e => updateRow(row.id, { disembarkGrade: e.target.value || null })}
-                          placeholder="등급" className="h-7 text-xs w-16 shrink-0" />
-                      );
-                    })()}
+                    {/* 하선자는 이미 승선 중인 선원이라 등급이 배정 시점의 사실(현재 배정 선박 급여표
+                        기준)일 뿐 여기서 새로 고르는 값이 아니므로, 고정 표시만 하고 수정은 막는다. */}
+                    <div
+                      className="h-7 text-xs w-16 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
+                      title="현재 승선 중 등급 (고정)"
+                    >
+                      {row.disembarkGrade || '-'}
+                    </div>
                   </div>
                   {draftReservationFor(row.disembarkCrewId) && (
                     <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">

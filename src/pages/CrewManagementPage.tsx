@@ -422,7 +422,7 @@ export function CrewManagementPage() {
           salary_amount: null,
           salary_currency: 'USD',
           embark_date: m.disembark_forecast_date!,
-          notes: `하선예정일: ${m.disembark_forecast_date}`,
+          notes: '',
         })),
       });
       if (plan) created++;
