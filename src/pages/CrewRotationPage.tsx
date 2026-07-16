@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Ship, Users, Calendar, FileText, CheckCircle, AlertTriangle, X, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Ship, Users, CheckCircle, AlertTriangle, X, Trash2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -642,26 +642,6 @@ export function CrewRotationPage() {
         </Button>
       </div>
 
-      {/* 요약 카드 */}
-      <div className="grid gap-3 md:grid-cols-5">
-        {(['all','draft','pending_approval','approved','executed'] as StatusTab[]).map(s => (
-          <Card key={s} className={`cursor-pointer transition-colors ${statusTab === s ? 'border-blue-500 bg-blue-50' : 'hover:bg-gray-50'}`}
-            onClick={() => setStatusTab(s)}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{STATUS_CONFIG[s].label}</CardTitle>
-              {s === 'all' ? <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                : s === 'draft' ? <FileText className="h-3.5 w-3.5 text-gray-400" />
-                : s === 'pending_approval' ? <Calendar className="h-3.5 w-3.5 text-yellow-500" />
-                : s === 'approved' ? <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                : <Ship className="h-3.5 w-3.5 text-blue-500" />}
-            </CardHeader>
-            <CardContent className="px-4 pb-3">
-              <div className="text-2xl font-bold">{countByStatus(s)}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       {/* 필터 */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterOwner || '_all'} onValueChange={v => { setFilterOwner(v === '_all' ? '' : v); setFilterFleet(''); setFilterShip(''); }}>
@@ -696,11 +676,17 @@ export function CrewRotationPage() {
       {/* 상태 탭 */}
       <Tabs value={statusTab} onValueChange={v => setStatusTab(v as StatusTab)}>
         <TabsList className="h-8 gap-0.5">
-          {(['all','draft','pending_approval','approved','executed'] as StatusTab[]).map(s => (
-            <TabsTrigger key={s} value={s} className="text-xs h-7 px-3">
-              {STATUS_CONFIG[s].label} <span className="ml-1 text-[10px] opacity-70">({countByStatus(s)})</span>
-            </TabsTrigger>
-          ))}
+          {(['all','draft','pending_approval','approved','executed'] as StatusTab[]).map(s => {
+            const emphasize = (s === 'draft' || s === 'pending_approval' || s === 'approved') && countByStatus(s) > 0;
+            return (
+              <TabsTrigger key={s} value={s} className="text-xs h-7 px-3">
+                {STATUS_CONFIG[s].label}{' '}
+                <span className={emphasize ? 'ml-1 font-bold text-blue-600' : 'ml-1 text-[10px] opacity-70'}>
+                  ({countByStatus(s)})
+                </span>
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
       </Tabs>
 
