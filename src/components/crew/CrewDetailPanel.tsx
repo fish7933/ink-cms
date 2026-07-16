@@ -560,10 +560,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         <div className="space-y-1">
           <TabsList className="grid w-full grid-cols-3 h-8">
             <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
-            <TabsTrigger value="emergency" className="text-xs">비상연락망</TabsTrigger>
             <TabsTrigger value="certificates" className="text-xs">
               증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
             </TabsTrigger>
+            <TabsTrigger value="emergency" className="text-xs">비상연락망</TabsTrigger>
           </TabsList>
           {!isNew && (
             <TabsList className="grid w-full grid-cols-5 h-8">
