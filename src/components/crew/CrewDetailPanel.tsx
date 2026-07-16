@@ -502,8 +502,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   const formBody = (
     <>
-      {/* 사진 + 핵심 정보(이름/직급/등급) — 어느 탭에서든 항상 보이도록 탭 밖에 배치 */}
-      <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+      {/* 사진 + 선주/플릿/선박·직급/이름(국적) — 어느 탭에서든 항상 보이도록 탭 밖에 배치 */}
+      <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
         <div className="flex flex-col items-center gap-1.5 shrink-0">
           {previewUrl ? (
             <div className="relative">
@@ -529,18 +529,21 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           </Label>
           <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
         </div>
-        <div className="flex-1 grid grid-cols-3 gap-3">
-          <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
-          <div>
-            <Label className="text-xs">직급 *</Label>
-            <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
-              <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
-              <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">등급</Label>
-            <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="배정된 선박의 급여표 기준" />
+        <div>
+          {shipContextParts.length > 0 && (
+            <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-0.5">
+              {shipContextParts.map((part, i) => (
+                <span key={i} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="text-gray-300">|</span>}
+                  {part}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="text-xl font-bold text-gray-900">
+            {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
+            {crewDisplayName(formData) || (isNew ? '새 선원 등록' : '선원 정보 수정')}
+            {formData.nationality && <span className="text-gray-400 font-normal ml-1.5">({formData.nationality})</span>}
           </div>
         </div>
       </div>
@@ -585,6 +588,21 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
         {/* 기본 정보 */}
         <TabsContent value="basic" className="space-y-3 mt-3 data-[state=inactive]:hidden">
+          <div className="grid grid-cols-3 gap-3">
+            <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
+            <div>
+              <Label className="text-xs">직급 *</Label>
+              <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">등급</Label>
+              <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="배정된 선박의 급여표 기준" />
+            </div>
+          </div>
+
           {formData.nationality === 'KR' && (
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">이름 (한국어)</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" /></div>
@@ -1147,29 +1165,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     return (
       <div ref={panelRef} className="space-y-4 pt-3 border-t">
         <div className="flex items-center justify-between">
-          <div>
-            {isNew ? (
-              <span className="text-xl font-bold text-gray-900">새 선원 등록</span>
-            ) : (
-              <>
-                {shipContextParts.length > 0 && (
-                  <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-0.5">
-                    {shipContextParts.map((part, i) => (
-                      <span key={i} className="flex items-center gap-1.5">
-                        {i > 0 && <span className="text-gray-300">|</span>}
-                        {part}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <span className="text-xl font-bold text-gray-900">
-                  {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
-                  {crewDisplayName(formData) || '선원 정보 수정'}
-                  {formData.nationality && <span className="text-gray-400 font-normal ml-1.5">({formData.nationality})</span>}
-                </span>
-              </>
-            )}
-          </div>
+          <span className="text-sm font-medium text-gray-500">
+            {isNew ? '새 선원 등록' : crewDisplayName(formData) || '선원 정보 수정'}
+          </span>
           <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
             <Save className="w-4 h-4" />
             {saving ? '저장 중...' : isNew ? '등록' : '저장'}
@@ -1191,27 +1189,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <div>
-                {isNew ? (
-                  <CardTitle className="text-2xl font-bold">선원 등록</CardTitle>
-                ) : (
-                  <>
-                    {shipContextParts.length > 0 && (
-                      <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-0.5">
-                        {shipContextParts.map((part, i) => (
-                          <span key={i} className="flex items-center gap-1.5">
-                            {i > 0 && <span className="text-gray-300">|</span>}
-                            {part}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <CardTitle className="text-2xl font-bold">
-                      {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
-                      {crewDisplayName(formData) || '선원 정보'}
-                      {formData.nationality && <span className="text-gray-400 font-normal ml-1.5">({formData.nationality})</span>}
-                    </CardTitle>
-                  </>
-                )}
+                <CardTitle className="text-base">
+                  {isNew ? '선원 등록' : crewDisplayName(formData) || '선원 정보'}
+                </CardTitle>
               </div>
             </div>
             <div className="flex items-center gap-2">
