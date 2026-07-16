@@ -16,6 +16,7 @@ import { useDispatchApprovalPendingCount } from '@/hooks/useDispatchApprovalPend
 import { useRotationPlanActionCount } from '@/hooks/useRotationPlanActionCount';
 import { useApprovalInboxBadgeCount } from '@/hooks/useApprovalInboxBadgeCount';
 import { useMyPayslipsPendingCount } from '@/hooks/useMyPayslipsPendingCount';
+import { useApprovalToastNotifications } from '@/hooks/useApprovalToastNotifications';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export default function Layout() {
   const rotationPlanActionCount = useRotationPlanActionCount();
   const approvalInboxBadgeCount = useApprovalInboxBadgeCount();
   const myPayslipsPendingCount = useMyPayslipsPendingCount();
+  useApprovalToastNotifications();
 
   useEffect(() => {
     let isMounted = true;
