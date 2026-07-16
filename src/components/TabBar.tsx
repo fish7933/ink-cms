@@ -43,13 +43,19 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
 
   if (tabs.length === 0) return null;
 
+  // 탭이 많아져도 가로 스크롤 없이 전부 보이도록 한다 — 설정된 최소너비(tabMinWidth)로
+  // 다 들어가면 그 기준(최소~최대)을 그대로 쓰고, 그래도 넘치면 스크롤 대신 그 이하로도
+  // 계속 줄여서 항상 전체 탭이 화면 안에 들어오게 한다(스크롤 시 뒤쪽 탭이 우측 닫기
+  // 버튼 뒤로 넘어가 버리던 문제).
   const availableWidth = containerWidth - CONTROLS_WIDTH;
   const baseTabWidth = availableWidth > 0
-    ? Math.max(uiSettings.tabMinWidth, Math.min(uiSettings.tabMaxWidth, Math.floor(availableWidth / tabs.length)))
+    ? (uiSettings.tabMinWidth * tabs.length <= availableWidth
+        ? Math.max(uiSettings.tabMinWidth, Math.min(uiSettings.tabMaxWidth, Math.floor(availableWidth / tabs.length)))
+        : Math.max(1, Math.floor(availableWidth / tabs.length)))
     : uiSettings.tabMaxWidth;
 
   return (
-    <div ref={containerRef} className="bg-gray-100 border-b border-gray-200 flex items-end gap-1.5 px-2 pt-1.5 overflow-x-auto scrollbar-hide shrink-0" style={{ scrollbarWidth: 'none' }}>
+    <div ref={containerRef} className="bg-gray-100 border-b border-gray-200 flex items-end gap-1.5 px-2 pt-1.5 overflow-hidden shrink-0">
       {tabs.map(tab => {
         const isActive = tab.id === activeTabId;
         const isHovered = hoveredTabId === tab.id;
