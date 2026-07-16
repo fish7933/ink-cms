@@ -191,9 +191,15 @@ export interface LedgerRow {
   ownerGroupSize: number;   // ownerGroupStart일 때만 의미 있음
   shipGroupStart: boolean;  // 이 행이 (선주,선박) 그룹의 첫 행인지
   shipGroupSize: number;    // shipGroupStart일 때만 의미 있음
+  planGroupStart: boolean;  // 이 행이 하나의 교대 계획(같은 계획의 여러 승선/하선 배정) 그룹의 첫 행인지
+  planGroupSize: number;    // planGroupStart일 때만 의미 있음 — 비고는 계획 단위라 이 범위로 병합
 }
 
+type FlatRow = Omit<LedgerRow, 'ownerGroupStart' | 'ownerGroupSize' | 'shipGroupStart' | 'shipGroupSize' | 'planGroupStart' | 'planGroupSize'> & { planId: string };
+
 // plans(계획 단위)를 선주>선박>교대일 순으로 정렬한 뒤, 계획별 배정(승선/하선 쌍)을 한 행씩 펼친다.
+// 비고는 배정(승선/하선 쌍) 각각의 것이 아니라 교대 계획 자체의 비고이므로, 계획당 한 번만 값을
+// 갖고 같은 계획에 속한 행끼리는 병합해서 보여준다(선주/선박과 같은 방식, 그룹 단위만 다름).
 export function buildRotationPlanLedgerRows(
   plans: CrewRotationPlanWithDetails[],
   portLabelByPlanId: Map<string, string>
@@ -204,7 +210,7 @@ export function buildRotationPlanLedgerRows(
     a.rotation_date.localeCompare(b.rotation_date)
   );
 
-  const flat: Omit<LedgerRow, 'ownerGroupStart' | 'ownerGroupSize' | 'shipGroupStart' | 'shipGroupSize'>[] = [];
+  const flat: FlatRow[] = [];
   let no = 1;
   for (const plan of sorted) {
     const portLabel = portLabelByPlanId.get(plan.id) || '-';
@@ -213,6 +219,7 @@ export function buildRotationPlanLedgerRows(
       const boarding = a?.on_crew_id ? `${a.on_rank_code || ''}${a.on_rank_grade ? `(${a.on_rank_grade})` : ''} ${a.on_crew_name || ''}`.trim() : '-';
       const disembark = a?.off_crew_id ? `${a.off_rank_code || ''}${a.off_rank_grade ? `(${a.off_rank_grade})` : ''} ${a.off_crew_name || ''}`.trim() : '-';
       flat.push({
+        planId: plan.id,
         ownerName: plan.owner_name,
         shipName: plan.ship_name,
         no: no++,
@@ -220,12 +227,12 @@ export function buildRotationPlanLedgerRows(
         disembark,
         rotationDate: plan.rotation_date,
         portLabel,
-        notes: a?.notes || '',
+        notes: plan.notes || '',
       });
     }
   }
 
-  // 선주 연속 그룹(선박이 달라도 선주가 같으면 이어짐) + 그 안의 (선주,선박) 연속 그룹을 각각 계산
+  // 선주 연속 그룹(선박이 달라도 선주가 같으면 이어짐) > (선주,선박) 연속 그룹 > 계획 연속 그룹 순으로 계산
   const rows: LedgerRow[] = [];
   let i = 0;
   while (i < flat.length) {
@@ -238,14 +245,25 @@ export function buildRotationPlanLedgerRows(
       let sj = k + 1;
       while (sj < oj && flat[sj].shipName === flat[k].shipName) sj++;
       const shipGroupSize = sj - k;
-      for (let m = k; m < sj; m++) {
-        rows.push({
-          ...flat[m],
-          ownerGroupStart: m === i,
-          ownerGroupSize: m === i ? ownerGroupSize : 0,
-          shipGroupStart: m === k,
-          shipGroupSize: m === k ? shipGroupSize : 0,
-        });
+
+      let p = k;
+      while (p < sj) {
+        let pj = p + 1;
+        while (pj < sj && flat[pj].planId === flat[p].planId) pj++;
+        const planGroupSize = pj - p;
+        for (let m = p; m < pj; m++) {
+          const { planId: _planId, ...row } = flat[m];
+          rows.push({
+            ...row,
+            ownerGroupStart: m === i,
+            ownerGroupSize: m === i ? ownerGroupSize : 0,
+            shipGroupStart: m === k,
+            shipGroupSize: m === k ? shipGroupSize : 0,
+            planGroupStart: m === p,
+            planGroupSize: m === p ? planGroupSize : 0,
+          });
+        }
+        p = pj;
       }
       k = sj;
     }
@@ -307,6 +325,9 @@ export async function exportRotationPlansLedgerToExcel(
     }
     if (r.shipGroupStart && r.shipGroupSize > 1) {
       merges.push({ s: { r: DATA_START + i, c: 1 }, e: { r: DATA_START + i + r.shipGroupSize - 1, c: 1 } });
+    }
+    if (r.planGroupStart && r.planGroupSize > 1) {
+      merges.push({ s: { r: DATA_START + i, c: 7 }, e: { r: DATA_START + i + r.planGroupSize - 1, c: 7 } });
     }
   });
   worksheet['!merges'] = merges;
