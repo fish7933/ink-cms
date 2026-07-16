@@ -21,7 +21,6 @@ import { getCertificateCategories } from '@/services/certificate-category.servic
 import type { Nationality } from '@/types/nationality';
 import type { CertificateType, CertificateNationalityValidity } from '@/types/certificate-type';
 import type { CertificateCategory } from '@/types/certificate-category';
-import CrewStatusBadge from '@/components/crew/CrewStatusBadge';
 import SeaServiceDialog from '@/components/crew/SeaServiceDialog';
 import SeaServiceEvaluationDialog from '@/components/crew/SeaServiceEvaluationDialog';
 import SeaServiceMedicalDialog from '@/components/crew/SeaServiceMedicalDialog';
@@ -154,7 +153,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
-  const [crewStatus, setCrewStatus] = useState('registered');
   // 이 선원이 현재 배정되어 있는 활성(임시저장/결재중/승인) 교대계획 — 승선 예정/하선 예정 모두 포함
   const [crewReservations, setCrewReservations] = useState<CrewReservation[]>([]);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -202,7 +200,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setPreviewUrl('');
       setCertificates([]);
       setEmergencyContacts([]);
-      setCrewStatus('registered');
       setShipContext(null);
     }
   }, [id]);
@@ -214,7 +211,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       if (error) throw error;
       if (!data) { toast({ title: '선원을 찾을 수 없습니다.', variant: 'destructive' }); onBack(); return; }
 
-      setCrewStatus(data.current_status || data.status || 'registered');
       rotationService.getCrewReservationsByIds([crewId]).then(map => setCrewReservations(map.get(crewId) || []));
       supabase.from('crew_embarkation_records').select('rank_grade').eq('crew_member_id', crewId).eq('status', 'active').maybeSingle()
         .then(({ data: activeEmbark }) => setCurrentGrade(activeEmbark?.rank_grade || data.current_grade || null));
@@ -489,9 +485,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   };
 
   const selectedRank = ranks.find(r => r.id === formData.rank_id);
-  const shipContextLine = shipContext
-    ? [shipContext.ownerName, shipContext.fleetName, shipContext.shipName].filter(Boolean).join(' > ')
-    : '';
+  // 선주/플릿/선박은 하나로 이어붙이지 않고 각각 구분된 박스로 보여준다(사용자가 ">"는
+  // 단순히 흐름 표시였을 뿐 셋을 하나의 문자열처럼 붙이려던 의도가 아니었음).
+  const shipContextParts = shipContext
+    ? [shipContext.ownerName, shipContext.fleetName, shipContext.shipName].filter(Boolean)
+    : [];
   const rankGradeLabel = selectedRank
     ? `${selectedRank.rank_code}${currentGrade ? `(${currentGrade})` : ''}`
     : '';
@@ -1160,14 +1158,19 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               <span className="text-xl font-bold text-gray-900">새 선원 등록</span>
             ) : (
               <>
-                <div className="text-sm font-medium text-gray-500">{shipContextLine || ' '}</div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xl font-bold text-gray-900">
-                    {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
-                    {crewDisplayName(formData) || '선원 정보 수정'}
-                  </span>
-                  <CrewStatusBadge status={crewStatus} />
-                </div>
+                {shipContextParts.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    {shipContextParts.map((part, i) => (
+                      <span key={i} className="text-xl font-bold text-gray-700 px-2 py-0.5 rounded-md border border-gray-300 bg-gray-50">
+                        {part}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <span className="text-xl font-bold text-gray-900">
+                  {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
+                  {crewDisplayName(formData) || '선원 정보 수정'}
+                </span>
               </>
             )}
           </div>
@@ -1196,14 +1199,19 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                   <CardTitle className="text-2xl font-bold">선원 등록</CardTitle>
                 ) : (
                   <>
-                    <div className="text-sm font-medium text-gray-500">{shipContextLine || ' '}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <CardTitle className="text-2xl font-bold">
-                        {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
-                        {crewDisplayName(formData) || '선원 정보'}
-                      </CardTitle>
-                      <CrewStatusBadge status={crewStatus} />
-                    </div>
+                    {shipContextParts.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        {shipContextParts.map((part, i) => (
+                          <span key={i} className="text-2xl font-bold text-gray-700 px-2 py-0.5 rounded-md border border-gray-300 bg-gray-50">
+                            {part}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <CardTitle className="text-2xl font-bold">
+                      {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
+                      {crewDisplayName(formData) || '선원 정보'}
+                    </CardTitle>
                   </>
                 )}
               </div>
