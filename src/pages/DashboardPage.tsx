@@ -9,6 +9,9 @@ import { useTabContext } from '@/contexts/TabContext';
 import { jobPostingGroupService } from '@/services/job-posting-group.service';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { approvalService } from '@/services/approval.service';
+import { rotationApprovalService } from '@/services/rotation-approval.service';
+import { contractApprovalService } from '@/services/contract-approval.service';
+import { dispatchOrderApprovalService } from '@/services/dispatch-order-approval.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { EMPLOYEE_ROLES } from '@/pages/EmployeeCardManagementPage';
@@ -107,16 +110,25 @@ export default function DashboardPage() {
   const loadMyPendingApprovals = async (user: User) => {
     const members = await orgChartService.getOrgMembers();
     const myOrgUnitIds = members.find(m => m.id === user.id)?.org_unit_ids || [];
+    const isMyTurn = (a: { status: string; current_approver?: { approver_id: string } }) =>
+      a.status === 'pending' && a.current_approver?.approver_id === user.id;
 
-    const [crewApprovals, documents, unreadReferences] = await Promise.all([
+    const [crewApprovals, rotationApprovals, contractApprovals, dispatchApprovals, documents, unreadReferences] = await Promise.all([
       approvalService.getMyRelatedApprovals(user.id),
+      rotationApprovalService.getMyRelatedApprovals(user.id),
+      contractApprovalService.getMyRelatedApprovals(user.id),
+      dispatchOrderApprovalService.getMyRelatedApprovals(user.id),
       approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
       approvalDocumentService.getUnreadReferencedDocuments(user.id, myOrgUnitIds),
     ]);
 
-    const myTurnCrew: MyPendingItem[] = crewApprovals
-      .filter(a => a.status === 'pending' && a.current_approver?.approver_id === user.id)
-      .map(a => ({ id: a.id, kind: 'crew', title: '선원추천 결재', requesterName: a.requester_name, createdAt: a.created_at }));
+    // 채용/배승/계약/승진강등 — 4개 도메인 모두 발령 결재함(/dispatch-approval-inbox)으로 모인다.
+    const myTurnCrew: MyPendingItem[] = [
+      ...crewApprovals.filter(isMyTurn).map(a => ({ ...a, title: '선원추천 결재' })),
+      ...rotationApprovals.filter(isMyTurn).map(a => ({ ...a, title: '배승 결재' })),
+      ...contractApprovals.filter(isMyTurn).map(a => ({ ...a, title: '계약 결재' })),
+      ...dispatchApprovals.filter(isMyTurn).map(a => ({ ...a, title: '승진/강등 결재' })),
+    ].map(a => ({ id: a.id, kind: 'crew' as const, title: a.title, requesterName: a.requester_name, createdAt: a.created_at }));
 
     const myTurnDocs: MyPendingItem[] = documents
       .filter(d => d.status === 'pending' && d.steps.some(s => s.step_order === d.current_step && s.approver_id === user.id && s.status === 'pending'))
@@ -133,12 +145,16 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!currentUser || !['ship_manager', 'manning_agency', 'admin', 'system_admin'].includes(currentUser.role)) return;
     const handler = () => loadMyPendingApprovals(currentUser).catch(e => console.error('내 결재함 위젯 갱신 실패', e));
-    window.addEventListener('approval-inbox-data-changed', handler);
-    window.addEventListener('dispatch-approval-inbox-data-changed', handler);
-    return () => {
-      window.removeEventListener('approval-inbox-data-changed', handler);
-      window.removeEventListener('dispatch-approval-inbox-data-changed', handler);
-    };
+    const events = [
+      'approval-inbox-data-changed',
+      'dispatch-approval-inbox-data-changed',
+      'rotation-plan-data-changed',
+      'recommendation-data-changed',
+      'contract-data-changed',
+      'dispatch-order-data-changed',
+    ];
+    events.forEach(evt => window.addEventListener(evt, handler));
+    return () => events.forEach(evt => window.removeEventListener(evt, handler));
   }, [currentUser]);
 
   const loadPendingPayslips = async (user: User) => {
