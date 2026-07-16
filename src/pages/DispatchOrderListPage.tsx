@@ -119,6 +119,7 @@ export default function DispatchOrderListPage() {
       toast({ title: '결재 상신 완료', description: '발령 결재함(승진/강등)에서 진행 상황을 확인할 수 있습니다.' });
       setSubmitOrderId(null);
       loadOrders();
+      window.dispatchEvent(new CustomEvent('dispatch-order-data-changed'));
     } finally {
       setSubmitting(false);
     }

@@ -251,6 +251,7 @@ export default function DispatchOrderPage() {
       }
       toast({ title: '결재 상신 완료', description: '승인이 완료되면 계약/승선경력에 즉시 반영됩니다.' });
       setSubmitDialogOpen(false);
+      window.dispatchEvent(new CustomEvent('dispatch-order-data-changed'));
       if (activeTabId) closeTab(activeTabId);
     } catch (e) {
       toast({ title: '오류', description: String(e), variant: 'destructive' });

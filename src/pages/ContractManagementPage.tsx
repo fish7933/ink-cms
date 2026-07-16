@@ -116,6 +116,7 @@ export default function ContractManagementPage() {
       setSubmitDialogContracts([]);
       setSelectedIds([]);
       loadData();
+      window.dispatchEvent(new CustomEvent('contract-data-changed'));
     } finally {
       setSubmitting(false);
     }
