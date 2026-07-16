@@ -6,7 +6,7 @@ import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
   ArrowUpCircle, Ship, Users, UserCheck, UserMinus, LayoutList,
   CheckCircle, XCircle, RefreshCw,
-  ArrowUp, ArrowDown, ArrowUpDown, Eye, Star,
+  ArrowUp, ArrowDown, ArrowUpDown, Star,
 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
@@ -729,7 +729,7 @@ export function CrewManagementPage() {
                           const natEntry = nationalities.find(n => n.country_code === c.nationality || n.country_name_ko === c.nationality);
                           const nationalityDisplay = natEntry ? natEntry.country_code : (c.nationality || '-');
                           return (
-                            <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => toggleSelect(c.id)}>
+                            <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보')}>
                               <td className="px-2 py-1.5" onClick={e => e.stopPropagation()}>
                                 <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
                               </td>
@@ -862,12 +862,6 @@ export function CrewManagementPage() {
                               </td>
                               <td className="px-2 py-1.5 text-right" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-end gap-1">
-                                  <Button
-                                    size="sm" variant="outline" className="h-6 text-xs px-2 gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                                    onClick={() => openNewTab(`/crew/${c.id}`, crewDisplayName(c) || '선원 정보')}
-                                  >
-                                    <Eye className="w-3 h-3" />열람
-                                  </Button>
                                   {permissions.canDelete && (
                                     <Button
                                       size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"

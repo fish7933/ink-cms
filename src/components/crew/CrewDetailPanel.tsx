@@ -14,6 +14,7 @@ import { crewService } from '@/services/crew.service';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewDisplayName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { useTabContext } from '@/contexts/TabContext';
 import { rotationService, type CrewReservation } from '@/services/rotation.service';
 import { getNationalities } from '@/services/nationality.service';
 import { getCertificateTypes, getAllNationalityValidityOverrides } from '@/services/certificate-type.service';
@@ -122,6 +123,7 @@ function calculateAge(dateOfBirth: string): number {
 
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
   const { toast } = useToast();
+  const { activeTabId, updateTab } = useTabContext();
   const panelRef = useRef<HTMLDivElement>(null);
 
   const scrollToTop = useCallback(() => {
@@ -499,6 +501,14 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const rankGradeLabel = selectedRank
     ? `${selectedRank.rank_code}${currentGrade ? `(${currentGrade})` : ''}`
     : '';
+
+  // 탭 제목을 이름만이 아니라 "직급 이름"으로 유지 — 목록에서 열 때 붙는 제목은 그 시점의
+  // 직급코드로 고정되므로, 직급/이름을 이 화면에서 고쳤을 때도 탭 제목이 따라가도록 갱신한다.
+  useEffect(() => {
+    if (!activeTabId || isNew) return;
+    const label = [selectedRank?.rank_code, crewDisplayName(formData)].filter(Boolean).join(' ');
+    if (label) updateTab(activeTabId, { title: label });
+  }, [activeTabId, isNew, selectedRank?.rank_code, formData.name, formData.name_english, updateTab]);
 
   if (loading) {
     return (
