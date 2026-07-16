@@ -764,13 +764,13 @@ export function CrewRotationPage() {
                   <TableHead className="text-xs whitespace-nowrap">상태</TableHead>
                   <TableHead className="text-xs whitespace-nowrap">결재 현황</TableHead>
                   <TableHead className="text-xs whitespace-nowrap">작성일</TableHead>
-                  <TableHead className="text-right text-xs whitespace-nowrap">작업</TableHead>
+                  <TableHead className="text-right text-xs whitespace-nowrap w-24">작업</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedPlans.map(plan => (
                       <TableRow
-                        key={plan.id} className="cursor-pointer whitespace-nowrap"
+                        key={plan.id} className="cursor-pointer"
                         onClick={() => openNewTab(
                           plan.status === 'draft' ? `/crew-rotation/${plan.id}/edit` : `/crew-rotation/${plan.id}`,
                           plan.plan_name || '교대계획'
@@ -799,15 +799,15 @@ export function CrewRotationPage() {
                         <TableCell><ApprovalChainCell approval={planApprovalMap.get(plan.id)} ccLabels={planCcMap.get(plan.id)} /></TableCell>
                         <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                          <div className="flex justify-end gap-1">
+                          <div className="flex flex-wrap justify-end gap-1">
                             {plan.status === 'draft' && (
-                              <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(plan.id)}>결재 상신</Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs whitespace-nowrap text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(plan.id)}>결재 상신</Button>
                             )}
                             {isAdmin && (
-                              <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs whitespace-nowrap text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
                             )}
                             {plan.status === 'approved' && (
-                              <Button variant="default" size="sm" className="h-7 text-xs" onClick={() => handleExecute(plan.id)}>발령 실행</Button>
+                              <Button variant="default" size="sm" className="h-7 text-xs whitespace-nowrap" onClick={() => handleExecute(plan.id)}>발령 실행</Button>
                             )}
                           </div>
                         </TableCell>
