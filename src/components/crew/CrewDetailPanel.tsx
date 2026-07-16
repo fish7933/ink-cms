@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Save, Upload, User, X, Plus, Trash2, FileText, Edit2, Star, Stethoscope } from 'lucide-react';
+import { Save, Upload, User, X, Plus, Trash2, FileText, Edit2, Star, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1186,11 +1186,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
-                <ArrowLeft className="w-4 h-4" />
+                <X className="w-4 h-4" />
               </Button>
               <div>
                 <CardTitle className="text-base">
-                  {isNew ? '선원 등록' : crewDisplayName(formData) || '선원 정보'}
+                  {isNew ? '선원 등록' : '선원 카드'}
                 </CardTitle>
               </div>
             </div>
