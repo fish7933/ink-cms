@@ -185,6 +185,8 @@ export const crewService = {
       { data: expiredCertData },
       // 미실행 교대 계획 배정: 대기 선원의 예정 선박/직급/계약개월 표시용
       { data: pendingAssignData },
+      // 승선 중인 선원의 하선 예정 배정 — 등록/대기/하선 선원용 필드는 필요 없고 계획 상태만 필요
+      { data: pendingOffAssignData },
       // 급여 템플릿 보유 선박 목록
       { data: shipTemplateData },
       // 매닝사 추천 시 입력한 승선가능일 (등록된 선원과 연결된 것만, 최신순)
@@ -207,6 +209,9 @@ export const crewService = {
       supabase.from('crew_rotation_assignments')
         .select('on_crew_id, on_rank_id, on_rank_grade, embark_date, salary_template_id, salary_amount, salary_currency, contract_months, crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status, plan_name)')
         .not('on_crew_id', 'is', null),
+      supabase.from('crew_rotation_assignments')
+        .select('off_crew_id, crew_rotation_plans!inner(status)')
+        .not('off_crew_id', 'is', null),
       supabase.from('salary_templates')
         .select('ship_id')
         .eq('is_active', true)
@@ -268,6 +273,17 @@ export const crewService = {
           salary_currency: a.salary_currency,
         });
       }
+    }
+
+    // 현재 승선 중인 선원의 하선 예정 계획 상태 맵 — 등록/대기/하선 선원은 위 pendingAssignMap(승선
+    // 예정 배정)으로 상태를 보여주지만, 이미 승선 중인 선원은 그 배정이 아니라 "곧 하선시킬" 배정의
+    // 계획 상태를 봐야 한다(임시저장/결재중/승인됨 뱃지가 승선 중인 선원에도 표시되도록).
+    const pendingOffPlanStatusMap = new Map<string, string>();
+    for (const a of (pendingOffAssignData || [])) {
+      if (!a.off_crew_id) continue;
+      const plan = (a as any).crew_rotation_plans;
+      if (!plan || !PENDING_PLAN_STATUSES.has(plan.status)) continue;
+      if (!pendingOffPlanStatusMap.has(a.off_crew_id)) pendingOffPlanStatusMap.set(a.off_crew_id, plan.status);
     }
 
     // 매닝사 추천 시 입력한 승선가능일 맵 (등록된 선원 기준, 최신 추천이 우선)
@@ -375,6 +391,9 @@ export const crewService = {
         pendingPlanStatus = pendingAssign.plan_status;
         pendingSalaryAmount = pendingAssign.salary_amount;
         pendingSalaryCurrency = pendingAssign.salary_currency;
+      } else if (isActiveOnboard) {
+        // 승선 중인 선원 — 곧 하선시킬 예정인 계획이 있으면 그 상태를 뱃지로 보여준다.
+        pendingPlanStatus = pendingOffPlanStatusMap.get(item.id);
       }
 
       // 하선예정일: 승선 중이면 활성 승선기록의 승선일+계약개월, 대기 중이면 예정 배정의 승선예정일+계약개월
