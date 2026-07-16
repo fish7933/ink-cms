@@ -110,11 +110,11 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
 
   return (
     <header className="bg-white border-b border-gray-200 h-14 flex items-center px-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] shrink-0 gap-2 relative z-20">
-      {/* 로고 */}
+      {/* 로고 — 좌측 사이드바 폭(w-56)과 같은 너비로 맞춰서, 대메뉴가 사이드바 뒤에서 시작하도록 함 */}
       <button
         type="button"
         onClick={goHome}
-        className="flex items-center gap-2 mr-5 shrink-0 hover:opacity-75 transition-opacity"
+        className="flex items-center gap-2 w-56 shrink-0 hover:opacity-75 transition-opacity"
       >
         {logoUrl ? (
           <img src={logoUrl} alt="" className="h-6 w-6 object-contain rounded" />
