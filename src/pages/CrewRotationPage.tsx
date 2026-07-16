@@ -672,12 +672,32 @@ export function CrewRotationPage() {
       {/* 계획 목록 */}
       <Card>
         <CardHeader className="py-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-sm">교대 계획 목록</CardTitle>
-              <CardDescription className="text-xs">작성된 선원 교대 계획서 목록입니다</CardDescription>
+          <div className="flex items-center gap-3 flex-wrap">
+            <CardTitle className="text-sm shrink-0">교대 계획 목록</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-gray-600">기간</span>
+              <input
+                type="month"
+                value={monthFrom}
+                onChange={e => setMonthFrom(e.target.value)}
+                className="h-8 rounded-md border border-input bg-white px-2 text-xs"
+              />
+              <span className="text-xs text-gray-400">~</span>
+              <input
+                type="month"
+                value={monthTo}
+                onChange={e => setMonthTo(e.target.value)}
+                className="h-8 rounded-md border border-input bg-white px-2 text-xs"
+              />
+              {pickedMonths.length > 0 && <span className="text-xs text-gray-400">({pickedMonths.length}개월)</span>}
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExportMonthsExcel} disabled={monthExporting === 'months'}>
+                {monthExporting === 'months' ? '내보내는 중...' : '엑셀 다운로드'}
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handlePrintMonths}>
+                PDF 출력
+              </Button>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 ml-auto shrink-0">
               <span className="text-xs text-gray-400">페이지당</span>
               <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
                 <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
@@ -686,29 +706,6 @@ export function CrewRotationPage() {
             </div>
           </div>
         </CardHeader>
-        <div className="flex items-center gap-2 flex-wrap px-4 pb-3">
-          <span className="text-xs font-medium text-gray-600">기간</span>
-          <input
-            type="month"
-            value={monthFrom}
-            onChange={e => setMonthFrom(e.target.value)}
-            className="h-8 rounded-md border border-input bg-white px-2 text-xs"
-          />
-          <span className="text-xs text-gray-400">~</span>
-          <input
-            type="month"
-            value={monthTo}
-            onChange={e => setMonthTo(e.target.value)}
-            className="h-8 rounded-md border border-input bg-white px-2 text-xs"
-          />
-          {pickedMonths.length > 0 && <span className="text-xs text-gray-400">({pickedMonths.length}개월)</span>}
-          <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExportMonthsExcel} disabled={monthExporting === 'months'}>
-            {monthExporting === 'months' ? '내보내는 중...' : '엑셀 다운로드'}
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handlePrintMonths}>
-            PDF 출력
-          </Button>
-        </div>
         {selectedIds.length > 0 && (
           <div className="flex items-center justify-between gap-2 flex-wrap bg-blue-50 border-y border-blue-200 px-4 py-2">
             <span className="text-xs font-medium text-blue-800">{selectedIds.length}건 선택됨</span>
