@@ -73,7 +73,7 @@ export default function CertificateExpiryDashboardPage() {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">증서 만료 현황</CardTitle>
