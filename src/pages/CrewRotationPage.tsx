@@ -57,7 +57,8 @@ export function CrewRotationPage() {
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'system_admin';
+  // 교대 계획 삭제(임시/영구)는 슈퍼관리자(admin)만 — 시스템관리자(system_admin)도 제외
+  const isSuperAdmin = currentUser?.role === 'admin';
 
   // 필터
   const [owners, setOwners] = useState<Company[]>([]);
@@ -233,7 +234,7 @@ export function CrewRotationPage() {
 
   // 삭제(발령 완료 포함 전 상태)는 시스템관리자 이상만 가능. 삭제해도 실제 선원 상태/계약/
   // 승선경력 등은 되돌리지 않고, 목록에서만 빠지며 삭제자/삭제일시가 기록된다.
-  const deletableIds = useMemo(() => isAdmin ? filteredPlans.map(p => p.id) : [], [filteredPlans, isAdmin]);
+  const deletableIds = useMemo(() => isSuperAdmin ? filteredPlans.map(p => p.id) : [], [filteredPlans, isSuperAdmin]);
   const allSelectableIds = useMemo(() => filteredPlans.map(p => p.id), [filteredPlans]);
   const approvedSelectedIds = useMemo(
     () => selectedIds.filter(id => plans.find(p => p.id === id)?.status === 'approved'),
@@ -489,7 +490,7 @@ export function CrewRotationPage() {
           <p className="text-xs text-muted-foreground mt-1">선원 승선/하선 교대 계획을 작성하고 결재를 진행합니다</p>
         </div>
         <div className="flex gap-2">
-          {isAdmin && (
+          {isSuperAdmin && (
             <Button variant="outline" size="sm" onClick={viewingDeleted ? () => setViewingDeleted(false) : openDeletedView} className="h-8 text-xs gap-1.5 text-red-600 border-red-300 hover:bg-red-50">
               <Trash2 className="h-3.5 w-3.5" />{viewingDeleted ? '목록으로' : '삭제된 교대 발령'}
             </Button>
@@ -731,7 +732,7 @@ export function CrewRotationPage() {
               <Button variant="outline" size="sm" className="h-7 text-xs bg-white gap-1" onClick={handlePrintSelected}>
                 선택 PDF ({selectedIds.length})
               </Button>
-              {isAdmin && (
+              {isSuperAdmin && (
                 <Button variant="outline" size="sm" className="h-7 text-xs bg-white text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
                   <Trash2 className="h-3.5 w-3.5 mr-1" />선택 삭제 ({selectedIds.length})
                 </Button>
@@ -803,7 +804,7 @@ export function CrewRotationPage() {
                             {plan.status === 'draft' && (
                               <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(plan.id)}>상신</Button>
                             )}
-                            {isAdmin && (
+                            {isSuperAdmin && (
                               <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
                             )}
                             {plan.status === 'approved' && (
