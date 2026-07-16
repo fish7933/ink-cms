@@ -79,6 +79,7 @@ export interface CrewWithDetails extends CrewMember {
   pending_fleet_id?: string;
   pending_rank_id?: string;
   pending_plan_name?: string;
+  pending_plan_status?: string;
   pending_salary_amount?: number | null;
   pending_salary_currency?: string;
   // 승선(예정)일 + 계약 개월수로 계산한 하선예정일 (대기/승선중 공통 — 승선 시점 값이 그대로 이어짐)
@@ -245,7 +246,7 @@ export const crewService = {
       on_rank_id?: string; on_rank_grade?: string | null;
       embark_date?: string; salary_template_id?: string | null;
       contract_months?: number | null;
-      plan_name?: string; salary_amount?: number | null; salary_currency?: string;
+      plan_name?: string; plan_status?: string; salary_amount?: number | null; salary_currency?: string;
     }>();
     for (const a of (pendingAssignData || [])) {
       if (!a.on_crew_id) continue;
@@ -262,6 +263,7 @@ export const crewService = {
           salary_template_id: a.salary_template_id,
           contract_months: a.contract_months,
           plan_name: plan.plan_name,
+          plan_status: plan.status,
           salary_amount: a.salary_amount,
           salary_currency: a.salary_currency,
         });
@@ -353,6 +355,7 @@ export const crewService = {
       let pendingFleetId: string | undefined;
       let pendingRankId: string | undefined;
       let pendingPlanName: string | undefined;
+      let pendingPlanStatus: string | undefined;
       let pendingSalaryAmount: number | null | undefined;
       let pendingSalaryCurrency: string | undefined;
       if (pendingAssign) {
@@ -369,6 +372,7 @@ export const crewService = {
         pendingFleetId = pFleetId;
         pendingRankId = pendingAssign.on_rank_id;
         pendingPlanName = pendingAssign.plan_name;
+        pendingPlanStatus = pendingAssign.plan_status;
         pendingSalaryAmount = pendingAssign.salary_amount;
         pendingSalaryCurrency = pendingAssign.salary_currency;
       }
@@ -458,6 +462,7 @@ export const crewService = {
         pending_fleet_id: pendingFleetId,
         pending_rank_id: pendingRankId,
         pending_plan_name: pendingPlanName,
+        pending_plan_status: pendingPlanStatus,
         pending_salary_amount: pendingSalaryAmount,
         pending_salary_currency: pendingSalaryCurrency,
         disembark_forecast_date: disembarkForecastDate,
@@ -670,6 +675,75 @@ export const crewService = {
       .order('created_at', { ascending: false });
     if (error) { console.error('Error fetching crew status history:', error); return []; }
     return data as CrewStatusHistoryItem[];
+  },
+
+  // 이 선원이 현재 "물고 있는" 배(선주>플릿>선박) — 승선중 활성 발령 → 대기중 예정 교대계획
+  // → 채용추천 시 지정된 선박 → 하선 후 마지막 승선 이력 → crew_members에 직접 지정된 선박 순으로
+  // 우선순위를 둔다(getAllWithDetails의 우선순위 로직과 동일한 기준). 어느 것도 없으면(선원 직접
+  // 등록 후 선박 미지정) null을 반환한다.
+  async getCrewShipContext(crewId: string): Promise<{ ownerName?: string; fleetName?: string; shipName?: string } | null> {
+    const { data: crew } = await supabase.from('crew_members').select('owner_id, fleet_id, current_ship_id').eq('id', crewId).single();
+    if (!crew) return null;
+
+    const { data: activeEmbark } = await supabase
+      .from('crew_embarkation_records').select('ship_id')
+      .eq('crew_member_id', crewId).eq('status', 'active').maybeSingle();
+
+    let ownerId: string | null | undefined = null;
+    let fleetId: string | null | undefined = null;
+    let shipId: string | null | undefined = activeEmbark?.ship_id;
+
+    if (!shipId) {
+      const { data: pendingRows } = await supabase
+        .from('crew_rotation_assignments')
+        .select('crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status)')
+        .eq('on_crew_id', crewId);
+      const PENDING_PLAN_STATUSES = new Set(['draft', 'pending_approval', 'approved']);
+      const pending = (pendingRows || [])
+        .map((r: any) => r.crew_rotation_plans)
+        .find((p: any) => p && PENDING_PLAN_STATUSES.has(p.status));
+
+      if (pending) {
+        shipId = pending.ship_id;
+        ownerId = pending.owner_id;
+        fleetId = pending.fleet_id;
+      } else {
+        const { data: rec } = await supabase
+          .from('crew_recommendations').select('ship_id')
+          .eq('crew_member_id', crewId).not('ship_id', 'is', null)
+          .order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+        if (rec?.ship_id) {
+          shipId = rec.ship_id;
+        } else {
+          const { data: lastEmbark } = await supabase
+            .from('crew_embarkation_records').select('ship_id')
+            .eq('crew_member_id', crewId).order('embark_date', { ascending: false }).limit(1).maybeSingle();
+          shipId = lastEmbark?.ship_id || crew.current_ship_id || null;
+        }
+      }
+    }
+
+    if (!shipId) {
+      ownerId = ownerId ?? crew.owner_id;
+      fleetId = fleetId ?? crew.fleet_id;
+      if (!ownerId && !fleetId) return null;
+      const [{ data: owner }, { data: fleet }] = await Promise.all([
+        ownerId ? supabase.from('companies').select('name').eq('id', ownerId).single() : Promise.resolve({ data: null as { name: string } | null }),
+        fleetId ? supabase.from('fleets').select('name').eq('id', fleetId).single() : Promise.resolve({ data: null as { name: string } | null }),
+      ]);
+      return { ownerName: owner?.name, fleetName: fleet?.name };
+    }
+
+    const { data: ship } = await supabase.from('ships').select('name, owner_id, fleet_id').eq('id', shipId).single();
+    if (!ship) return null;
+    ownerId = ownerId || ship.owner_id || crew.owner_id;
+    fleetId = fleetId || ship.fleet_id || crew.fleet_id;
+    const [{ data: owner }, { data: fleet }] = await Promise.all([
+      ownerId ? supabase.from('companies').select('name').eq('id', ownerId).single() : Promise.resolve({ data: null as { name: string } | null }),
+      fleetId ? supabase.from('fleets').select('name').eq('id', fleetId).single() : Promise.resolve({ data: null as { name: string } | null }),
+    ]);
+    return { ownerName: owner?.name, fleetName: fleet?.name, shipName: ship.name };
   },
 };
 

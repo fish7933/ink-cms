@@ -747,14 +747,19 @@ export function CrewManagementPage() {
                                     ? <span className="text-violet-500">{c.pending_fleet_name}</span>
                                     : <span className="text-gray-500">{crewExt.fleet_name || '-'}</span>}
                               </td>
-                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.current_ship_name : (c.pending_ship_name ? `${c.pending_plan_name || '교대계획'}${c.pending_salary_amount ? ` · ${c.pending_salary_currency} ${c.pending_salary_amount.toLocaleString()}` : ''}` : crewExt.current_ship_name)}>
+                              <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.current_ship_name : (c.pending_ship_name || crewExt.current_ship_name)}>
                                 {c.is_active_onboard
                                   ? <span className="font-medium">{crewExt.current_ship_name || '-'}</span>
                                   : c.pending_ship_name
                                     ? (
-                                      <div>
+                                      <div className="flex items-center gap-1">
                                         <span className="font-medium text-violet-700">{c.pending_ship_name}</span>
-                                        {c.pending_plan_name && <div className="text-[10px] text-violet-400 truncate">{c.pending_plan_name}</div>}
+                                        {c.pending_plan_status === 'draft' && (
+                                          <Badge variant="outline" className="text-[10px] h-4 px-1 text-gray-500 border-gray-300">임시저장</Badge>
+                                        )}
+                                        {c.pending_plan_status === 'pending_approval' && (
+                                          <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">결재중</Badge>
+                                        )}
                                       </div>
                                     )
                                     : <span className="font-medium">{crewExt.current_ship_name || '-'}</span>}

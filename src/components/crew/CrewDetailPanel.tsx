@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { crewService } from '@/services/crew.service';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewDisplayName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -162,6 +163,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   // 우선 쓰고, 없으면 crew_members.current_grade로 대체한다. 폼에서 직접 입력하는 값이 아니라
   // 읽기 전용으로만 보여준다.
   const [currentGrade, setCurrentGrade] = useState<string | null>(null);
+  // 선주>플릿>선박 — 채용추천/대기/승선/하선 등 상태와 무관하게 이 선원이 현재 물고 있는 배
+  // (crew.service.ts의 getCrewShipContext 참고). 선원을 선박 지정 없이 직접 등록한 경우만 null.
+  const [shipContext, setShipContext] = useState<{ ownerName?: string; fleetName?: string; shipName?: string } | null>(null);
 
   const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
@@ -199,6 +203,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setCertificates([]);
       setEmergencyContacts([]);
       setCrewStatus('registered');
+      setShipContext(null);
     }
   }, [id]);
 
@@ -213,6 +218,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       rotationService.getCrewReservationsByIds([crewId]).then(map => setCrewReservations(map.get(crewId) || []));
       supabase.from('crew_embarkation_records').select('rank_grade').eq('crew_member_id', crewId).eq('status', 'active').maybeSingle()
         .then(({ data: activeEmbark }) => setCurrentGrade(activeEmbark?.rank_grade || data.current_grade || null));
+      crewService.getCrewShipContext(crewId).then(setShipContext).catch(() => setShipContext(null));
       setFormData({
         name: data.name || '',
         name_english: data.name_english || '',
@@ -483,6 +489,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   };
 
   const selectedRank = ranks.find(r => r.id === formData.rank_id);
+  const shipContextLine = shipContext
+    ? [shipContext.ownerName, shipContext.fleetName, shipContext.shipName].filter(Boolean).join(' > ')
+    : '';
 
   if (loading) {
     return (
@@ -1143,12 +1152,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     return (
       <div ref={panelRef} className="space-y-4 pt-3 border-t">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}
-            {!isNew && <CrewStatusBadge status={crewStatus} />}
-            <span className="text-sm font-medium text-gray-700">
-              {isNew ? '새 선원 등록' : crewDisplayName(formData) || '선원 정보 수정'}
-            </span>
+          <div>
+            {shipContextLine && <div className="text-xs text-gray-500 mb-0.5">{shipContextLine}</div>}
+            <div className="flex items-center gap-2">
+              {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}
+              {!isNew && <CrewStatusBadge status={crewStatus} />}
+              <span className="text-sm font-medium text-gray-700">
+                {isNew ? '새 선원 등록' : crewDisplayName(formData) || '선원 정보 수정'}
+              </span>
+            </div>
           </div>
           <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
             <Save className="w-4 h-4" />
@@ -1171,6 +1183,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <div>
+                {shipContextLine && <div className="text-xs text-gray-500">{shipContextLine}</div>}
                 <CardTitle className="text-base">
                   {isNew ? '선원 등록' : crewDisplayName(formData) || '선원 정보'}
                 </CardTitle>
