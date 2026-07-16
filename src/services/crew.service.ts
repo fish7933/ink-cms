@@ -108,6 +108,8 @@ export interface DeletedCrewMember {
 interface CrewMemberRow {
   id: string;
   name: string;
+  name_english?: string;
+  name_chinese?: string;
   rank: string;
   rank_id?: string;
   nationality: string;
@@ -400,6 +402,8 @@ export const crewService = {
       return {
         id: item.id,
         name: item.name,
+        name_english: item.name_english,
+        name_chinese: item.name_chinese,
         rank_id: item.rank_id || rank?.id || '',
         nationality: item.nationality,
         date_of_birth: item.date_of_birth,
