@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
+import { crewDisplayName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { rotationService, type CrewReservation } from '@/services/rotation.service';
 import { getNationalities } from '@/services/nationality.service';
@@ -61,7 +62,10 @@ interface Rank {
   id: string;
   name: string;
   rank_code: string;
+  rank_category: 'officer' | 'rating';
 }
+
+const RANK_CATEGORY_LABELS: Record<string, string> = { officer: '사관', rating: '부원' };
 
 interface CrewDetailPanelProps {
   id?: string;
@@ -367,8 +371,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const parseOptional = (val: string): string | null => (val && val !== 'none') ? val : null;
 
   const handleSave = async () => {
-    if (!formData.name || !formData.rank_id) {
-      toast({ title: '필수 항목 누락', description: '이름과 직급은 필수입니다.', variant: 'destructive' });
+    if (!formData.name_english || !formData.rank_id) {
+      toast({ title: '필수 항목 누락', description: '이름(영문)과 직급은 필수입니다.', variant: 'destructive' });
       return;
     }
     try {
@@ -559,10 +563,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
         {/* 기본 정보 */}
         <TabsContent value="basic" className="space-y-3 mt-3 data-[state=inactive]:hidden">
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">이름 (한국어) *</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" /></div>
-            <div><Label className="text-xs">이름 (영문)</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
-            <div><Label className="text-xs">이름 (한자)</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" /></div>
+          <div className="grid grid-cols-3 gap-3">
+            <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
             <div>
               <Label className="text-xs">직급 *</Label>
               <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
@@ -570,6 +572,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            <div>
+              <Label className="text-xs">등급</Label>
+              <Input value={selectedRank ? RANK_CATEGORY_LABELS[selectedRank.rank_category] || '' : ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="직급 선택 시 표시" />
+            </div>
+          </div>
+
+          {formData.nationality === 'KR' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label className="text-xs">이름 (한국어)</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" /></div>
+              <div><Label className="text-xs">이름 (한자)</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" /></div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">국적</Label>
               <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
@@ -583,19 +599,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </div>
             <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
             <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
-          </div>
-
-          <div className="border-t pt-3">
-            <p className="text-xs font-semibold text-gray-600 mb-2">서류 번호</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">여권 번호</Label><Input value={formData.passport_number} onChange={e => f('passport_number', e.target.value)} className="mt-1 h-9" placeholder="M12345678" /></div>
-              <div><Label className="text-xs">여권 만료일</Label><Input type="date" value={formData.passport_expiry} onChange={e => f('passport_expiry', e.target.value)} className="mt-1 h-9" /></div>
-              <div><Label className="text-xs">선원수첩 (국내) 번호</Label><Input value={formData.seaman_book_number} onChange={e => f('seaman_book_number', e.target.value)} className="mt-1 h-9" /></div>
-              <div><Label className="text-xs">선원수첩 (국내) 만료일</Label><Input type="date" value={formData.seaman_book_expiry} onChange={e => f('seaman_book_expiry', e.target.value)} className="mt-1 h-9" /></div>
-              <div><Label className="text-xs">선원수첩 (국제/Flag) 번호</Label><Input value={formData.seaman_book_flag_number} onChange={e => f('seaman_book_flag_number', e.target.value)} className="mt-1 h-9" /></div>
-              <div><Label className="text-xs">선원수첩 (국제/Flag) 만료일</Label><Input type="date" value={formData.seaman_book_flag_expiry} onChange={e => f('seaman_book_flag_expiry', e.target.value)} className="mt-1 h-9" /></div>
-              <div><Label className="text-xs">SID (선원 ID)</Label><Input value={formData.sid} onChange={e => f('sid', e.target.value)} className="mt-1 h-9" /></div>
-            </div>
           </div>
         </TabsContent>
 
@@ -1102,7 +1105,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </div>
             <EvaluationDialog
               open={crewEvaluationDialogOpen} onOpenChange={setCrewEvaluationDialogOpen} record={editingCrewEvaluation}
-              lockedCrewId={id} lockedCrewName={formData.name}
+              lockedCrewId={id} lockedCrewName={crewDisplayName(formData)}
               onSuccess={() => loadExtendedRecords(id!)}
             />
           </TabsContent>
@@ -1229,7 +1232,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}
             {!isNew && <CrewStatusBadge status={crewStatus} />}
             <span className="text-sm font-medium text-gray-700">
-              {isNew ? '새 선원 등록' : formData.name || '선원 정보 수정'}
+              {isNew ? '새 선원 등록' : crewDisplayName(formData) || '선원 정보 수정'}
             </span>
           </div>
           <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
@@ -1254,7 +1257,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </Button>
               <div>
                 <CardTitle className="text-base">
-                  {isNew ? '선원 등록' : formData.name || '선원 정보'}
+                  {isNew ? '선원 등록' : crewDisplayName(formData) || '선원 정보'}
                 </CardTitle>
                 <div className="flex items-center gap-2 mt-0.5">
                   {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { msg } from '@/lib/messages';
+import { crewDisplayName } from '@/lib/utils';
 import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
   ArrowUpCircle, Ship, Users, UserCheck, UserMinus, LayoutList,
@@ -145,6 +146,7 @@ export function CrewManagementPage() {
       const t = searchTerm.toLowerCase();
       list = list.filter(c =>
         c.name?.toLowerCase().includes(t) ||
+        c.name_english?.toLowerCase().includes(t) ||
         c.rank_name?.toLowerCase().includes(t) ||
         c.passport_number?.toLowerCase().includes(t) ||
         c.seaman_book_number?.toLowerCase().includes(t)
@@ -167,6 +169,7 @@ export function CrewManagementPage() {
       const t = searchTerm.toLowerCase();
       list = list.filter(c =>
         c.name?.toLowerCase().includes(t) ||
+        c.name_english?.toLowerCase().includes(t) ||
         c.rank_name?.toLowerCase().includes(t) ||
         c.passport_number?.toLowerCase().includes(t) ||
         c.seaman_book_number?.toLowerCase().includes(t)
@@ -309,7 +312,7 @@ export function CrewManagementPage() {
       case 'ship': return effShipName(c) || '';
       case 'manning': return (c as CrewWithDetails & { manning_agency_name?: string }).manning_agency_name || '';
       case 'rank': return rankOrderIndex.get(effRankId(c) || '') ?? 999;
-      case 'name': return c.name || '';
+      case 'name': return crewDisplayName(c);
       case 'nationality': return c.nationality || '';
       case 'birth': return c.date_of_birth || '';
       case 'date1': return getDateCol1(c);
@@ -772,7 +775,7 @@ export function CrewManagementPage() {
                                   );
                                 })()}
                               </td>
-                              <td className="px-2 py-1.5 font-medium text-gray-900">{c.name}</td>
+                              <td className="px-2 py-1.5 font-medium text-gray-900">{crewDisplayName(c)}</td>
                               <td className="px-2 py-1.5 text-gray-500">{nationalityDisplay}</td>
                               <td className="px-2 py-1.5 text-gray-500">
                                 {c.date_of_birth
@@ -854,7 +857,7 @@ export function CrewManagementPage() {
                                 <div className="flex justify-end gap-1">
                                   <Button
                                     size="sm" variant="outline" className="h-6 text-xs px-2 gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                                    onClick={() => openNewTab(`/crew/${c.id}`, c.name || '선원 정보')}
+                                    onClick={() => openNewTab(`/crew/${c.id}`, crewDisplayName(c) || '선원 정보')}
                                   >
                                     <Eye className="w-3 h-3" />열람
                                   </Button>
