@@ -15,7 +15,7 @@ export default function RotationPlanLedgerPrintPage() {
   const [unauthorized, setUnauthorized] = useState(false);
   const [plans, setPlans] = useState<CrewRotationPlanWithDetails[]>([]);
   const [portLabelByPlanId, setPortLabelByPlanId] = useState<Map<string, string>>(new Map());
-  const [title, setTitle] = useState('배승 계획 목록');
+  const [periodLabel, setPeriodLabel] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -31,12 +31,11 @@ export default function RotationPlanLedgerPrintPage() {
       if (idsParam) {
         const idSet = new Set(idsParam.split(',').filter(Boolean));
         matched = allPlans.filter(p => idSet.has(p.id));
-        setTitle(`배승 계획 목록 (선택 ${matched.length}건)`);
       } else if (monthsParam) {
         const monthSet = new Set(monthsParam.split(',').filter(Boolean));
         matched = allPlans.filter(p => monthSet.has(p.rotation_date.slice(0, 7)));
         const sortedMonths = [...monthSet].sort();
-        setTitle(`배승 계획 목록 (${sortedMonths.join(', ')})`);
+        setPeriodLabel(sortedMonths.join(', '));
       }
 
       setPlans(matched);
@@ -68,7 +67,7 @@ export default function RotationPlanLedgerPrintPage() {
           인쇄 / PDF 저장
         </button>
       </div>
-      <RotationPlanLedgerSheet plans={plans} portLabelByPlanId={portLabelByPlanId} title={title} />
+      <RotationPlanLedgerSheet plans={plans} portLabelByPlanId={portLabelByPlanId} periodLabel={periodLabel} />
     </div>
   );
 }

@@ -8,12 +8,13 @@ const PAGE_HEIGHT_PX = (210 - 20) * (96 / 25.4);
 interface Props {
   plans: CrewRotationPlanWithDetails[];
   portLabelByPlanId: Map<string, string>;
-  title?: string;
+  // 기간을 지정해 조회한 경우에만 제목 아래 괄호로 표기 (선택 건수 등은 표기하지 않음)
+  periodLabel?: string;
 }
 
-// 배승 계획 목록 — 선주/선박/번호/승선자/하선자/교대일/교대국가·도시/비고 표 형태.
+// 배승 계획 목록 — 번호/선주/선박/승선자/하선자/교대일/교대국가·도시/비고 표 형태.
 // 같은 선박끼리는 선주/선박 셀을 rowSpan으로 병합한다. 엑셀 내보내기와 동일한 그룹 로직 재사용.
-export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, title }: Props) {
+export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, periodLabel }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [printZoom, setPrintZoom] = useState(1);
   const rows = buildRotationPlanLedgerRows(plans, portLabelByPlanId);
@@ -47,19 +48,19 @@ export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, titl
 
       <div ref={contentRef} className="print-content" style={{ '--print-zoom': printZoom } as React.CSSProperties}>
         <div style={{ textAlign: 'center', marginBottom: 20, borderBottom: '3px solid #1a1a1a', paddingBottom: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: 3, color: '#888', marginBottom: 6, textTransform: 'uppercase' }}>Crew Dispatch Plan List</div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: 1 }}>{title || '배승 계획 목록'}</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: 1 }}>CREW DISPATCH PLAN</h1>
+          {periodLabel && <div style={{ fontSize: 13, color: '#666', marginTop: 6 }}>({periodLabel})</div>}
         </div>
 
         <table className="ledger-table">
           <colgroup>
-            <col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} />
             <col style={{ width: '17%' }} /><col style={{ width: '17%' }} />
             <col style={{ width: '9%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} />
           </colgroup>
           <thead>
             <tr>
-              <th>선주</th><th>선박</th><th>No.</th><th>승선자</th><th>하선자</th><th>교대일</th><th>교대국가/도시(항구)</th><th>비고</th>
+              <th>No.</th><th>선주</th><th>선박</th><th>승선자</th><th>하선자</th><th>교대일</th><th>교대국가/도시(항구)</th><th>비고</th>
             </tr>
           </thead>
           <tbody>
@@ -67,9 +68,9 @@ export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, titl
               <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#bbb' }}>해당하는 교대 계획이 없습니다</td></tr>
             ) : rows.map((r, i) => (
               <tr key={i}>
+                <td className="center">{r.no}</td>
                 {r.ownerGroupStart && <td className="owner-ship" rowSpan={r.ownerGroupSize}>{r.ownerName}</td>}
                 {r.shipGroupStart && <td className="owner-ship" rowSpan={r.shipGroupSize}>{r.shipName}</td>}
-                <td className="center">{r.no}</td>
                 <td>{r.boarding}</td>
                 <td>{r.disembark}</td>
                 <td className="center">{r.rotationDate}</td>
