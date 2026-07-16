@@ -404,7 +404,7 @@ export function CrewManagementPage() {
         fleet_id: group.fleetId,
         plan_name: planName,
         rotation_date: baseDate,
-        notes: '선원 목록에서 일괄 선택하여 자동 생성',
+        notes: '',
         base_departure_date: baseDate,
         port_id: null,
         assignments: group.members.map(m => ({
