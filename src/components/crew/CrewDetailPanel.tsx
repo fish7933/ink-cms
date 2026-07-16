@@ -502,15 +502,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   const formBody = (
     <>
-      {/* 사진 */}
-      <div className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-lg w-fit">
-        <div className="relative">
+      {/* 사진 + 핵심 정보(이름/직급/등급) — 어느 탭에서든 항상 보이도록 탭 밖에 배치 */}
+      <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+        <div className="flex flex-col items-center gap-1.5 shrink-0">
           {previewUrl ? (
             <div className="relative">
               <img
                 src={previewUrl}
                 alt=""
-                className="w-32 h-32 rounded-full object-cover border-2 border-gray-200 cursor-pointer hover:opacity-80"
+                className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 cursor-pointer hover:opacity-80"
                 onClick={() => setPhotoModalOpen(true)}
               />
               <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5">
@@ -518,18 +518,31 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </button>
             </div>
           ) : (
-            <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
-              <User className="w-16 h-16 text-gray-400" />
+            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
+              <User className="w-10 h-10 text-gray-400" />
             </div>
           )}
+          <Label htmlFor="photo-input" className="cursor-pointer">
+            <div className="inline-flex items-center gap-1 px-2 py-1 bg-white border rounded-md hover:bg-gray-50 text-[11px]">
+              <Upload className="w-3 h-3" />사진 업로드
+            </div>
+          </Label>
+          <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
         </div>
-        <Label htmlFor="photo-input" className="cursor-pointer">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border rounded-md hover:bg-gray-50 text-xs">
-            <Upload className="w-3.5 h-3.5" />사진 업로드
+        <div className="flex-1 grid grid-cols-3 gap-3">
+          <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
+          <div>
+            <Label className="text-xs">직급 *</Label>
+            <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
+              <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+              <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+            </Select>
           </div>
-        </Label>
-        <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
-        <p className="text-xs text-gray-400">JPG, PNG, WEBP · 최대 5MB</p>
+          <div>
+            <Label className="text-xs">등급</Label>
+            <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="배정된 선박의 급여표 기준" />
+          </div>
+        </div>
       </div>
 
       <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
@@ -572,21 +585,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
         {/* 기본 정보 */}
         <TabsContent value="basic" className="space-y-3 mt-3 data-[state=inactive]:hidden">
-          <div className="grid grid-cols-3 gap-3">
-            <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
-            <div>
-              <Label className="text-xs">직급 *</Label>
-              <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
-                <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">등급</Label>
-              <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="배정된 선박의 급여표 기준" />
-            </div>
-          </div>
-
           {formData.nationality === 'KR' && (
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">이름 (한국어)</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" /></div>

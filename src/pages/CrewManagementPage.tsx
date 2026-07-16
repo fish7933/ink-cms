@@ -743,7 +743,7 @@ export function CrewManagementPage() {
                                     <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">결재중</Badge>
                                   )}
                                   {c.pending_plan_status === 'approved' && (
-                                    <Badge variant="outline" className="text-[10px] h-4 px-1 text-emerald-600 border-emerald-300">발령실행중</Badge>
+                                    <Badge variant="outline" className="text-[10px] h-4 px-1 text-emerald-600 border-emerald-300">발령대기중</Badge>
                                   )}
                                 </td>
                               )}
