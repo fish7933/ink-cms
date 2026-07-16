@@ -164,6 +164,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   // 선주>플릿>선박 — 채용추천/대기/승선/하선 등 상태와 무관하게 이 선원이 현재 물고 있는 배
   // (crew.service.ts의 getCrewShipContext 참고). 선원을 선박 지정 없이 직접 등록한 경우만 null.
   const [shipContext, setShipContext] = useState<{ ownerName?: string; fleetName?: string; shipName?: string } | null>(null);
+  // 대기/승선/하선 단계로 넘어간 선원은 이름/직급/국적/생년월일이 이미 승선경력·증서·계약 등에
+  // 물려 쓰이고 있어 자유롭게 고치면 안 되므로 잠근다. 등록됨 계열(등록/검토중/선주송부/승인/거절)
+  // 상태일 때만 계속 수정 가능.
+  const [identityFieldsLocked, setIdentityFieldsLocked] = useState(false);
 
   const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
@@ -201,8 +205,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setCertificates([]);
       setEmergencyContacts([]);
       setShipContext(null);
+      setIdentityFieldsLocked(false);
     }
   }, [id]);
+
+  const REGISTERED_STATUSES = new Set(['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected']);
 
   const loadCrew = async (crewId: string) => {
     try {
@@ -211,6 +218,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       if (error) throw error;
       if (!data) { toast({ title: '선원을 찾을 수 없습니다.', variant: 'destructive' }); onBack(); return; }
 
+      setIdentityFieldsLocked(!REGISTERED_STATUSES.has(data.current_status || data.status || 'registered'));
       rotationService.getCrewReservationsByIds([crewId]).then(map => setCrewReservations(map.get(crewId) || []));
       supabase.from('crew_embarkation_records').select('rank_grade').eq('crew_member_id', crewId).eq('status', 'active').maybeSingle()
         .then(({ data: activeEmbark }) => setCurrentGrade(activeEmbark?.rank_grade || data.current_grade || null));
@@ -588,11 +596,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
         {/* 기본 정보 */}
         <TabsContent value="basic" className="space-y-3 mt-3 data-[state=inactive]:hidden">
+          {identityFieldsLocked && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              대기/승선/하선 단계로 넘어간 선원은 이름·직급·국적·생년월일을 수정할 수 없습니다.
+            </p>
+          )}
           <div className="grid grid-cols-3 gap-3">
-            <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" /></div>
+            <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></div>
             <div>
               <Label className="text-xs">직급 *</Label>
-              <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)}>
+              <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={identityFieldsLocked}>
                 <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
                 <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
               </Select>
@@ -605,22 +618,22 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
           {formData.nationality === 'KR' && (
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">이름 (한국어)</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" /></div>
-              <div><Label className="text-xs">이름 (한자)</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" /></div>
+              <div><Label className="text-xs">이름 (한국어)</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" disabled={identityFieldsLocked} /></div>
+              <div><Label className="text-xs">이름 (한자)</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" disabled={identityFieldsLocked} /></div>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">국적</Label>
-              <Select value={formData.nationality} onValueChange={v => f('nationality', v)}>
+              <Select value={formData.nationality} onValueChange={v => f('nationality', v)} disabled={identityFieldsLocked}>
                 <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="국적 선택" /></SelectTrigger>
                 <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
               <Label className="text-xs">생년월일{formData.date_of_birth && <span className="text-gray-400 font-normal"> (만 {calculateAge(formData.date_of_birth)}세)</span>}</Label>
-              <Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1 h-9" />
+              <Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1 h-9" disabled={identityFieldsLocked} />
             </div>
             <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
             <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
