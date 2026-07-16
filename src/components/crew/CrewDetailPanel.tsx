@@ -492,6 +492,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const shipContextLine = shipContext
     ? [shipContext.ownerName, shipContext.fleetName, shipContext.shipName].filter(Boolean).join(' > ')
     : '';
+  const rankGradeLabel = selectedRank
+    ? `${selectedRank.rank_code}${currentGrade ? `(${currentGrade})` : ''}`
+    : '';
 
   if (loading) {
     return (
@@ -1153,14 +1156,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       <div ref={panelRef} className="space-y-4 pt-3 border-t">
         <div className="flex items-center justify-between">
           <div>
-            {shipContextLine && <div className="text-xs text-gray-500 mb-0.5">{shipContextLine}</div>}
-            <div className="flex items-center gap-2">
-              {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}
-              {!isNew && <CrewStatusBadge status={crewStatus} />}
-              <span className="text-sm font-medium text-gray-700">
-                {isNew ? '새 선원 등록' : crewDisplayName(formData) || '선원 정보 수정'}
-              </span>
-            </div>
+            {isNew ? (
+              <span className="text-xl font-bold text-gray-900">새 선원 등록</span>
+            ) : (
+              <>
+                <div className="text-sm font-medium text-gray-500">{shipContextLine || ' '}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xl font-bold text-gray-900">
+                    {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
+                    {crewDisplayName(formData) || '선원 정보 수정'}
+                  </span>
+                  <CrewStatusBadge status={crewStatus} />
+                </div>
+              </>
+            )}
           </div>
           <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
             <Save className="w-4 h-4" />
@@ -1183,14 +1192,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <div>
-                {shipContextLine && <div className="text-xs text-gray-500">{shipContextLine}</div>}
-                <CardTitle className="text-base">
-                  {isNew ? '선원 등록' : crewDisplayName(formData) || '선원 정보'}
-                </CardTitle>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {selectedRank && <Badge variant="outline" className="text-xs">{selectedRank.rank_code}</Badge>}
-                  {!isNew && <CrewStatusBadge status={crewStatus} />}
-                </div>
+                {isNew ? (
+                  <CardTitle className="text-2xl font-bold">선원 등록</CardTitle>
+                ) : (
+                  <>
+                    <div className="text-sm font-medium text-gray-500">{shipContextLine || ' '}</div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <CardTitle className="text-2xl font-bold">
+                        {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
+                        {crewDisplayName(formData) || '선원 정보'}
+                      </CardTitle>
+                      <CrewStatusBadge status={crewStatus} />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
