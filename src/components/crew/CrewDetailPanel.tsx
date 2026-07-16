@@ -485,8 +485,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   };
 
   const selectedRank = ranks.find(r => r.id === formData.rank_id);
-  // 선주/플릿/선박은 하나로 이어붙이지 않고 각각 구분된 박스로 보여준다(사용자가 ">"는
-  // 단순히 흐름 표시였을 뿐 셋을 하나의 문자열처럼 붙이려던 의도가 아니었음).
   const shipContextParts = shipContext
     ? [shipContext.ownerName, shipContext.fleetName, shipContext.shipName].filter(Boolean)
     : [];
@@ -505,14 +503,14 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const formBody = (
     <>
       {/* 사진 */}
-      <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+      <div className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-lg w-fit">
         <div className="relative">
           {previewUrl ? (
             <div className="relative">
               <img
                 src={previewUrl}
                 alt=""
-                className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 cursor-pointer hover:opacity-80"
+                className="w-32 h-32 rounded-full object-cover border-2 border-gray-200 cursor-pointer hover:opacity-80"
                 onClick={() => setPhotoModalOpen(true)}
               />
               <button type="button" onClick={() => { setSelectedFile(null); setPreviewUrl(''); f('photo_url', ''); }} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5">
@@ -520,20 +518,18 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </button>
             </div>
           ) : (
-            <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
-              <User className="w-8 h-8 text-gray-400" />
+            <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center border-2 border-gray-200">
+              <User className="w-16 h-16 text-gray-400" />
             </div>
           )}
         </div>
-        <div>
-          <Label htmlFor="photo-input" className="cursor-pointer">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border rounded-md hover:bg-gray-50 text-xs">
-              <Upload className="w-3.5 h-3.5" />사진 업로드
-            </div>
-          </Label>
-          <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
-          <p className="text-xs text-gray-400 mt-1">JPG, PNG, WEBP · 최대 5MB</p>
-        </div>
+        <Label htmlFor="photo-input" className="cursor-pointer">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border rounded-md hover:bg-gray-50 text-xs">
+            <Upload className="w-3.5 h-3.5" />사진 업로드
+          </div>
+        </Label>
+        <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
+        <p className="text-xs text-gray-400">JPG, PNG, WEBP · 최대 5MB</p>
       </div>
 
       <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
@@ -1159,9 +1155,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             ) : (
               <>
                 {shipContextParts.length > 0 && (
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-0.5">
                     {shipContextParts.map((part, i) => (
-                      <span key={i} className="text-xl font-bold text-gray-700 px-2 py-0.5 rounded-md border border-gray-300 bg-gray-50">
+                      <span key={i} className="flex items-center gap-1.5">
+                        {i > 0 && <span className="text-gray-300">|</span>}
                         {part}
                       </span>
                     ))}
@@ -1170,6 +1167,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <span className="text-xl font-bold text-gray-900">
                   {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
                   {crewDisplayName(formData) || '선원 정보 수정'}
+                  {formData.nationality && <span className="text-gray-400 font-normal ml-1.5">({formData.nationality})</span>}
                 </span>
               </>
             )}
@@ -1200,9 +1198,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 ) : (
                   <>
                     {shipContextParts.length > 0 && (
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-0.5">
                         {shipContextParts.map((part, i) => (
-                          <span key={i} className="text-2xl font-bold text-gray-700 px-2 py-0.5 rounded-md border border-gray-300 bg-gray-50">
+                          <span key={i} className="flex items-center gap-1.5">
+                            {i > 0 && <span className="text-gray-300">|</span>}
                             {part}
                           </span>
                         ))}
@@ -1211,6 +1210,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     <CardTitle className="text-2xl font-bold">
                       {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
                       {crewDisplayName(formData) || '선원 정보'}
+                      {formData.nationality && <span className="text-gray-400 font-normal ml-1.5">({formData.nationality})</span>}
                     </CardTitle>
                   </>
                 )}
