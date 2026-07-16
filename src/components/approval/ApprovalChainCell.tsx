@@ -11,7 +11,7 @@ export interface ApprovalChainLike {
 // 목록에서 결재 현황을 한 줄로 보여준다: 요청자 → 중간결재자(들) → 최종결재자.
 // 결재중인 단계는 파란색으로 강조하고, 이미 승인/반려된 단계는 각각 초록/빨강으로 표시한다.
 // 공간이 부족할 때만(테이블 자체 스크롤) 잘리도록, 여기서는 폭을 임의로 제한하지 않는다.
-export function ApprovalChainCell({ approval, ccLabels }: { approval?: ApprovalChainLike | null; ccLabels?: string[] }) {
+export function ApprovalChainCell({ approval }: { approval?: ApprovalChainLike | null }) {
   if (!approval) return <span className="text-xs text-gray-300">-</span>;
   const plainText = [approval.requester_name, ...approval.approval_line.steps.map(s => s.approver_name)].join(' → ');
   return (
@@ -36,9 +36,6 @@ export function ApprovalChainCell({ approval, ccLabels }: { approval?: ApprovalC
       })}
       {approval.status === 'approved' && (
         <span className="ml-1.5 text-green-700 font-semibold">(결재완료)</span>
-      )}
-      {ccLabels && ccLabels.length > 0 && (
-        <span className="ml-1.5 text-gray-400">· 참조: {ccLabels.join(', ')}</span>
       )}
     </div>
   );

@@ -195,7 +195,7 @@ export default function DispatchOrderListPage() {
                           <TableCell className="text-sm text-gray-600">{o.ship_name || '-'}</TableCell>
                           <TableCell className="text-xs text-gray-600">{o.effective_date}</TableCell>
                           <TableCell><Badge variant={STATUS_CONFIG[o.status].variant} className="text-xs">{STATUS_CONFIG[o.status].label}</Badge></TableCell>
-                          <TableCell><ApprovalChainCell approval={orderApprovalMap.get(o.id)} ccLabels={orderCcMap.get(o.id)} /></TableCell>
+                          <TableCell><ApprovalChainCell approval={orderApprovalMap.get(o.id)} /></TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               {o.status === 'draft' && permissions.canEdit && (

@@ -459,7 +459,7 @@ export default function ContractManagementPage() {
                           <td className="p-2 text-muted-foreground">{c.contract_type === 'renewal' ? c.created_at.slice(0, 10) : '-'}</td>
                           <td className="p-2 text-right font-mono">{c.salary_amount ? `${c.salary_amount.toLocaleString()} ${c.salary_currency}` : '-'}</td>
                           <td className="p-2 text-center"><Badge className={`text-xs ${EFFECTIVE_STATUS_CONFIG[status].color}`}>{EFFECTIVE_STATUS_CONFIG[status].label}</Badge></td>
-                          <td className="p-2"><ApprovalChainCell approval={contractApprovalMap.get(c.id)} ccLabels={contractCcMap.get(c.id)} /></td>
+                          <td className="p-2"><ApprovalChainCell approval={contractApprovalMap.get(c.id)} /></td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-center gap-1">
                               {status === 'draft' && permissions.canEdit && (

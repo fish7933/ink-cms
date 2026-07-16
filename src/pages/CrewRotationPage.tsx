@@ -791,7 +791,7 @@ export function CrewRotationPage() {
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(plan.status)}</TableCell>
-                        <TableCell><ApprovalChainCell approval={planApprovalMap.get(plan.id)} ccLabels={planCcMap.get(plan.id)} /></TableCell>
+                        <TableCell><ApprovalChainCell approval={planApprovalMap.get(plan.id)} /></TableCell>
                         <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex flex-nowrap justify-end gap-1">
