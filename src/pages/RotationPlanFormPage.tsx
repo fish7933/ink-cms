@@ -1,31 +1,44 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Plus, X, Ship, LogIn, LogOut } from 'lucide-react';
+import { Plus, X, Ship, LogIn, LogOut, Download, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { rotationService, type CrewReservation } from '@/services/rotation.service';
 import { getPorts, findOrCreatePort } from '@/services/port.service';
 import { getEffectiveTemplateForShip, type SalaryTemplateWithItems } from '@/lib/salary-store';
 import { calculateContractPeriod } from '@/utils/contract-period';
+import { exportRotationPlanToExcel } from '@/utils/rotation-plan-export';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supervisorService } from '@/services/supervisor.service';
 import { getCurrentUser } from '@/lib/store';
 import type { Rank, Ship as ShipType, Company, Fleet } from '@/types/models';
 import type { RankGrade } from '@/types/dispatch';
-import type { CrewRotationAssignmentInput } from '@/types/rotation';
+import type { CrewRotationAssignmentInput, CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Port } from '@/types/port';
 import { useToast } from '@/hooks/use-toast';
 import { useTabContext } from '@/contexts/TabContext';
 import CrewCandidateSelectDialog from '@/components/rotation/CrewCandidateSelectDialog';
 
+const STATUS_CONFIG: Record<string, { label: string; variant: 'secondary' | 'default' | 'destructive' }> = {
+  draft: { label: '임시저장', variant: 'secondary' },
+  pending_approval: { label: '결재대기', variant: 'default' },
+  approved: { label: '승인됨', variant: 'default' },
+  rejected: { label: '반려됨', variant: 'destructive' },
+  executed: { label: '실행완료', variant: 'default' },
+};
+
 interface AssignmentRow {
   id: string;
+  // 결재중/승인/실행완료 등 임시저장이 아닌 계획을 볼 때, 비고만은 계속 수정 가능해야 하므로
+  // 실제 crew_rotation_assignments 행의 id를 들고 있어야 한다(신규 작성 중인 행은 없음).
+  assignmentId?: string;
   boardingCrewId: string | null;
   boardingRankId: string;
   boardingGrade: RankGrade | null;
@@ -117,6 +130,16 @@ export default function RotationPlanFormPage() {
   const [rowPicker, setRowPicker] = useState<{ rowId: string; side: 'boarding' | 'disembark' } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // 임시저장이 아닌 계획(결재대기/승인/반려/실행완료)을 열람할 때 쓰는 상태 — 비고를 제외한
+  // 모든 입력부를 잠근 채로 같은 작성 폼 레이아웃을 그대로 보여준다.
+  const [planStatus, setPlanStatus] = useState('draft');
+  const [loadedPlan, setLoadedPlan] = useState<CrewRotationPlanWithDetails | null>(null);
+  const [portLabel, setPortLabel] = useState('');
+  const [executing, setExecuting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const isReadOnly = isEditMode && planStatus !== 'draft';
+
   const preBoarding = (searchParams.get('boarding') || '').split(',').filter(Boolean);
   const preDisembark = (searchParams.get('disembark') || '').split(',').filter(Boolean);
 
@@ -191,11 +214,8 @@ export default function RotationPlanFormPage() {
         if (activeTabId) closeTab(activeTabId);
         return;
       }
-      if (existing.status !== 'draft') {
-        toast({ title: '임시저장 상태의 계획만 수정할 수 있습니다.', description: '이미 결재가 진행중이거나 처리된 계획입니다.', variant: 'destructive' });
-        if (activeTabId) closeTab(activeTabId);
-        return;
-      }
+      setPlanStatus(existing.status);
+      setLoadedPlan(existing);
 
       const [fleetsRes, shipsRes] = await Promise.all([
         supabase.from('fleets').select('*').eq('owner_id', existing.owner_id).order('name'),
@@ -212,11 +232,12 @@ export default function RotationPlanFormPage() {
       setBaseDepartureDate(existing.base_departure_date || '');
       if (existing.port_id) {
         const port = (portsData || []).find(p => p.id === existing.port_id);
-        if (port) { setCountryName(port.country_name); setCityName(port.city_name); }
+        if (port) { setCountryName(port.country_name); setCityName(port.city_name); setPortLabel(`${port.country_name} ${port.city_name}`); }
       }
 
       const loadedRows: AssignmentRow[] = existing.assignments.length > 0
         ? existing.assignments.map(a => makeRow({
+            assignmentId: a.id,
             boardingCrewId: a.on_crew_id,
             boardingRankId: a.on_rank_id || '',
             boardingGrade: a.on_rank_grade,
@@ -599,6 +620,49 @@ export default function RotationPlanFormPage() {
     } finally { setSubmitting(false); }
   };
 
+  // 임시저장이 아닌 계획에서는 비고(계획 비고 + 승/하선자별 비고)만 계속 저장할 수 있다.
+  const handleSaveNotes = async () => {
+    if (!editPlanId) return;
+    setSavingNotes(true);
+    try {
+      await rotationService.updateRotationPlan(editPlanId, { notes: planNotes || null });
+      await Promise.all(
+        rows.filter(r => r.assignmentId).map(r => rotationService.updateAssignmentNotes(r.assignmentId!, r.notes || null))
+      );
+      toast({ title: '비고가 저장되었습니다.' });
+    } catch (e) {
+      toast({ title: '비고 저장 중 오류가 발생했습니다.', description: String(e), variant: 'destructive' });
+    } finally { setSavingNotes(false); }
+  };
+
+  const handleExecute = async () => {
+    if (!editPlanId || !confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
+    setExecuting(true);
+    try {
+      const ok = await rotationService.executeRotationPlan(editPlanId);
+      if (ok) {
+        toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' });
+        setPlanStatus('executed');
+        window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
+      } else {
+        toast({ title: '실행 중 오류가 발생했습니다', variant: 'destructive' });
+      }
+    } finally { setExecuting(false); }
+  };
+
+  const handleExportExcel = async () => {
+    if (!loadedPlan) return;
+    setExporting(true);
+    try {
+      await exportRotationPlanToExcel(loadedPlan, portLabel);
+    } finally { setExporting(false); }
+  };
+
+  const handlePrint = () => {
+    if (!editPlanId) return;
+    window.open(`/print/rotation-plans/${editPlanId}`, '_blank');
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
@@ -611,18 +675,45 @@ export default function RotationPlanFormPage() {
       {/* 헤더 */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Ship className="w-4 h-4" />{isEditMode ? '교대 계획 수정 (임시저장)' : '교대 계획 작성'}
+              <Ship className="w-4 h-4" />
+              {isReadOnly ? '교대 계획 상세' : isEditMode ? '교대 계획 수정 (임시저장)' : '교대 계획 작성'}
+              {isReadOnly && (
+                <Badge variant={STATUS_CONFIG[planStatus]?.variant || 'secondary'}>
+                  {STATUS_CONFIG[planStatus]?.label || planStatus}
+                </Badge>
+              )}
             </CardTitle>
-            <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">{isEditMode ? '수정 완료' : '작성 완료'}</Button>
+            <div className="flex items-center gap-2">
+              {isReadOnly ? (
+                <>
+                  <Button size="sm" variant="outline" className="h-8" onClick={handleExportExcel} disabled={exporting}>
+                    <Download className="w-3.5 h-3.5 mr-1" />{exporting ? '내보내는 중...' : '엑셀 다운로드'}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8" onClick={handlePrint}>
+                    <Printer className="w-3.5 h-3.5 mr-1" />PDF 출력
+                  </Button>
+                  {planStatus === 'approved' && (
+                    <Button size="sm" className="h-8" onClick={handleExecute} disabled={executing}>
+                      {executing ? '실행 중...' : '발령 실행'}
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={handleSaveNotes} disabled={savingNotes}>
+                    {savingNotes ? '저장 중...' : '비고 저장'}
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">{isEditMode ? '수정 완료' : '작성 완료'}</Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-2.5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">선주 *</Label>
-              <Select value={ownerId || '_none'} onValueChange={v => handleOwnerChange(v === '_none' ? '' : v)}>
+              <Select value={ownerId || '_none'} onValueChange={v => handleOwnerChange(v === '_none' ? '' : v)} disabled={isReadOnly}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선주 선택" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">선주 선택</SelectItem>
@@ -632,7 +723,7 @@ export default function RotationPlanFormPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">플릿</Label>
-              <Select value={fleetId || '_none'} onValueChange={handleFleetChange} disabled={!ownerId}>
+              <Select value={fleetId || '_none'} onValueChange={handleFleetChange} disabled={isReadOnly || !ownerId}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="전체" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">전체</SelectItem>
@@ -642,7 +733,7 @@ export default function RotationPlanFormPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">선박 *</Label>
-              <Select value={shipId || '_none'} onValueChange={v => setShipId(v === '_none' ? '' : v)} disabled={!ownerId}>
+              <Select value={shipId || '_none'} onValueChange={v => setShipId(v === '_none' ? '' : v)} disabled={isReadOnly || !ownerId}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선박 선택" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">선박 선택</SelectItem>
@@ -652,7 +743,7 @@ export default function RotationPlanFormPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">계획명</Label>
-              <Input value={planName} onChange={e => setPlanName(e.target.value)} placeholder="선박 선택 시 자동입력" className="h-8 text-xs" />
+              <Input value={planName} onChange={e => setPlanName(e.target.value)} placeholder="선박 선택 시 자동입력" className="h-8 text-xs" disabled={isReadOnly} />
             </div>
           </div>
 
@@ -661,11 +752,13 @@ export default function RotationPlanFormPage() {
               <Label className="text-xs">교대지 국가</Label>
               {manualCountry ? (
                 <div className="flex gap-1">
-                  <Input value={countryName} onChange={e => handleManualCountryChange(e.target.value)} placeholder="국가명 (영어)" className="h-8 text-xs" />
-                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCountry(false); setCountryName(''); }}>목록</Button>
+                  <Input value={countryName} onChange={e => handleManualCountryChange(e.target.value)} placeholder="국가명 (영어)" className="h-8 text-xs" disabled={isReadOnly} />
+                  {!isReadOnly && (
+                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCountry(false); setCountryName(''); }}>목록</Button>
+                  )}
                 </div>
               ) : (
-                <Select value={countryName || '_none'} onValueChange={handleCountrySelect}>
+                <Select value={countryName || '_none'} onValueChange={handleCountrySelect} disabled={isReadOnly}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="국가 선택" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_manual">직접 입력...</SelectItem>
@@ -679,13 +772,13 @@ export default function RotationPlanFormPage() {
               <Label className="text-xs">교대지 도시</Label>
               {(manualCountry || manualCity) ? (
                 <div className="flex gap-1">
-                  <Input value={cityName} onChange={e => setCityName(e.target.value)} placeholder="도시명 (영어)" className="h-8 text-xs" />
-                  {!manualCountry && (
+                  <Input value={cityName} onChange={e => setCityName(e.target.value)} placeholder="도시명 (영어)" className="h-8 text-xs" disabled={isReadOnly} />
+                  {!manualCountry && !isReadOnly && (
                     <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCity(false); setCityName(''); }}>목록</Button>
                   )}
                 </div>
               ) : (
-                <Select value={cityName || '_none'} onValueChange={handleCitySelect} disabled={!countryName}>
+                <Select value={cityName || '_none'} onValueChange={handleCitySelect} disabled={isReadOnly || !countryName}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={countryName ? '도시 선택' : '국가를 먼저 선택'} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_manual">직접 입력...</SelectItem>
@@ -697,7 +790,7 @@ export default function RotationPlanFormPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">기준 교대일</Label>
-              <Input type="date" value={baseDepartureDate} onChange={e => setBaseDepartureDate(e.target.value)} className="h-8 text-xs" />
+              <Input type="date" value={baseDepartureDate} onChange={e => setBaseDepartureDate(e.target.value)} className="h-8 text-xs" disabled={isReadOnly} />
               <p className="text-[10px] text-gray-400">승선/하선일은 기준일, 출국일은 하루 전날, 귀국일은 하루 뒷날로 일괄 설정합니다</p>
             </div>
           </div>
@@ -713,17 +806,19 @@ export default function RotationPlanFormPage() {
       <div className="space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-semibold text-gray-700">발령 상세</h3>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setBoardingDialogOpen(true)} className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
-              <Plus className="w-3 h-3" />승선 후보 추가
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setDisembarkDialogOpen(true)} className="h-7 text-xs gap-1 border-orange-300 text-orange-700 hover:bg-orange-50">
-              <Plus className="w-3 h-3" />하선 후보 추가
-            </Button>
-            <Button size="sm" variant="outline" onClick={addRow} className="h-7 text-xs gap-1">
-              <Plus className="w-3 h-3" />빈 행 추가
-            </Button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setBoardingDialogOpen(true)} className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                <Plus className="w-3 h-3" />승선 후보 추가
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDisembarkDialogOpen(true)} className="h-7 text-xs gap-1 border-orange-300 text-orange-700 hover:bg-orange-50">
+                <Plus className="w-3 h-3" />하선 후보 추가
+              </Button>
+              <Button size="sm" variant="outline" onClick={addRow} className="h-7 text-xs gap-1">
+                <Plus className="w-3 h-3" />빈 행 추가
+              </Button>
+            </div>
+          )}
         </div>
 
         {rows.map((row, idx) => (
@@ -731,7 +826,7 @@ export default function RotationPlanFormPage() {
             <CardContent className="p-2 space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-gray-400">#{idx + 1}</span>
-                {rows.length > 1 && (
+                {rows.length > 1 && !isReadOnly && (
                   <Button size="sm" variant="ghost" className="h-5 w-5 p-0 text-gray-400" onClick={() => removeRow(row.id)}>
                     <X className="w-3 h-3" />
                   </Button>
@@ -748,13 +843,13 @@ export default function RotationPlanFormPage() {
                   </div>
                   <div className="flex gap-1">
                     <Button
-                      type="button" variant="outline"
+                      type="button" variant="outline" disabled={isReadOnly}
                       className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-emerald-200"
                       onClick={() => setRowPicker({ rowId: row.id, side: 'boarding' })}
                     >
                       <span className="truncate text-emerald-800">{getCrewLabel(row.boardingCrewId)}</span>
                     </Button>
-                    <Select value={row.boardingRankId || '_none'} onValueChange={v => updateRow(row.id, { boardingRankId: v === '_none' ? '' : v, boardingGrade: null })}>
+                    <Select value={row.boardingRankId || '_none'} onValueChange={v => updateRow(row.id, { boardingRankId: v === '_none' ? '' : v, boardingGrade: null })} disabled={isReadOnly}>
                       <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급 *" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">직급 *</SelectItem>
@@ -764,7 +859,7 @@ export default function RotationPlanFormPage() {
                     {(() => {
                       const opts = gradesForRankId(row.boardingRankId);
                       return opts.length > 0 ? (
-                        <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })}>
+                        <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })} disabled={isReadOnly}>
                           <SelectTrigger className={`h-7 text-xs w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
                             <SelectValue placeholder="등급 *" />
                           </SelectTrigger>
@@ -775,7 +870,7 @@ export default function RotationPlanFormPage() {
                         </Select>
                       ) : (
                         <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
-                          placeholder="등급" className="h-7 text-xs w-16 shrink-0" />
+                          placeholder="등급" className="h-7 text-xs w-16 shrink-0" disabled={isReadOnly} />
                       );
                     })()}
                   </div>
@@ -786,11 +881,11 @@ export default function RotationPlanFormPage() {
                   )}
                   <div className="grid grid-cols-2 gap-1">
                     <div className="relative">
-                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-xs pr-1" />
+                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
                       <span className="absolute -top-1.5 left-1 text-[9px] text-emerald-500 bg-emerald-50 px-0.5">출국</span>
                     </div>
                     <div className="relative">
-                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-xs pr-1" />
+                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
                       <span className="absolute -top-1.5 left-1 text-[9px] text-emerald-500 bg-emerald-50 px-0.5">승선</span>
                     </div>
                   </div>
@@ -805,13 +900,13 @@ export default function RotationPlanFormPage() {
                   </div>
                   <div className="flex gap-1">
                     <Button
-                      type="button" variant="outline"
+                      type="button" variant="outline" disabled={isReadOnly}
                       className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-orange-200"
                       onClick={() => setRowPicker({ rowId: row.id, side: 'disembark' })}
                     >
                       <span className="truncate text-orange-800">{getCrewLabel(row.disembarkCrewId)}</span>
                     </Button>
-                    <Select value={row.disembarkRankId || '_none'} onValueChange={v => updateRow(row.id, { disembarkRankId: v === '_none' ? '' : v })}>
+                    <Select value={row.disembarkRankId || '_none'} onValueChange={v => updateRow(row.id, { disembarkRankId: v === '_none' ? '' : v })} disabled={isReadOnly}>
                       <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">직급</SelectItem>
@@ -834,11 +929,11 @@ export default function RotationPlanFormPage() {
                   )}
                   <div className="grid grid-cols-2 gap-1">
                     <div className="relative">
-                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-xs pr-1" />
+                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
                       <span className="absolute -top-1.5 left-1 text-[9px] text-orange-500 bg-orange-50 px-0.5">하선</span>
                     </div>
                     <div className="relative">
-                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-xs pr-1" />
+                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
                       <span className="absolute -top-1.5 left-1 text-[9px] text-orange-500 bg-orange-50 px-0.5">귀국</span>
                     </div>
                   </div>
@@ -854,6 +949,7 @@ export default function RotationPlanFormPage() {
                     onChange={e => updateRow(row.id, { contractMonths: e.target.value })}
                     className="h-7 text-xs"
                     placeholder={row.boardingCrewId && !row.contractMonths ? '계약개월 (선주사 기본값 미설정)' : '계약 개월'}
+                    disabled={isReadOnly}
                   />
                 </div>
                 <Input value={row.notes} onChange={e => updateRow(row.id, { notes: e.target.value })} className="h-7 text-xs" placeholder="비고" />

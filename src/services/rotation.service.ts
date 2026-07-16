@@ -523,6 +523,17 @@ export const rotationService = {
     return data;
   },
 
+  // 발령 실행 후(다른 입력부는 다 잠긴 뒤)에도 승/하선자별 비고는 계속 입력할 수 있어야 하므로,
+  // 구조를 바꾸는 updateRotationPlanWithAssignments(draft 전용)와 별개로 이 필드만 갱신한다.
+  async updateAssignmentNotes(assignmentId: string, notes: string | null): Promise<boolean> {
+    const { error } = await supabase
+      .from('crew_rotation_assignments')
+      .update({ notes })
+      .eq('id', assignmentId);
+    if (error) { console.error('Error updating assignment notes:', error); return false; }
+    return true;
+  },
+
   /**
    * 교대계획을 발령 결재(rotation_plan_approvals)로 상신한다 — 채용 결재와 동일하게
    * 결재선을 직접 선택하는 방식(조직도 소속 부서 기반 자동 구성은 더 이상 쓰지 않음).
