@@ -674,7 +674,7 @@ export function CrewRotationPage() {
         <CardHeader className="py-3">
           <div className="flex items-center gap-3 flex-wrap">
             <CardTitle className="text-sm shrink-0">교대 계획 목록</CardTitle>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap ml-4">
               <span className="text-xs font-medium text-gray-600">기간</span>
               <input
                 type="month"
