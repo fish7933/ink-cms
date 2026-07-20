@@ -30,9 +30,9 @@ export default function CrewPayslipPrintPage() {
     load();
   }, [id]);
 
-  if (loading) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>불러오는 중...</div>;
-  if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>로그인이 필요합니다.</div>;
-  if (!payslip) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>급여명세서를 찾을 수 없습니다.</div>;
+  if (loading) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Loading...</div>;
+  if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Login required.</div>;
+  if (!payslip) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Payslip not found.</div>;
 
   return (
     <div className="print-page-wrapper" style={{ padding: '28px 36px 48px' }}>
@@ -51,7 +51,7 @@ export default function CrewPayslipPrintPage() {
           onClick={() => window.print()}
           style={{ padding: '7px 14px', background: '#fff', color: '#333', border: '1px solid #999', borderRadius: 4, fontSize: 12.5, cursor: 'pointer' }}
         >
-          인쇄 / PDF 저장
+          Print / Save PDF
         </button>
       </div>
 

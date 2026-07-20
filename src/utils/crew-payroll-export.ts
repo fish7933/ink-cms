@@ -38,22 +38,22 @@ interface SaveFilePickerWindow extends Window {
 // 계약별 수당을 "기본급" 한 칸으로 뭉치지 않고 항목명별 열로 모두 펼쳐 보여준다.
 export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): XLSX.WorkBook {
   const { period, ship_name, owner_name, fleet_name, allowance_columns, deduction_columns, rows } = ledger;
-  const headerLabels = ['이름', '직급', '등급', '근무기간', '근무일', ...allowance_columns, '합계', ...deduction_columns, '공제합계', '실지급액'];
+  const headerLabels = ['Rank', 'Grade', 'Name', 'Pay Period', 'Days', ...allowance_columns, 'Total Earnings', ...deduction_columns, 'Total Deductions', 'Net Pay'];
   const colCount = headerLabels.length;
-  const grossCol = 4 + allowance_columns.length; // 0-indexed 위치
+  const grossCol = 4 + allowance_columns.length; // 0-indexed position
 
   const aoa: ReturnType<typeof cell>[][] = [];
 
   const titleParts = [owner_name, fleet_name, ship_name].filter(Boolean).join(' > ');
   aoa.push([
-    cell(`${titleParts}  ${period.year_month} 급여대장`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
+    cell(`${titleParts}  ${period.year_month} Payroll Ledger`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   aoa.push(Array.from({ length: colCount }, () => cell('', {})));
 
   aoa.push(headerLabels.map((label, i) => {
-    const isDeduction = i > grossCol && label !== '공제합계' && label !== '실지급액';
-    const isResult = label === '공제합계' || label === '실지급액' || label === '합계';
+    const isDeduction = i > grossCol && label !== 'Total Deductions' && label !== 'Net Pay';
+    const isResult = label === 'Total Deductions' || label === 'Net Pay' || label === 'Total Earnings';
     const colors = isDeduction ? DEDUCTION_HEADER : isResult ? RESULT_HEADER : HEADER;
     return cell(label, {
       font: { bold: true, sz: BASE_SZ, color: { rgb: colors.fg } },
@@ -65,9 +65,9 @@ export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): X
 
   rows.forEach((r, idx) => {
     aoa.push([
-      cell(r.crew_name, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ, bold: true }, border: border() }),
       cell(r.rank_code || '-', { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(r.rank_grade || '-', { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
+      cell(r.crew_name, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ, bold: true }, border: border() }),
       cell(`${fmtMD(r.period_start_date)}~${fmtMD(r.period_end_date)}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(`${r.days_served}/${r.days_in_month}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       ...allowance_columns.map(name => cell(r.allowance_by_name[name] || 0, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ }, border: border() })),
@@ -80,7 +80,7 @@ export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): X
 
   const sum = (f: (r: CrewPayrollLedgerData['rows'][number]) => number) => rows.reduce((s, r) => s + f(r), 0);
   aoa.push([
-    cell(`합계 (${rows.length}명)`, { font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
+    cell(`Total (${rows.length} crew)`, { font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),

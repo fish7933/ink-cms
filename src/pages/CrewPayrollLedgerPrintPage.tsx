@@ -5,7 +5,7 @@ import { crewPayrollService } from '@/services/crew-payroll.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import type { CrewPayrollLedgerData } from '@/types/crew-payroll';
 
-const fmt = (n: number) => n.toLocaleString('ko-KR');
+const fmt = (n: number) => n.toLocaleString('en-US');
 const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
 
 // 선박별 급여대장(표 형태) 인쇄 페이지 — 사이드바/헤더 없이 순수 표만 렌더링
@@ -33,9 +33,9 @@ export default function CrewPayrollLedgerPrintPage() {
     load();
   }, [periodId]);
 
-  if (loading) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>불러오는 중...</div>;
-  if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>로그인이 필요합니다.</div>;
-  if (!ledger) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>급여대장을 찾을 수 없습니다.</div>;
+  if (loading) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Loading...</div>;
+  if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Login required.</div>;
+  if (!ledger) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Payroll ledger not found.</div>;
 
   const { period, ship_name, owner_name, fleet_name, allowance_columns, deduction_columns, rows } = ledger;
   const totalGross = rows.reduce((s, r) => s + r.gross_amount, 0);
@@ -68,39 +68,39 @@ export default function CrewPayrollLedgerPrintPage() {
           onClick={() => window.print()}
           style={{ padding: '7px 14px', background: '#fff', color: '#333', border: '1px solid #999', borderRadius: 4, fontSize: 12.5, cursor: 'pointer' }}
         >
-          인쇄 / PDF 저장
+          Print / Save PDF
         </button>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8, paddingBottom: 6, borderBottom: '2px solid #888' }}>
         <div style={{ fontSize: 12.5, fontWeight: 600 }}>{company?.name || ''}</div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: 1 }}>{titleParts} {period.year_month} 급여대장</div>
+          <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: 1 }}>{titleParts} {period.year_month} Payroll Ledger</div>
         </div>
-        <div style={{ fontSize: 10.5, color: '#777' }}>{rows.length}명</div>
+        <div style={{ fontSize: 10.5, color: '#777' }}>{rows.length} crew</div>
       </div>
 
       <table className="ledger">
         <thead>
           <tr>
-            <th>이름</th>
-            <th>직급</th>
-            <th>등급</th>
-            <th>근무기간</th>
-            <th>근무일</th>
+            <th>Rank</th>
+            <th>Grade</th>
+            <th>Name</th>
+            <th>Pay Period</th>
+            <th>Days</th>
             {allowance_columns.map(name => <th key={name}>{name}</th>)}
-            <th>급여합계</th>
+            <th>Total Earnings</th>
             {deduction_columns.map(name => <th key={name}>{name}</th>)}
-            <th>공제합계</th>
-            <th>실지급액</th>
+            <th>Total Deductions</th>
+            <th>Net Pay</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(r => (
             <tr key={r.crew_member_id}>
-              <td className="name">{r.crew_name}</td>
               <td className="name">{r.rank_code || '-'}</td>
               <td className="name">{r.rank_grade || '-'}</td>
+              <td className="name">{r.crew_name}</td>
               <td className="name">{fmtMD(r.period_start_date)}~{fmtMD(r.period_end_date)}</td>
               <td className="name">{r.days_served}/{r.days_in_month}</td>
               {allowance_columns.map(name => <td key={name} className="amount">{fmt(r.allowance_by_name[name] || 0)}</td>)}
@@ -111,7 +111,7 @@ export default function CrewPayrollLedgerPrintPage() {
             </tr>
           ))}
           <tr className="total">
-            <td colSpan={5} className="name">합계 ({rows.length}명)</td>
+            <td colSpan={5} className="name">Total ({rows.length} crew)</td>
             {allowance_columns.map(name => <td key={name} className="amount">{fmt(totalByAllowance(name))}</td>)}
             <td className="amount">{fmt(totalGross)}</td>
             {deduction_columns.map(name => <td key={name} className="amount" style={{ color: '#a33' }}>{fmt(totalByDeduction(name))}</td>)}

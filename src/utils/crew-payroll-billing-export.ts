@@ -5,10 +5,10 @@ import type { CrewPayrollBillingData, CrewPayrollBillingShipSection } from '@/ty
 const OWNER_BILLED_HEADER = { bg: 'FFF3E0', fg: '9A6300' };
 
 function buildSummarySheet(data: CrewPayrollBillingData): XLSX.WorkSheet {
-  const headers = ['선주', '플릿', '선박', '인원', '실지급액 합계', '선주청구 합계'];
+  const headers = ['Owner', 'Fleet', 'Vessel', 'Crew', 'Total Net Pay', 'Total Owner Billed'];
   const aoa: ReturnType<typeof cell>[][] = [];
   aoa.push([
-    cell(`${data.group_label}  ${data.year_month} 선원 급여 청구서`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
+    cell(`${data.group_label}  ${data.year_month} Crew Payroll Claim`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: headers.length - 1 }, () => cell('', {})),
   ]);
   aoa.push(Array.from({ length: headers.length }, () => cell('', {})));
@@ -31,7 +31,7 @@ function buildSummarySheet(data: CrewPayrollBillingData): XLSX.WorkSheet {
   });
 
   aoa.push([
-    cell(`합계 (${data.ships.length}척)`, { font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
+    cell(`Total (${data.ships.length} vessels)`, { font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell(data.ships.reduce((s, sec) => s + sec.rows.length, 0), { alignment: { horizontal: 'center' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
@@ -47,22 +47,22 @@ function buildSummarySheet(data: CrewPayrollBillingData): XLSX.WorkSheet {
 
 function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.WorkSheet {
   const { allowance_columns, deduction_columns, rows } = section;
-  const headerLabels = ['이름', '직급', '등급', '근무기간', '근무일', ...allowance_columns, '합계', ...deduction_columns, '공제합계', '실지급액', '선주청구'];
+  const headerLabels = ['Rank', 'Grade', 'Name', 'Pay Period', 'Days', ...allowance_columns, 'Total Earnings', ...deduction_columns, 'Total Deductions', 'Net Pay', 'Owner Billed'];
   const colCount = headerLabels.length;
   const grossCol = 4 + allowance_columns.length;
 
   const aoa: ReturnType<typeof cell>[][] = [];
   const titleParts = [section.owner_name, section.fleet_name, section.ship_name].filter(Boolean).join(' > ');
   aoa.push([
-    cell(`${titleParts}  ${section.period_year_month} 급여대장`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
+    cell(`${titleParts}  ${section.period_year_month} Payroll Ledger`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   aoa.push(Array.from({ length: colCount }, () => cell('', {})));
 
   aoa.push(headerLabels.map((label, i) => {
-    const isDeduction = i > grossCol && label !== '공제합계' && label !== '실지급액' && label !== '선주청구';
-    const isOwnerBilled = label === '선주청구';
-    const isResult = label === '공제합계' || label === '실지급액' || label === '합계';
+    const isDeduction = i > grossCol && label !== 'Total Deductions' && label !== 'Net Pay' && label !== 'Owner Billed';
+    const isOwnerBilled = label === 'Owner Billed';
+    const isResult = label === 'Total Deductions' || label === 'Net Pay' || label === 'Total Earnings';
     const colors = isOwnerBilled ? OWNER_BILLED_HEADER : isDeduction ? DEDUCTION_HEADER : isResult ? RESULT_HEADER : HEADER;
     return cell(label, {
       font: { bold: true, sz: BASE_SZ, color: { rgb: colors.fg } },
@@ -74,9 +74,9 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
 
   rows.forEach((r, idx) => {
     aoa.push([
-      cell(r.crew_name, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ, bold: true }, border: border() }),
       cell(r.rank_code || '-', { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(r.rank_grade || '-', { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
+      cell(r.crew_name, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ, bold: true }, border: border() }),
       cell(`${fmtMD(r.period_start_date)}~${fmtMD(r.period_end_date)}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(`${r.days_served}/${r.days_in_month}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       ...allowance_columns.map(name => cell(r.allowance_by_name[name] || 0, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ }, border: border() })),
@@ -90,7 +90,7 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
 
   const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((s, r) => s + f(r), 0);
   aoa.push([
-    cell(`합계 (${rows.length}명)`, { font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
+    cell(`Total (${rows.length} crew)`, { font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
@@ -117,7 +117,7 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
 
 export function buildCrewPayrollBillingWorkbook(data: CrewPayrollBillingData): XLSX.WorkBook {
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, buildSummarySheet(data), '요약');
+  XLSX.utils.book_append_sheet(workbook, buildSummarySheet(data), 'Summary');
   data.ships.forEach((section, idx) => {
     const sheetName = `${idx + 1}_${section.ship_name}`.slice(0, 31);
     XLSX.utils.book_append_sheet(workbook, buildShipDetailSheet(section), sheetName);
@@ -136,7 +136,7 @@ interface SaveFilePickerWindow extends Window {
 
 export async function exportCrewPayrollBillingToExcel(data: CrewPayrollBillingData): Promise<void> {
   const workbook = buildCrewPayrollBillingWorkbook(data);
-  const fileName = `${data.group_label}_${data.year_month}_선원급여청구서.xlsx`;
+  const fileName = `${data.group_label}_${data.year_month}_CrewPayrollClaim.xlsx`;
 
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
   if (picker) {

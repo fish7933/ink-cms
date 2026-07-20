@@ -18,18 +18,19 @@ import CrewPayslipDetailView from '@/components/crew-payroll/CrewPayslipDetailVi
 import type { Ship } from '@/lib/store';
 import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails } from '@/types/crew-payroll';
 
-const STATUS_LABELS: Record<string, string> = { draft: '작성중', pending_approval: '결재 진행중', confirmed: '확정됨' };
+const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   pending_approval: 'bg-purple-50 text-purple-700 border-purple-200',
   confirmed: 'bg-green-50 text-green-700 border-green-200',
 };
-const fmt = (n: number) => n.toLocaleString('ko-KR');
+const fmt = (n: number) => n.toLocaleString('en-US');
 const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
 // 선박별 선원 급여명세 — 담당 선박의 급여 템플릿(직급+등급)과 선원 계약별 수당/공제를
 // 승선일수 기준 일할계산으로 합쳐 월별 명세서를 자동 생성하고, 지출결의서로 결재 상신한다.
+// 선주/매닝사와 공유되는 화면이라 표시 문구는 전부 영어로 유지한다.
 export default function CrewPayrollManagementPage() {
   const { toast } = useToast();
   const permissions = usePermissions('crew_payroll');
@@ -109,7 +110,7 @@ export default function CrewPayrollManagementPage() {
       setCurrentPeriod(period);
       setPayslips(period ? await crewPayrollService.getPayslipsForPeriod(period.id) : []);
     } catch (e) {
-      toast({ title: '조회 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: 'Failed to load', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -123,21 +124,21 @@ export default function CrewPayrollManagementPage() {
   };
 
   const handleGenerate = async () => {
-    if (!shipId) { toast({ title: '선박을 먼저 선택하세요', variant: 'destructive' }); return; }
+    if (!shipId) { toast({ title: 'Please select a vessel first', variant: 'destructive' }); return; }
     try {
       setGenerating(true);
       const user = await getCurrentUser();
       if (!user) return;
       if (currentPeriod) {
         await crewPayrollService.regeneratePayrollPeriod(currentPeriod.id, user.id);
-        toast({ title: '다시 생성되었습니다.' });
+        toast({ title: 'Regenerated successfully.' });
       } else {
         await crewPayrollService.createPayrollPeriod(shipId, yearMonth, user.id);
-        toast({ title: '명세서가 생성되었습니다.' });
+        toast({ title: 'Payslips generated.' });
       }
       await refresh();
     } catch (e) {
-      toast({ title: '생성 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: 'Generation failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setGenerating(false);
     }
@@ -145,28 +146,28 @@ export default function CrewPayrollManagementPage() {
 
   const handleDeletePeriod = async () => {
     if (!currentPeriod) return;
-    if (!confirm(`${yearMonth} 회차를 삭제하시겠습니까? 생성된 명세서가 모두 사라집니다.`)) return;
+    if (!confirm(`Delete the ${yearMonth} payroll period? All generated payslips will be removed.`)) return;
     try {
       await crewPayrollService.deletePayrollPeriod(currentPeriod.id);
-      toast({ title: '삭제되었습니다.' });
+      toast({ title: 'Deleted.' });
       await refresh();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: 'Delete failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
   const handleSubmit = async () => {
     if (!currentPeriod) return;
-    if (!confirm(`${yearMonth} 급여대장을 지출결의서로 결재 상신하시겠습니까?`)) return;
+    if (!confirm(`Submit the ${yearMonth} payroll ledger as an expense report for approval?`)) return;
     try {
       setSubmitting(true);
       const user = await getCurrentUser();
       if (!user) return;
       await crewPayrollService.submitPayrollForApproval(currentPeriod.id, user.id);
-      toast({ title: '지출결의서를 상신했습니다.' });
+      toast({ title: 'Expense report submitted.' });
       await refresh();
     } catch (e) {
-      toast({ title: '상신 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: 'Submission failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -174,16 +175,16 @@ export default function CrewPayrollManagementPage() {
 
   const handleConfirm = async () => {
     if (!currentPeriod) return;
-    if (!confirm(`${yearMonth} 급여명세를 확정 처리하시겠습니까? (결재 없이 바로 확정됩니다)`)) return;
+    if (!confirm(`Confirm the ${yearMonth} payroll? (This finalizes it directly, without an approval workflow.)`)) return;
     try {
       setConfirming(true);
       const user = await getCurrentUser();
       if (!user) return;
       await crewPayrollService.confirmPayrollPeriod(currentPeriod.id, user.id);
-      toast({ title: '확정 처리되었습니다.' });
+      toast({ title: 'Confirmed.' });
       await refresh();
     } catch (e) {
-      toast({ title: '확정 처리 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: 'Confirmation failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setConfirming(false);
     }
@@ -194,10 +195,10 @@ export default function CrewPayrollManagementPage() {
     try {
       setExporting(true);
       const ledger = await crewPayrollService.getPayrollLedgerForPeriod(currentPeriod.id);
-      if (!ledger || ledger.rows.length === 0) { toast({ title: '내려받을 명세서가 없습니다.', variant: 'destructive' }); return; }
+      if (!ledger || ledger.rows.length === 0) { toast({ title: 'No payslips to download.', variant: 'destructive' }); return; }
       await exportCrewPayrollLedgerToExcel(ledger);
     } catch (e) {
-      toast({ title: '엑셀 다운로드 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: 'Excel download failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setExporting(false);
     }
@@ -218,11 +219,11 @@ export default function CrewPayrollManagementPage() {
           await crewPayrollService.updatePayslipItemAmount(item.id, next);
         }
       }
-      toast({ title: '저장되었습니다.' });
+      toast({ title: 'Saved.' });
       setEditingPayslip(null);
       await refresh();
     } catch (e) {
-      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: 'Save failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSavingItems(false);
     }
@@ -254,45 +255,45 @@ export default function CrewPayrollManagementPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><Wallet className="w-5 h-5 text-muted-foreground" />선원 급여명세</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Wallet className="w-5 h-5 text-muted-foreground" />Crew Payroll</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          선박에 배정된 급여 템플릿과 선원 계약별 수당/공제를 승선일수 기준으로 합쳐 월별 명세서를 만들고, 지출결의서로 결재 상신합니다.
+          Combines the vessel&apos;s salary template with each crew member&apos;s contract allowances/deductions, pro-rated by days served, into a monthly payroll ledger you can submit for approval.
         </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">선주</Label>
+          <Label className="text-xs">Owner</Label>
           <Select value={ownerId || '_none'} onValueChange={v => handleOwnerChange(v === '_none' ? '' : v)}>
-            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="선주 선택" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="Select owner" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_none">선주 선택</SelectItem>
+              <SelectItem value="_none">Select owner</SelectItem>
               {owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">플릿</Label>
+          <Label className="text-xs">Fleet</Label>
           <Select value={fleetId || '_none'} onValueChange={v => handleFleetChange(v === '_none' ? '' : v)} disabled={!ownerId}>
-            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="All" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_none">전체</SelectItem>
+              <SelectItem value="_none">All</SelectItem>
               {fleetsForOwner.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">선박</Label>
+          <Label className="text-xs">Vessel</Label>
           <Select value={shipId || '_none'} onValueChange={v => setShipId(v === '_none' ? '' : v)} disabled={!ownerId}>
-            <SelectTrigger className="h-9 text-sm w-48"><SelectValue placeholder="선박 선택" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-sm w-48"><SelectValue placeholder="Select vessel" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_none">선박 선택</SelectItem>
+              <SelectItem value="_none">Select vessel</SelectItem>
               {shipsForSelection.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">급여 월</Label>
+          <Label className="text-xs">Pay Month</Label>
           <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-9 text-sm w-40" />
         </div>
         <Badge variant="outline" className={STATUS_COLORS[periodStatus]}>{STATUS_LABELS[periodStatus]}</Badge>
@@ -300,74 +301,74 @@ export default function CrewPayrollManagementPage() {
         {payslips.length > 0 && (
           <>
             <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => window.open(`/print/crew-payroll/${currentPeriod?.id}`, '_blank')}>
-              <Printer className="w-3.5 h-3.5" />급여대장 인쇄
+              <Printer className="w-3.5 h-3.5" />Print Ledger
             </Button>
             <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleExportExcel} disabled={exporting}>
-              <FileSpreadsheet className="w-3.5 h-3.5" />{exporting ? '다운로드 중...' : '엑셀 다운로드'}
+              <FileSpreadsheet className="w-3.5 h-3.5" />{exporting ? 'Downloading...' : 'Download Excel'}
             </Button>
           </>
         )}
         {permissions.canCreate && isDraft && shipId && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleGenerate} disabled={generating || loading}>
-            <RefreshCw className="w-3.5 h-3.5" />{generating ? '생성 중...' : currentPeriod ? '다시 생성' : '명세서 생성'}
+            <RefreshCw className="w-3.5 h-3.5" />{generating ? 'Generating...' : currentPeriod ? 'Regenerate' : 'Generate Payslips'}
           </Button>
         )}
         {permissions.canDelete && isDraft && currentPeriod && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9 text-red-600 border-red-300" onClick={handleDeletePeriod}>
-            <Trash2 className="w-3.5 h-3.5" />회차 삭제
+            <Trash2 className="w-3.5 h-3.5" />Delete Period
           </Button>
         )}
         {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9 text-purple-600 border-purple-300" onClick={handleSubmit} disabled={submitting}>
-            <Send className="w-3.5 h-3.5" />{submitting ? '상신 중...' : '지출결의서 상신'}
+            <Send className="w-3.5 h-3.5" />{submitting ? 'Submitting...' : 'Submit Expense Report'}
           </Button>
         )}
         {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
           <Button size="sm" className="gap-1.5 h-9" onClick={handleConfirm} disabled={confirming}>
-            <CheckCircle2 className="w-3.5 h-3.5" />{confirming ? '처리 중...' : '확정 처리'}
+            <CheckCircle2 className="w-3.5 h-3.5" />{confirming ? 'Confirming...' : 'Confirm'}
           </Button>
         )}
         {isPendingApproval && currentPeriod?.approval_document_id && (
           <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => window.open(`/documents/${currentPeriod.approval_document_id}`, '_blank')}>
-            <ExternalLink className="w-3.5 h-3.5" />결재 진행 상황 보기
+            <ExternalLink className="w-3.5 h-3.5" />View Approval Status
           </Button>
         )}
       </div>
 
       {!shipId ? (
-        <div className="text-center py-12 text-sm text-gray-400">담당 선박을 먼저 선택하세요.</div>
+        <div className="text-center py-12 text-sm text-gray-400">Please select a vessel first.</div>
       ) : loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
       ) : payslips.length === 0 ? (
         <div className="text-center py-12 text-sm text-gray-400">
-          이 달의 급여명세서가 없습니다. {isDraft && '"명세서 생성" 버튼으로 이 선박에 승선한 선원 전원의 명세서를 만들 수 있습니다.'}
+          No payslips for this month yet. {isDraft && 'Use "Generate Payslips" to create payslips for every crew member on this vessel.'}
         </div>
       ) : (
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left p-2 font-medium text-gray-600">선원</th>
-                <th className="text-center p-2 font-medium text-gray-600">근무기간</th>
+                <th className="text-left p-2 font-medium text-gray-600">Rank</th>
+                <th className="text-left p-2 font-medium text-gray-600">Name</th>
+                <th className="text-center p-2 font-medium text-gray-600">Pay Period</th>
+                <th className="text-center p-2 font-medium text-gray-600">Days</th>
                 {allowanceOrder.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
-                <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">급여합계</th>
+                <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">Total Earnings</th>
                 {deductionOrder.map(name => <th key={name} className="text-right p-2 font-medium text-red-500">{name}</th>)}
-                <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">공제합계</th>
-                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60">실지급액</th>
-                <th className="text-right p-2 font-medium text-gray-600 w-36">작업</th>
+                <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">Total Deductions</th>
+                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60">Net Pay</th>
+                <th className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
               </tr>
             </thead>
             <tbody>
               {payslips.map(p => (
                 <tr key={p.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setViewingPayslip(p)}>
-                  <td className="p-2">
-                    <div className="font-medium">{p.crew_name}</div>
-                    <div className="text-[10px] text-gray-400">{p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}</div>
-                  </td>
+                  <td className="p-2 text-gray-600">{p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}</td>
+                  <td className="p-2 font-medium">{p.crew_name}</td>
                   <td className="p-2 text-center text-gray-500" title={`${p.period_start_date} ~ ${p.period_end_date}`}>
-                    <div>{fmtMD(p.period_start_date)}~{fmtMD(p.period_end_date)}</div>
-                    <div className="text-[10px] text-gray-400">({p.days_served}/{p.days_in_month}일)</div>
+                    {fmtMD(p.period_start_date)}~{fmtMD(p.period_end_date)}
                   </td>
+                  <td className="p-2 text-center text-gray-500">{p.days_served}/{p.days_in_month}</td>
                   {allowanceOrder.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(amountByName(p, name, false))}</td>)}
                   <td className="p-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>
                   {deductionOrder.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(amountByName(p, name, true))}</td>)}
@@ -376,10 +377,10 @@ export default function CrewPayrollManagementPage() {
                   <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
                       {permissions.canEdit && isDraft && (
-                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEditDialog(p)}>편집</Button>
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEditDialog(p)}>Edit</Button>
                       )}
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => window.open(`/print/crew-payslips/${p.id}`, '_blank')}>
-                        <Printer className="w-3.5 h-3.5" />인쇄
+                        <Printer className="w-3.5 h-3.5" />Print
                       </Button>
                     </div>
                   </td>
@@ -388,7 +389,7 @@ export default function CrewPayrollManagementPage() {
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t font-semibold">
-                <td className="p-2" colSpan={2}>합계 ({payslips.length}명)</td>
+                <td className="p-2" colSpan={4}>Total ({payslips.length} crew)</td>
                 {allowanceOrder.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
                 <td className="p-2 text-right font-mono bg-blue-50/60">{fmt(totalGross)}</td>
                 {deductionOrder.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
@@ -403,14 +404,14 @@ export default function CrewPayrollManagementPage() {
 
       {periods.length > 0 && (
         <div className="pt-2">
-          <p className="text-xs text-gray-500 mb-1.5">지급 이력</p>
+          <p className="text-xs text-gray-500 mb-1.5">Payment History</p>
           <div className="flex flex-wrap gap-1.5">
             {periods.map(p => (
               <button
                 key={p.id} type="button" onClick={() => setYearMonth(p.year_month)}
                 className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${yearMonth === p.year_month ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
               >
-                {p.year_month} · {STATUS_LABELS[p.status]} ({p.payslip_count}명)
+                {p.year_month} · {STATUS_LABELS[p.status]} ({p.payslip_count} crew)
               </button>
             ))}
           </div>
@@ -420,13 +421,13 @@ export default function CrewPayrollManagementPage() {
       <Dialog open={!!editingPayslip} onOpenChange={o => !savingItems && !o && setEditingPayslip(null)}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">{editingPayslip?.crew_name} — {yearMonth} 급여명세 편집</DialogTitle>
+            <DialogTitle className="text-base">{editingPayslip?.crew_name} — {yearMonth} Payslip Edit</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-1">
             {editingPayslip?.items.map(item => (
               <div key={item.id} className="flex items-center gap-1.5">
                 <span className={`text-xs w-14 shrink-0 ${item.category === 'deduction' ? 'text-red-600' : 'text-gray-600'}`}>
-                  {item.category === 'deduction' ? '공제' : item.source === 'template' ? '기본급' : '수당'}
+                  {item.category === 'deduction' ? 'Deduction' : item.source === 'template' ? 'Base Pay' : 'Allowance'}
                 </span>
                 <span className="text-sm flex-1 truncate">{item.name}</span>
                 <Input
@@ -439,8 +440,8 @@ export default function CrewPayrollManagementPage() {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setEditingPayslip(null)} disabled={savingItems}>취소</Button>
-            <Button size="sm" onClick={handleSaveItems} disabled={savingItems}>{savingItems ? '저장 중...' : '저장'}</Button>
+            <Button variant="outline" size="sm" onClick={() => setEditingPayslip(null)} disabled={savingItems}>Cancel</Button>
+            <Button size="sm" onClick={handleSaveItems} disabled={savingItems}>{savingItems ? 'Saving...' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -449,15 +450,15 @@ export default function CrewPayrollManagementPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base">
-              {viewingPayslip?.crew_name}{viewingPayslip?.rank_code ? ` · ${viewingPayslip.rank_code}${viewingPayslip.rank_grade ? `(${viewingPayslip.rank_grade})` : ''}` : ''} — {yearMonth} 급여명세서
+              {viewingPayslip?.crew_name}{viewingPayslip?.rank_code ? ` · ${viewingPayslip.rank_code}${viewingPayslip.rank_grade ? `(${viewingPayslip.rank_grade})` : ''}` : ''} — {yearMonth} Payslip
             </DialogTitle>
           </DialogHeader>
           {viewingPayslip && (
             <div className="py-1">
-              <CrewPayslipDetailView payslip={viewingPayslip} showTitle={false} />
+              <CrewPayslipDetailView payslip={viewingPayslip} shipName={ships.find(s => s.id === shipId)?.name} showTitle={false} />
               <div className="flex justify-end gap-2 pt-3">
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => window.open(`/print/crew-payslips/${viewingPayslip.id}`, '_blank')}>
-                  <Printer className="w-3.5 h-3.5" />인쇄
+                  <Printer className="w-3.5 h-3.5" />Print
                 </Button>
               </div>
             </div>
