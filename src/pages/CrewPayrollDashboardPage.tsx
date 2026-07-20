@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
-import { Wallet, RefreshCw, FileSpreadsheet, CheckCircle2, Search } from 'lucide-react';
+import { Wallet, RefreshCw, FileSpreadsheet, CheckCircle2, Search, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { supervisorService } from '@/services/supervisor.service';
 import { crewPayrollService, type GeneratePayrollResult } from '@/services/crew-payroll.service';
 import { crewPayrollBillingService } from '@/services/crew-payroll-billing.service';
+import { crewPayrollArchiveService } from '@/services/crew-payroll-archive.service';
 import { exportCrewPayrollBillingToExcel } from '@/utils/crew-payroll-billing-export';
 import { useTabContext } from '@/contexts/TabContext';
 import type { Ship } from '@/lib/store';
@@ -58,6 +59,7 @@ export default function CrewPayrollDashboardPage() {
   const [billingLevel, setBillingLevel] = useState<CrewPayrollBillingGroupLevel>('owner');
   const [billingGroupId, setBillingGroupId] = useState('all');
   const [billingExporting, setBillingExporting] = useState(false);
+  const [archivingOwnerId, setArchivingOwnerId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -198,6 +200,30 @@ export default function CrewPayrollDashboardPage() {
     openNewTab(`/crew-payroll/ship?shipId=${row.ship_id}&yearMonth=${yearMonth}`, `${row.ship_name} Payroll`);
   };
 
+  // 선주 소속 선박들의 급여대장+급여명세서 엑셀을 선박별로 각각 생성해 zip 하나로 묶어
+  // 내려받는다 — 저장 위치는 브라우저의 파일 저장 다이얼로그(showSaveFilePicker)로 묻는다.
+  const handleDownloadOwnerZip = async (group: { ownerId: string; ownerName: string; rows: CrewPayrollDashboardRow[] }) => {
+    const shipsWithPeriod = group.rows.filter(r => r.period_id);
+    if (shipsWithPeriod.length === 0) { toast({ title: 'No generated payroll periods to download for this owner.', variant: 'destructive' }); return; }
+    setArchivingOwnerId(group.ownerId);
+    try {
+      const { includedCount, skippedCount } = await crewPayrollArchiveService.downloadPayrollZip(
+        yearMonth,
+        group.ownerName,
+        shipsWithPeriod.map(r => ({ ship_id: r.ship_id, ship_name: r.ship_name, period_id: r.period_id }))
+      );
+      if (includedCount > 0) {
+        toast({ title: `ZIP downloaded — ${includedCount} vessel(s) included${skippedCount > 0 ? `, ${skippedCount} skipped` : ''}.` });
+      } else {
+        toast({ title: 'No payslips to include in the ZIP.', variant: 'destructive' });
+      }
+    } catch (e) {
+      toast({ title: 'ZIP download failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setArchivingOwnerId(null);
+    }
+  };
+
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div>
@@ -299,9 +325,18 @@ export default function CrewPayrollDashboardPage() {
                           onCheckedChange={checked => setSelectedIds(prev => checked ? [...new Set([...prev, ...groupIds])] : prev.filter(id => !groupIds.includes(id)))}
                         />
                       </TableCell>
-                      <TableCell colSpan={6} className="text-xs font-semibold text-slate-700">
+                      <TableCell colSpan={5} className="text-xs font-semibold text-slate-700">
                         {group.ownerName}
                         <span className="ml-2 font-normal text-slate-500">({group.rows.length} vessels · {confirmedCount}/{group.rows.length} confirmed)</span>
+                      </TableCell>
+                      <TableCell colSpan={2} className="text-right" onClick={e => e.stopPropagation()}>
+                        <Button
+                          size="sm" variant="outline" className="h-6 text-[11px] gap-1 bg-white"
+                          onClick={() => handleDownloadOwnerZip(group)}
+                          disabled={archivingOwnerId === group.ownerId || !group.rows.some(r => r.period_id)}
+                        >
+                          <Archive className="w-3 h-3" />{archivingOwnerId === group.ownerId ? 'Zipping...' : 'Download ZIP'}
+                        </Button>
                       </TableCell>
                     </TableRow>
                     {group.rows.map(row => (
