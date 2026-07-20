@@ -71,7 +71,7 @@ export const crewPayrollBillingService = {
         const allowanceByName: Record<string, number> = {};
         const deductionByName: Record<string, number> = {};
         for (const item of pItems) {
-          if (item.category === 'earning' && item.source === 'contract') {
+          if (item.category === 'earning') {
             allowanceByName[item.name] = (allowanceByName[item.name] || 0) + item.amount;
             if (!allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
           }

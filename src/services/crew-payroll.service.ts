@@ -367,11 +367,15 @@ export const crewPayrollService = {
       ? await supabase.from('salary_template_items').select('*').in('template_id', templateIds)
       : { data: [] as { template_id: string; component_id: string; rank?: string; rank_grade?: string | null; amount: number }[] };
     const { data: allComponents } = await supabase.from('salary_components').select('*');
-    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction' }]));
+    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; is_active: boolean }]));
     const templateItemsByTemplateId = new Map<string, TemplateItemWithComponent[]>();
     for (const item of templateItemsRaw || []) {
+      const component = componentById.get(String(item.component_id));
+      // 급여 구성항목이 개명/통합되며 예전 항목이 비활성화된 뒤에도 salary_template_items에는
+      // 예전 component_id를 참조하는 행이 남아있을 수 있다 — 비활성 항목은 대체된 것이므로
+      // 새 항목과 중복 계산되지 않도록 제외한다.
+      if (!component || component.is_active === false) continue;
       const arr = templateItemsByTemplateId.get(String(item.template_id)) || [];
-      const component = componentById.get(String(item.component_id)) || { name: 'Unknown', component_type: 'earning' as const };
       arr.push({ rank: item.rank, rank_grade: item.rank_grade, amount: Number(item.amount), component });
       templateItemsByTemplateId.set(String(item.template_id), arr);
     }
@@ -572,12 +576,16 @@ export const crewPayrollService = {
       ship?.fleet_id ? supabase.from('fleets').select('name').eq('id', ship.fleet_id).single() : Promise.resolve({ data: null as { name: string } | null }),
     ]);
 
+    // 급여대장은 선박에 승선한 선원 전원의 급여세목(BW/OT/OA/LP 등 급여 구성항목 +
+    // 계약별 수당)을 항목명별 열로 모두 펼쳐 보여준다 — 급여 구성항목을 "기본급" 한 칸으로
+    // 뭉치지 않고, 계약 수당과 동일하게 항목별로 나열한다(items는 display_order로 정렬되어
+    // 있어 급여 구성항목이 계약 수당보다 항상 앞선 열에 온다).
     const payslips: CrewPayslipWithDetails[] = await this.getPayslipsForPeriod(periodId);
     const allowanceColumns: string[] = [];
     const deductionColumns: string[] = [];
     for (const p of payslips) {
       for (const item of p.items) {
-        if (item.category === 'earning' && item.source === 'contract' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
+        if (item.category === 'earning' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
         if (item.category === 'deduction' && !deductionColumns.includes(item.name)) deductionColumns.push(item.name);
       }
     }
@@ -586,7 +594,7 @@ export const crewPayrollService = {
       const allowanceByName: Record<string, number> = {};
       const deductionByName: Record<string, number> = {};
       for (const item of p.items) {
-        if (item.category === 'earning' && item.source === 'contract') allowanceByName[item.name] = (allowanceByName[item.name] || 0) + item.amount;
+        if (item.category === 'earning') allowanceByName[item.name] = (allowanceByName[item.name] || 0) + item.amount;
         if (item.category === 'deduction') deductionByName[item.name] = (deductionByName[item.name] || 0) + item.amount;
       }
       return {
@@ -619,7 +627,7 @@ export const crewPayrollService = {
     };
   },
 
-  // 직원 급여관리의 submitPayrollExpenseReport와 동일한 패턴 — 급여명세표 엑셀을 첨부해
+  // 직원 급여관리의 submitPayrollExpenseReport와 동일한 패턴 — 급여대장 엑셀을 첨부해
   // 지출결의서로 상신하고, 승인/반려 결과는 approval-document.service.ts의
   // applyReferenceSideEffect(reference_type='crew_payroll_period')가 회차 상태에 반영한다.
   // 실사용에서는 결재 없이 confirmPayrollPeriod로 바로 확정하는 게 주 흐름이고, 이 상신은
@@ -655,7 +663,7 @@ export const crewPayrollService = {
       `공제 합계: ${totalDeduction.toLocaleString('ko-KR')} ${period.currency}`,
       `실지급액 합계: ${totalNet.toLocaleString('ko-KR')} ${period.currency}`,
       '',
-      '상세 내역은 첨부된 급여명세표를 참고해주세요.',
+      '상세 내역은 첨부된 급여대장을 참고해주세요.',
     ].join('\n');
 
     const workbook = buildCrewPayrollLedgerWorkbook(ledger);
@@ -677,7 +685,7 @@ export const crewPayrollService = {
         vendor: `${ledger.ship_name} 선원 급여계좌 일괄이체`,
         notes: content,
       },
-      attachments: [{ name: `${ledger.ship_name}_${period.year_month}_급여명세표.xlsx`, path, size: blob.size, type: blob.type }],
+      attachments: [{ name: `${ledger.ship_name}_${period.year_month}_급여대장.xlsx`, path, size: blob.size, type: blob.type }],
       org_unit_id: orgUnitId,
       created_by: submittedByUserId,
       reference_type: 'crew_payroll_period',

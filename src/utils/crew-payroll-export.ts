@@ -34,17 +34,19 @@ interface SaveFilePickerWindow extends Window {
 }
 
 // 워크북 생성만 담당 — 파일 저장(다운로드 버튼)과 결재 첨부 업로드(지출결의서 상신) 양쪽에서 재사용.
+// 급여대장 — 선박에 승선한 선원 전원을 한 표에 모으되, 급여 구성항목(BW/OT/OA/LP 등)과
+// 계약별 수당을 "기본급" 한 칸으로 뭉치지 않고 항목명별 열로 모두 펼쳐 보여준다.
 export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): XLSX.WorkBook {
   const { period, ship_name, owner_name, fleet_name, allowance_columns, deduction_columns, rows } = ledger;
-  const headerLabels = ['이름', '직급', '등급', '근무기간', '근무일', '기본급', ...allowance_columns, '합계', ...deduction_columns, '공제합계', '실지급액'];
+  const headerLabels = ['이름', '직급', '등급', '근무기간', '근무일', ...allowance_columns, '합계', ...deduction_columns, '공제합계', '실지급액'];
   const colCount = headerLabels.length;
-  const grossCol = 5 + allowance_columns.length; // 0-indexed 위치
+  const grossCol = 4 + allowance_columns.length; // 0-indexed 위치
 
   const aoa: ReturnType<typeof cell>[][] = [];
 
   const titleParts = [owner_name, fleet_name, ship_name].filter(Boolean).join(' > ');
   aoa.push([
-    cell(`${titleParts}  ${period.year_month} 급여명세표`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
+    cell(`${titleParts}  ${period.year_month} 급여대장`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   aoa.push(Array.from({ length: colCount }, () => cell('', {})));
@@ -68,7 +70,6 @@ export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): X
       cell(r.rank_grade || '-', { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(`${fmtMD(r.period_start_date)}~${fmtMD(r.period_end_date)}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(`${r.days_served}/${r.days_in_month}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
-      cell(r.base_amount, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ }, border: border() }),
       ...allowance_columns.map(name => cell(r.allowance_by_name[name] || 0, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ }, border: border() })),
       cell(r.gross_amount, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ, bold: true }, fill: { fgColor: { rgb: RESULT_HEADER.bg } }, border: border() }),
       ...deduction_columns.map(name => cell(r.deduction_by_name[name] || 0, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ, color: { rgb: DEDUCTION_HEADER.fg } }, border: border() })),
@@ -84,7 +85,6 @@ export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): X
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
-    cell(sum(r => r.base_amount), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     ...allowance_columns.map(name => cell(sum(r => r.allowance_by_name[name] || 0), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) })),
     cell(sum(r => r.gross_amount), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     ...deduction_columns.map(name => cell(sum(r => r.deduction_by_name[name] || 0), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) })),
@@ -94,7 +94,7 @@ export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): X
 
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
   worksheet['!cols'] = [
-    { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 13 }, { wch: 10 }, { wch: 12 },
+    { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 13 }, { wch: 10 },
     ...allowance_columns.map(() => ({ wch: 11 })),
     { wch: 12 },
     ...deduction_columns.map(() => ({ wch: 11 })),
@@ -103,13 +103,13 @@ export function buildCrewPayrollLedgerWorkbook(ledger: CrewPayrollLedgerData): X
   worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }];
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, `${period.year_month} 급여명세표`);
+  XLSX.utils.book_append_sheet(workbook, worksheet, `${period.year_month} 급여대장`);
   return workbook;
 }
 
 export async function exportCrewPayrollLedgerToExcel(ledger: CrewPayrollLedgerData): Promise<void> {
   const workbook = buildCrewPayrollLedgerWorkbook(ledger);
-  const fileName = `${ledger.ship_name}_${ledger.period.year_month}_급여명세표.xlsx`;
+  const fileName = `${ledger.ship_name}_${ledger.period.year_month}_급여대장.xlsx`;
 
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
   if (picker) {

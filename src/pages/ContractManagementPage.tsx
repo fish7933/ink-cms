@@ -366,7 +366,7 @@ export default function ContractManagementPage() {
               {formView?.record && (
                 <div className="border-t pt-3">
                   <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
-                    <Coins className="w-3.5 h-3.5" />수당/공제 (급여 구성항목과 별개로 급여명세표 지급/공제항목에 별도로 붙습니다)
+                    <Coins className="w-3.5 h-3.5" />수당/공제 (급여 구성항목과 별개로 급여대장 지급/공제항목에 별도로 붙습니다)
                   </p>
                   {contractAllowances.length > 0 && (
                     <table className="w-full text-xs mb-3">

@@ -157,7 +157,7 @@ export default function CrewPayrollManagementPage() {
 
   const handleSubmit = async () => {
     if (!currentPeriod) return;
-    if (!confirm(`${yearMonth} 급여명세표를 지출결의서로 결재 상신하시겠습니까?`)) return;
+    if (!confirm(`${yearMonth} 급여대장을 지출결의서로 결재 상신하시겠습니까?`)) return;
     try {
       setSubmitting(true);
       const user = await getCurrentUser();
@@ -232,17 +232,19 @@ export default function CrewPayrollManagementPage() {
   const isDraft = periodStatus === 'draft';
   const isPendingApproval = periodStatus === 'pending_approval';
 
-  // 급여명세표처럼 한눈에 — 이번 회차에 실제로 쓰인 수당/공제 항목명의 합집합을 열로 펼친다.
+  // 급여대장은 급여 구성항목(BW/OT/OA/LP 등)과 계약별 수당을 "기본급" 한 칸으로 뭉치지 않고
+  // 항목명별 열로 모두 펼친다 — 이번 회차에 실제로 쓰인 급여/공제 항목명의 합집합을 열로 만든다
+  // (items는 display_order 순이라 급여 구성항목이 계약 수당보다 항상 앞선 열에 온다).
   const allowanceOrder: string[] = [];
   const deductionOrder: string[] = [];
   for (const p of payslips) {
     for (const item of p.items) {
-      if (item.category === 'earning' && item.source === 'contract' && !allowanceOrder.includes(item.name)) allowanceOrder.push(item.name);
+      if (item.category === 'earning' && !allowanceOrder.includes(item.name)) allowanceOrder.push(item.name);
       if (item.category === 'deduction' && !deductionOrder.includes(item.name)) deductionOrder.push(item.name);
     }
   }
   const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
-    p.items.filter(i => (deduction ? i.category === 'deduction' : i.category === 'earning' && i.source === 'contract') && i.name === name)
+    p.items.filter(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name)
       .reduce((sum, i) => sum + i.amount, 0);
   const sumColumn = (f: (p: CrewPayslipWithDetails) => number) => payslips.reduce((sum, p) => sum + f(p), 0);
   const totalGross = payslips.reduce((sum, p) => sum + p.base_amount + p.total_allowance, 0);
@@ -298,7 +300,7 @@ export default function CrewPayrollManagementPage() {
         {payslips.length > 0 && (
           <>
             <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => window.open(`/print/crew-payroll/${currentPeriod?.id}`, '_blank')}>
-              <Printer className="w-3.5 h-3.5" />급여명세표 인쇄
+              <Printer className="w-3.5 h-3.5" />급여대장 인쇄
             </Button>
             <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleExportExcel} disabled={exporting}>
               <FileSpreadsheet className="w-3.5 h-3.5" />{exporting ? '다운로드 중...' : '엑셀 다운로드'}
@@ -347,7 +349,6 @@ export default function CrewPayrollManagementPage() {
               <tr>
                 <th className="text-left p-2 font-medium text-gray-600">선원</th>
                 <th className="text-center p-2 font-medium text-gray-600">근무기간</th>
-                <th className="text-right p-2 font-medium text-gray-600">기본급</th>
                 {allowanceOrder.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
                 <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">급여합계</th>
                 {deductionOrder.map(name => <th key={name} className="text-right p-2 font-medium text-red-500">{name}</th>)}
@@ -367,7 +368,6 @@ export default function CrewPayrollManagementPage() {
                     <div>{fmtMD(p.period_start_date)}~{fmtMD(p.period_end_date)}</div>
                     <div className="text-[10px] text-gray-400">({p.days_served}/{p.days_in_month}일)</div>
                   </td>
-                  <td className="p-2 text-right font-mono">{fmt(p.base_amount)}</td>
                   {allowanceOrder.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(amountByName(p, name, false))}</td>)}
                   <td className="p-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>
                   {deductionOrder.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(amountByName(p, name, true))}</td>)}
@@ -389,7 +389,6 @@ export default function CrewPayrollManagementPage() {
             <tfoot>
               <tr className="bg-gray-50 border-t font-semibold">
                 <td className="p-2" colSpan={2}>합계 ({payslips.length}명)</td>
-                <td className="p-2 text-right font-mono">{fmt(sumColumn(p => p.base_amount))}</td>
                 {allowanceOrder.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
                 <td className="p-2 text-right font-mono bg-blue-50/60">{fmt(totalGross)}</td>
                 {deductionOrder.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}

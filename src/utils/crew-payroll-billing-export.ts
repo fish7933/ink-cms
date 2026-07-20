@@ -47,14 +47,14 @@ function buildSummarySheet(data: CrewPayrollBillingData): XLSX.WorkSheet {
 
 function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.WorkSheet {
   const { allowance_columns, deduction_columns, rows } = section;
-  const headerLabels = ['이름', '직급', '등급', '근무기간', '근무일', '기본급', ...allowance_columns, '합계', ...deduction_columns, '공제합계', '실지급액', '선주청구'];
+  const headerLabels = ['이름', '직급', '등급', '근무기간', '근무일', ...allowance_columns, '합계', ...deduction_columns, '공제합계', '실지급액', '선주청구'];
   const colCount = headerLabels.length;
-  const grossCol = 5 + allowance_columns.length;
+  const grossCol = 4 + allowance_columns.length;
 
   const aoa: ReturnType<typeof cell>[][] = [];
   const titleParts = [section.owner_name, section.fleet_name, section.ship_name].filter(Boolean).join(' > ');
   aoa.push([
-    cell(`${titleParts}  ${section.period_year_month} 급여명세표`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
+    cell(`${titleParts}  ${section.period_year_month} 급여대장`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   aoa.push(Array.from({ length: colCount }, () => cell('', {})));
@@ -79,7 +79,6 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
       cell(r.rank_grade || '-', { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(`${fmtMD(r.period_start_date)}~${fmtMD(r.period_end_date)}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
       cell(`${r.days_served}/${r.days_in_month}`, { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ }, border: border() }),
-      cell(r.base_amount, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ }, border: border() }),
       ...allowance_columns.map(name => cell(r.allowance_by_name[name] || 0, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ }, border: border() })),
       cell(r.gross_amount, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ, bold: true }, fill: { fgColor: { rgb: RESULT_HEADER.bg } }, border: border() }),
       ...deduction_columns.map(name => cell(r.deduction_by_name[name] || 0, { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { sz: BASE_SZ, color: { rgb: DEDUCTION_HEADER.fg } }, border: border() })),
@@ -96,7 +95,6 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     cell('', { fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
-    cell(sum(r => r.base_amount), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     ...allowance_columns.map(name => cell(sum(r => r.allowance_by_name[name] || 0), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) })),
     cell(sum(r => r.gross_amount), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
     ...deduction_columns.map(name => cell(sum(r => r.deduction_by_name[name] || 0), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) })),
@@ -107,7 +105,7 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
 
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
   worksheet['!cols'] = [
-    { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 13 }, { wch: 10 }, { wch: 12 },
+    { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 13 }, { wch: 10 },
     ...allowance_columns.map(() => ({ wch: 11 })),
     { wch: 12 },
     ...deduction_columns.map(() => ({ wch: 11 })),

@@ -8,7 +8,7 @@ import type { CrewPayrollLedgerData } from '@/types/crew-payroll';
 const fmt = (n: number) => n.toLocaleString('ko-KR');
 const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
 
-// 선박별 선원 급여명세표(표 형태) 인쇄 페이지 — 사이드바/헤더 없이 순수 표만 렌더링
+// 선박별 급여대장(표 형태) 인쇄 페이지 — 사이드바/헤더 없이 순수 표만 렌더링
 // (App.tsx 최상위 라우트, Layout 우회). 가로로 넓은 표라 A4 가로(landscape)로 인쇄한다.
 export default function CrewPayrollLedgerPrintPage() {
   const { periodId } = useParams<{ periodId: string }>();
@@ -35,10 +35,9 @@ export default function CrewPayrollLedgerPrintPage() {
 
   if (loading) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>불러오는 중...</div>;
   if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>로그인이 필요합니다.</div>;
-  if (!ledger) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>급여명세표를 찾을 수 없습니다.</div>;
+  if (!ledger) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>급여대장을 찾을 수 없습니다.</div>;
 
   const { period, ship_name, owner_name, fleet_name, allowance_columns, deduction_columns, rows } = ledger;
-  const totalBase = rows.reduce((s, r) => s + r.base_amount, 0);
   const totalGross = rows.reduce((s, r) => s + r.gross_amount, 0);
   const totalDeduction = rows.reduce((s, r) => s + r.total_deduction, 0);
   const totalNet = rows.reduce((s, r) => s + r.net_amount, 0);
@@ -76,7 +75,7 @@ export default function CrewPayrollLedgerPrintPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8, paddingBottom: 6, borderBottom: '2px solid #888' }}>
         <div style={{ fontSize: 12.5, fontWeight: 600 }}>{company?.name || ''}</div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: 1 }}>{titleParts} {period.year_month} 급여명세표</div>
+          <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: 1 }}>{titleParts} {period.year_month} 급여대장</div>
         </div>
         <div style={{ fontSize: 10.5, color: '#777' }}>{rows.length}명</div>
       </div>
@@ -89,7 +88,6 @@ export default function CrewPayrollLedgerPrintPage() {
             <th>등급</th>
             <th>근무기간</th>
             <th>근무일</th>
-            <th>기본급</th>
             {allowance_columns.map(name => <th key={name}>{name}</th>)}
             <th>급여합계</th>
             {deduction_columns.map(name => <th key={name}>{name}</th>)}
@@ -105,7 +103,6 @@ export default function CrewPayrollLedgerPrintPage() {
               <td className="name">{r.rank_grade || '-'}</td>
               <td className="name">{fmtMD(r.period_start_date)}~{fmtMD(r.period_end_date)}</td>
               <td className="name">{r.days_served}/{r.days_in_month}</td>
-              <td className="amount">{fmt(r.base_amount)}</td>
               {allowance_columns.map(name => <td key={name} className="amount">{fmt(r.allowance_by_name[name] || 0)}</td>)}
               <td className="amount">{fmt(r.gross_amount)}</td>
               {deduction_columns.map(name => <td key={name} className="amount" style={{ color: '#a33' }}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
@@ -115,7 +112,6 @@ export default function CrewPayrollLedgerPrintPage() {
           ))}
           <tr className="total">
             <td colSpan={5} className="name">합계 ({rows.length}명)</td>
-            <td className="amount">{fmt(totalBase)}</td>
             {allowance_columns.map(name => <td key={name} className="amount">{fmt(totalByAllowance(name))}</td>)}
             <td className="amount">{fmt(totalGross)}</td>
             {deduction_columns.map(name => <td key={name} className="amount" style={{ color: '#a33' }}>{fmt(totalByDeduction(name))}</td>)}

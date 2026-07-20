@@ -71,7 +71,8 @@ export interface CrewPayslipWithDetails extends CrewPayslip {
   period_status?: CrewPayrollPeriodStatus;
 }
 
-// 선박별 급여명세표(표 형태) 출력/엑셀용 — 기본급 옆에 수당/공제 항목을 열(컬럼)로 펼쳐 보여준다.
+// 급여대장(선박에 승선한 선원 전원을 한 표로) 출력/엑셀용 — 급여 구성항목(BW/OT/OA/LP 등)과
+// 계약별 수당/공제를 "기본급" 한 칸으로 뭉치지 않고 항목명별 열(컬럼)로 모두 펼쳐 보여준다.
 export interface CrewPayrollLedgerRow {
   crew_member_id: string;
   crew_name: string;
