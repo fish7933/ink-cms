@@ -13,11 +13,12 @@ import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { allowanceService } from '@/services/allowance.service';
 import { usePermissions } from '@/hooks/usePermissions';
-import type { AllowanceType, AllowanceRankRateWithDetails, AllowancePaymentBasis, AllowancePaymentMethod } from '@/types/allowance';
+import type { AllowanceType, AllowanceKind, AllowanceRankRateWithDetails, AllowancePaymentBasis, AllowancePaymentMethod } from '@/types/allowance';
 import type { Rank } from '@/types/models';
 
 const BASIS_LABELS: Record<AllowancePaymentBasis, string> = { monthly: '매월 지급', lump_sum: '일시불' };
 const METHOD_LABELS: Record<AllowancePaymentMethod, string> = { ship_direct: '본선 직접지급', owner_billed: '선주 청구' };
+const KIND_LABELS: Record<AllowanceKind, string> = { allowance: '수당', deduction: '공제' };
 
 interface RateDraft {
   amount: string;
@@ -29,6 +30,7 @@ export default function AllowanceTypesManagementPage() {
   const { toast } = useToast();
   const permissions = usePermissions('allowance_types');
   const [types, setTypes] = useState<AllowanceType[]>([]);
+  const [kindFilter, setKindFilter] = useState<AllowanceKind>('allowance');
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
   const [rates, setRates] = useState<AllowanceRankRateWithDetails[]>([]);
@@ -39,6 +41,7 @@ export default function AllowanceTypesManagementPage() {
   const [editingType, setEditingType] = useState<AllowanceType | null>(null);
   const [typeForm, setTypeForm] = useState({
     code: '', name: '', description: '',
+    kind: 'allowance' as AllowanceKind,
     payment_basis: 'monthly' as AllowancePaymentBasis,
     payment_method: 'owner_billed' as AllowancePaymentMethod,
   });
@@ -85,13 +88,13 @@ export default function AllowanceTypesManagementPage() {
 
   const openNewTypeForm = () => {
     setEditingType(null);
-    setTypeForm({ code: '', name: '', description: '', payment_basis: 'monthly', payment_method: 'owner_billed' });
+    setTypeForm({ code: '', name: '', description: '', kind: kindFilter, payment_basis: 'monthly', payment_method: 'owner_billed' });
     setTypeFormOpen(true);
   };
 
   const openEditTypeForm = (t: AllowanceType) => {
     setEditingType(t);
-    setTypeForm({ code: t.code, name: t.name, description: t.description || '', payment_basis: t.payment_basis, payment_method: t.payment_method });
+    setTypeForm({ code: t.code, name: t.name, description: t.description || '', kind: t.kind, payment_basis: t.payment_basis, payment_method: t.payment_method });
     setTypeFormOpen(true);
   };
 
@@ -113,7 +116,7 @@ export default function AllowanceTypesManagementPage() {
     } else {
       const created = await allowanceService.createType(typeForm);
       if (!created) { toast({ title: '생성 실패', variant: 'destructive' }); return; }
-      toast({ title: '수당 유형이 추가되었습니다' });
+      toast({ title: `${KIND_LABELS[typeForm.kind]} 유형이 추가되었습니다` });
       setTypeFormOpen(false);
       await loadTypes();
       setSelectedTypeId(created.id);
@@ -170,19 +173,31 @@ export default function AllowanceTypesManagementPage() {
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><Coins className="w-5 h-5 text-muted-foreground" />수당 기준 관리</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Coins className="w-5 h-5 text-muted-foreground" />수당/공제 기준 관리</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          급여표와 별개로 계약에 붙는 수당(재고용수당 등)의 유형과 직급별 기준 금액을 관리합니다. 지급방식/지급주체는 유형 전체에 일괄 적용됩니다.
+          급여표와 별개로 계약에 붙는 수당/공제(재고용수당 등)의 유형과 직급별 기준 금액을 관리합니다. 지급방식/지급주체는 유형 전체에 일괄 적용됩니다.
         </p>
+      </div>
+
+      <div className="flex gap-1.5">
+        {(Object.entries(KIND_LABELS) as [AllowanceKind, string][]).map(([k, l]) => (
+          <Button
+            key={k} size="sm" variant={kindFilter === k ? 'default' : 'outline'}
+            className="h-8"
+            onClick={() => { setKindFilter(k); setSelectedTypeId(''); setTypeFormOpen(false); }}
+          >
+            {l}
+          </Button>
+        ))}
       </div>
 
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="text-sm">수당 유형 목록</CardTitle>
+            <CardTitle className="text-sm">{KIND_LABELS[kindFilter]} 유형 목록</CardTitle>
             {permissions.canCreate && (
               <Button size="sm" className="h-8 gap-1.5" onClick={openNewTypeForm}>
-                <Plus className="w-4 h-4" />새 수당 유형
+                <Plus className="w-4 h-4" />새 {KIND_LABELS[kindFilter]} 유형
               </Button>
             )}
           </div>
@@ -199,13 +214,15 @@ export default function AllowanceTypesManagementPage() {
                 <SelectContent>{Object.entries(BASIS_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">지급주체 (일괄)</Label>
-              <Select value={typeForm.payment_method} onValueChange={v => setTypeForm(p => ({ ...p, payment_method: v as AllowancePaymentMethod }))}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+            {typeForm.kind === 'allowance' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">지급주체 (일괄)</Label>
+                <Select value={typeForm.payment_method} onValueChange={v => setTypeForm(p => ({ ...p, payment_method: v as AllowancePaymentMethod }))}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>{Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex gap-2 items-end">
               {(editingType ? permissions.canEdit : permissions.canCreate) && (
                 <Button size="sm" onClick={handleSaveType}>{editingType ? '수정 저장' : '추가'}</Button>
@@ -215,10 +232,10 @@ export default function AllowanceTypesManagementPage() {
           </CardContent>
         )}
         <CardContent className="p-0">
-          {types.length === 0 ? (
+          {types.filter(t => t.kind === kindFilter).length === 0 ? (
             <div className="text-center py-10 text-sm text-muted-foreground">
-              <Badge variant="outline" className="mb-2">수당 유형 없음</Badge>
-              <p>새 수당 유형을 추가해 직급별 기준을 설정하세요.</p>
+              <Badge variant="outline" className="mb-2">{KIND_LABELS[kindFilter]} 유형 없음</Badge>
+              <p>새 {KIND_LABELS[kindFilter]} 유형을 추가해 직급별 기준을 설정하세요.</p>
             </div>
           ) : (
             <Table>
@@ -235,7 +252,7 @@ export default function AllowanceTypesManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {types.map(t => (
+                {types.filter(t => t.kind === kindFilter).map(t => (
                   <TableRow
                     key={t.id}
                     className={`cursor-pointer ${selectedTypeId === t.id ? 'bg-blue-50/60' : 'hover:bg-gray-50'}`}
@@ -248,7 +265,7 @@ export default function AllowanceTypesManagementPage() {
                       {t.description && <div className="text-[11px] text-muted-foreground font-normal truncate max-w-[220px]">{t.description}</div>}
                     </TableCell>
                     <TableCell className="text-xs">{BASIS_LABELS[t.payment_basis]}</TableCell>
-                    <TableCell className="text-xs">{METHOD_LABELS[t.payment_method]}</TableCell>
+                    <TableCell className="text-xs">{t.kind === 'deduction' ? '-' : METHOD_LABELS[t.payment_method]}</TableCell>
                     <TableCell className="text-xs text-center">{rateCountByType(t.id) ?? '-'}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className={`text-xs ${t.is_active ? 'text-green-700 border-green-300' : 'text-gray-400'}`}>

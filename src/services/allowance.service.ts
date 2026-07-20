@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
   AllowanceType,
+  AllowanceKind,
   AllowanceRankRate,
   AllowanceRankRateWithDetails,
   AllowancePaymentBasis,
@@ -10,21 +11,22 @@ import type {
 } from '@/types/allowance';
 
 export const allowanceService = {
-  async getTypes(includeInactive = false): Promise<AllowanceType[]> {
+  async getTypes(includeInactive = false, kind?: AllowanceKind): Promise<AllowanceType[]> {
     let query = supabase.from('allowance_types').select('*').order('name');
     if (!includeInactive) query = query.eq('is_active', true);
+    if (kind) query = query.eq('kind', kind);
     const { data, error } = await query;
     if (error) { console.error('Error fetching allowance types:', error); return []; }
     return data || [];
   },
 
-  async createType(data: { code: string; name: string; description?: string; payment_basis?: AllowancePaymentBasis; payment_method?: AllowancePaymentMethod }): Promise<AllowanceType | null> {
+  async createType(data: { code: string; name: string; description?: string; kind?: AllowanceKind; payment_basis?: AllowancePaymentBasis; payment_method?: AllowancePaymentMethod }): Promise<AllowanceType | null> {
     const { data: result, error } = await supabase.from('allowance_types').insert(data).select().single();
     if (error) { console.error('Error creating allowance type:', error); return null; }
     return result;
   },
 
-  async updateType(id: string, data: Partial<Pick<AllowanceType, 'name' | 'description' | 'is_active' | 'payment_basis' | 'payment_method'>>): Promise<void> {
+  async updateType(id: string, data: Partial<Pick<AllowanceType, 'name' | 'description' | 'is_active' | 'kind' | 'payment_basis' | 'payment_method'>>): Promise<void> {
     const { error } = await supabase.from('allowance_types')
       .update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
     if (error) throw error;
