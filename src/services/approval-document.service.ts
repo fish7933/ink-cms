@@ -159,6 +159,20 @@ async function applyReferenceSideEffect(
         .eq('id', referenceId);
     }
   }
+  if (referenceType === 'crew_payroll_period') {
+    if (newStatus === 'approved') {
+      await supabase
+        .from('crew_payroll_periods')
+        .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+    } else if (newStatus === 'rejected') {
+      // 지출결의서가 반려되면 담당자가 다시 손볼 수 있도록 작성중 상태로 되돌린다.
+      await supabase
+        .from('crew_payroll_periods')
+        .update({ status: 'draft', confirmed_at: null, confirmed_by: null, approval_document_id: null, updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+    }
+  }
 }
 
 // 전결규정에 지정된 직급의 position_order(선임도 기준값)를 조회
