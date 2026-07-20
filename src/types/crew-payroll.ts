@@ -51,6 +51,10 @@ export interface CrewPayslip {
 // 명세서 항목 — source='template'은 선박 급여 템플릿에서, source='contract'는 선원 계약별
 // 수당/공제(crew_contract_allowances)에서 가져온 것. payment_method='owner_billed'인
 // 수당은 선주에게 별도 청구되는 금액이라 net_amount(실지급액) 합산에서 제외된다.
+//
+// payment_type: 급여 구성항목이 payment_type='deferred'(후불성, 예: 휴가비/LP)인 경우 —
+// 매월 정상적으로 지급되지 않고 'deferred_accrual'로 누적만 되며(net_amount 제외),
+// 하선월에 그동안 쌓인 금액 전체가 'deferred_payout'(1건, net_amount 포함)으로 일괄 지급된다.
 export interface CrewPayslipItem {
   id: string;
   payslip_id: string;
@@ -58,8 +62,10 @@ export interface CrewPayslipItem {
   category: 'earning' | 'deduction';
   name: string;
   payment_method: 'ship_direct' | 'owner_billed' | null;
+  payment_type: 'immediate' | 'deferred_accrual' | 'deferred_payout';
   standard_amount: number; // 일할계산 적용 전 월 기준액
-  amount: number;          // 일할계산 적용 후 실제 반영 금액
+  amount: number;          // 일할계산 적용 후 실제 반영 금액(deferred_payout은 승선 기간 전체 누적액)
+  accrued_to_date: number | null; // deferred_accrual/payout 항목의 승선일~이 달 말 누적액
   display_order: number;
 }
 

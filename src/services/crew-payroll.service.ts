@@ -31,13 +31,40 @@ function daysBetweenInclusive(a: string, b: string): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000) + 1;
 }
 
+// 후불성(payment_type='deferred') 급여항목은 매월 지급되지 않고 누적만 되다가 하선월에
+// 일괄 지급된다 — 승선일부터 throughDate(보통 그 달 말, 하선월이면 하선일)까지 걸친 모든
+// 달을 실제 달력 기준으로 훑어, 각 달의 일할계산(기존 월별 계산과 동일한 공식)을 더한 게
+// 그 시점까지의 누적액이다. 등급/직급이 계약 기간 중 안 바뀐다는 전제(승선기록 1건=고정
+// rank_grade)로, 현재 유효한 월 기준액(monthlyRate)을 전 기간에 동일 적용한다.
+function sumDeferredAccrualThroughDate(embarkDate: string, throughDate: string, monthlyRate: number): number {
+  let total = 0;
+  let cursor = embarkDate.slice(0, 7);
+  const lastMonth = throughDate.slice(0, 7);
+  while (cursor <= lastMonth) {
+    const { start, end } = monthRange(cursor);
+    const totalDays = daysInMonth(cursor);
+    const overlapStart = embarkDate > start ? embarkDate : start;
+    const overlapEnd = throughDate < end ? throughDate : end;
+    if (overlapStart <= overlapEnd) {
+      const daysServed = daysBetweenInclusive(overlapStart, overlapEnd);
+      total += Math.round(monthlyRate * daysServed / totalDays);
+    }
+    const [y, m] = cursor.split('-').map(Number);
+    const next = new Date(y, m, 1); // m은 1-indexed 월이라 그대로 넘기면 다음 달 1일
+    cursor = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+  }
+  return total;
+}
+
 interface GeneratedItem {
   source: 'template' | 'contract';
   category: 'earning' | 'deduction';
   name: string;
   payment_method: 'ship_direct' | 'owner_billed' | null;
+  payment_type: 'immediate' | 'deferred_accrual' | 'deferred_payout';
   standard_amount: number;
   amount: number;
+  accrued_to_date: number | null;
   display_order: number;
 }
 
@@ -45,7 +72,7 @@ interface TemplateItemWithComponent {
   rank?: string;
   rank_grade?: string | null;
   amount: number;
-  component: { name: string; component_type: 'earning' | 'deduction' };
+  component: { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred' };
 }
 
 interface EmbarkRecord {
@@ -115,15 +142,53 @@ function buildShipPayslips(input: {
       const matched = gradeSpecific.length > 0 ? gradeSpecific : rankItems.filter(i => !i.rank_grade);
       matched.forEach((i, idx) => {
         const standard = Number(i.amount);
+        const isDeduction = i.component.component_type === 'deduction';
+        const isDeferred = !isDeduction && i.component.payment_type === 'deferred';
+
+        if (!isDeferred) {
+          items.push({
+            source: 'template',
+            category: isDeduction ? 'deduction' : 'earning',
+            name: i.component.name,
+            payment_method: null,
+            payment_type: 'immediate',
+            standard_amount: standard,
+            amount: Math.round(standard * ratio),
+            accrued_to_date: null,
+            display_order: idx,
+          });
+          return;
+        }
+
+        // 후불성 급여 — 이 달분은 누적만 되고(net_amount 제외), 하선월이면 승선일부터 쌓인
+        // 전체 누적액을 별도 항목으로 일괄 지급한다(net_amount 포함).
+        const cumulativeToDate = sumDeferredAccrualThroughDate(rec.embark_date, overlapEnd, standard);
         items.push({
           source: 'template',
-          category: i.component.component_type === 'deduction' ? 'deduction' : 'earning',
+          category: 'earning',
           name: i.component.name,
           payment_method: null,
+          payment_type: 'deferred_accrual',
           standard_amount: standard,
           amount: Math.round(standard * ratio),
+          accrued_to_date: cumulativeToDate,
           display_order: idx,
         });
+
+        const isDisembarkMonth = !!rec.disembark_date && rec.disembark_date >= start && rec.disembark_date <= end;
+        if (isDisembarkMonth) {
+          items.push({
+            source: 'template',
+            category: 'earning',
+            name: `${i.component.name} (Lump Sum)`,
+            payment_method: null,
+            payment_type: 'deferred_payout',
+            standard_amount: standard,
+            amount: cumulativeToDate,
+            accrued_to_date: cumulativeToDate,
+            display_order: idx + 50,
+          });
+        }
       });
     }
 
@@ -141,14 +206,16 @@ function buildShipPayslips(input: {
           category: a.kind === 'deduction' ? 'deduction' : 'earning',
           name: a.allowance_type_name,
           payment_method: a.kind === 'allowance' ? a.payment_method : null,
+          payment_type: 'immediate',
           standard_amount: standard,
           amount: Math.round(standard * ratio),
+          accrued_to_date: null,
           display_order: 100 + idx,
         });
       });
     }
 
-    const baseAmount = items.filter(i => i.source === 'template' && i.category === 'earning').reduce((s, i) => s + i.amount, 0);
+    const baseAmount = items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual').reduce((s, i) => s + i.amount, 0);
     const allowanceAmount = items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + i.amount, 0);
     const ownerBilledAmount = items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method === 'owner_billed').reduce((s, i) => s + i.amount, 0);
     const deductionAmount = items.filter(i => i.category === 'deduction').reduce((s, i) => s + i.amount, 0);
@@ -386,7 +453,7 @@ export const crewPayrollService = {
       ? await supabase.from('salary_template_items').select('*').in('template_id', templateIds)
       : { data: [] as { template_id: string; component_id: string; rank?: string; rank_grade?: string | null; amount: number }[] };
     const { data: allComponents } = await supabase.from('salary_components').select('*');
-    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; is_active: boolean }]));
+    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean }]));
     const templateItemsByTemplateId = new Map<string, TemplateItemWithComponent[]>();
     for (const item of templateItemsRaw || []) {
       const component = componentById.get(String(item.component_id));
@@ -572,7 +639,7 @@ export const crewPayrollService = {
     const { data: allItems, error: allItemsError } = await supabase.from('crew_payslip_items').select('*').eq('payslip_id', item.payslip_id);
     if (allItemsError || !allItems) throw allItemsError || new Error('항목 조회 실패');
 
-    const baseAmount = allItems.filter(i => i.source === 'template' && i.category === 'earning').reduce((s, i) => s + Number(i.amount), 0);
+    const baseAmount = allItems.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual').reduce((s, i) => s + Number(i.amount), 0);
     const allowanceAmount = allItems.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + Number(i.amount), 0);
     const ownerBilledAmount = allItems.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method === 'owner_billed').reduce((s, i) => s + Number(i.amount), 0);
     const deductionAmount = allItems.filter(i => i.category === 'deduction').reduce((s, i) => s + Number(i.amount), 0);
