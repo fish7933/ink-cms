@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import { cell, border, HEADER, DEDUCTION_HEADER, RESULT_HEADER, TOTAL_ROW_BG, BASE_SZ, fmtMD } from '@/utils/crew-payroll-export';
+import { cell, border, HEADER, DEDUCTION_HEADER, RESULT_HEADER, TOTAL_ROW_BG, BASE_SZ, fmtMD, appendTemplateMatrixRows } from '@/utils/crew-payroll-export';
 import type { CrewPayrollBillingData, CrewPayrollBillingShipSection } from '@/types/crew-payroll';
 
 const OWNER_BILLED_HEADER = { bg: 'FFF3E0', fg: '9A6300' };
@@ -103,6 +103,8 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
     cell(sum(r => r.owner_billed_amount), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ, color: { rgb: OWNER_BILLED_HEADER.fg } }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
   ]);
 
+  appendTemplateMatrixRows(aoa, section.template_name, section.template_matrix);
+
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
   worksheet['!cols'] = [
     { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 13 }, { wch: 10 },
@@ -111,7 +113,8 @@ function buildShipDetailSheet(section: CrewPayrollBillingShipSection): XLSX.Work
     ...deduction_columns.map(() => ({ wch: 11 })),
     { wch: 12 }, { wch: 13 }, { wch: 12 },
   ];
-  worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }];
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }];
+  worksheet['!merges'] = merges;
   return worksheet;
 }
 

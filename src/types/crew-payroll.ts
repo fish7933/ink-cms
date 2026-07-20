@@ -1,3 +1,5 @@
+import type { TemplateMatrix } from '@/lib/salary-template-matrix';
+
 export type CrewPayrollPeriodStatus = 'draft' | 'pending_approval' | 'confirmed';
 
 export interface CrewPayrollPeriod {
@@ -96,6 +98,8 @@ export interface CrewPayrollLedgerData {
   ship_name: string;
   owner_name?: string;
   fleet_name?: string;
+  template_name?: string; // 이 선박에 적용된 급여 템플릿명
+  template_matrix?: TemplateMatrix; // 그 템플릿의 직급/등급별 급여 항목 전체 내용
   allowance_columns: string[];
   deduction_columns: string[];
   rows: CrewPayrollLedgerRow[];
@@ -123,6 +127,8 @@ export interface CrewPayrollBillingShipSection {
   ship_name: string;
   owner_name?: string;
   fleet_name?: string;
+  template_name?: string; // 이 선박에 적용된 급여 템플릿명
+  template_matrix?: TemplateMatrix;
   period_year_month: string;
   allowance_columns: string[];
   deduction_columns: string[];

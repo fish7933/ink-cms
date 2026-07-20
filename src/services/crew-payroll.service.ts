@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
-import { getEffectiveTemplateMapForShips } from '@/lib/salary-store';
+import { getEffectiveTemplateMapForShips, getEffectiveTemplateForShip, getSalaryComponents } from '@/lib/salary-store';
+import { getRanks } from '@/services/rank.service';
+import { buildSalaryTemplateMatrix } from '@/lib/salary-template-matrix';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { getCompanyInfo } from '@/services/company-info.service';
@@ -571,10 +573,14 @@ export const crewPayrollService = {
     if (!period) return null;
 
     const { data: ship } = await supabase.from('ships').select('name, owner_id, fleet_id').eq('id', period.ship_id).single();
-    const [{ data: owner }, { data: fleet }] = await Promise.all([
+    const [{ data: owner }, { data: fleet }, template, components, ranks] = await Promise.all([
       ship?.owner_id ? supabase.from('companies').select('name').eq('id', ship.owner_id).single() : Promise.resolve({ data: null as { name: string } | null }),
       ship?.fleet_id ? supabase.from('fleets').select('name').eq('id', ship.fleet_id).single() : Promise.resolve({ data: null as { name: string } | null }),
+      getEffectiveTemplateForShip(period.ship_id),
+      getSalaryComponents(),
+      getRanks(),
     ]);
+    const templateMatrix = template ? buildSalaryTemplateMatrix(template, components, ranks) : undefined;
 
     // 급여대장은 선박에 승선한 선원 전원의 급여세목(BW/OT/OA/LP 등 급여 구성항목 +
     // 계약별 수당)을 항목명별 열로 모두 펼쳐 보여준다 — 급여 구성항목을 "기본급" 한 칸으로
@@ -621,6 +627,8 @@ export const crewPayrollService = {
       ship_name: ship?.name || '',
       owner_name: owner?.name,
       fleet_name: fleet?.name,
+      template_name: template?.name,
+      template_matrix: templateMatrix,
       allowance_columns: allowanceColumns,
       deduction_columns: deductionColumns,
       rows,

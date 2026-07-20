@@ -11,11 +11,16 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getCurrentUser, getShips } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { getEffectiveTemplateForShip, getSalaryComponents } from '@/lib/salary-store';
+import { getRanks } from '@/services/rank.service';
 import { supervisorService } from '@/services/supervisor.service';
 import { crewPayrollService } from '@/services/crew-payroll.service';
 import { exportCrewPayrollLedgerToExcel } from '@/utils/crew-payroll-export';
 import CrewPayslipDetailView from '@/components/crew-payroll/CrewPayslipDetailView';
+import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixTable';
 import type { Ship } from '@/lib/store';
+import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
+import type { Rank } from '@/types/models';
 import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails } from '@/types/crew-payroll';
 
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
@@ -56,6 +61,9 @@ export default function CrewPayrollManagementPage() {
   const [draftAmounts, setDraftAmounts] = useState<Record<string, string>>({});
   const [savingItems, setSavingItems] = useState(false);
   const [viewingPayslip, setViewingPayslip] = useState<CrewPayslipWithDetails | null>(null);
+  const [template, setTemplate] = useState<SalaryTemplateWithItems | null>(null);
+  const [components, setComponents] = useState<SalaryComponent[]>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -77,6 +85,9 @@ export default function CrewPayrollManagementPage() {
       ]);
       setOwners(ownerRows || []);
       setFleets(fleetRows || []);
+      const [comps, rankList] = await Promise.all([getSalaryComponents(), getRanks()]);
+      setComponents(comps);
+      setRanks(rankList);
 
       const presetShipId = searchParams.get('shipId');
       if (presetShipId) {
@@ -100,6 +111,11 @@ export default function CrewPayrollManagementPage() {
   }, []);
 
   useEffect(() => { loadPeriods(shipId); }, [shipId, loadPeriods]);
+
+  useEffect(() => {
+    if (!shipId) { setTemplate(null); return; }
+    getEffectiveTemplateForShip(shipId).then(setTemplate);
+  }, [shipId]);
 
   const loadPayslips = useCallback(async (sid: string, ym: string) => {
     if (!sid) { setCurrentPeriod(null); setPayslips([]); return; }
@@ -196,7 +212,7 @@ export default function CrewPayrollManagementPage() {
       setExporting(true);
       const ledger = await crewPayrollService.getPayrollLedgerForPeriod(currentPeriod.id);
       if (!ledger || ledger.rows.length === 0) { toast({ title: 'No payslips to download.', variant: 'destructive' }); return; }
-      await exportCrewPayrollLedgerToExcel(ledger);
+      await exportCrewPayrollLedgerToExcel(ledger, payslips);
     } catch (e) {
       toast({ title: 'Excel download failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
@@ -399,6 +415,12 @@ export default function CrewPayrollManagementPage() {
               </tr>
             </tfoot>
           </table>
+          {template && (
+            <div className="px-2 py-3 border-t bg-gray-50 space-y-1.5">
+              <p className="text-xs text-gray-500">Salary Template Applied: <span className="text-gray-700 font-medium">{template.name}</span></p>
+              <SalaryTemplateMatrixTable template={template} components={components} ranks={ranks} />
+            </div>
+          )}
         </div>
       )}
 

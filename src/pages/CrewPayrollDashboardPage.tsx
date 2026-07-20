@@ -170,7 +170,7 @@ export default function CrewPayrollDashboardPage() {
         else if (billingLevel === 'fleet') { targetRows = rows.filter(r => r.fleet_id === billingGroupId); label = targetRows[0]?.fleet_name || 'Fleet'; }
         else { targetRows = rows.filter(r => r.ship_id === billingGroupId); label = targetRows[0]?.ship_name || 'Vessel'; }
       }
-      const shipsForBilling = targetRows.map(r => ({ id: r.ship_id, name: r.ship_name, owner_name: r.owner_name, fleet_name: r.fleet_name }));
+      const shipsForBilling = targetRows.map(r => ({ id: r.ship_id, name: r.ship_name, owner_name: r.owner_name, fleet_name: r.fleet_name, owner_id: r.owner_id, fleet_id: r.fleet_id }));
       const data = await crewPayrollBillingService.getBillingClaimData(yearMonth, billingLevel, label, shipsForBilling);
       if (data.ships.length === 0) { toast({ title: 'No payslips to export.', variant: 'destructive' }); return; }
       await exportCrewPayrollBillingToExcel(data);

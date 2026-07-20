@@ -3,18 +3,21 @@ import { useParams } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/store';
 import { crewPayrollService } from '@/services/crew-payroll.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
-import type { CrewPayrollLedgerData } from '@/types/crew-payroll';
+import CrewPayslipDetailView from '@/components/crew-payroll/CrewPayslipDetailView';
+import type { CrewPayrollLedgerData, CrewPayslipWithDetails } from '@/types/crew-payroll';
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
 
-// 선박별 급여대장(표 형태) 인쇄 페이지 — 사이드바/헤더 없이 순수 표만 렌더링
-// (App.tsx 최상위 라우트, Layout 우회). 가로로 넓은 표라 A4 가로(landscape)로 인쇄한다.
+// 선박별 급여대장(표 형태) + 승선 중인 선원 각자의 급여명세서를 이어붙인 인쇄 페이지 —
+// 사이드바/헤더 없이 순수 문서만 렌더링(App.tsx 최상위 라우트, Layout 우회). 첫 페이지는
+// 급여대장, 이후 선원별 급여명세서가 한 명당 한 페이지씩 이어진다.
 export default function CrewPayrollLedgerPrintPage() {
   const { periodId } = useParams<{ periodId: string }>();
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
   const [ledger, setLedger] = useState<CrewPayrollLedgerData | null>(null);
+  const [payslips, setPayslips] = useState<CrewPayslipWithDetails[]>([]);
   const [company, setCompany] = useState<CompanyInfo | null>(null);
 
   useEffect(() => {
@@ -22,11 +25,13 @@ export default function CrewPayrollLedgerPrintPage() {
       if (!periodId) return;
       const user = await getCurrentUser();
       if (!user) { setUnauthorized(true); setLoading(false); return; }
-      const [data, companyInfo] = await Promise.all([
+      const [data, payslipData, companyInfo] = await Promise.all([
         crewPayrollService.getPayrollLedgerForPeriod(periodId),
+        crewPayrollService.getPayslipsForPeriod(periodId),
         getCompanyInfo().catch(() => null),
       ]);
       setLedger(data);
+      setPayslips(payslipData);
       setCompany(companyInfo);
       setLoading(false);
     };
@@ -37,7 +42,7 @@ export default function CrewPayrollLedgerPrintPage() {
   if (unauthorized) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Login required.</div>;
   if (!ledger) return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>Payroll ledger not found.</div>;
 
-  const { period, ship_name, owner_name, fleet_name, allowance_columns, deduction_columns, rows } = ledger;
+  const { period, ship_name, owner_name, fleet_name, template_name, allowance_columns, deduction_columns, rows } = ledger;
   const totalGross = rows.reduce((s, r) => s + r.gross_amount, 0);
   const totalDeduction = rows.reduce((s, r) => s + r.total_deduction, 0);
   const totalNet = rows.reduce((s, r) => s + r.net_amount, 0);
@@ -61,6 +66,7 @@ export default function CrewPayrollLedgerPrintPage() {
         table.ledger td.amount { text-align: right; font-variant-numeric: tabular-nums; }
         table.ledger td.name { text-align: center; }
         table.ledger tr.total td { font-weight: 600; background: #f7f7f7; border-top: 2px solid #888; }
+        .payslip-page { page-break-before: always; padding-top: 16px; max-width: 760px; margin: 0 auto; }
       `}</style>
 
       <div className="print-actions" style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
@@ -120,6 +126,39 @@ export default function CrewPayrollLedgerPrintPage() {
           </tr>
         </tbody>
       </table>
+      {template_name && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: '#333', marginBottom: 4 }}>Salary Template Applied: {template_name}</div>
+          {ledger.template_matrix && ledger.template_matrix.rows.length > 0 && (
+            <table className="ledger">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  {ledger.template_matrix.columns.map(c => <th key={c.component_id} style={{ color: c.is_deduction ? '#a33' : undefined }}>{c.name}</th>)}
+                  <th>Total (TW)</th>
+                  <th>Net (AW)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.template_matrix.rows.map((r, idx) => (
+                  <tr key={idx}>
+                    <td className="name">{r.grade ? `${r.rank_code} (${r.grade})` : r.rank_code}</td>
+                    {r.amounts.map((a, i) => <td key={i} className="amount">{a === null ? '-' : fmt(a)}</td>)}
+                    <td className="amount" style={{ fontWeight: 600 }}>{fmt(r.total_earning)}</td>
+                    <td className="amount" style={{ fontWeight: 600 }}>{fmt(r.net_earning)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {payslips.map(p => (
+        <div key={p.id} className="payslip-page">
+          <CrewPayslipDetailView payslip={p} shipName={ship_name} />
+        </div>
+      ))}
     </div>
   );
 }

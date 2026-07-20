@@ -1,4 +1,7 @@
 import { supabase } from '@/lib/supabase';
+import { getEffectiveTemplateMapForShips, getSalaryTemplateWithItems, getSalaryComponents } from '@/lib/salary-store';
+import { getRanks } from '@/services/rank.service';
+import { buildSalaryTemplateMatrix } from '@/lib/salary-template-matrix';
 import { crewDisplayName } from '@/lib/utils';
 import type {
   CrewPayrollBillingData,
@@ -14,12 +17,30 @@ export const crewPayrollBillingService = {
     yearMonth: string,
     groupLevel: CrewPayrollBillingGroupLevel,
     groupLabel: string,
-    ships: { id: string; name: string; owner_name?: string; fleet_name?: string }[]
+    ships: { id: string; name: string; owner_name?: string; fleet_name?: string; owner_id?: string; fleet_id?: string }[]
   ): Promise<CrewPayrollBillingData> {
     const shipIds = ships.map(s => s.id);
     if (shipIds.length === 0) {
       return { year_month: yearMonth, group_level: groupLevel, group_label: groupLabel, ships: [], grand_total_net: 0, grand_total_owner_billed: 0 };
     }
+
+    const templateMap = await getEffectiveTemplateMapForShips(
+      ships.map(s => ({ id: s.id, fleet_id: s.fleet_id ?? null, owner_id: s.owner_id ?? null }))
+    );
+
+    // 청구서에도 급여대장과 동일하게 선박별 적용 템플릿 전체 내용을 붙인다 — 여러 선박이
+    // 같은 템플릿을 공유하는 경우가 많아, 템플릿 id별로 한 번씩만 조회한다.
+    const templateIds = [...new Set(Object.values(templateMap).filter((t): t is NonNullable<typeof t> => !!t).map(t => t.id))];
+    const [components, ranks, templatesWithItems] = await Promise.all([
+      getSalaryComponents(),
+      getRanks(),
+      Promise.all(templateIds.map(id => getSalaryTemplateWithItems(id))),
+    ]);
+    const matrixByTemplateId = new Map<string, ReturnType<typeof buildSalaryTemplateMatrix>>();
+    templateIds.forEach((id, idx) => {
+      const t = templatesWithItems[idx];
+      if (t) matrixByTemplateId.set(id, buildSalaryTemplateMatrix(t, components, ranks));
+    });
 
     const { data: periods } = await supabase
       .from('crew_payroll_periods')
@@ -104,6 +125,8 @@ export const crewPayrollBillingService = {
         ship_name: ship.name,
         owner_name: ship.owner_name,
         fleet_name: ship.fleet_name,
+        template_name: templateMap[ship.id]?.name,
+        template_matrix: templateMap[ship.id] ? matrixByTemplateId.get(templateMap[ship.id]!.id) : undefined,
         period_year_month: yearMonth,
         allowance_columns: allowanceColumns,
         deduction_columns: deductionColumns,

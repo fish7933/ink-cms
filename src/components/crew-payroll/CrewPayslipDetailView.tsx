@@ -133,6 +133,17 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
       {payslip.memo && (
         <div style={{ marginTop: 8, fontSize: 10.5, color: '#555' }}><span style={{ color: '#777' }}>Remarks</span>&nbsp;&nbsp;{payslip.memo}</div>
       )}
+
+      <div style={{ marginTop: 28, display: 'flex', justifyContent: 'flex-end', gap: 32, fontSize: 10.5 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ borderBottom: '1px solid #999', width: 160, height: 22 }} />
+          <div style={{ color: '#777', marginTop: 3 }}>Crew Signature</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ borderBottom: '1px solid #999', width: 100, height: 22 }} />
+          <div style={{ color: '#777', marginTop: 3 }}>Date</div>
+        </div>
+      </div>
     </div>
   );
 }
