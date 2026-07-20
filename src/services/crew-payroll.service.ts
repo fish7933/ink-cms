@@ -270,7 +270,24 @@ export const crewPayrollService = {
     const ownerNameById = new Map((owners || []).map(o => [o.id, o.name]));
     const fleetNameById = new Map((fleets || []).map(f => [f.id, f.name]));
 
-    return ships.map(s => {
+    // 아직 회차가 없는 선박은, 그 달에 승선 기록이 하나도 없으면 목록에서 아예 뺀다 —
+    // 회차가 이미 있는 선박은(하선 등으로 지금은 승선자가 없어졌어도) 계속 보여준다.
+    const shipIdsWithoutPeriod = ships.map(s => s.id).filter(id => !periodByShip.has(id));
+    let shipIdsWithCrewThisMonth: Set<string> | null = null;
+    if (shipIdsWithoutPeriod.length > 0) {
+      const { start, end } = monthRange(yearMonth);
+      const { data: records } = await supabase
+        .from('crew_embarkation_records')
+        .select('ship_id')
+        .in('ship_id', shipIdsWithoutPeriod)
+        .lte('embark_date', end)
+        .or(`disembark_date.is.null,disembark_date.gte.${start}`);
+      shipIdsWithCrewThisMonth = new Set((records || []).map(r => r.ship_id));
+    }
+
+    return ships
+      .filter(s => periodByShip.has(s.id) || shipIdsWithCrewThisMonth?.has(s.id))
+      .map(s => {
       const period = periodByShip.get(s.id);
       const summary = period ? summaryByPeriod.get(period.id) : undefined;
       return {

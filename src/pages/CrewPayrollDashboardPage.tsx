@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { Wallet, RefreshCw, FileSpreadsheet, CheckCircle2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -108,6 +108,18 @@ export default function CrewPayrollDashboardPage() {
       (!search.trim() || r.ship_name.toLowerCase().includes(search.trim().toLowerCase()))
     );
   }, [rows, ownerFilter, fleetFilter, search]);
+
+  // 선주 단위로 그룹핑 — 각 그룹 안에서 선박별 급여 확정 단계(상태 배지)를 한눈에 볼 수 있다.
+  const ownerGroups = useMemo(() => {
+    const byOwner = new Map<string, { ownerId: string; ownerName: string; rows: CrewPayrollDashboardRow[] }>();
+    for (const row of filteredRows) {
+      const key = row.owner_id || '_none';
+      const group = byOwner.get(key) || { ownerId: key, ownerName: row.owner_name || 'No Owner', rows: [] };
+      group.rows.push(row);
+      byOwner.set(key, group);
+    }
+    return [...byOwner.values()].sort((a, b) => a.ownerName.localeCompare(b.ownerName));
+  }, [filteredRows]);
 
   const generatableIds = filteredRows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'none').map(r => r.ship_id);
   const confirmableIds = filteredRows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'draft' && r.period_id).map(r => r.period_id!);
@@ -266,7 +278,6 @@ export default function CrewPayrollDashboardPage() {
                     onCheckedChange={checked => toggleSelectAll(!!checked)}
                   />
                 </TableHead>
-                <TableHead className="text-xs whitespace-nowrap">Owner</TableHead>
                 <TableHead className="text-xs whitespace-nowrap">Fleet</TableHead>
                 <TableHead className="text-xs whitespace-nowrap">Vessel</TableHead>
                 <TableHead className="text-xs whitespace-nowrap">Status</TableHead>
@@ -276,20 +287,39 @@ export default function CrewPayrollDashboardPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredRows.map(row => (
-                <TableRow key={row.ship_id} className="cursor-pointer" onClick={() => openShip(row)}>
-                  <TableCell onClick={e => e.stopPropagation()}>
-                    <Checkbox checked={selectedIds.includes(row.ship_id)} onCheckedChange={() => toggleSelect(row.ship_id)} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{row.owner_name || '-'}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{row.fleet_name || '-'}</TableCell>
-                  <TableCell className="text-xs font-medium">{row.ship_name}</TableCell>
-                  <TableCell><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
-                  <TableCell className="text-xs text-center">{row.payslip_count > 0 ? row.payslip_count : '-'}</TableCell>
-                  <TableCell className="text-xs text-right font-mono">{row.total_net_amount > 0 ? fmt(row.total_net_amount) : '-'}</TableCell>
-                  <TableCell className="text-xs text-right font-mono text-orange-700">{row.total_owner_billed > 0 ? fmt(row.total_owner_billed) : '-'}</TableCell>
-                </TableRow>
-              ))}
+              {ownerGroups.map(group => {
+                const groupIds = group.rows.map(r => r.ship_id);
+                const confirmedCount = group.rows.filter(r => r.status === 'confirmed').length;
+                return (
+                  <Fragment key={group.ownerId}>
+                    <TableRow className="bg-slate-50 hover:bg-slate-50">
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <Checkbox
+                          checked={groupIds.length > 0 && groupIds.every(id => selectedIds.includes(id))}
+                          onCheckedChange={checked => setSelectedIds(prev => checked ? [...new Set([...prev, ...groupIds])] : prev.filter(id => !groupIds.includes(id)))}
+                        />
+                      </TableCell>
+                      <TableCell colSpan={6} className="text-xs font-semibold text-slate-700">
+                        {group.ownerName}
+                        <span className="ml-2 font-normal text-slate-500">({group.rows.length} vessels · {confirmedCount}/{group.rows.length} confirmed)</span>
+                      </TableCell>
+                    </TableRow>
+                    {group.rows.map(row => (
+                      <TableRow key={row.ship_id} className="cursor-pointer" onClick={() => openShip(row)}>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <Checkbox checked={selectedIds.includes(row.ship_id)} onCheckedChange={() => toggleSelect(row.ship_id)} />
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{row.fleet_name || '-'}</TableCell>
+                        <TableCell className="text-xs font-medium">{row.ship_name}</TableCell>
+                        <TableCell><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
+                        <TableCell className="text-xs text-center">{row.payslip_count > 0 ? row.payslip_count : '-'}</TableCell>
+                        <TableCell className="text-xs text-right font-mono">{row.total_net_amount > 0 ? fmt(row.total_net_amount) : '-'}</TableCell>
+                        <TableCell className="text-xs text-right font-mono text-orange-700">{row.total_owner_billed > 0 ? fmt(row.total_owner_billed) : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </Fragment>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
