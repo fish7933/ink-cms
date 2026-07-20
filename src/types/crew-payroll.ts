@@ -31,6 +31,8 @@ export interface CrewPayslip {
   embarkation_record_id: string | null;
   rank_id: string | null;
   rank_grade: string | null;
+  period_start_date: string; // 그 달 실제 근무 시작일 (승선일과 월초 중 늦은 날)
+  period_end_date: string;   // 그 달 실제 근무 종료일 (하선일과 월말 중 이른 날)
   days_served: number;
   days_in_month: number;
   base_amount: number;
@@ -75,6 +77,8 @@ export interface CrewPayrollLedgerRow {
   crew_name: string;
   rank_code: string;
   rank_grade: string | null;
+  period_start_date: string;
+  period_end_date: string;
   days_served: number;
   days_in_month: number;
   base_amount: number;

@@ -6,6 +6,7 @@ import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.servic
 import type { CrewPayrollLedgerData } from '@/types/crew-payroll';
 
 const fmt = (n: number) => n.toLocaleString('ko-KR');
+const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
 
 // 선박별 선원 급여명세표(표 형태) 인쇄 페이지 — 사이드바/헤더 없이 순수 표만 렌더링
 // (App.tsx 최상위 라우트, Layout 우회). 가로로 넓은 표라 A4 가로(landscape)로 인쇄한다.
@@ -86,6 +87,7 @@ export default function CrewPayrollLedgerPrintPage() {
             <th>이름</th>
             <th>직급</th>
             <th>등급</th>
+            <th>근무기간</th>
             <th>근무일</th>
             <th>기본급</th>
             {allowance_columns.map(name => <th key={name}>{name}</th>)}
@@ -101,6 +103,7 @@ export default function CrewPayrollLedgerPrintPage() {
               <td className="name">{r.crew_name}</td>
               <td className="name">{r.rank_code || '-'}</td>
               <td className="name">{r.rank_grade || '-'}</td>
+              <td className="name">{fmtMD(r.period_start_date)}~{fmtMD(r.period_end_date)}</td>
               <td className="name">{r.days_served}/{r.days_in_month}</td>
               <td className="amount">{fmt(r.base_amount)}</td>
               {allowance_columns.map(name => <td key={name} className="amount">{fmt(r.allowance_by_name[name] || 0)}</td>)}
@@ -111,7 +114,7 @@ export default function CrewPayrollLedgerPrintPage() {
             </tr>
           ))}
           <tr className="total">
-            <td colSpan={4} className="name">합계 ({rows.length}명)</td>
+            <td colSpan={5} className="name">합계 ({rows.length}명)</td>
             <td className="amount">{fmt(totalBase)}</td>
             {allowance_columns.map(name => <td key={name} className="amount">{fmt(totalByAllowance(name))}</td>)}
             <td className="amount">{fmt(totalGross)}</td>

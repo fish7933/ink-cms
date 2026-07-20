@@ -69,6 +69,8 @@ interface BuiltPayslip {
   crew_member_id: string;
   rank_id: string | null;
   rank_grade: string | null;
+  period_start_date: string;
+  period_end_date: string;
   days_served: number;
   days_in_month: number;
   base_amount: number;
@@ -155,6 +157,8 @@ function buildShipPayslips(input: {
       crew_member_id: rec.crew_member_id,
       rank_id: rec.rank_id,
       rank_grade: rec.rank_grade,
+      period_start_date: overlapStart,
+      period_end_date: overlapEnd,
       days_served: daysServed,
       days_in_month: totalDays,
       base_amount: baseAmount,
@@ -400,6 +404,8 @@ export const crewPayrollService = {
               embarkation_record_id: b.embarkation_record_id,
               rank_id: b.rank_id,
               rank_grade: b.rank_grade,
+              period_start_date: b.period_start_date,
+              period_end_date: b.period_end_date,
               days_served: b.days_served,
               days_in_month: b.days_in_month,
               base_amount: b.base_amount,
@@ -588,6 +594,8 @@ export const crewPayrollService = {
         crew_name: p.crew_name,
         rank_code: p.rank_code,
         rank_grade: p.rank_grade,
+        period_start_date: p.period_start_date,
+        period_end_date: p.period_end_date,
         days_served: p.days_served,
         days_in_month: p.days_in_month,
         base_amount: p.base_amount,

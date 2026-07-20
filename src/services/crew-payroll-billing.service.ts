@@ -85,6 +85,8 @@ export const crewPayrollBillingService = {
           crew_name: crew ? crewDisplayName(crew) : '',
           rank_code: rank?.rank_code || '',
           rank_grade: p.rank_grade,
+          period_start_date: p.period_start_date,
+          period_end_date: p.period_end_date,
           days_served: p.days_served,
           days_in_month: p.days_in_month,
           base_amount: p.base_amount,

@@ -25,6 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: 'bg-green-50 text-green-700 border-green-200',
 };
 const fmt = (n: number) => n.toLocaleString('ko-KR');
+const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
 // 선박별 선원 급여명세 — 담당 선박의 급여 템플릿(직급+등급)과 선원 계약별 수당/공제를
@@ -345,7 +346,7 @@ export default function CrewPayrollManagementPage() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left p-2 font-medium text-gray-600">선원</th>
-                <th className="text-center p-2 font-medium text-gray-600">근무일</th>
+                <th className="text-center p-2 font-medium text-gray-600">근무기간</th>
                 <th className="text-right p-2 font-medium text-gray-600">기본급</th>
                 {allowanceOrder.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
                 <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">급여합계</th>
@@ -362,7 +363,10 @@ export default function CrewPayrollManagementPage() {
                     <div className="font-medium">{p.crew_name}</div>
                     <div className="text-[10px] text-gray-400">{p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}</div>
                   </td>
-                  <td className="p-2 text-center text-gray-500">{p.days_served}/{p.days_in_month}</td>
+                  <td className="p-2 text-center text-gray-500" title={`${p.period_start_date} ~ ${p.period_end_date}`}>
+                    <div>{fmtMD(p.period_start_date)}~{fmtMD(p.period_end_date)}</div>
+                    <div className="text-[10px] text-gray-400">({p.days_served}/{p.days_in_month}일)</div>
+                  </td>
                   <td className="p-2 text-right font-mono">{fmt(p.base_amount)}</td>
                   {allowanceOrder.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(amountByName(p, name, false))}</td>)}
                   <td className="p-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>

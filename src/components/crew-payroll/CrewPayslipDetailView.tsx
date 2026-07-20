@@ -98,8 +98,9 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
           <span><span style={{ color: '#777' }}>선박</span>&nbsp;&nbsp;{shipName || '-'}</span>
           <span><span style={{ color: '#777' }}>국적</span>&nbsp;&nbsp;{payslip.nationality || '-'}</span>
         </div>
-        <div style={{ padding: '1.5px 0' }}>
-          <span style={{ color: '#777' }}>근무일수</span>&nbsp;&nbsp;{payslip.days_served}일 / {payslip.days_in_month}일 (일할계산 {ratio}%)
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1.5px 0' }}>
+          <span><span style={{ color: '#777' }}>급여 계산기간</span>&nbsp;&nbsp;{payslip.period_start_date} ~ {payslip.period_end_date}</span>
+          <span><span style={{ color: '#777' }}>근무일수</span>&nbsp;&nbsp;{payslip.days_served}일 / {payslip.days_in_month}일 ({ratio}%)</span>
         </div>
       </div>
 
@@ -124,7 +125,7 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
 
       <div style={{ marginTop: 10, fontSize: 9.5, color: '#666', lineHeight: 1.55, border: '1px solid #ddd', padding: '6px 12px' }}>
         <div style={{ fontWeight: 600, color: '#333', marginBottom: 1 }}>계산방법</div>
-        <div>기본급/수당/공제는 선박에 배정된 급여 템플릿과 선원 계약 조건을 기준으로, 해당 월 승선일수({payslip.days_served}/{payslip.days_in_month}일) 비율로 일할계산되었습니다.</div>
+        <div>기본급/수당/공제는 선박에 배정된 급여 템플릿과 선원 계약 조건을 기준으로, 이 달의 실제 근무기간({payslip.period_start_date} ~ {payslip.period_end_date}, {payslip.days_served}/{payslip.days_in_month}일)에 맞춰 일할계산되었습니다.</div>
         <div>"(선주청구)" 표시된 수당은 본선/회사가 지급하는 금액이 아니라 선주에게 별도로 청구되는 금액이라 실지급액 합계에서는 제외되었습니다.</div>
       </div>
 
