@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Printer, RefreshCw, FileSpreadsheet, Send, ExternalLink, Trash2, Wallet } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Printer, RefreshCw, FileSpreadsheet, Send, ExternalLink, Trash2, Wallet, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -31,20 +32,22 @@ const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 export default function CrewPayrollManagementPage() {
   const { toast } = useToast();
   const permissions = usePermissions('crew_payroll');
+  const [searchParams] = useSearchParams();
 
   const [ships, setShips] = useState<Ship[]>([]);
   const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
   const [fleets, setFleets] = useState<{ id: string; name: string }[]>([]);
   const [ownerId, setOwnerId] = useState('');
   const [fleetId, setFleetId] = useState('');
-  const [shipId, setShipId] = useState('');
-  const [yearMonth, setYearMonth] = useState(currentYearMonth());
+  const [shipId, setShipId] = useState(() => searchParams.get('shipId') || '');
+  const [yearMonth, setYearMonth] = useState(() => searchParams.get('yearMonth') || currentYearMonth());
   const [periods, setPeriods] = useState<CrewPayrollPeriodSummary[]>([]);
   const [currentPeriod, setCurrentPeriod] = useState<CrewPayrollPeriod | null>(null);
   const [payslips, setPayslips] = useState<CrewPayslipWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const [editingPayslip, setEditingPayslip] = useState<CrewPayslipWithDetails | null>(null);
@@ -72,8 +75,15 @@ export default function CrewPayrollManagementPage() {
       ]);
       setOwners(ownerRows || []);
       setFleets(fleetRows || []);
+
+      const presetShipId = searchParams.get('shipId');
+      if (presetShipId) {
+        const presetShip = scopedShips.find(s => s.id === presetShipId);
+        if (presetShip) { setOwnerId(presetShip.owner_id || ''); setFleetId(presetShip.fleet_id || ''); }
+      }
       setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOwnerChange = (id: string) => { setOwnerId(id); setFleetId(''); setShipId(''); };
@@ -158,6 +168,23 @@ export default function CrewPayrollManagementPage() {
       toast({ title: '상신 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!currentPeriod) return;
+    if (!confirm(`${yearMonth} 급여명세를 확정 처리하시겠습니까? (결재 없이 바로 확정됩니다)`)) return;
+    try {
+      setConfirming(true);
+      const user = await getCurrentUser();
+      if (!user) return;
+      await crewPayrollService.confirmPayrollPeriod(currentPeriod.id, user.id);
+      toast({ title: '확정 처리되었습니다.' });
+      await refresh();
+    } catch (e) {
+      toast({ title: '확정 처리 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -288,8 +315,13 @@ export default function CrewPayrollManagementPage() {
           </Button>
         )}
         {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
-          <Button size="sm" className="gap-1.5 h-9" onClick={handleSubmit} disabled={submitting}>
+          <Button size="sm" variant="outline" className="gap-1.5 h-9 text-purple-600 border-purple-300" onClick={handleSubmit} disabled={submitting}>
             <Send className="w-3.5 h-3.5" />{submitting ? '상신 중...' : '지출결의서 상신'}
+          </Button>
+        )}
+        {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
+          <Button size="sm" className="gap-1.5 h-9" onClick={handleConfirm} disabled={confirming}>
+            <CheckCircle2 className="w-3.5 h-3.5" />{confirming ? '처리 중...' : '확정 처리'}
           </Button>
         )}
         {isPendingApproval && currentPeriod?.approval_document_id && (

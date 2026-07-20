@@ -36,6 +36,7 @@ export interface CrewPayslip {
   base_amount: number;
   total_allowance: number;
   total_deduction: number;
+  total_owner_billed: number;
   net_amount: number;
   currency: string;
   memo: string | null;
@@ -82,6 +83,7 @@ export interface CrewPayrollLedgerRow {
   deduction_by_name: Record<string, number>;
   total_deduction: number;
   net_amount: number;
+  owner_billed_amount: number; // 선주에게 별도 청구되는 수당 합계 (net_amount에는 포함 안 됨)
 }
 
 export interface CrewPayrollLedgerData {
@@ -92,4 +94,43 @@ export interface CrewPayrollLedgerData {
   allowance_columns: string[];
   deduction_columns: string[];
   rows: CrewPayrollLedgerRow[];
+}
+
+// 월별 전 선박 대시보드 한 행 — 그 달 회차가 없는 선박도 status='none'으로 표시된다.
+export interface CrewPayrollDashboardRow {
+  ship_id: string;
+  ship_name: string;
+  owner_id?: string;
+  owner_name?: string;
+  fleet_id?: string;
+  fleet_name?: string;
+  period_id: string | null;
+  status: CrewPayrollPeriodStatus | 'none';
+  payslip_count: number;
+  total_net_amount: number;
+  total_owner_billed: number;
+}
+
+export type CrewPayrollBillingGroupLevel = 'owner' | 'fleet' | 'ship';
+
+export interface CrewPayrollBillingShipSection {
+  ship_id: string;
+  ship_name: string;
+  owner_name?: string;
+  fleet_name?: string;
+  period_year_month: string;
+  allowance_columns: string[];
+  deduction_columns: string[];
+  rows: CrewPayrollLedgerRow[];
+  subtotal_net: number;
+  subtotal_owner_billed: number;
+}
+
+export interface CrewPayrollBillingData {
+  year_month: string;
+  group_level: CrewPayrollBillingGroupLevel;
+  group_label: string; // "전체" 또는 선택된 선주/플릿/선박 이름
+  ships: CrewPayrollBillingShipSection[];
+  grand_total_net: number;
+  grand_total_owner_billed: number;
 }

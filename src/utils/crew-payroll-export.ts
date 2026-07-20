@@ -3,22 +3,22 @@ import type { CrewPayrollLedgerData } from '@/types/crew-payroll';
 
 // 직원 급여대장(employee-payroll-ledger-export.ts)과 같은 톤 — 옅은 회색 배경 + 공제 항목만
 // 빨간 글자로 구분.
-const HEADER = { bg: 'F5F5F5', fg: '333333' };
-const DEDUCTION_HEADER = { bg: 'F5F5F5', fg: 'A33333' };
-const RESULT_HEADER = { bg: 'EFEFEF', fg: '222222' };
-const TOTAL_ROW_BG = 'F7F7F7';
+export const HEADER = { bg: 'F5F5F5', fg: '333333' };
+export const DEDUCTION_HEADER = { bg: 'F5F5F5', fg: 'A33333' };
+export const RESULT_HEADER = { bg: 'EFEFEF', fg: '222222' };
+export const TOTAL_ROW_BG = 'F7F7F7';
 const THIN = 'CCCCCC';
 const THICK = '888888';
-const BASE_SZ = 9;
+export const BASE_SZ = 9;
 
-const border = (opts: { thickTop?: boolean; thickBottom?: boolean } = {}) => ({
+export const border = (opts: { thickTop?: boolean; thickBottom?: boolean } = {}) => ({
   top: { style: opts.thickTop ? 'medium' : 'thin', color: { rgb: opts.thickTop ? THICK : THIN } },
   bottom: { style: opts.thickBottom ? 'medium' : 'thin', color: { rgb: opts.thickBottom ? THICK : THIN } },
   left: { style: 'thin', color: { rgb: THIN } },
   right: { style: 'thin', color: { rgb: THIN } },
 });
 
-function cell(v: string | number, style: Record<string, unknown>) {
+export function cell(v: string | number, style: Record<string, unknown>) {
   return { v, t: typeof v === 'number' ? 'n' : 's', s: style };
 }
 

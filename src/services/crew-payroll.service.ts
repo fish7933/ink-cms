@@ -1,12 +1,13 @@
 import { supabase } from '@/lib/supabase';
-import { getEffectiveTemplateForShip } from '@/lib/salary-store';
-import { allowanceService } from '@/services/allowance.service';
+import { getEffectiveTemplateMapForShips } from '@/lib/salary-store';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { getCompanyInfo } from '@/services/company-info.service';
 import { crewDisplayName } from '@/lib/utils';
 import { buildCrewPayrollLedgerWorkbook } from '@/utils/crew-payroll-export';
 import * as XLSX from 'xlsx-js-style';
+import type { SalaryTemplate } from '@/lib/salary-store';
+import type { CrewContractAllowanceWithDetails } from '@/types/allowance';
 import type {
   CrewPayrollPeriod,
   CrewPayrollPeriodSummary,
@@ -14,6 +15,7 @@ import type {
   CrewPayslipItem,
   CrewPayslipWithDetails,
   CrewPayrollLedgerData,
+  CrewPayrollDashboardRow,
 } from '@/types/crew-payroll';
 
 function daysInMonth(yearMonth: string): number {
@@ -37,67 +39,141 @@ interface GeneratedItem {
   display_order: number;
 }
 
-// 승선/하선일 기준 일할계산 비율을 적용해, 선박 급여 템플릿(직급+등급 기준)과 그 시점에
-// 유효했던 선원 계약의 수당/공제(crew_contract_allowances)를 합쳐 한 선원의 명세서 항목을 만든다.
-async function buildPayslipItems(
-  shipId: string,
-  yearMonth: string,
-  record: { crew_member_id: string; rank_id: string | null; rank_grade: string | null; embark_date: string },
-  ratio: number,
-  template: Awaited<ReturnType<typeof getEffectiveTemplateForShip>>,
-  rankNameById: Map<string, string>
-): Promise<GeneratedItem[]> {
-  const items: GeneratedItem[] = [];
+interface TemplateItemWithComponent {
+  rank?: string;
+  rank_grade?: string | null;
+  amount: number;
+  component: { name: string; component_type: 'earning' | 'deduction' };
+}
 
-  const rankName = record.rank_id ? rankNameById.get(record.rank_id) : undefined;
-  if (template && rankName) {
-    const rankItems = template.items.filter(i => i.rank === rankName);
-    const gradeSpecific = rankItems.filter(i => (i.rank_grade || null) === (record.rank_grade || null));
-    const matched = gradeSpecific.length > 0 ? gradeSpecific : rankItems.filter(i => !i.rank_grade);
-    matched.forEach((i, idx) => {
-      const standard = Number(i.amount);
-      items.push({
-        source: 'template',
-        category: i.component.component_type === 'deduction' ? 'deduction' : 'earning',
-        name: i.component.name,
-        payment_method: null,
-        standard_amount: standard,
-        amount: Math.round(standard * ratio),
-        display_order: idx,
+interface EmbarkRecord {
+  id: string;
+  ship_id: string;
+  crew_member_id: string;
+  rank_id: string | null;
+  rank_grade: string | null;
+  embark_date: string;
+  disembark_date: string | null;
+}
+
+interface ContractRow {
+  id: string;
+  crew_member_id: string;
+  ship_id: string;
+  start_date: string;
+  end_date: string;
+}
+
+interface BuiltPayslip {
+  embarkation_record_id: string;
+  crew_member_id: string;
+  rank_id: string | null;
+  rank_grade: string | null;
+  days_served: number;
+  days_in_month: number;
+  base_amount: number;
+  total_allowance: number;
+  total_deduction: number;
+  total_owner_billed: number;
+  net_amount: number;
+  currency: string;
+  items: GeneratedItem[];
+}
+
+// 순수 함수 — DB 호출 없이, 미리 벌크로 읽어온 데이터(Map)에서만 조회해 한 선박의 명세서들을
+// 계산한다. 여러 선박을 한 번에 생성할 때도, 선박 1척만 생성할 때도 이 함수 하나로 처리한다.
+function buildShipPayslips(input: {
+  shipId: string;
+  yearMonth: string;
+  templateCurrency: string | undefined;
+  templateItems: TemplateItemWithComponent[];
+  records: EmbarkRecord[];
+  rankNameById: Map<string, string>;
+  contractsByCrewMember: Map<string, ContractRow[]>;
+  allowanceItemsByContractId: Map<string, CrewContractAllowanceWithDetails[]>;
+}): BuiltPayslip[] {
+  const { shipId, yearMonth, templateCurrency, templateItems, records, rankNameById, contractsByCrewMember, allowanceItemsByContractId } = input;
+  const { start, end } = monthRange(yearMonth);
+  const totalDays = daysInMonth(yearMonth);
+  const results: BuiltPayslip[] = [];
+
+  for (const rec of records) {
+    const overlapStart = rec.embark_date > start ? rec.embark_date : start;
+    const overlapEnd = rec.disembark_date && rec.disembark_date < end ? rec.disembark_date : end;
+    const daysServed = Math.max(0, Math.min(daysBetweenInclusive(overlapStart, overlapEnd), totalDays));
+    const ratio = totalDays > 0 ? daysServed / totalDays : 0;
+
+    const items: GeneratedItem[] = [];
+    const rankName = rec.rank_id ? rankNameById.get(rec.rank_id) : undefined;
+    if (rankName) {
+      const rankItems = templateItems.filter(i => i.rank === rankName);
+      const gradeSpecific = rankItems.filter(i => (i.rank_grade || null) === (rec.rank_grade || null));
+      const matched = gradeSpecific.length > 0 ? gradeSpecific : rankItems.filter(i => !i.rank_grade);
+      matched.forEach((i, idx) => {
+        const standard = Number(i.amount);
+        items.push({
+          source: 'template',
+          category: i.component.component_type === 'deduction' ? 'deduction' : 'earning',
+          name: i.component.name,
+          payment_method: null,
+          standard_amount: standard,
+          amount: Math.round(standard * ratio),
+          display_order: idx,
+        });
       });
+    }
+
+    // 그 승선 시점(embark_date)에 유효했던 계약 — 현재 status가 아니라 계약기간으로 판단
+    const candidateContracts = (contractsByCrewMember.get(rec.crew_member_id) || [])
+      .filter(c => c.ship_id === shipId && c.start_date <= rec.embark_date && c.end_date >= rec.embark_date)
+      .sort((a, b) => (a.start_date < b.start_date ? 1 : -1));
+    const contract = candidateContracts[0];
+    if (contract) {
+      const contractItems = allowanceItemsByContractId.get(contract.id) || [];
+      contractItems.forEach((a, idx) => {
+        const standard = Number(a.amount);
+        items.push({
+          source: 'contract',
+          category: a.kind === 'deduction' ? 'deduction' : 'earning',
+          name: a.allowance_type_name,
+          payment_method: a.kind === 'allowance' ? a.payment_method : null,
+          standard_amount: standard,
+          amount: Math.round(standard * ratio),
+          display_order: 100 + idx,
+        });
+      });
+    }
+
+    const baseAmount = items.filter(i => i.source === 'template' && i.category === 'earning').reduce((s, i) => s + i.amount, 0);
+    const allowanceAmount = items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + i.amount, 0);
+    const ownerBilledAmount = items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method === 'owner_billed').reduce((s, i) => s + i.amount, 0);
+    const deductionAmount = items.filter(i => i.category === 'deduction').reduce((s, i) => s + i.amount, 0);
+    const netAmount = baseAmount + allowanceAmount - deductionAmount;
+
+    results.push({
+      embarkation_record_id: rec.id,
+      crew_member_id: rec.crew_member_id,
+      rank_id: rec.rank_id,
+      rank_grade: rec.rank_grade,
+      days_served: daysServed,
+      days_in_month: totalDays,
+      base_amount: baseAmount,
+      total_allowance: allowanceAmount,
+      total_deduction: deductionAmount,
+      total_owner_billed: ownerBilledAmount,
+      net_amount: netAmount,
+      currency: templateCurrency || 'USD',
+      items,
     });
   }
 
-  // 그 승선 시점(embark_date)에 유효했던 계약을 찾는다 — 현재 status가 아니라 계약기간으로
-  // 판단해야, 이미 하선/계약종료로 status가 바뀐 뒤에 명세서를 생성해도 정확히 찾을 수 있다.
-  const { data: contract } = await supabase
-    .from('crew_contracts')
-    .select('id')
-    .eq('crew_member_id', record.crew_member_id)
-    .eq('ship_id', shipId)
-    .lte('start_date', record.embark_date)
-    .gte('end_date', record.embark_date)
-    .order('start_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  return results;
+}
 
-  if (contract) {
-    const contractItems = await allowanceService.getContractAllowances(contract.id);
-    contractItems.forEach((a, idx) => {
-      const standard = Number(a.amount);
-      items.push({
-        source: 'contract',
-        category: a.kind === 'deduction' ? 'deduction' : 'earning',
-        name: a.allowance_type_name,
-        payment_method: a.kind === 'allowance' ? a.payment_method : null,
-        standard_amount: standard,
-        amount: Math.round(standard * ratio),
-        display_order: 100 + idx,
-      });
-    });
-  }
-
-  return items;
+export interface GeneratePayrollResult {
+  succeeded: { shipId: string; periodId: string; payslipCount: number }[];
+  skipped: { shipId: string; reason: 'no_crew' | 'already_exists' }[];
+  failed: { shipId: string; error: string }[];
 }
 
 export const crewPayrollService = {
@@ -150,73 +226,220 @@ export const crewPayrollService = {
     return data;
   },
 
-  // 그 선박의 그 달 승선 기록(그 달과 겹치는 기간)을 대상으로 명세서를 자동 생성한다.
-  // 이미 회차가 있으면 실패(중복 방지) — 다시 만들려면 회차를 지우고 새로 생성해야 한다(draft만 가능).
-  async createPayrollPeriod(shipId: string, yearMonth: string, createdBy: string): Promise<CrewPayrollPeriod> {
+  // 월별 전 선박(최대 200척) 대시보드용 집계 — 선박 수와 무관하게 고정된 소수 쿼리로 처리한다.
+  // 그 달 회차가 없는 선박도 status='none'으로 한 행씩 포함된다.
+  async getDashboardRows(
+    yearMonth: string,
+    ships: { id: string; name: string; owner_id?: string; fleet_id?: string }[]
+  ): Promise<CrewPayrollDashboardRow[]> {
+    if (ships.length === 0) return [];
+    const shipIds = ships.map(s => s.id);
+
+    const { data: periods } = await supabase
+      .from('crew_payroll_periods')
+      .select('id, ship_id, status')
+      .eq('year_month', yearMonth)
+      .in('ship_id', shipIds);
+    const periodByShip = new Map((periods || []).map(p => [p.ship_id, p]));
+
+    const periodIds = (periods || []).map(p => p.id);
+    const { data: payslips } = periodIds.length > 0
+      ? await supabase.from('crew_payslips').select('period_id, net_amount, total_owner_billed').in('period_id', periodIds)
+      : { data: [] as { period_id: string; net_amount: number; total_owner_billed: number }[] };
+    const summaryByPeriod = new Map<string, { count: number; net: number; ownerBilled: number }>();
+    for (const p of payslips || []) {
+      const cur = summaryByPeriod.get(p.period_id) || { count: 0, net: 0, ownerBilled: 0 };
+      cur.count += 1;
+      cur.net += Number(p.net_amount);
+      cur.ownerBilled += Number(p.total_owner_billed);
+      summaryByPeriod.set(p.period_id, cur);
+    }
+
+    const ownerIds = [...new Set(ships.map(s => s.owner_id).filter((v): v is string => !!v))];
+    const fleetIds = [...new Set(ships.map(s => s.fleet_id).filter((v): v is string => !!v))];
+    const [{ data: owners }, { data: fleets }] = await Promise.all([
+      ownerIds.length > 0 ? supabase.from('companies').select('id, name').in('id', ownerIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ]);
+    const ownerNameById = new Map((owners || []).map(o => [o.id, o.name]));
+    const fleetNameById = new Map((fleets || []).map(f => [f.id, f.name]));
+
+    return ships.map(s => {
+      const period = periodByShip.get(s.id);
+      const summary = period ? summaryByPeriod.get(period.id) : undefined;
+      return {
+        ship_id: s.id,
+        ship_name: s.name,
+        owner_id: s.owner_id,
+        owner_name: s.owner_id ? ownerNameById.get(s.owner_id) : undefined,
+        fleet_id: s.fleet_id,
+        fleet_name: s.fleet_id ? fleetNameById.get(s.fleet_id) : undefined,
+        period_id: period?.id ?? null,
+        status: period?.status ?? 'none',
+        payslip_count: summary?.count ?? 0,
+        total_net_amount: summary?.net ?? 0,
+        total_owner_billed: summary?.ownerBilled ?? 0,
+      } as CrewPayrollDashboardRow;
+    });
+  },
+
+  // 여러 선박(최대 200척)을 한 번에 생성 — 선박 수와 무관하게 고정된 소수 쿼리로 읽고,
+  // 쓰기(명세서/항목 insert)만 선박당 2회씩 10~15척 단위로 병렬 처리한다.
+  // 원자적 성공/실패가 아니라 선박별 결과 리스트를 반환 — 일부 선박은 그 달 승선자가
+  // 없거나 이미 회차가 있어 건너뛰는 게 정상이다.
+  async generatePayrollForShips(shipIds: string[], yearMonth: string, createdBy: string): Promise<GeneratePayrollResult> {
+    const result: GeneratePayrollResult = { succeeded: [], skipped: [], failed: [] };
+    if (shipIds.length === 0) return result;
     const { start, end } = monthRange(yearMonth);
-    const totalDays = daysInMonth(yearMonth);
 
-    const template = await getEffectiveTemplateForShip(shipId);
+    const { data: shipsRaw, error: shipsError } = await supabase.from('ships').select('id, fleet_id, owner_id').in('id', shipIds);
+    if (shipsError) { shipIds.forEach(id => result.failed.push({ shipId: id, error: shipsError.message })); return result; }
+    const ships = (shipsRaw || []).map(s => ({ id: String(s.id), fleet_id: s.fleet_id ? String(s.fleet_id) : null, owner_id: s.owner_id ? String(s.owner_id) : null }));
 
-    const { data: records, error: recError } = await supabase
+    const { data: existingPeriods } = await supabase
+      .from('crew_payroll_periods').select('ship_id').eq('year_month', yearMonth).in('ship_id', shipIds);
+    const existingShipIds = new Set((existingPeriods || []).map(p => p.ship_id));
+    for (const id of existingShipIds) result.skipped.push({ shipId: id, reason: 'already_exists' });
+    const targetShipIds = shipIds.filter(id => !existingShipIds.has(id));
+    if (targetShipIds.length === 0) return result;
+
+    const templateMap = await getEffectiveTemplateMapForShips(ships.filter(s => targetShipIds.includes(s.id)));
+
+    const { data: recordsRaw, error: recError } = await supabase
       .from('crew_embarkation_records')
-      .select('id, crew_member_id, rank_id, rank_grade, embark_date, disembark_date')
-      .eq('ship_id', shipId)
+      .select('id, ship_id, crew_member_id, rank_id, rank_grade, embark_date, disembark_date')
+      .in('ship_id', targetShipIds)
       .lte('embark_date', end)
       .or(`disembark_date.is.null,disembark_date.gte.${start}`);
-    if (recError) throw recError;
-    if (!records || records.length === 0) throw new Error('그 달에 이 선박에 승선 기록이 있는 선원이 없습니다.');
+    if (recError) { targetShipIds.forEach(id => result.failed.push({ shipId: id, error: recError.message })); return result; }
+    const records = (recordsRaw || []) as EmbarkRecord[];
+
+    const recordsByShip = new Map<string, EmbarkRecord[]>();
+    for (const r of records) {
+      const arr = recordsByShip.get(r.ship_id) || [];
+      arr.push(r);
+      recordsByShip.set(r.ship_id, arr);
+    }
+    const shipsWithRecords = targetShipIds.filter(id => (recordsByShip.get(id) || []).length > 0);
+    for (const id of targetShipIds) {
+      if (!recordsByShip.get(id)?.length) result.skipped.push({ shipId: id, reason: 'no_crew' });
+    }
+    if (shipsWithRecords.length === 0) return result;
 
     const rankIds = [...new Set(records.map(r => r.rank_id).filter((v): v is string => !!v))];
     const { data: ranks } = rankIds.length > 0 ? await supabase.from('ranks').select('id, name').in('id', rankIds) : { data: [] as { id: string; name: string }[] };
     const rankNameById = new Map((ranks || []).map(r => [r.id, r.name]));
 
-    const { data: period, error: periodError } = await supabase
-      .from('crew_payroll_periods')
-      .insert({ ship_id: shipId, year_month: yearMonth, currency: template?.currency || 'USD', created_by: createdBy })
-      .select()
-      .single();
-    if (periodError || !period) throw periodError || new Error('회차 생성에 실패했습니다.');
-
-    for (const rec of records) {
-      const overlapStart = rec.embark_date > start ? rec.embark_date : start;
-      const overlapEnd = rec.disembark_date && rec.disembark_date < end ? rec.disembark_date : end;
-      const daysServed = Math.max(0, Math.min(daysBetweenInclusive(overlapStart, overlapEnd), totalDays));
-      const ratio = totalDays > 0 ? daysServed / totalDays : 0;
-
-      const items = await buildPayslipItems(shipId, yearMonth, rec, ratio, template, rankNameById);
-
-      const baseAmount = items.filter(i => i.source === 'template' && i.category === 'earning').reduce((s, i) => s + i.amount, 0);
-      const allowanceAmount = items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + i.amount, 0);
-      const deductionAmount = items.filter(i => i.category === 'deduction').reduce((s, i) => s + i.amount, 0);
-      const netAmount = baseAmount + allowanceAmount - deductionAmount;
-
-      const { data: payslip, error: payslipError } = await supabase
-        .from('crew_payslips')
-        .insert({
-          period_id: period.id,
-          crew_member_id: rec.crew_member_id,
-          embarkation_record_id: rec.id,
-          rank_id: rec.rank_id,
-          rank_grade: rec.rank_grade,
-          days_served: daysServed,
-          days_in_month: totalDays,
-          base_amount: baseAmount,
-          total_allowance: allowanceAmount,
-          total_deduction: deductionAmount,
-          net_amount: netAmount,
-          currency: template?.currency || 'USD',
-        })
-        .select()
-        .single();
-      if (payslipError || !payslip) { console.error('Error creating payslip:', payslipError); continue; }
-
-      if (items.length > 0) {
-        await supabase.from('crew_payslip_items').insert(items.map(i => ({ ...i, payslip_id: payslip.id })));
-      }
+    const crewMemberIds = [...new Set(records.map(r => r.crew_member_id))];
+    const { data: contractsRaw } = crewMemberIds.length > 0
+      ? await supabase.from('crew_contracts').select('id, crew_member_id, ship_id, start_date, end_date').in('crew_member_id', crewMemberIds)
+      : { data: [] as ContractRow[] };
+    const contracts = (contractsRaw || []) as ContractRow[];
+    const contractsByCrewMember = new Map<string, ContractRow[]>();
+    for (const c of contracts) {
+      const arr = contractsByCrewMember.get(c.crew_member_id) || [];
+      arr.push(c);
+      contractsByCrewMember.set(c.crew_member_id, arr);
     }
 
-    return period;
+    const contractIds = [...new Set(contracts.map(c => c.id))];
+    const { data: contractAllowancesRaw } = contractIds.length > 0
+      ? await supabase.from('crew_contract_allowances').select('*').in('contract_id', contractIds)
+      : { data: [] as (CrewContractAllowanceWithDetails & { allowance_type_id: string; contract_id: string })[] };
+    const allowanceTypeIds = [...new Set((contractAllowancesRaw || []).map(a => a.allowance_type_id))];
+    const { data: allowanceTypes } = allowanceTypeIds.length > 0
+      ? await supabase.from('allowance_types').select('id, name').in('id', allowanceTypeIds)
+      : { data: [] as { id: string; name: string }[] };
+    const allowanceTypeNameById = new Map((allowanceTypes || []).map(t => [t.id, t.name]));
+    const allowanceItemsByContractId = new Map<string, CrewContractAllowanceWithDetails[]>();
+    for (const a of contractAllowancesRaw || []) {
+      const arr = allowanceItemsByContractId.get(a.contract_id) || [];
+      arr.push({ ...a, allowance_type_name: allowanceTypeNameById.get(a.allowance_type_id) || '' });
+      allowanceItemsByContractId.set(a.contract_id, arr);
+    }
+
+    const templateIds = [...new Set(Object.values(templateMap).filter((t): t is SalaryTemplate => !!t).map(t => t.id))];
+    const { data: templateItemsRaw } = templateIds.length > 0
+      ? await supabase.from('salary_template_items').select('*').in('template_id', templateIds)
+      : { data: [] as { template_id: string; component_id: string; rank?: string; rank_grade?: string | null; amount: number }[] };
+    const { data: allComponents } = await supabase.from('salary_components').select('*');
+    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction' }]));
+    const templateItemsByTemplateId = new Map<string, TemplateItemWithComponent[]>();
+    for (const item of templateItemsRaw || []) {
+      const arr = templateItemsByTemplateId.get(String(item.template_id)) || [];
+      const component = componentById.get(String(item.component_id)) || { name: 'Unknown', component_type: 'earning' as const };
+      arr.push({ rank: item.rank, rank_grade: item.rank_grade, amount: Number(item.amount), component });
+      templateItemsByTemplateId.set(String(item.template_id), arr);
+    }
+
+    const CHUNK = 12;
+    for (let i = 0; i < shipsWithRecords.length; i += CHUNK) {
+      const chunk = shipsWithRecords.slice(i, i + CHUNK);
+      await Promise.all(chunk.map(async shipId => {
+        try {
+          const template = templateMap[shipId];
+          const templateItems = template ? (templateItemsByTemplateId.get(template.id) || []) : [];
+          const shipRecords = recordsByShip.get(shipId) || [];
+          const built = buildShipPayslips({
+            shipId, yearMonth, templateCurrency: template?.currency, templateItems,
+            records: shipRecords, rankNameById, contractsByCrewMember, allowanceItemsByContractId,
+          });
+
+          const { data: period, error: periodError } = await supabase
+            .from('crew_payroll_periods')
+            .insert({ ship_id: shipId, year_month: yearMonth, currency: template?.currency || 'USD', created_by: createdBy })
+            .select()
+            .single();
+          if (periodError || !period) throw periodError || new Error('회차 생성에 실패했습니다.');
+
+          const { data: insertedPayslips, error: payslipError } = await supabase
+            .from('crew_payslips')
+            .insert(built.map(b => ({
+              period_id: period.id,
+              crew_member_id: b.crew_member_id,
+              embarkation_record_id: b.embarkation_record_id,
+              rank_id: b.rank_id,
+              rank_grade: b.rank_grade,
+              days_served: b.days_served,
+              days_in_month: b.days_in_month,
+              base_amount: b.base_amount,
+              total_allowance: b.total_allowance,
+              total_deduction: b.total_deduction,
+              total_owner_billed: b.total_owner_billed,
+              net_amount: b.net_amount,
+              currency: b.currency,
+            })))
+            .select('id');
+          if (payslipError || !insertedPayslips) throw payslipError || new Error('명세서 생성에 실패했습니다.');
+
+          const itemRows = insertedPayslips.flatMap((p, idx) => built[idx].items.map(it => ({ ...it, payslip_id: p.id })));
+          if (itemRows.length > 0) {
+            const { error: itemError } = await supabase.from('crew_payslip_items').insert(itemRows);
+            if (itemError) throw itemError;
+          }
+
+          result.succeeded.push({ shipId, periodId: period.id, payslipCount: built.length });
+        } catch (e) {
+          result.failed.push({ shipId, error: e instanceof Error ? e.message : String(e) });
+        }
+      }));
+    }
+
+    return result;
+  },
+
+  // 선박 1척 생성 — generatePayrollForShips([shipId])의 얇은 래퍼. 기존 단일 선박 UI가
+  // 그대로 쓸 수 있도록 예외를 던지는 기존 동작을 유지한다.
+  async createPayrollPeriod(shipId: string, yearMonth: string, createdBy: string): Promise<CrewPayrollPeriod> {
+    const result: GeneratePayrollResult = await this.generatePayrollForShips([shipId], yearMonth, createdBy);
+    if (result.succeeded.length > 0) {
+      const period = await this.getPayrollPeriodById(result.succeeded[0].periodId);
+      if (!period) throw new Error('회차 생성에 실패했습니다.');
+      return period;
+    }
+    if (result.failed.length > 0) throw new Error(result.failed[0].error);
+    if (result.skipped[0]?.reason === 'already_exists') throw new Error('이미 그 달 회차가 존재합니다.');
+    throw new Error('그 달에 이 선박에 승선 기록이 있는 선원이 없습니다.');
   },
 
   // draft 회차를 지우고(명세서/항목은 CASCADE로 함께 삭제) 같은 조건으로 다시 생성한다.
@@ -234,6 +457,19 @@ export const crewPayrollService = {
     if (!period) return;
     if (period.status !== 'draft') throw new Error('임시저장 상태의 회차만 삭제할 수 있습니다.');
     const { error } = await supabase.from('crew_payroll_periods').delete().eq('id', periodId);
+    if (error) throw error;
+  },
+
+  // 결재 없이 draft 회차를 바로 확정 처리한다 — 지출결의서 상신(submitPayrollForApproval)은
+  // 선택적 부가 기능일 뿐, 실사용에서는 청구서 발송 후 이 함수로 월을 마감한다.
+  async confirmPayrollPeriod(periodId: string, confirmedBy: string): Promise<void> {
+    const period = await this.getPayrollPeriodById(periodId);
+    if (!period) throw new Error('회차를 찾을 수 없습니다.');
+    if (period.status !== 'draft') throw new Error('임시저장 상태의 회차만 확정할 수 있습니다.');
+    const { error } = await supabase
+      .from('crew_payroll_periods')
+      .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_by: confirmedBy, updated_at: new Date().toISOString() })
+      .eq('id', periodId);
     if (error) throw error;
   },
 
@@ -309,12 +545,13 @@ export const crewPayrollService = {
 
     const baseAmount = allItems.filter(i => i.source === 'template' && i.category === 'earning').reduce((s, i) => s + Number(i.amount), 0);
     const allowanceAmount = allItems.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + Number(i.amount), 0);
+    const ownerBilledAmount = allItems.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method === 'owner_billed').reduce((s, i) => s + Number(i.amount), 0);
     const deductionAmount = allItems.filter(i => i.category === 'deduction').reduce((s, i) => s + Number(i.amount), 0);
     const netAmount = baseAmount + allowanceAmount - deductionAmount;
 
     const { error: payslipError } = await supabase
       .from('crew_payslips')
-      .update({ base_amount: baseAmount, total_allowance: allowanceAmount, total_deduction: deductionAmount, net_amount: netAmount, updated_at: new Date().toISOString() })
+      .update({ base_amount: baseAmount, total_allowance: allowanceAmount, total_deduction: deductionAmount, total_owner_billed: ownerBilledAmount, net_amount: netAmount, updated_at: new Date().toISOString() })
       .eq('id', item.payslip_id);
     if (payslipError) throw payslipError;
   },
@@ -359,6 +596,7 @@ export const crewPayrollService = {
         deduction_by_name: deductionByName,
         total_deduction: p.total_deduction,
         net_amount: p.net_amount,
+        owner_billed_amount: p.total_owner_billed,
       };
     });
 
@@ -376,6 +614,8 @@ export const crewPayrollService = {
   // 직원 급여관리의 submitPayrollExpenseReport와 동일한 패턴 — 급여명세표 엑셀을 첨부해
   // 지출결의서로 상신하고, 승인/반려 결과는 approval-document.service.ts의
   // applyReferenceSideEffect(reference_type='crew_payroll_period')가 회차 상태에 반영한다.
+  // 실사용에서는 결재 없이 confirmPayrollPeriod로 바로 확정하는 게 주 흐름이고, 이 상신은
+  // 내부 결재 기록이 필요한 경우를 위한 부가 기능이다.
   async submitPayrollForApproval(periodId: string, submittedByUserId: string): Promise<void> {
     const period = await this.getPayrollPeriodById(periodId);
     if (!period) throw new Error('회차를 찾을 수 없습니다.');
