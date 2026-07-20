@@ -35,6 +35,7 @@ const SalaryTemplateFormPage = lazy(() => import('@/pages/SalaryTemplateFormPage
 const SalaryTemplateDetailPage = lazy(() => import('@/pages/SalaryTemplateDetailPage'));
 const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
 const AllowanceTypesManagementPage = lazy(() => import('@/pages/AllowanceTypesManagementPage'));
+const CrewPayrollManagementPage = lazy(() => import('@/pages/CrewPayrollManagementPage'));
 const OrgChartManagementPage = lazy(() => import('@/pages/OrgChartManagementPage'));
 const DocumentTypesManagementPage = lazy(() => import('@/pages/DocumentTypesManagementPage'));
 const DocumentDraftPage = lazy(() => import('@/pages/DocumentDraftPage'));
@@ -140,6 +141,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/my-payslips', component: EmployeeMyPayslipsPage },
   { path: '/contract-management', component: ContractManagementPage },
   { path: '/allowance-types', component: AllowanceTypesManagementPage },
+  { path: '/crew-payroll', component: CrewPayrollManagementPage },
   { path: '/sign-off-reasons', component: SignOffReasonsPage },
   { path: '/crew-management-settings', component: CrewManagementSettingsPage },
   { path: '/ship-management-settings', component: ShipManagementSettingsPage },

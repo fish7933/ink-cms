@@ -4,6 +4,7 @@ import { allowanceService } from '@/services/allowance.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { getCompanyInfo } from '@/services/company-info.service';
+import { crewDisplayName } from '@/lib/utils';
 import { buildCrewPayrollLedgerWorkbook } from '@/utils/crew-payroll-export';
 import * as XLSX from 'xlsx-js-style';
 import type {
@@ -239,7 +240,7 @@ export const crewPayrollService = {
   async getPayslipsForPeriod(periodId: string): Promise<CrewPayslipWithDetails[]> {
     const { data, error } = await supabase
       .from('crew_payslips')
-      .select('*, crew_members!crew_member_id(name, nationality), ranks:rank_id(name, rank_code)')
+      .select('*, crew_members!crew_member_id(name, name_english, nationality), ranks:rank_id(name, rank_code)')
       .eq('period_id', periodId)
       .order('created_at');
     if (error) { console.error('Error fetching crew payslips:', error); return []; }
@@ -255,17 +256,44 @@ export const crewPayrollService = {
     }
 
     return data.map(p => {
-      const crew = p.crew_members as { name?: string; nationality?: string } | null;
+      const crew = p.crew_members as { name?: string; name_english?: string; nationality?: string } | null;
       const rank = p.ranks as { name?: string; rank_code?: string } | null;
       return {
         ...p,
-        crew_name: crew?.name || '',
+        crew_name: crew ? crewDisplayName(crew) : '',
         nationality: crew?.nationality,
         rank_name: rank?.name || '',
         rank_code: rank?.rank_code || '',
         items: itemsByPayslip.get(p.id) || [],
       } as CrewPayslipWithDetails;
     });
+  },
+
+  async getPayslipById(id: string): Promise<(CrewPayslipWithDetails & { ship_name: string }) | null> {
+    const { data, error } = await supabase
+      .from('crew_payslips')
+      .select('*, crew_members!crew_member_id(name, name_english, nationality), ranks:rank_id(name, rank_code), crew_payroll_periods!period_id(year_month, status, ships!ship_id(name))')
+      .eq('id', id)
+      .single();
+    if (error || !data) { console.error('Error fetching crew payslip:', error); return null; }
+
+    const { data: items } = await supabase.from('crew_payslip_items').select('*').eq('payslip_id', id).order('display_order');
+
+    const crew = data.crew_members as { name?: string; name_english?: string; nationality?: string } | null;
+    const rank = data.ranks as { name?: string; rank_code?: string } | null;
+    const period = data.crew_payroll_periods as { year_month?: string; status?: string; ships?: { name?: string } } | null;
+
+    return {
+      ...data,
+      crew_name: crew ? crewDisplayName(crew) : '',
+      nationality: crew?.nationality,
+      rank_name: rank?.name || '',
+      rank_code: rank?.rank_code || '',
+      items: items || [],
+      period_year_month: period?.year_month,
+      period_status: period?.status as CrewPayslipWithDetails['period_status'],
+      ship_name: period?.ships?.name || '',
+    } as CrewPayslipWithDetails & { ship_name: string };
   },
 
   // 명세서 항목 하나를 수동으로 조정(draft 상태에서만) — 조정 후 그 명세서의 합계도 다시 계산한다.
