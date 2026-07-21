@@ -19,6 +19,7 @@ import type {
   CrewPayrollLedgerData,
   CrewPayrollDashboardRow,
   CrewDeferredPayRow,
+  CrewDeferredPayHistoryRow,
   CrewPayrollHistoryRow,
   CrewPayrollPeriodStatus,
 } from '@/types/crew-payroll';
@@ -383,6 +384,8 @@ export const crewPayrollService = {
 
   // 선원 개인의 월별 급여 이력 — 급여대장에서 직급/이름을 클릭했을 때, 선박이 바뀌었어도
   // 이 선원의 전체 승선 이력에 걸친 급여를 급여대장과 같은 형태(월별 행 + 상태)로 보여준다.
+  // 급여대장과 동일하게 급여 구성항목/계약 수당/공제를 "기본급" 한 칸으로 뭉치지 않고
+  // 항목명별로 모두 펼쳐서(allowance_by_name/deduction_by_name) 반환한다.
   async getCrewPayrollHistory(crewMemberId: string): Promise<CrewPayrollHistoryRow[]> {
     const { data, error } = await supabase
       .from('crew_payslips')
@@ -390,15 +393,38 @@ export const crewPayrollService = {
       .eq('crew_member_id', crewMemberId)
       .order('created_at', { ascending: false });
     if (error) { console.error('Error fetching crew payroll history:', error); return []; }
-    return (data || []).map(p => {
+    if (!data || data.length === 0) return [];
+
+    const payslipIds = data.map(p => p.id);
+    const { data: items } = await supabase.from('crew_payslip_items').select('*').in('payslip_id', payslipIds);
+    const itemsByPayslip = new Map<string, { category: string; name: string; amount: number }[]>();
+    for (const it of items || []) {
+      const arr = itemsByPayslip.get(it.payslip_id) || [];
+      arr.push(it);
+      itemsByPayslip.set(it.payslip_id, arr);
+    }
+
+    return data.map(p => {
       const period = p.crew_payroll_periods as { year_month?: string; status?: string; ships?: { name?: string } } | null;
+      const pItems = itemsByPayslip.get(p.id) || [];
+      const allowanceByName: Record<string, number> = {};
+      const deductionByName: Record<string, number> = {};
+      for (const item of pItems) {
+        if (item.category === 'earning') allowanceByName[item.name] = (allowanceByName[item.name] || 0) + Number(item.amount);
+        if (item.category === 'deduction') deductionByName[item.name] = (deductionByName[item.name] || 0) + Number(item.amount);
+      }
       return {
         period_id: p.period_id,
         year_month: period?.year_month || '',
         ship_name: period?.ships?.name || '',
         status: (period?.status as CrewPayrollPeriodStatus) || 'draft',
-        base_amount: Number(p.base_amount),
-        total_allowance: Number(p.total_allowance),
+        period_start_date: p.period_start_date,
+        period_end_date: p.period_end_date,
+        days_served: p.days_served,
+        days_in_month: p.days_in_month,
+        allowance_by_name: allowanceByName,
+        gross_amount: Number(p.base_amount) + Number(p.total_allowance),
+        deduction_by_name: deductionByName,
         total_deduction: Number(p.total_deduction),
         total_owner_billed: Number(p.total_owner_billed),
         net_amount: Number(p.net_amount),
@@ -484,6 +510,54 @@ export const crewPayrollService = {
     return [...rowsByKey.values()].sort((a, b) =>
       (a.owner_name || '').localeCompare(b.owner_name || '') || a.ship_name.localeCompare(b.ship_name) || a.crew_name.localeCompare(b.crew_name)
     );
+  },
+
+  // 선원 1명의 후불성 적립 히스토리 — 선박이 바뀐 이력까지 전부 포함해 월별로 모은다.
+  // itemName을 지정하면 그 항목(예: "LP") 하나의 적립 이력만 필터링한다.
+  async getCrewDeferredPayHistory(crewMemberId: string, itemName?: string): Promise<CrewDeferredPayHistoryRow[]> {
+    const { data: payslips } = await supabase
+      .from('crew_payslips')
+      .select('id, period_id, crew_payroll_periods!period_id(year_month, status, ships!ship_id(name))')
+      .eq('crew_member_id', crewMemberId);
+    if (!payslips || payslips.length === 0) return [];
+    const metaByPayslip = new Map(payslips.map(p => [p.id, p]));
+    const payslipIds = payslips.map(p => p.id);
+
+    const { data: items } = await supabase
+      .from('crew_payslip_items')
+      .select('*')
+      .in('payslip_id', payslipIds)
+      .in('payment_type', ['deferred_accrual', 'deferred_payout']);
+    if (!items || items.length === 0) return [];
+
+    const rowsByKey = new Map<string, CrewDeferredPayHistoryRow>();
+    for (const item of items) {
+      const baseName = item.name.replace(/\s*\([^)]*\)\s*$/, '');
+      if (itemName && baseName !== itemName) continue;
+      const payslip = metaByPayslip.get(item.payslip_id);
+      if (!payslip) continue;
+      const period = payslip.crew_payroll_periods as { year_month?: string; status?: string; ships?: { name?: string } } | null;
+      const key = `${item.payslip_id}::${baseName}`;
+      const row = rowsByKey.get(key) || {
+        period_id: payslip.period_id,
+        year_month: period?.year_month || '',
+        ship_name: period?.ships?.name || '',
+        status: (period?.status as CrewPayrollPeriodStatus) || 'draft',
+        item_name: baseName,
+        monthly_accrual: 0,
+        accrued_to_date: 0,
+        payout_this_month: 0,
+      };
+      if (item.payment_type === 'deferred_accrual') {
+        row.monthly_accrual = Number(item.amount);
+        row.accrued_to_date = Number(item.accrued_to_date ?? item.amount);
+      } else if (item.payment_type === 'deferred_payout') {
+        row.payout_this_month = Number(item.amount);
+      }
+      rowsByKey.set(key, row);
+    }
+
+    return [...rowsByKey.values()].sort((a, b) => b.year_month.localeCompare(a.year_month) || a.item_name.localeCompare(b.item_name));
   },
 
   // 여러 선박(최대 200척)을 한 번에 생성 — 선박 수와 무관하게 고정된 소수 쿼리로 읽고,

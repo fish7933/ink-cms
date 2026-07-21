@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
+import JSZip from 'jszip';
 import type { CrewPayrollLedgerData, CrewPayslipWithDetails } from '@/types/crew-payroll';
 import type { TemplateMatrix } from '@/lib/salary-template-matrix';
 
@@ -24,6 +25,57 @@ export function cell(v: string | number, style: Record<string, unknown>) {
 }
 
 export const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
+
+// 각 열의 실제 내용(헤더+값) 길이에 맞춰 너비를 계산 — 고정폭이면 이름/항목명이 길 때
+// 잘려 보이는 문제가 있어, 시트를 만들 때마다 데이터에서 직접 폭을 뽑아 쓴다.
+export function autoColWidths(aoa: ReturnType<typeof cell>[][], count: number, opts: { min?: number; max?: number; startRow?: number } = {}): { wch: number }[] {
+  const min = opts.min ?? 8;
+  const max = opts.max ?? 26;
+  const startRow = opts.startRow ?? 0;
+  const widths = Array.from({ length: count }, () => min);
+  for (let r = startRow; r < aoa.length; r++) {
+    const row = aoa[r];
+    for (let i = 0; i < count && i < row.length; i++) {
+      const raw = row[i]?.v;
+      const text = typeof raw === 'number' ? raw.toLocaleString('en-US') : String(raw ?? '');
+      widths[i] = Math.min(max, Math.max(widths[i], text.length + 2));
+    }
+  }
+  return widths.map(w => ({ wch: w }));
+}
+
+// xlsx-js-style(SheetJS 커뮤니티 빌드)은 인쇄 배율(fitToWidth/fitToHeight, 용지 방향) 쓰기를
+// 지원하지 않아 워크북 생성 API만으로는 "한 페이지에 맞춤"을 걸 수 없다 — 만들어진 xlsx는
+// zip이므로, 시트별 XML에 표준 OOXML 순서(mergeCells → pageMargins → pageSetup → ignoredErrors)를
+// 지켜 pageSetup을 직접 끼워 넣는다. 급여대장(1번 시트)은 가로로 넓어 폭만 한 페이지에 맞추고
+// (세로는 인원 수만큼 여러 페이지 허용), 개인 급여명세서(2번 시트부터)는 서명란까지 포함해
+// 통째로 한 페이지에 들어가야 하므로 세로도 한 페이지로 맞춘다.
+export async function applyPrintFit(buffer: ArrayBuffer, sheetCount: number): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(buffer);
+  for (let i = 1; i <= sheetCount; i++) {
+    const path = `xl/worksheets/sheet${i}.xml`;
+    const file = zip.file(path);
+    if (!file) continue;
+    let xml = await file.async('string');
+    const isLedger = i === 1;
+    const orientation = isLedger ? 'landscape' : 'portrait';
+    const fitToHeight = isLedger ? 0 : 1;
+    if (!xml.includes('<sheetPr')) {
+      xml = xml.replace(/(<worksheet[^>]*>)/, `$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>`);
+    }
+    const pageSetupTag = `<pageSetup paperSize="9" orientation="${orientation}" fitToWidth="1" fitToHeight="${fitToHeight}"/>`;
+    if (xml.includes('<pageMargins')) {
+      xml = xml.replace(/(<pageMargins[^/]*\/>)/, `$1${pageSetupTag}`);
+    } else {
+      const defaultMargins = `<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>`;
+      xml = xml.includes('<ignoredErrors')
+        ? xml.replace('<ignoredErrors', `${defaultMargins}${pageSetupTag}<ignoredErrors`)
+        : xml.replace('</worksheet>', `${defaultMargins}${pageSetupTag}</worksheet>`);
+    }
+    zip.file(path, xml);
+  }
+  return zip.generateAsync({ type: 'uint8array' });
+}
 
 // 적용된 급여 템플릿의 직급/등급별 전체 항목(SalaryTemplateMatrixTable과 같은 데이터)을
 // 급여대장 아래에 참고표로 붙인다 — 급여명/청구서 엑셀 양쪽에서 재사용.
@@ -112,17 +164,14 @@ function buildLedgerWorksheet(ledger: CrewPayrollLedgerData): XLSX.WorkSheet {
     cell(sum(r => r.net_amount), { numFmt: '#,##0', alignment: { horizontal: 'right' }, font: { bold: true, sz: BASE_SZ }, fill: { fgColor: { rgb: TOTAL_ROW_BG } }, border: border({ thickTop: true }) }),
   ]);
 
+  // 열 너비는 급여대장 표 부분(제목/템플릿 참고표 제외)의 실제 내용 길이로 계산한다.
+  const dataRowCount = aoa.length;
   appendTemplateMatrixRows(aoa, template_name, ledger.template_matrix);
 
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-  worksheet['!cols'] = [
-    { wch: 14 }, { wch: 8 }, { wch: 8 }, { wch: 13 }, { wch: 10 },
-    ...allowance_columns.map(() => ({ wch: 11 })),
-    { wch: 12 },
-    ...deduction_columns.map(() => ({ wch: 11 })),
-    { wch: 12 }, { wch: 13 },
-  ];
+  worksheet['!cols'] = autoColWidths(aoa.slice(0, dataRowCount), colCount, { min: 8, max: 22, startRow: 2 });
   worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }];
+  worksheet['!margins'] = { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 };
   return worksheet;
 }
 
@@ -276,11 +325,12 @@ function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string
   ]);
 
   const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-  worksheet['!cols'] = [{ wch: 22 }, { wch: 18 }, { wch: 14 }, { wch: 16 }];
+  worksheet['!cols'] = autoColWidths(aoa, COLS, { min: 12, max: 24, startRow: 2 });
   worksheet['!merges'] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: COLS - 1 } },
     { s: { r: 1, c: 0 }, e: { r: 1, c: COLS - 1 } },
   ];
+  worksheet['!margins'] = { left: 0.35, right: 0.35, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 };
   return worksheet;
 }
 
@@ -312,6 +362,9 @@ interface SaveFilePickerWindow extends Window {
 }
 
 async function writeWorkbookToFile(workbook: XLSX.WorkBook, fileName: string): Promise<void> {
+  const rawBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  const buffer = await applyPrintFit(rawBuffer, workbook.SheetNames.length);
+
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
   if (picker) {
     try {
@@ -319,16 +372,23 @@ async function writeWorkbookToFile(workbook: XLSX.WorkBook, fileName: string): P
         suggestedName: fileName,
         types: [{ description: 'Excel Workbook', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }],
       });
-      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       const writable = await handle.createWritable();
-      await writable.write(buffer);
+      await writable.write(buffer as unknown as BlobPart);
       await writable.close();
       return;
     } catch (e) {
       if ((e as DOMException)?.name === 'AbortError') return;
     }
   }
-  XLSX.writeFile(workbook, fileName);
+  const blob = new Blob([buffer as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // 급여대장 시트 + 선원별 급여명세서 시트를 하나의 엑셀로 내려받는다.

@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx-js-style';
 import { crewPayrollService } from '@/services/crew-payroll.service';
-import { buildCrewPayrollFullWorkbook } from '@/utils/crew-payroll-export';
+import { buildCrewPayrollFullWorkbook, applyPrintFit } from '@/utils/crew-payroll-export';
 
 interface SaveFilePickerWindow extends Window {
   showSaveFilePicker?: (options: {
@@ -58,7 +58,8 @@ export const crewPayrollArchiveService = {
       ]);
       if (!ledger || ledger.rows.length === 0) { skippedCount++; continue; }
       const workbook = buildCrewPayrollFullWorkbook(ledger, payslips);
-      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const rawBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+      const buffer = await applyPrintFit(rawBuffer, workbook.SheetNames.length);
       const fileName = `${ship.ship_name}_${yearMonth}_Payroll.xlsx`.replace(/[/\\?%*:|"<>]/g, '');
       zip.file(fileName, buffer);
       includedCount++;

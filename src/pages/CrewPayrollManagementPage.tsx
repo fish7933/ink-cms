@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Printer, RefreshCw, FileSpreadsheet, Send, ExternalLink, Trash2, Wallet, CheckCircle2, Eye, History, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,10 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const fmt = (n: number) => n.toLocaleString('en-US');
 const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
+// period_start_date/end_date는 승선일~월초, 하선일~월말 중 늦은/이른 날로 이미 잘려 있으므로
+// 월초(1일)가 아니거나 월말(days_in_month)이 아니면 그 달에 실제로 승선/하선한 것이다.
+const embarkedThisMonth = (p: { period_start_date: string }) => Number(p.period_start_date.slice(8, 10)) !== 1;
+const disembarkedThisMonth = (p: { period_end_date: string; days_in_month: number }) => Number(p.period_end_date.slice(8, 10)) !== p.days_in_month;
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
 // 선박별 선원 급여명세 — 담당 선박의 급여 템플릿(직급+등급)과 선원 계약별 수당/공제를
@@ -342,6 +346,26 @@ export default function CrewPayrollManagementPage() {
   const totalDeduction = payslips.reduce((sum, p) => sum + p.total_deduction, 0);
   const totalNet = payslips.reduce((sum, p) => sum + p.net_amount, 0);
 
+  // 이력 다이얼로그도 급여대장과 동일하게 항목명별 열을 펼친다 — 월마다 적용 템플릿이
+  // 달라질 수 있어 전체 이력에 등장한 항목명의 합집합을 열로 만든다.
+  const historyAllowanceColumns = useMemo(() => {
+    const cols: string[] = [];
+    for (const r of historyRows) for (const name of Object.keys(r.allowance_by_name)) if (!cols.includes(name)) cols.push(name);
+    return cols;
+  }, [historyRows]);
+  const historyDeductionColumns = useMemo(() => {
+    const cols: string[] = [];
+    for (const r of historyRows) for (const name of Object.keys(r.deduction_by_name)) if (!cols.includes(name)) cols.push(name);
+    return cols;
+  }, [historyRows]);
+  const historyTotals = useMemo(() => ({
+    allowanceByName: historyAllowanceColumns.reduce((acc, name) => { acc[name] = historyRows.reduce((s, r) => s + (r.allowance_by_name[name] || 0), 0); return acc; }, {} as Record<string, number>),
+    deductionByName: historyDeductionColumns.reduce((acc, name) => { acc[name] = historyRows.reduce((s, r) => s + (r.deduction_by_name[name] || 0), 0); return acc; }, {} as Record<string, number>),
+    gross: historyRows.reduce((s, r) => s + r.gross_amount, 0),
+    deduction: historyRows.reduce((s, r) => s + r.total_deduction, 0),
+    net: historyRows.reduce((s, r) => s + r.net_amount, 0),
+  }), [historyRows, historyAllowanceColumns, historyDeductionColumns]);
+
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div>
@@ -387,7 +411,9 @@ export default function CrewPayrollManagementPage() {
           <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-7 text-xs w-40" />
         </div>
         <Badge variant="outline" className={STATUS_COLORS[periodStatus]}>{STATUS_LABELS[periodStatus]}</Badge>
-        <div className="flex-1" />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
         {payslips.length > 0 && (
           <>
             <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={() => window.open(`/print/crew-payroll/${currentPeriod?.id}`, '_blank')}>
@@ -471,7 +497,11 @@ export default function CrewPayrollManagementPage() {
                     {p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}
                   </td>
                   <td className="py-1 px-2 font-medium cursor-pointer hover:underline hover:text-blue-700" onClick={() => openCrewHistory(p)}>
-                    {p.crew_name}
+                    <span className="inline-flex items-center gap-1">
+                      {p.crew_name}
+                      {embarkedThisMonth(p) && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-4 bg-blue-50 text-blue-700 border-blue-200">Joined</Badge>}
+                      {disembarkedThisMonth(p) && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-4 bg-orange-50 text-orange-700 border-orange-200">Signed Off</Badge>}
+                    </span>
                   </td>
                   <td className="py-1 px-2 text-center text-gray-500" title={`${p.period_start_date} ~ ${p.period_end_date}`}>
                     {fmtMD(p.period_start_date)}~{fmtMD(p.period_end_date)}
@@ -510,7 +540,7 @@ export default function CrewPayrollManagementPage() {
           {template && (
             <div className="px-2 py-3 border-t bg-gray-50 space-y-1.5">
               <p className="text-xs text-gray-500">Salary Template Applied: <span className="text-gray-700 font-medium">{template.name}</span></p>
-              <SalaryTemplateMatrixTable template={template} components={components} ranks={ranks} />
+              <SalaryTemplateMatrixTable template={template} components={components} ranks={ranks} lang="en" />
             </div>
           )}
         </div>
@@ -533,7 +563,7 @@ export default function CrewPayrollManagementPage() {
       )}
 
       <Dialog open={!!historyCrew} onOpenChange={o => !o && setHistoryCrew(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-1.5"><History className="w-4 h-4 text-muted-foreground" />{historyCrew?.crewName} — Payroll History</DialogTitle>
           </DialogHeader>
@@ -549,10 +579,13 @@ export default function CrewPayrollManagementPage() {
                     <th className="text-left p-2 font-medium text-gray-600">Month</th>
                     <th className="text-left p-2 font-medium text-gray-600">Vessel</th>
                     <th className="text-left p-2 font-medium text-gray-600">Status</th>
-                    <th className="text-right p-2 font-medium text-gray-600">Base Pay</th>
-                    <th className="text-right p-2 font-medium text-gray-600">Allowance</th>
-                    <th className="text-right p-2 font-medium text-red-600">Deduction</th>
-                    <th className="text-right p-2 font-medium text-gray-600">Net Pay</th>
+                    <th className="text-left p-2 font-medium text-gray-600">Pay Period</th>
+                    <th className="text-left p-2 font-medium text-gray-600">Days</th>
+                    {historyAllowanceColumns.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
+                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">Total Earnings</th>
+                    {historyDeductionColumns.map(name => <th key={name} className="text-right p-2 font-medium text-red-600">{name}</th>)}
+                    <th className="text-right p-2 font-medium text-red-700 bg-gray-100">Total Deductions</th>
+                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">Net Pay</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -561,12 +594,29 @@ export default function CrewPayrollManagementPage() {
                       <td className="py-1 px-2">{r.year_month}</td>
                       <td className="py-1 px-2 text-gray-600">{r.ship_name}</td>
                       <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
-                      <td className="py-1 px-2 text-right font-mono">{fmt(r.base_amount)}</td>
-                      <td className="py-1 px-2 text-right font-mono">{fmt(r.total_allowance)}</td>
-                      <td className="py-1 px-2 text-right font-mono text-red-600">{fmt(r.total_deduction)}</td>
-                      <td className="py-1 px-2 text-right font-mono font-semibold">{fmt(r.net_amount)}</td>
+                      <td className="py-1 px-2 text-gray-600">{r.period_start_date}~{r.period_end_date}</td>
+                      <td className="py-1 px-2 text-gray-600">{r.days_served}/{r.days_in_month}</td>
+                      {historyAllowanceColumns.map(name => <td key={name} className="py-1 px-2 text-right font-mono">{fmt(r.allowance_by_name[name] || 0)}</td>)}
+                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50">{fmt(r.gross_amount)}</td>
+                      {historyDeductionColumns.map(name => <td key={name} className="py-1 px-2 text-right font-mono text-red-600">{fmt(r.deduction_by_name[name] || 0)}</td>)}
+                      <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-gray-50">{fmt(r.total_deduction)}</td>
+                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50">{fmt(r.net_amount)}</td>
                     </tr>
                   ))}
+                  {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
+                      급여대장에는 총적립액을 노출하지 않기로 했으므로 합계 칸은 비워둔다. */}
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                    <td className="py-1 px-2" colSpan={5}>Total ({historyRows.length} months)</td>
+                    {historyAllowanceColumns.map(name => (
+                      <td key={name} className="py-1 px-2 text-right font-mono">
+                        {name.endsWith('(Accrued)') ? <span className="text-gray-300">-</span> : fmt(historyTotals.allowanceByName[name] || 0)}
+                      </td>
+                    ))}
+                    <td className="py-1 px-2 text-right font-mono">{fmt(historyTotals.gross)}</td>
+                    {historyDeductionColumns.map(name => <td key={name} className="py-1 px-2 text-right font-mono text-red-600">{fmt(historyTotals.deductionByName[name] || 0)}</td>)}
+                    <td className="py-1 px-2 text-right font-mono text-red-600">{fmt(historyTotals.deduction)}</td>
+                    <td className="py-1 px-2 text-right font-mono">{fmt(historyTotals.net)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
