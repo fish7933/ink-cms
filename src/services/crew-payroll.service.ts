@@ -34,6 +34,12 @@ function monthRange(yearMonth: string): { start: string; end: string } {
 function daysBetweenInclusive(a: string, b: string): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000) + 1;
 }
+function dayBeforeDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
 
 // 후불성(payment_type='deferred') 급여항목은 매월 지급되지 않고 누적만 되다가 하선월에
 // 일괄 지급된다 — 승선일부터 throughDate(보통 그 달 말, 하선월이면 하선일)까지 걸친 모든
@@ -166,35 +172,53 @@ function buildShipPayslips(input: {
           return;
         }
 
-        // 후불성 급여 — 이 달분은 누적만 되고(net_amount 제외), 하선월이면 승선일부터 쌓인
-        // 전체 누적액을 별도 항목으로 일괄 지급한다(net_amount 포함).
-        const cumulativeToDate = sumDeferredAccrualThroughDate(rec.embark_date, overlapEnd, standard);
-        items.push({
-          source: 'template',
-          category: 'earning',
-          name: `${i.component.name} (Accrued)`,
-          payment_method: null,
-          payment_type: 'deferred_accrual',
-          standard_amount: standard,
-          amount: Math.round(standard * ratio),
-          accrued_to_date: cumulativeToDate,
-          description: i.component.description || null,
-          display_order: idx,
-        });
-
+        // 후불성 급여 — 계속 승선 중이면 이 달분은 누적만 되고(net_amount 제외), 하선월이면
+        // 이 달분은 정상 어닝으로 당월 정산에 포함시키고 그 이전까지 쌓인 금액만 리브페이로
+        // 별도 일괄 지급한다(둘 다 net_amount 포함 — 이 달분을 Lump Sum에 다시 합치면 중복).
         const isDisembarkMonth = !!rec.disembark_date && rec.disembark_date >= start && rec.disembark_date <= end;
+        const thisMonthAmount = Math.round(standard * ratio);
+
         if (isDisembarkMonth) {
           items.push({
             source: 'template',
             category: 'earning',
-            name: `${i.component.name} (Lump Sum)`,
+            name: i.component.name,
             payment_method: null,
-            payment_type: 'deferred_payout',
+            payment_type: 'immediate',
             standard_amount: standard,
-            amount: cumulativeToDate,
+            amount: thisMonthAmount,
+            accrued_to_date: null,
+            description: i.component.description || null,
+            display_order: idx,
+          });
+          const priorCumulative = sumDeferredAccrualThroughDate(rec.embark_date, dayBeforeDate(start), standard);
+          if (priorCumulative > 0) {
+            items.push({
+              source: 'template',
+              category: 'earning',
+              name: `${i.component.name} (Lump Sum)`,
+              payment_method: null,
+              payment_type: 'deferred_payout',
+              standard_amount: standard,
+              amount: priorCumulative,
+              accrued_to_date: priorCumulative,
+              description: i.component.description || null,
+              display_order: idx + 50,
+            });
+          }
+        } else {
+          const cumulativeToDate = sumDeferredAccrualThroughDate(rec.embark_date, overlapEnd, standard);
+          items.push({
+            source: 'template',
+            category: 'earning',
+            name: `${i.component.name} (Accrued)`,
+            payment_method: null,
+            payment_type: 'deferred_accrual',
+            standard_amount: standard,
+            amount: thisMonthAmount,
             accrued_to_date: cumulativeToDate,
             description: i.component.description || null,
-            display_order: idx + 50,
+            display_order: idx,
           });
         }
       });
