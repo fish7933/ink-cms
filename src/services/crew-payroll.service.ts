@@ -745,6 +745,15 @@ export const crewPayrollService = {
     if (error) throw error;
   },
 
+  // 대시보드의 선박 다건 선택 "무효화" 전용 — 상태(draft/pending_approval/confirmed)를
+  // 가리지 않고 강제로 삭제한다. 확정 회차가 섞여 있어도 여기까지 왔다는 건 화면에서
+  // 이미 사용자에게 경고/확인을 받았다는 뜻이라 별도 상태 체크를 하지 않는다.
+  async invalidatePayrollPeriods(periodIds: string[]): Promise<void> {
+    if (periodIds.length === 0) return;
+    const { error } = await supabase.from('crew_payroll_periods').delete().in('id', periodIds);
+    if (error) throw error;
+  },
+
   // 결재 없이 draft 회차를 바로 확정 처리한다 — 지출결의서 상신(submitPayrollForApproval)은
   // 선택적 부가 기능일 뿐, 실사용에서는 청구서 발송 후 이 함수로 월을 마감한다.
   async confirmPayrollPeriod(periodId: string, confirmedBy: string): Promise<void> {

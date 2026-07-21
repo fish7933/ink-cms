@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
-import { Wallet, RefreshCw, FileSpreadsheet, CheckCircle2, Search, Archive } from 'lucide-react';
+import { Wallet, RefreshCw, FileSpreadsheet, CheckCircle2, Search, Archive, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -48,6 +48,7 @@ export default function CrewPayrollDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [invalidating, setInvalidating] = useState(false);
 
   const [ownerFilter, setOwnerFilter] = useState('');
   const [fleetFilter, setFleetFilter] = useState('');
@@ -125,6 +126,8 @@ export default function CrewPayrollDashboardPage() {
 
   const generatableIds = filteredRows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'none').map(r => r.ship_id);
   const confirmableIds = filteredRows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'draft' && r.period_id).map(r => r.period_id!);
+  const invalidatableRows = filteredRows.filter(r => selectedIds.includes(r.ship_id) && r.period_id);
+  const invalidatableIds = invalidatableRows.map(r => r.period_id!);
   const allSelectableIds = filteredRows.map(r => r.ship_id);
 
   const toggleSelect = (shipId: string) => setSelectedIds(prev => prev.includes(shipId) ? prev.filter(id => id !== shipId) : [...prev, shipId]);
@@ -165,6 +168,26 @@ export default function CrewPayrollDashboardPage() {
       await loadRows(yearMonth, ships);
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleBulkInvalidate = async () => {
+    if (invalidatableIds.length === 0) return;
+    const confirmedCount = invalidatableRows.filter(r => r.status === 'confirmed').length;
+    const message = confirmedCount > 0
+      ? `선택한 ${invalidatableIds.length}개 회차 중 ${confirmedCount}개는 이미 확정 처리된 회차입니다. 그래도 무효화(삭제)하시겠습니까? 생성된 급여명세서가 모두 삭제되며 되돌릴 수 없습니다.`
+      : `선택한 ${invalidatableIds.length}개 급여 회차를 무효화(삭제)하시겠습니까? 생성된 급여명세서가 모두 삭제되며 되돌릴 수 없습니다.`;
+    if (!confirm(message)) return;
+    setInvalidating(true);
+    try {
+      await crewPayrollService.invalidatePayrollPeriods(invalidatableIds);
+      toast({ title: `${invalidatableIds.length}개 회차를 무효화했습니다.` });
+      setSelectedIds([]);
+      await loadRows(yearMonth, ships);
+    } catch (e) {
+      toast({ title: '무효화 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setInvalidating(false);
     }
   };
 
@@ -283,6 +306,11 @@ export default function CrewPayrollDashboardPage() {
             {confirmableIds.length > 0 && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 bg-white text-green-700 border-green-300" onClick={handleBulkConfirm} disabled={confirming}>
                 <CheckCircle2 className="w-3.5 h-3.5" />{confirming ? 'Confirming...' : `Bulk Confirm (${confirmableIds.length})`}
+              </Button>
+            )}
+            {invalidatableIds.length > 0 && (
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 bg-white text-red-600 border-red-300" onClick={handleBulkInvalidate} disabled={invalidating}>
+                <Ban className="w-3.5 h-3.5" />{invalidating ? 'Invalidating...' : `Invalidate (${invalidatableIds.length})`}
               </Button>
             )}
           </div>
