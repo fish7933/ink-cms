@@ -1,71 +1,84 @@
-import { Plus, Minus, Trash2 } from 'lucide-react';
+import { useRef } from 'react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { parseTableFieldValue, stringifyTableFieldValue, parseClipboardGrid, pasteIntoGrid, type TableFieldGrid } from '@/utils/table-field';
+import { extractSanitizedTable, plainTextToTableHtml, sanitizeTableHtml, injectContentEditable, stripContentEditable } from '@/utils/table-field';
 
 interface Props {
   value: string;
-  onChange: (json: string) => void;
+  onChange: (html: string) => void;
   disabled?: boolean;
 }
 
-const DEFAULT_COLS_FALLBACK = 4;
-
-// 엑셀 등에서 셀 범위를 복사해 그대로 붙여넣을 수 있는 표 입력 컨트롤 (기안서 동적 양식 field.type === 'table').
+// 엑셀에서 셀 범위를 복사해 서식(글꼴/테두리/배경/정렬)을 그대로 유지한 채 붙여넣을 수 있는
+// 표 입력 컨트롤 (기안서 동적 양식 field.type === 'table'). 값은 정제된 <table> HTML 문자열.
 export default function PasteableTableField({ value, onChange, disabled }: Props) {
-  const grid = parseTableFieldValue(value);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const setGrid = (next: TableFieldGrid) => onChange(stringifyTableFieldValue(next));
-
-  const handleCellChange = (r: number, c: number, v: string) => {
-    const next = grid.map((row, ri) => ri === r ? row.map((cell, ci) => ci === c ? v : cell) : row);
-    setGrid(next);
+  const commit = () => {
+    if (!containerRef.current) return;
+    const next = stripContentEditable(containerRef.current.innerHTML);
+    if (next !== value) onChange(next);
   };
 
-  const handlePaste = (r: number, c: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+  // 표 전체를 새로 붙여넣는 경우(엑셀 range 복사)는 기존 내용을 통째로 교체하고,
+  // 표가 없는 순수 텍스트를 이미 편집 중인 셀 안에 붙여넣는 경우는 그 자리에 텍스트만 삽입한다
+  // (셀 안에 임의 HTML이 그대로 삽입되지 않도록 위험을 차단).
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const html = e.clipboardData.getData('text/html');
+    if (html && /<table/i.test(html)) {
+      e.preventDefault();
+      if (value && !window.confirm('기존 표 내용을 붙여넣은 내용으로 교체할까요?')) return;
+      const extracted = extractSanitizedTable(html);
+      if (extracted) onChange(extracted);
+      return;
+    }
     const text = e.clipboardData.getData('text/plain');
     if (!text) return;
     e.preventDefault();
-    const pasted = parseClipboardGrid(text);
-    setGrid(pasteIntoGrid(grid, r, c, pasted));
+    if (!value) {
+      onChange(plainTextToTableHtml(text));
+      return;
+    }
+    document.execCommand('insertText', false, text);
   };
 
-  const addRow = () => setGrid([...grid, Array(grid[0]?.length || DEFAULT_COLS_FALLBACK).fill('')]);
-  const addCol = () => setGrid(grid.map(row => [...row, '']));
-  const removeLastRow = () => grid.length > 1 && setGrid(grid.slice(0, -1));
-  const removeLastCol = () => (grid[0]?.length || 0) > 1 && setGrid(grid.map(row => row.slice(0, -1)));
-  const clearAll = () => setGrid(grid.map(row => row.map(() => '')));
+  const clear = () => onChange('');
+
+  if (disabled) {
+    return value ? (
+      <div className="border border-gray-300 rounded-md overflow-x-auto p-1" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(value) }} />
+    ) : (
+      <p className="text-xs text-gray-400">-</p>
+    );
+  }
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-1 flex-wrap">
-        <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-[11px] gap-0.5" onClick={addRow} disabled={disabled}><Plus className="w-3 h-3" />행</Button>
-        <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-[11px] gap-0.5" onClick={addCol} disabled={disabled}><Plus className="w-3 h-3" />열</Button>
-        <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-[11px] gap-0.5" onClick={removeLastRow} disabled={disabled || grid.length <= 1}><Minus className="w-3 h-3" />행</Button>
-        <Button type="button" size="sm" variant="outline" className="h-6 px-1.5 text-[11px] gap-0.5" onClick={removeLastCol} disabled={disabled || (grid[0]?.length || 0) <= 1}><Minus className="w-3 h-3" />열</Button>
-        <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-[11px] gap-0.5 text-red-500" onClick={clearAll} disabled={disabled}><Trash2 className="w-3 h-3" />전체 지우기</Button>
-        <span className="text-[10px] text-gray-400 ml-auto">엑셀에서 범위를 복사(Ctrl+C)한 뒤 셀을 클릭하고 붙여넣기(Ctrl+V)하세요</span>
-      </div>
-      <div className="border border-gray-300 rounded-md overflow-x-auto">
-        <table className="border-collapse w-full">
-          <tbody>
-            {grid.map((row, r) => (
-              <tr key={r}>
-                {row.map((cellVal, c) => (
-                  <td key={c} className="border border-gray-300 p-0">
-                    <input
-                      value={cellVal}
-                      disabled={disabled}
-                      onChange={e => handleCellChange(r, c, e.target.value)}
-                      onPaste={e => handlePaste(r, c, e)}
-                      className="w-full h-7 px-1.5 text-xs outline-none bg-transparent focus:bg-blue-50 min-w-[70px]"
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {value && (
+        <div className="flex items-center gap-1">
+          <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-[11px] gap-0.5 text-red-500" onClick={clear}>
+            <Trash2 className="w-3 h-3" />지우고 다시 붙여넣기
+          </Button>
+          <span className="text-[10px] text-gray-400 ml-auto">셀을 클릭해 내용을 직접 수정할 수 있습니다</span>
+        </div>
+      )}
+      {value ? (
+        <div
+          ref={containerRef}
+          className="border border-gray-300 rounded-md overflow-x-auto p-1"
+          onPaste={handlePaste}
+          onBlur={commit}
+          dangerouslySetInnerHTML={{ __html: injectContentEditable(value) }}
+        />
+      ) : (
+        <div
+          tabIndex={0}
+          onPaste={handlePaste}
+          className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center text-xs text-gray-400 cursor-text focus:outline-none focus:border-blue-400"
+        >
+          엑셀에서 범위를 복사(Ctrl+C)한 뒤 여기를 클릭하고 붙여넣기(Ctrl+V)하세요
+        </div>
+      )}
     </div>
   );
 }

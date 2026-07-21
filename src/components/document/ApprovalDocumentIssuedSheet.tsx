@@ -1,9 +1,26 @@
 import { supabase } from '@/lib/supabase';
-import { parseTableFieldValue } from '@/utils/table-field';
+import { sanitizeTableHtml } from '@/utils/table-field';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { LeaveDetail } from '@/services/approval-document.service';
-import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
+import type { ApprovalDocumentWithDetails, ApprovalDocumentType, DocumentFormField } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
+
+// 표(table) 필드는 다른 필드처럼 "왼쪽 라벨 + 오른쪽 내용" 한 줄에 넣으면 폭이 좁아져 보기 나쁘므로,
+// 연속된 일반 필드는 한 표로 묶고 표 필드는 라벨을 소제목으로 둔 채 전체 폭 블록으로 따로 뺀다.
+type FieldGroup = { kind: 'rows'; fields: DocumentFormField[] } | { kind: 'table'; field: DocumentFormField };
+function groupFields(fields: DocumentFormField[]): FieldGroup[] {
+  const groups: FieldGroup[] = [];
+  for (const f of fields) {
+    if (f.type === 'table') {
+      groups.push({ kind: 'table', field: f });
+    } else {
+      const last = groups[groups.length - 1];
+      if (last && last.kind === 'rows') last.fields.push(f);
+      else groups.push({ kind: 'rows', fields: [f] });
+    }
+  }
+  return groups;
+}
 
 interface Props {
   doc: ApprovalDocumentWithDetails;
@@ -43,9 +60,8 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.issued-fields { border-collapse: collapse; width: 100%; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
-        table.issued-fields td.field-table-cell { padding: 4px; }
-        table.issued-nested { border-collapse: collapse; width: 100%; }
-        table.issued-nested > tbody > tr > td { border: 1px solid #999 !important; padding: 5px 7px; font-size: 12px; }
+        .issued-table-block table { border-collapse: collapse; width: 100%; }
+        .issued-table-block td, .issued-table-block th { padding: 4px 7px; font-size: 12px; }
         table.approval-block { border-collapse: collapse; table-layout: auto; }
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
@@ -157,40 +173,41 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           </tbody>
         </table>
       ) : fields.length > 0 ? (
-        <table className="issued-fields">
-          <tbody>
-            {fields.map(f => {
-              const raw = doc.form_data?.[f.key];
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {groupFields(fields).map((g, gi) => {
+            if (g.kind === 'table') {
+              const raw = doc.form_data?.[g.field.key];
               const isEmpty = raw === null || raw === undefined || raw === '';
-              if (f.type === 'table') {
-                const grid = isEmpty ? [] : parseTableFieldValue(raw);
-                return (
-                  <tr key={f.key}>
-                    <th>{f.label}</th>
-                    <td className="field-table-cell">
-                      {grid.length === 0 ? '-' : (
-                        <table className="issued-nested">
-                          <tbody>
-                            {grid.map((row, r) => (
-                              <tr key={r}>{row.map((cell, c) => <td key={c}>{cell}</td>)}</tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </td>
-                  </tr>
-                );
-              }
-              const display = isEmpty ? '-' : f.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
               return (
-                <tr key={f.key}>
-                  <th>{f.label}</th>
-                  <td style={f.type === 'textarea' ? { whiteSpace: 'pre-wrap' } : undefined}>{display}</td>
-                </tr>
+                <div key={gi}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{g.field.label}</div>
+                  {isEmpty ? (
+                    <p style={{ fontSize: 12, color: '#999' }}>-</p>
+                  ) : (
+                    <div className="issued-table-block" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(String(raw)) }} />
+                  )}
+                </div>
               );
-            })}
-          </tbody>
-        </table>
+            }
+            return (
+              <table className="issued-fields" key={gi}>
+                <tbody>
+                  {g.fields.map(f => {
+                    const raw = doc.form_data?.[f.key];
+                    const isEmpty = raw === null || raw === undefined || raw === '';
+                    const display = isEmpty ? '-' : f.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
+                    return (
+                      <tr key={f.key}>
+                        <th>{f.label}</th>
+                        <td style={f.type === 'textarea' ? { whiteSpace: 'pre-wrap' } : undefined}>{display}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })}
+        </div>
       ) : (
         doc.content && <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>
       )}

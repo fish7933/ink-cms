@@ -77,6 +77,9 @@ dependencies:
   date-fns:
     specifier: ^3.6.0
     version: 3.6.0
+  dompurify:
+    specifier: ^3.4.12
+    version: 3.4.12
   jszip:
     specifier: ^3.10.1
     version: 3.10.1
@@ -2254,6 +2257,12 @@ packages:
     dependencies:
       csstype: 3.2.3
 
+  /@types/trusted-types@2.0.7:
+    resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
+    requiresBuild: true
+    dev: false
+    optional: true
+
   /@typescript-eslint/eslint-plugin@8.54.0(@typescript-eslint/parser@8.54.0)(eslint@9.39.2)(typescript@5.9.3):
     resolution: {integrity: sha512-hAAP5io/7csFStuOmR782YmTthKBJ9ND3WVL60hcOjvtGFb+HJxH4O5huAcmcZ9v9G8P+JETiZ/G1B8MALnWZQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -2882,6 +2891,12 @@ packages:
     dependencies:
       '@babel/runtime': 7.28.6
       csstype: 3.2.3
+    dev: false
+
+  /dompurify@3.4.12:
+    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
+    optionalDependencies:
+      '@types/trusted-types': 2.0.7
     dev: false
 
   /dunder-proto@1.0.1:

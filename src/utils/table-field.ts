@@ -1,46 +1,49 @@
+import DOMPurify from 'dompurify';
+
 // 기안서 양식의 'table' 필드(엑셀 붙여넣기 가능한 표) 값 처리.
-// form_data에는 문자열만 저장 가능하므로 2차원 배열을 JSON 문자열로 직렬화해 담는다.
-export type TableFieldGrid = string[][];
+// 엑셀에서 복사하면 클립보드에 text/html로 셀별 서식(글꼴/테두리/배경/정렬 등)이 포함된 <table>이
+// 함께 담겨오므로, 이를 그대로 받아 서식을 보존한다 — 대신 신뢰할 수 없는 외부 HTML이므로
+// DOMPurify로 표/서식 관련 태그·속성만 허용하고 스크립트/이벤트 핸들러 등은 모두 제거한다.
+const ALLOWED_TAGS = ['table', 'colgroup', 'col', 'thead', 'tbody', 'tr', 'td', 'th', 'br', 'b', 'strong', 'i', 'em', 'u', 'span', 'div', 'p', 'font'];
+const ALLOWED_ATTR = ['style', 'colspan', 'rowspan', 'align', 'valign', 'width', 'height'];
 
-const DEFAULT_ROWS = 3;
-const DEFAULT_COLS = 4;
-
-export function parseTableFieldValue(raw: unknown): TableFieldGrid {
-  if (typeof raw === 'string' && raw.trim()) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed.every(r => Array.isArray(r))) {
-        return parsed as TableFieldGrid;
-      }
-    } catch {
-      // JSON이 아니면(과거 데이터 등) 빈 표로 대체
-    }
-  }
-  return Array.from({ length: DEFAULT_ROWS }, () => Array(DEFAULT_COLS).fill(''));
+export function sanitizeTableHtml(html: string): string {
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false });
 }
 
-export function stringifyTableFieldValue(grid: TableFieldGrid): string {
-  return JSON.stringify(grid);
+// 클립보드 text/html은 보통 <html><head><style>...</style></head><body><table>...</table></body></html>
+// 형태(엑셀/구글시트 공통)이므로, 그 안의 <table>만 뽑아 정제한다.
+export function extractSanitizedTable(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const table = doc.querySelector('table');
+  if (!table) return '';
+  return sanitizeTableHtml(table.outerHTML);
 }
 
-// 엑셀 등 스프레드시트에서 복사한 범위를 붙여넣기(Ctrl+V)했을 때 오는 탭/줄바꿈 구분 텍스트를 셀 그리드로 변환.
-export function parseClipboardGrid(text: string): TableFieldGrid {
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// text/html이 없는 붙여넣기(예: 메모장, 순수 텍스트)에 대한 대체 — 탭/줄바꿈 기준으로 소박한 표를 만든다.
+export function plainTextToTableHtml(text: string): string {
   const lines = text.replace(/\r/g, '').split('\n');
-  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop(); // 엑셀 복사 시 붙는 마지막 빈 줄 제거
-  return lines.map(line => line.split('\t'));
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  const rows = lines
+    .map(line => `<tr>${line.split('\t').map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+    .join('');
+  return `<table>${rows}</table>`;
 }
 
-// pasted 그리드를 (startRow, startCol) 위치부터 grid에 덮어쓰며, 필요하면 행/열을 늘린다.
-export function pasteIntoGrid(grid: TableFieldGrid, startRow: number, startCol: number, pasted: TableFieldGrid): TableFieldGrid {
-  const rows = Math.max(grid.length, startRow + pasted.length);
-  const cols = Math.max(grid[0]?.length || 0, startCol + Math.max(...pasted.map(r => r.length)));
-  const next: TableFieldGrid = Array.from({ length: rows }, (_, r) =>
-    Array.from({ length: cols }, (_, c) => grid[r]?.[c] ?? '')
-  );
-  pasted.forEach((prow, ri) => {
-    prow.forEach((val, ci) => {
-      next[startRow + ri][startCol + ci] = val;
-    });
-  });
-  return next;
+// 화면에 렌더링할 때만 각 셀을 직접 편집 가능하게 만든다 (저장되는 값 자체엔 넣지 않는다).
+export function injectContentEditable(html: string): string {
+  const doc = new DOMParser().parseFromString(sanitizeTableHtml(html), 'text/html');
+  doc.querySelectorAll('td, th').forEach(cell => cell.setAttribute('contenteditable', 'true'));
+  return doc.body.innerHTML;
+}
+
+// 편집 후 DOM에서 다시 읽어온 HTML에서 에디터 전용 속성을 제거하고 재정제해 저장용 값으로 되돌린다.
+export function stripContentEditable(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('[contenteditable]').forEach(cell => cell.removeAttribute('contenteditable'));
+  return sanitizeTableHtml(doc.body.innerHTML);
 }
