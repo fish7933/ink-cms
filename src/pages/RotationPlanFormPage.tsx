@@ -1057,11 +1057,11 @@ export default function RotationPlanFormPage() {
                         <span className="ml-auto text-[10px] text-gray-400">{r.contractMonths}개월</span>
                       )}
                     </div>
-                    {/* OUT 하선 */}
+                    {/* Off-Signer */}
                     <div className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1 w-16 shrink-0">
+                      <div className="flex items-center gap-1 w-20 shrink-0">
                         <LogOut className="w-3 h-3 text-orange-500" />
-                        <span className="text-[10px] font-medium text-orange-600">하선(OUT)</span>
+                        <span className="text-[10px] font-medium text-orange-600 whitespace-nowrap">Off-Signer</span>
                       </div>
                       {r.disembarkCrewId ? (
                         <div className="flex items-center gap-1 min-w-0">
@@ -1071,11 +1071,11 @@ export default function RotationPlanFormPage() {
                         </div>
                       ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
                     </div>
-                    {/* IN 승선 */}
+                    {/* On-Signer */}
                     <div className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1 w-16 shrink-0">
+                      <div className="flex items-center gap-1 w-20 shrink-0">
                         <LogIn className="w-3 h-3 text-emerald-500" />
-                        <span className="text-[10px] font-medium text-emerald-600">승선(IN)</span>
+                        <span className="text-[10px] font-medium text-emerald-600 whitespace-nowrap">On-Signer</span>
                       </div>
                       {r.boardingCrewId ? (
                         <div className="flex items-center gap-1 min-w-0">
