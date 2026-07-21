@@ -49,4 +49,5 @@ export interface CrewContractAllowance {
 
 export interface CrewContractAllowanceWithDetails extends CrewContractAllowance {
   allowance_type_name: string;
+  allowance_type_description?: string;
 }

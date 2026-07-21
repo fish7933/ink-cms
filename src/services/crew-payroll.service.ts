@@ -65,6 +65,7 @@ interface GeneratedItem {
   standard_amount: number;
   amount: number;
   accrued_to_date: number | null;
+  description: string | null;
   display_order: number;
 }
 
@@ -72,7 +73,7 @@ interface TemplateItemWithComponent {
   rank?: string;
   rank_grade?: string | null;
   amount: number;
-  component: { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred' };
+  component: { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; description?: string | null };
 }
 
 interface EmbarkRecord {
@@ -155,6 +156,7 @@ function buildShipPayslips(input: {
             standard_amount: standard,
             amount: Math.round(standard * ratio),
             accrued_to_date: null,
+            description: i.component.description || null,
             display_order: idx,
           });
           return;
@@ -166,12 +168,13 @@ function buildShipPayslips(input: {
         items.push({
           source: 'template',
           category: 'earning',
-          name: i.component.name,
+          name: `${i.component.name} (Accrued)`,
           payment_method: null,
           payment_type: 'deferred_accrual',
           standard_amount: standard,
           amount: Math.round(standard * ratio),
           accrued_to_date: cumulativeToDate,
+          description: i.component.description || null,
           display_order: idx,
         });
 
@@ -186,6 +189,7 @@ function buildShipPayslips(input: {
             standard_amount: standard,
             amount: cumulativeToDate,
             accrued_to_date: cumulativeToDate,
+            description: i.component.description || null,
             display_order: idx + 50,
           });
         }
@@ -210,6 +214,7 @@ function buildShipPayslips(input: {
           standard_amount: standard,
           amount: Math.round(standard * ratio),
           accrued_to_date: null,
+          description: a.allowance_type_description || null,
           display_order: 100 + idx,
         });
       });
@@ -438,13 +443,15 @@ export const crewPayrollService = {
       : { data: [] as (CrewContractAllowanceWithDetails & { allowance_type_id: string; contract_id: string })[] };
     const allowanceTypeIds = [...new Set((contractAllowancesRaw || []).map(a => a.allowance_type_id))];
     const { data: allowanceTypes } = allowanceTypeIds.length > 0
-      ? await supabase.from('allowance_types').select('id, name').in('id', allowanceTypeIds)
-      : { data: [] as { id: string; name: string }[] };
-    const allowanceTypeNameById = new Map((allowanceTypes || []).map(t => [t.id, t.name]));
+      ? await supabase.from('allowance_types').select('id, name, description').in('id', allowanceTypeIds)
+      : { data: [] as { id: string; name: string; description?: string | null }[] };
+    const allowanceTypeList: { id: string; name: string; description?: string | null }[] = allowanceTypes || [];
+    const allowanceTypeNameById = new Map(allowanceTypeList.map(t => [t.id, t.name] as [string, string]));
+    const allowanceTypeDescById = new Map(allowanceTypeList.map(t => [t.id, t.description] as [string, string | null | undefined]));
     const allowanceItemsByContractId = new Map<string, CrewContractAllowanceWithDetails[]>();
     for (const a of contractAllowancesRaw || []) {
       const arr = allowanceItemsByContractId.get(a.contract_id) || [];
-      arr.push({ ...a, allowance_type_name: allowanceTypeNameById.get(a.allowance_type_id) || '' });
+      arr.push({ ...a, allowance_type_name: allowanceTypeNameById.get(a.allowance_type_id) || '', allowance_type_description: allowanceTypeDescById.get(a.allowance_type_id) || undefined });
       allowanceItemsByContractId.set(a.contract_id, arr);
     }
 
@@ -453,7 +460,7 @@ export const crewPayrollService = {
       ? await supabase.from('salary_template_items').select('*').in('template_id', templateIds)
       : { data: [] as { template_id: string; component_id: string; rank?: string; rank_grade?: string | null; amount: number }[] };
     const { data: allComponents } = await supabase.from('salary_components').select('*');
-    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean }]));
+    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean; description?: string | null }]));
     const templateItemsByTemplateId = new Map<string, TemplateItemWithComponent[]>();
     for (const item of templateItemsRaw || []) {
       const component = componentById.get(String(item.component_id));

@@ -52,10 +52,12 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks 
             <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100">직급</th>
             {orderedComps.map(comp => {
               const isDeduction = comp.component_type === 'deduction';
+              const isDeferred = !isDeduction && comp.payment_type === 'deferred';
               return (
-                <th key={comp.id} className={`text-right p-2 border-r font-semibold min-w-24 ${isDeduction ? 'text-red-600' : ''}`}>
+                <th key={comp.id} className={`text-right p-2 border-r font-semibold min-w-24 ${isDeduction ? 'text-red-600' : isDeferred ? 'text-amber-700' : ''}`}>
                   {comp.name}
                   {isDeduction && <span className="block text-[10px] font-normal text-red-400">공제</span>}
+                  {isDeferred && <span className="block text-[10px] font-normal text-amber-500">후불</span>}
                 </th>
               );
             })}

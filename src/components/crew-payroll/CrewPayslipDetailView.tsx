@@ -70,6 +70,18 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
   ];
   const ratio = payslip.days_in_month > 0 ? Math.round((payslip.days_served / payslip.days_in_month) * 1000) / 10 : 0;
 
+  // 급여 구성항목/수당유형 약어(BW/OT/OA/LP 등) 설명을 한 줄짜리 각주로 — 최대한 자리를
+  // 안 차지하게, (Accrued)/(Lump Sum) 같은 접미사는 뭉쳐서 항목당 한 번만 보여준다.
+  const legendEntries: [string, string][] = [];
+  const seenLegend = new Set<string>();
+  for (const item of payslip.items) {
+    if (!item.description) continue;
+    const baseName = item.name.replace(/\s*\([^)]*\)\s*$/, '');
+    if (seenLegend.has(baseName)) continue;
+    seenLegend.add(baseName);
+    legendEntries.push([baseName, item.description]);
+  }
+
   return (
     <div style={{ fontFamily: "Pretendard, 'Segoe UI', sans-serif", color: '#222' }}>
       <style>{`
@@ -118,6 +130,12 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
         <p style={{ fontSize: 10.5, color: '#999', textAlign: 'center', padding: '4px 0' }}>No deduction items.</p>
       ) : (
         <BorderedTable><PayGridTable groups={[{ key: 'deduction', label: 'Deduction', items: deductionItems }]} negative totalLabel="Total Deductions" totalValue={payslip.total_deduction} /></BorderedTable>
+      )}
+
+      {legendEntries.length > 0 && (
+        <div style={{ marginTop: 4, fontSize: 8.5, color: '#999', lineHeight: 1.4 }}>
+          {legendEntries.map(([name, desc]) => `${name}: ${desc}`).join('  ·  ')}
+        </div>
       )}
 
       <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 12px', border: '1px solid #999', borderTop: '2px solid #888', background: '#f7f7f7' }}>

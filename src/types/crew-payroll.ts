@@ -66,6 +66,7 @@ export interface CrewPayslipItem {
   standard_amount: number; // 일할계산 적용 전 월 기준액
   amount: number;          // 일할계산 적용 후 실제 반영 금액(deferred_payout은 승선 기간 전체 누적액)
   accrued_to_date: number | null; // deferred_accrual/payout 항목의 승선일~이 달 말 누적액
+  description: string | null; // 급여 구성항목/수당유형의 설명 — 생성 시점 스냅샷
   display_order: number;
 }
 
