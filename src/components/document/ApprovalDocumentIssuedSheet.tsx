@@ -178,15 +178,10 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
             if (g.kind === 'table') {
               const raw = doc.form_data?.[g.field.key];
               const isEmpty = raw === null || raw === undefined || raw === '';
-              return (
-                <div key={gi}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{g.field.label}</div>
-                  {isEmpty ? (
-                    <p style={{ fontSize: 12, color: '#999' }}>-</p>
-                  ) : (
-                    <div className="issued-table-block" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(String(raw)) }} />
-                  )}
-                </div>
+              // 표 필드는 라벨(양식 제목)을 따로 보여주지 않고 표 자체만 그대로 보여준다 —
+              // 라벨이 표 내용과 중복돼 보인다는 피드백에 따라 제거.
+              return isEmpty ? null : (
+                <div key={gi} className="issued-table-block" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(String(raw)) }} />
               );
             }
             return (

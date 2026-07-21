@@ -38,18 +38,6 @@ function inlineClassStyles(rawHtml: string): string {
   return doc.body.innerHTML;
 }
 
-function parseWidthValue(el: Element): number | null {
-  const style = el.getAttribute('style') || '';
-  const styleMatch = style.match(/width\s*:\s*([\d.]+)(pt|px)?/i);
-  if (styleMatch) return parseFloat(styleMatch[1]);
-  const attr = el.getAttribute('width');
-  if (attr) {
-    const n = parseFloat(attr);
-    if (!isNaN(n)) return n;
-  }
-  return null;
-}
-
 function removeWidthDeclarations(el: Element): void {
   el.removeAttribute('width');
   const style = el.getAttribute('style');
@@ -60,52 +48,54 @@ function removeWidthDeclarations(el: Element): void {
   }
 }
 
-// 엑셀은 원본 시트의 열 폭(pt/px 절대값)을 <col>(또는 첫 행 셀)의 width로 그대로 내보내서,
-// 붙여넣은 표가 문서 페이지 폭과 무관하게 시트에서 보이던 좁은 폭 그대로 잘려 보인다 — 표/열의
-// 절대 width 지정을 제거하고 표는 100%로, 열은 원래 폭의 "비율"을 백분율로 환산해 다시 넣어서
-// 페이지 폭을 꽉 채우면서도 원본의 열 간 상대적인 비율(넓은 열/좁은 열 구분)은 그대로 유지한다.
-function fillPageWidth(rawHtml: string): string {
-  const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
-  const table = doc.querySelector('table');
-  if (!table) return rawHtml;
+// 엑셀/구글시트/WPS 등은 원본 시트의 열 폭을 서로 다른 방식(<col> 유무, pt/px, mso-* 접두
+// 속성 등)으로 내보내는데, 그 표기를 정규식으로 일일이 다 대응하려 하면 소스마다 놓치는
+// 경우가 계속 나온다 — 대신 원래 폭 그대로(아직 페이지에 맞게 줄이기 전) 화면 밖에 실제로
+// 렌더링해서 브라우저가 실제로 계산한 렌더링 폭을 그대로 읽어와 비율을 구한다. 어떤 소스에서
+// 왔든 "브라우저가 그 표를 실제로 어떻게 그렸는지"를 그대로 재는 것이므로 서식/단위 차이에
+// 관계없이 항상 정확하다. 반드시 정제(sanitize)된 안전한 HTML만 넘겨야 한다 — 살아있는 DOM에
+// 붙이므로, 정제 전 원본을 여기 붙이면 onerror 등 이벤트 핸들러가 그대로 실행될 수 있다.
+function fillPageWidth(safeTableHtml: string, containerWidthPx = 900): string {
+  const container = document.createElement('div');
+  container.style.cssText = `position:fixed; left:-99999px; top:0; visibility:hidden; width:${containerWidthPx}px;`;
+  container.innerHTML = safeTableHtml;
+  document.body.appendChild(container);
+  try {
+    const table = container.querySelector('table');
+    const firstRow = table?.querySelector('tr');
+    if (!table || !firstRow) return safeTableHtml;
 
-  removeWidthDeclarations(table);
-  table.setAttribute('style', `width:100%;${table.getAttribute('style') || ''}`);
+    const headCells = Array.from(firstRow.children) as HTMLElement[];
+    const measured = headCells.map(c => c.getBoundingClientRect().width);
+    const total = measured.reduce((a, b) => a + b, 0);
+    if (total <= 0) return safeTableHtml;
 
-  const cols = Array.from(table.querySelectorAll('col'));
-  const firstRowCells = cols.length === 0 ? Array.from(table.querySelector('tr')?.children || []) : [];
-  const widthSourceEls = cols.length > 0 ? cols : firstRowCells;
-
-  if (widthSourceEls.length > 0) {
-    const widths = widthSourceEls.map(el => parseWidthValue(el) ?? 1);
-    const total = widths.reduce((a, b) => a + b, 0) || widthSourceEls.length;
-    widthSourceEls.forEach((el, i) => {
-      const pct = ((widths[i] / total) * 100).toFixed(2);
-      removeWidthDeclarations(el);
-      el.setAttribute('style', `width:${pct}%;${el.getAttribute('style') || ''}`);
+    removeWidthDeclarations(table);
+    table.style.width = '100%';
+    table.querySelectorAll('col').forEach(c => c.remove());
+    headCells.forEach((cell, i) => {
+      removeWidthDeclarations(cell);
+      cell.style.width = `${((measured[i] / total) * 100).toFixed(2)}%`;
     });
+    Array.from(table.querySelectorAll('tr')).forEach(row => {
+      if (row === firstRow) return;
+      Array.from(row.children).forEach(cell => removeWidthDeclarations(cell));
+    });
+    return table.outerHTML;
+  } finally {
+    document.body.removeChild(container);
   }
-
-  // 폭 비율 산정에 쓴 요소(col 또는 첫 행 셀) 외의 나머지 셀들에 남은 개별 width 지정은
-  // 표 전체가 페이지 폭을 온전히 쓰는 걸 방해하므로 제거한다.
-  table.querySelectorAll('td, th').forEach(cell => {
-    if (widthSourceEls.includes(cell)) return;
-    removeWidthDeclarations(cell);
-  });
-
-  return doc.body.innerHTML;
 }
 
 // 클립보드 text/html은 보통 <html><head><style>...</style></head><body><table>...</table></body></html>
-// 형태(엑셀/구글시트 공통)이므로, 클래스 서식을 인라인으로 합치고 폭을 페이지에 맞게 재계산한 뒤
-// 그 안의 <table>만 뽑아 정제한다.
+// 형태(엑셀/구글시트 공통)이므로, 클래스 서식을 인라인으로 합치고 정제한 뒤, 그 안전한 표를
+// 실제로 렌더링해 폭을 페이지에 맞게 재계산한다.
 export function extractSanitizedTable(html: string): string {
-  const withInlineStyles = inlineClassStyles(html);
-  const withFullWidth = fillPageWidth(withInlineStyles);
-  const doc = new DOMParser().parseFromString(withFullWidth, 'text/html');
+  const doc = new DOMParser().parseFromString(inlineClassStyles(html), 'text/html');
   const table = doc.querySelector('table');
   if (!table) return '';
-  return sanitizeTableHtml(table.outerHTML);
+  const safe = sanitizeTableHtml(table.outerHTML);
+  return sanitizeTableHtml(fillPageWidth(safe));
 }
 
 function escapeHtml(s: string): string {
