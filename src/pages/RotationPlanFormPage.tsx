@@ -916,17 +916,17 @@ export default function RotationPlanFormPage() {
                         const opts = gradesForRankId(row.boardingRankId);
                         return opts.length > 0 ? (
                           <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })} disabled={isReadOnly}>
-                            <SelectTrigger className={`h-7 text-[10px] md:text-[10px] w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
+                            <SelectTrigger className={`h-7 text-[12px] md:text-[12px] w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
                               <SelectValue placeholder="등급 *" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="_none" className="text-[10px]">선택 *</SelectItem>
-                              {opts.map(g => <SelectItem key={g} value={g} className="text-[10px]">{g}</SelectItem>)}
+                              <SelectItem value="_none" className="text-[12px]">선택 *</SelectItem>
+                              {opts.map(g => <SelectItem key={g} value={g} className="text-[12px]">{g}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         ) : (
                           <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
-                            placeholder="등급" className="h-7 text-[10px] md:text-[10px] w-16 shrink-0" disabled={isReadOnly} />
+                            placeholder="등급" className="h-7 text-[12px] md:text-[12px] w-16 shrink-0" disabled={isReadOnly} />
                         );
                       })()}
                     </div>
