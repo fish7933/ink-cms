@@ -1082,20 +1082,6 @@ export default function RotationPlanFormPage() {
                         <span className="ml-auto text-[10px] text-gray-400">{r.contractMonths}개월</span>
                       )}
                     </div>
-                    {/* Off-Signer */}
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1 w-20 shrink-0">
-                        <LogOut className="w-3 h-3 text-orange-500" />
-                        <span className="text-[10px] font-medium text-orange-600 whitespace-nowrap">Off-Signer</span>
-                      </div>
-                      {r.disembarkCrewId ? (
-                        <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-orange-800 truncate">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
-                          {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
-                          {r.disembarkDate && <span className="text-[10px] text-gray-400 shrink-0">{r.disembarkDate}</span>}
-                        </div>
-                      ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
-                    </div>
                     {/* On-Signer */}
                     <div className="flex items-center gap-1.5">
                       <div className="flex items-center gap-1 w-20 shrink-0">
@@ -1111,6 +1097,20 @@ export default function RotationPlanFormPage() {
                               ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
                               : null}
                           {r.boardingDate && <span className="text-[10px] text-gray-400 shrink-0">{r.boardingDate}</span>}
+                        </div>
+                      ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
+                    </div>
+                    {/* Off-Signer */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1 w-20 shrink-0">
+                        <LogOut className="w-3 h-3 text-orange-500" />
+                        <span className="text-[10px] font-medium text-orange-600 whitespace-nowrap">Off-Signer</span>
+                      </div>
+                      {r.disembarkCrewId ? (
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="font-medium text-orange-800 truncate">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
+                          {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
+                          {r.disembarkDate && <span className="text-[10px] text-gray-400 shrink-0">{r.disembarkDate}</span>}
                         </div>
                       ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
                     </div>
