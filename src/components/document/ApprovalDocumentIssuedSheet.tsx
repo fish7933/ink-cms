@@ -111,7 +111,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         <table style={{ flex: 1, fontSize: 13 }}>
           <tbody>
             <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
-            <tr><td style={{ padding: '3px 0' }}><b>기안일자</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')}</td></tr>
+            <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
             <tr><td style={{ padding: '3px 0' }}><b>시행일자</b>&nbsp;&nbsp;{issuedDate ? issuedDate.toLocaleDateString('ko-KR') : '결재 진행중'}</td></tr>
             <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
             {referenceLabels.length > 0 && (
