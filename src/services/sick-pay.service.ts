@@ -55,18 +55,21 @@ async function attachDetails(records: CrewSickPayRecord[]): Promise<CrewSickPayR
 }
 
 export const sickPayService = {
-  // 상병 하선 등록 — 하선일 다음날을 청구 시작일로 자동 계산한다.
+  // 상병 하선 등록 — 귀국일(return_date)까지는 정상 급여가 지급되므로, 상병급여 청구
+  // 시작일은 하선일이 아니라 귀국일 다음날부터다. 귀국일이 없으면(드묾) 하선일을 대신 쓴다.
   async createSickPayRecord(input: {
     crew_member_id: string;
     ship_id: string;
     rank_id: string | null;
     sea_service_record_id: string | null;
     disembark_date: string;
+    return_date: string | null;
     monthly_amount: number;
     currency?: string;
     memo?: string | null;
     created_by: string;
   }): Promise<CrewSickPayRecord> {
+    const startBasis = input.return_date || input.disembark_date;
     const { data, error } = await supabase
       .from('crew_sick_pay_records')
       .insert({
@@ -75,7 +78,7 @@ export const sickPayService = {
         rank_id: input.rank_id,
         sea_service_record_id: input.sea_service_record_id,
         disembark_date: input.disembark_date,
-        start_date: addDays(input.disembark_date, 1),
+        start_date: addDays(startBasis, 1),
         monthly_amount: input.monthly_amount,
         currency: input.currency || 'USD',
         memo: input.memo || null,

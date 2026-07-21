@@ -149,7 +149,7 @@ export default function CrewSickPayManagementPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Stethoscope className="w-5 h-5 text-muted-foreground" />상병 수당 관리</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          상병(질병/부상) 하선 선원에게 하선일 다음날부터 발생하는 상병급여 케이스를 모아 봅니다. 선원 급여대장과 별개로 관리되며, 매월 청구액은 각 선박의 급여대장 화면 하단에서 수정할 수 있습니다.
+          상병(질병/부상) 하선 선원에게 귀국일 다음날부터 발생하는 상병급여 케이스를 모아 봅니다(귀국일까지는 정상 급여가 지급됩니다). 선원 급여대장과 별개로 관리되며, 매월 청구액은 각 선박의 급여대장 화면 하단에서 수정할 수 있습니다.
         </p>
       </div>
 

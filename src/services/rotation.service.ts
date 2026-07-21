@@ -749,7 +749,8 @@ export const rotationService = {
           }).eq('id', openService[0].id);
         }
 
-        // 상병하선 + 상병급여 월액이 입력된 경우 — 하선일 다음날부터 청구되는 상병급여 케이스를 자동 등록한다.
+        // 상병하선 + 상병급여 월액이 입력된 경우 — 귀국일까지는 정상 급여가 지급되므로
+        // 귀국일 다음날부터 청구되는 상병급여 케이스를 자동 등록한다.
         if (sickReason && a.off_sign_off_reason_id === sickReason.id && a.off_sick_pay_monthly_amount && a.off_sick_pay_monthly_amount > 0) {
           await sickPayService.createSickPayRecord({
             crew_member_id: a.off_crew_id,
@@ -757,6 +758,7 @@ export const rotationService = {
             rank_id: a.off_rank_id,
             sea_service_record_id: closedServiceRecordId,
             disembark_date: disembarkDate,
+            return_date: a.off_return_date || null,
             monthly_amount: a.off_sick_pay_monthly_amount,
             created_by: executedByUser?.id || '',
           });

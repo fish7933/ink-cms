@@ -1,6 +1,7 @@
 export type SickPayStatus = 'active' | 'closed';
 
-// 상병(질병/부상) 하선 선원에게 하선일 다음날부터 발생하는 상병급여 케이스 — 선원 급여대장
+// 상병(질병/부상) 하선 선원에게 귀국일 다음날부터 발생하는 상병급여 케이스(귀국일까지는
+// 정상 급여가 지급되므로) — 선원 급여대장
 // (crew_payslips)과 별개로 추적한다.
 export interface CrewSickPayRecord {
   id: string;
@@ -9,7 +10,7 @@ export interface CrewSickPayRecord {
   rank_id: string | null;
   sea_service_record_id: string | null;
   disembark_date: string;
-  start_date: string; // 하선일 다음날
+  start_date: string; // 귀국일 다음날(귀국일이 없으면 하선일 다음날)
   monthly_amount: number;
   currency: string;
   status: SickPayStatus;
