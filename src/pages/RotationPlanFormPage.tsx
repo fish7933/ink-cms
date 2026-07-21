@@ -14,6 +14,7 @@ import { rotationService, type CrewReservation } from '@/services/rotation.servi
 import { getPorts, findOrCreatePort } from '@/services/port.service';
 import { getEffectiveTemplateForShip, type SalaryTemplateWithItems } from '@/lib/salary-store';
 import { calculateContractPeriod } from '@/utils/contract-period';
+import { crewDisplayName } from '@/lib/utils';
 import { exportRotationPlanToExcel } from '@/utils/rotation-plan-export';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supervisorService } from '@/services/supervisor.service';
@@ -499,7 +500,8 @@ export default function RotationPlanFormPage() {
     const c = getCrew(id);
     if (c) {
       const code = c.rank_code || '';
-      return code ? `[${code}] ${c.name}` : c.name;
+      const name = crewDisplayName(c);
+      return code ? `[${code}] ${name}` : name;
     }
     if (id) return fallbackName || '이름 확인 불가';
     return '선원 선택';
@@ -571,13 +573,13 @@ export default function RotationPlanFormPage() {
     // 승선자 직급/등급 필수 검증 — 등급은 그 직급의 급여템플릿에 실제로 등급 옵션이 있을 때만 필수
     const missingRank = validRows.filter(r => r.boardingCrewId && !r.boardingRankId);
     if (missingRank.length > 0) {
-      const names = missingRank.map(r => getCrew(r.boardingCrewId)?.name || '?').join(', ');
+      const names = missingRank.map(r => { const c = getCrew(r.boardingCrewId); return c ? crewDisplayName(c) : '?'; }).join(', ');
       toast({ title: '승선 직급 필수', description: `${names} — 승선 직급을 선택하세요`, variant: 'destructive' });
       return;
     }
     const missingGrade = validRows.filter(r => r.boardingCrewId && r.boardingRankId && gradesForRankId(r.boardingRankId).length > 0 && !r.boardingGrade);
     if (missingGrade.length > 0) {
-      const names = missingGrade.map(r => getCrew(r.boardingCrewId)?.name || '?').join(', ');
+      const names = missingGrade.map(r => { const c = getCrew(r.boardingCrewId); return c ? crewDisplayName(c) : '?'; }).join(', ');
       toast({ title: '승선 등급 필수', description: `${names} — 이 직급은 급여템플릿에 등급이 구분돼 있어 등급을 선택해야 합니다`, variant: 'destructive' });
       return;
     }
@@ -863,7 +865,7 @@ export default function RotationPlanFormPage() {
                   <div className="flex items-center gap-1.5 mb-1">
                     <LogIn className="w-3.5 h-3.5 text-emerald-600" />
                     <Label className="text-[11px] font-semibold text-emerald-700">신규 승선 (IN)</Label>
-                    <span className="text-[10px] text-emerald-500">출국일 → 승선일</span>
+                    <span className="text-[10px] text-emerald-500">On-Signer</span>
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -904,15 +906,23 @@ export default function RotationPlanFormPage() {
                     </p>
                   )}
                   <div className="grid grid-cols-2 gap-1">
-                    <div className="relative">
-                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
-                      <span className="absolute -top-1.5 left-1 text-[9px] text-emerald-500 bg-emerald-50 px-0.5">출국</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-emerald-600 shrink-0">출국일</span>
+                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-xs px-1 min-w-0" disabled={isReadOnly} />
                     </div>
-                    <div className="relative">
-                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
-                      <span className="absolute -top-1.5 left-1 text-[9px] text-emerald-500 bg-emerald-50 px-0.5">승선</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-emerald-600 shrink-0">승선일</span>
+                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-xs px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                   </div>
+                  <Input
+                    type="number"
+                    value={row.contractMonths}
+                    onChange={e => updateRow(row.id, { contractMonths: e.target.value })}
+                    className="h-7 text-xs"
+                    placeholder={row.boardingCrewId && !row.contractMonths ? '계약개월 (선주사 기본값 미설정)' : '계약 개월'}
+                    disabled={isReadOnly}
+                  />
                 </div>
 
                 {/* ────────── 기존 하선 (OUT) ────────── */}
@@ -920,7 +930,7 @@ export default function RotationPlanFormPage() {
                   <div className="flex items-center gap-1.5 mb-1">
                     <LogOut className="w-3.5 h-3.5 text-orange-600" />
                     <Label className="text-[11px] font-semibold text-orange-700">기존 하선 (OUT)</Label>
-                    <span className="text-[10px] text-orange-500">하선일 → 귀국일</span>
+                    <span className="text-[10px] text-orange-500">Off-Signer</span>
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -952,13 +962,13 @@ export default function RotationPlanFormPage() {
                     </p>
                   )}
                   <div className="grid grid-cols-2 gap-1">
-                    <div className="relative">
-                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
-                      <span className="absolute -top-1.5 left-1 text-[9px] text-orange-500 bg-orange-50 px-0.5">하선</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-orange-600 shrink-0">하선일</span>
+                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-xs px-1 min-w-0" disabled={isReadOnly} />
                     </div>
-                    <div className="relative">
-                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-xs pr-1" disabled={isReadOnly} />
-                      <span className="absolute -top-1.5 left-1 text-[9px] text-orange-500 bg-orange-50 px-0.5">귀국</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-orange-600 shrink-0">귀국일</span>
+                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-xs px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                   </div>
                   {row.disembarkCrewId && (
@@ -985,19 +995,9 @@ export default function RotationPlanFormPage() {
                 </div>
               </div>
 
-              {/* 계약개월 + 비고 */}
-              <div className="grid grid-cols-2 gap-1 pt-1 border-t">
-                <div className="relative">
-                  <Input
-                    type="number"
-                    value={row.contractMonths}
-                    onChange={e => updateRow(row.id, { contractMonths: e.target.value })}
-                    className="h-7 text-xs"
-                    placeholder={row.boardingCrewId && !row.contractMonths ? '계약개월 (선주사 기본값 미설정)' : '계약 개월'}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <Input value={row.notes} onChange={e => updateRow(row.id, { notes: e.target.value })} className="h-7 text-xs" placeholder="비고" />
+              {/* 비고 */}
+              <div className="pt-1 border-t">
+                <Input value={row.notes} onChange={e => updateRow(row.id, { notes: e.target.value })} className="h-7 text-xs w-full" placeholder="비고" />
               </div>
             </CardContent>
           </Card>
@@ -1038,7 +1038,7 @@ export default function RotationPlanFormPage() {
                       </div>
                       {r.disembarkCrewId ? (
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-orange-800 truncate">{outCrew?.name || r.disembarkCrewName || '이름 확인 불가'}</span>
+                          <span className="font-medium text-orange-800 truncate">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
                           {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
                           {r.disembarkDate && <span className="text-[10px] text-gray-400 shrink-0">{r.disembarkDate}</span>}
                         </div>
@@ -1052,7 +1052,7 @@ export default function RotationPlanFormPage() {
                       </div>
                       {r.boardingCrewId ? (
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-emerald-800 truncate">{inCrew?.name || r.boardingCrewName || '이름 확인 불가'}</span>
+                          <span className="font-medium text-emerald-800 truncate">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</span>
                           {r.boardingGrade
                             ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
                             : gradesForRankId(r.boardingRankId).length > 0

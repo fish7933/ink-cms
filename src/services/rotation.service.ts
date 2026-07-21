@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
 import { sickPayService } from '@/services/sick-pay.service';
+import { crewDisplayName } from '@/lib/utils';
 import type {
   CrewRotationPlan,
   CrewRotationPlanWithDetails,
@@ -150,9 +151,9 @@ export const rotationService = {
       .from('crew_rotation_assignments')
       .select(`
         *,
-        off_crew:crew_members!crew_rotation_assignments_off_crew_id_fkey(id, name, rank),
+        off_crew:crew_members!crew_rotation_assignments_off_crew_id_fkey(id, name, name_english, rank),
         off_rank:ranks!crew_rotation_assignments_off_rank_id_fkey(id, name, rank_code),
-        on_crew:crew_members!crew_rotation_assignments_on_crew_id_fkey(id, name, rank),
+        on_crew:crew_members!crew_rotation_assignments_on_crew_id_fkey(id, name, name_english, rank),
         on_rank:ranks!crew_rotation_assignments_on_rank_id_fkey(id, name, rank_code)
       `)
       .eq('rotation_plan_id', planId);
@@ -162,12 +163,14 @@ export const rotationService = {
       return [];
     }
 
+    // 선원 이름(name)이 비어있고 영문명(name_english)만 있는 경우(외국인 선원 다수)를 위해
+    // crewDisplayName으로 폴백한다 — 그냥 .name만 쓰면 이 선원들은 이름이 빈 채로 나온다.
     return (data || []).map((assignment) => ({
       ...assignment,
-      off_crew_name: assignment.off_crew?.name,
+      off_crew_name: assignment.off_crew ? crewDisplayName(assignment.off_crew) : undefined,
       off_rank_name: assignment.off_rank?.name,
       off_rank_code: assignment.off_rank?.rank_code,
-      on_crew_name: assignment.on_crew?.name || '',
+      on_crew_name: assignment.on_crew ? crewDisplayName(assignment.on_crew) : '',
       on_rank_name: assignment.on_rank?.name || '',
       on_rank_code: assignment.on_rank?.rank_code || '',
     }));

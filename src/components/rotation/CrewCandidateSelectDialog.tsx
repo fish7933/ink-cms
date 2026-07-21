@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
+import { crewDisplayName } from '@/lib/utils';
 import { getNationalities } from '@/services/nationality.service';
 import type { CrewWithDetails } from '@/services/crew.service';
 import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
@@ -103,6 +104,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
       const t = search.toLowerCase();
       list = list.filter(c =>
         c.name?.toLowerCase().includes(t) ||
+        c.name_english?.toLowerCase().includes(t) ||
         c.rank_name?.toLowerCase().includes(t) ||
         c.passport_number?.toLowerCase().includes(t) ||
         c.seaman_book_number?.toLowerCase().includes(t)
@@ -227,7 +229,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                   <td className="px-3 py-2 text-xs text-gray-500">{affiliationOf(c)}</td>
                   <td className="px-3 py-2 text-gray-700">{c.rank_code || '-'}</td>
                   <td className="px-3 py-2 font-medium">
-                    {c.name}
+                    {crewDisplayName(c)}
                     {getReservationNote?.(c) && (
                       <div className="text-[10px] text-amber-600 font-normal mt-0.5">⚠ {getReservationNote(c)}</div>
                     )}
