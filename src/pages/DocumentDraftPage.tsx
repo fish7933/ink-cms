@@ -955,7 +955,7 @@ export default function DocumentDraftPage() {
                         <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
                         <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
                         <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
-                        <th className="text-left p-2 text-xs font-medium text-gray-600">기안일</th>
+                        <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
                         <th className="text-right p-2 text-xs font-medium text-gray-600"></th>
                       </tr>
                     </thead>
@@ -975,7 +975,7 @@ export default function DocumentDraftPage() {
                             <td className="p-2"><Badge variant="outline" className={status.className}><StatusIcon className="w-3 h-3 mr-1" />{status.label}</Badge></td>
                             <td className="p-2 font-medium">{doc.title}</td>
                             <td className="p-2 text-gray-500">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
-                            <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
+                            <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
                             <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
                               {doc.status === 'draft' && (
                                 <Button
@@ -1070,8 +1070,8 @@ export default function DocumentDraftPage() {
                   <p className="font-medium">{viewDoc.org_unit_name || '-'}</p>
                 </div>
                 <div className="p-2.5 bg-gray-50 rounded-md">
-                  <p className="text-gray-500">기안일</p>
-                  <p className="font-medium">{format(new Date(viewDoc.created_at), 'yyyy-MM-dd', { locale: ko })}</p>
+                  <p className="text-gray-500">기안일시</p>
+                  <p className="font-medium">{format(new Date(viewDoc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</p>
                 </div>
               </div>
 

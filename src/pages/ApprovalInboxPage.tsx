@@ -354,7 +354,7 @@ export default function ApprovalInboxPage() {
             <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">결재 현황</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
             <th className="text-right p-2 text-xs font-medium text-gray-600 w-60">작업</th>
           </tr>
         </thead>
@@ -398,7 +398,7 @@ export default function ApprovalInboxPage() {
                     ))}
                   </div>
                 </td>
-                <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
+                <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
                 <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-end gap-1">
                     {myTurn && (
@@ -447,7 +447,7 @@ export default function ApprovalInboxPage() {
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
             <th className="text-right p-2 text-xs font-medium text-gray-600 w-32">작업</th>
           </tr>
         </thead>
@@ -461,7 +461,7 @@ export default function ApprovalInboxPage() {
               <td className="p-2 font-medium">{doc.title}</td>
               <td className="p-2">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
               <td className="p-2">{doc.creator_name}</td>
-              <td className="p-2">{format(new Date(doc.created_at), 'yyyy-MM-dd', { locale: ko })}</td>
+              <td className="p-2">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
               <td className="p-2 text-right">
                 <div className="flex justify-end gap-1">
                   <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleRestoreDoc(doc)}>복원</Button>
