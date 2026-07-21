@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Plus, X, Ship, LogIn, LogOut, Download, Printer, Undo2 } from 'lucide-react';
+import { Plus, X, Ship, LogIn, LogOut, Download, Printer, Undo2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -149,6 +149,7 @@ export default function RotationPlanFormPage() {
   const [portLabel, setPortLabel] = useState('');
   const [executing, setExecuting] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const isReadOnly = isEditMode && planStatus !== 'draft';
@@ -670,6 +671,27 @@ export default function RotationPlanFormPage() {
     } finally { setSavingNotes(false); }
   };
 
+  const handleDeleteDraft = async () => {
+    if (!editPlanId) return;
+    if (!confirm('이 임시저장 계획을 삭제하시겠습니까? 삭제 이력이 기록되며, 배정된 선원들의 임시저장 표시도 함께 풀립니다.')) return;
+    const user = await getCurrentUser();
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const ok = await rotationService.deleteRotationPlan(editPlanId, user.id);
+      if (ok) {
+        toast({ title: '삭제되었습니다' });
+        window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
+        openTab('/crew-rotation', '선원 교대 발령');
+        if (activeTabId) closeTab(activeTabId);
+      } else {
+        toast({ title: '삭제 중 오류가 발생했습니다', variant: 'destructive' });
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleWithdraw = async () => {
     if (!editPlanId || !confirm('이 교대 계획의 결재 상신을 철회하시겠습니까? 배정됐던 선원들의 임시저장 표시도 함께 풀립니다.')) return;
     setWithdrawing(true);
@@ -763,13 +785,20 @@ export default function RotationPlanFormPage() {
                   </Button>
                 </>
               ) : (
-                <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">{isEditMode ? '수정 완료' : '작성 완료'}</Button>
+                <>
+                  {isEditMode && (
+                    <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50" onClick={handleDeleteDraft} disabled={deleting}>
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />{deleting ? '삭제 중...' : '삭제'}
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">{isEditMode ? '수정 완료' : '작성 완료'}</Button>
+                </>
               )}
             </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-2.5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_2fr] gap-3">
             <div className="space-y-1">
               <Label className="text-xs">선주 *</Label>
               <Select value={ownerId || '_none'} onValueChange={v => handleOwnerChange(v === '_none' ? '' : v)} disabled={isReadOnly}>
@@ -802,7 +831,7 @@ export default function RotationPlanFormPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">계획명</Label>
-              <Input value={planName} onChange={e => setPlanName(e.target.value)} placeholder="선박 선택 시 자동입력" className="h-8 text-xs" disabled={isReadOnly} />
+              <Input value={planName} onChange={e => setPlanName(e.target.value)} placeholder="선박 선택 시 자동입력" className="h-8 text-[12px] md:text-[12px]" disabled={isReadOnly} />
             </div>
           </div>
 
@@ -849,14 +878,13 @@ export default function RotationPlanFormPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">기준 교대일</Label>
-              <Input type="date" value={baseDepartureDate} onChange={e => setBaseDepartureDate(e.target.value)} className="h-8 text-xs" disabled={isReadOnly} />
+              <Input type="date" value={baseDepartureDate} onChange={e => setBaseDepartureDate(e.target.value)} className="h-8 text-[12px] md:text-[12px]" disabled={isReadOnly} />
               <p className="text-[10px] text-gray-400">승선/하선일은 기준일, 출국일은 하루 전날, 귀국일은 하루 뒷날로 일괄 설정합니다</p>
             </div>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">비고</Label>
-            <Textarea value={planNotes} onChange={e => setPlanNotes(e.target.value)} rows={2} className="text-xs resize-none" />
+            <Textarea value={planNotes} onChange={e => setPlanNotes(e.target.value)} placeholder="비고" rows={1} className="text-xs md:text-xs resize-none min-h-0 h-8 py-1.5" />
           </div>
         </CardContent>
       </Card>
