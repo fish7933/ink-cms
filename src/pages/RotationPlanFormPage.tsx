@@ -42,11 +42,16 @@ interface AssignmentRow {
   // 실제 crew_rotation_assignments 행의 id를 들고 있어야 한다(신규 작성 중인 행은 없음).
   assignmentId?: string;
   boardingCrewId: string | null;
+  // 승선/하선 후보 목록(availableCrew/onboardCrew)은 "현재 상태" 기준 스냅샷이라, 발령
+  // 실행 등으로 선원 상태가 바뀌면 후보 목록에서 사라져 이름을 못 찾는 경우가 있다 —
+  // 기존 계획을 불러올 때는 서버가 조인해준 이름을 여기 저장해두고 그걸 우선 표시한다.
+  boardingCrewName: string | null;
   boardingRankId: string;
   boardingGrade: RankGrade | null;
   departureDate: string;
   boardingDate: string;
   disembarkCrewId: string | null;
+  disembarkCrewName: string | null;
   disembarkRankId: string;
   disembarkGrade: RankGrade | null;
   disembarkDate: string;
@@ -60,9 +65,9 @@ interface AssignmentRow {
 function makeRow(overrides?: Partial<AssignmentRow>): AssignmentRow {
   return {
     id: crypto.randomUUID(),
-    boardingCrewId: null, boardingRankId: '', boardingGrade: null,
+    boardingCrewId: null, boardingCrewName: null, boardingRankId: '', boardingGrade: null,
     departureDate: '', boardingDate: '',
-    disembarkCrewId: null, disembarkRankId: '', disembarkGrade: null,
+    disembarkCrewId: null, disembarkCrewName: null, disembarkRankId: '', disembarkGrade: null,
     disembarkDate: '', returnDate: '',
     disembarkReasonId: '', sickPayMonthlyAmount: '',
     contractMonths: '', notes: '',
@@ -247,11 +252,13 @@ export default function RotationPlanFormPage() {
         ? existing.assignments.map(a => makeRow({
             assignmentId: a.id,
             boardingCrewId: a.on_crew_id,
+            boardingCrewName: a.on_crew_name || null,
             boardingRankId: a.on_rank_id || '',
             boardingGrade: a.on_rank_grade,
             departureDate: a.on_departure_date || '',
             boardingDate: a.embark_date || '',
             disembarkCrewId: a.off_crew_id,
+            disembarkCrewName: a.off_crew_name || null,
             disembarkRankId: a.off_rank_id || '',
             disembarkGrade: a.off_rank_grade,
             disembarkDate: a.off_disembark_date || '',
@@ -486,11 +493,16 @@ export default function RotationPlanFormPage() {
   };
 
   const getCrew = (id: string | null) => (id && (availableCrew.find(c => c.id === id) || onboardCrew.find(c => c.id === id))) || null;
-  const getCrewLabel = (id: string | null) => {
+  // 발령 실행 등으로 선원 상태가 바뀌어 현재 후보 목록(availableCrew/onboardCrew)에서 빠지면
+  // getCrew가 못 찾는다 — 그럴 땐 계획 로드 시 서버 조인으로 저장해둔 이름(fallbackName)을 쓴다.
+  const getCrewLabel = (id: string | null, fallbackName?: string | null) => {
     const c = getCrew(id);
-    if (!c) return '선원 선택';
-    const code = c.rank_code || '';
-    return code ? `[${code}] ${c.name}` : c.name;
+    if (c) {
+      const code = c.rank_code || '';
+      return code ? `[${code}] ${c.name}` : c.name;
+    }
+    if (id) return fallbackName || '이름 확인 불가';
+    return '선원 선택';
   };
 
   const rowPickerCandidates = (): CrewWithDetails[] => {
@@ -859,7 +871,7 @@ export default function RotationPlanFormPage() {
                       className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-emerald-200"
                       onClick={() => setRowPicker({ rowId: row.id, side: 'boarding' })}
                     >
-                      <span className="truncate text-emerald-800">{getCrewLabel(row.boardingCrewId)}</span>
+                      <span className="truncate text-emerald-800">{getCrewLabel(row.boardingCrewId, row.boardingCrewName)}</span>
                     </Button>
                     <Select value={row.boardingRankId || '_none'} onValueChange={v => updateRow(row.id, { boardingRankId: v === '_none' ? '' : v, boardingGrade: null })} disabled={isReadOnly}>
                       <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급 *" /></SelectTrigger>
@@ -916,7 +928,7 @@ export default function RotationPlanFormPage() {
                       className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-orange-200"
                       onClick={() => setRowPicker({ rowId: row.id, side: 'disembark' })}
                     >
-                      <span className="truncate text-orange-800">{getCrewLabel(row.disembarkCrewId)}</span>
+                      <span className="truncate text-orange-800">{getCrewLabel(row.disembarkCrewId, row.disembarkCrewName)}</span>
                     </Button>
                     <Select value={row.disembarkRankId || '_none'} onValueChange={v => updateRow(row.id, { disembarkRankId: v === '_none' ? '' : v })} disabled={isReadOnly}>
                       <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급" /></SelectTrigger>
@@ -1024,9 +1036,9 @@ export default function RotationPlanFormPage() {
                         <LogOut className="w-3 h-3 text-orange-500" />
                         <span className="text-[10px] font-medium text-orange-600">하선(OUT)</span>
                       </div>
-                      {outCrew ? (
+                      {r.disembarkCrewId ? (
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-orange-800 truncate">{outCrew.name}</span>
+                          <span className="font-medium text-orange-800 truncate">{outCrew?.name || r.disembarkCrewName || '이름 확인 불가'}</span>
                           {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
                           {r.disembarkDate && <span className="text-[10px] text-gray-400 shrink-0">{r.disembarkDate}</span>}
                         </div>
@@ -1038,9 +1050,9 @@ export default function RotationPlanFormPage() {
                         <LogIn className="w-3 h-3 text-emerald-500" />
                         <span className="text-[10px] font-medium text-emerald-600">승선(IN)</span>
                       </div>
-                      {inCrew ? (
+                      {r.boardingCrewId ? (
                         <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-emerald-800 truncate">{inCrew.name}</span>
+                          <span className="font-medium text-emerald-800 truncate">{inCrew?.name || r.boardingCrewName || '이름 확인 불가'}</span>
                           {r.boardingGrade
                             ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
                             : gradesForRankId(r.boardingRankId).length > 0
