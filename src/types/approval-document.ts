@@ -1,4 +1,4 @@
-export type DocumentFormFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select';
+export type DocumentFormFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'table';
 
 export interface DocumentFormField {
   key: string;

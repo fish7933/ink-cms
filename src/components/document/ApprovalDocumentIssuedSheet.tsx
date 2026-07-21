@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { parseTableFieldValue } from '@/utils/table-field';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { LeaveDetail } from '@/services/approval-document.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
@@ -42,6 +43,9 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.issued-fields { border-collapse: collapse; width: 100%; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
+        table.issued-fields td.field-table-cell { padding: 4px; }
+        table.issued-nested { border-collapse: collapse; width: 100%; }
+        table.issued-nested td { border: 1px solid #ccc; padding: 5px 7px; font-size: 12px; }
         table.approval-block { border-collapse: collapse; table-layout: auto; }
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
@@ -158,6 +162,25 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
             {fields.map(f => {
               const raw = doc.form_data?.[f.key];
               const isEmpty = raw === null || raw === undefined || raw === '';
+              if (f.type === 'table') {
+                const grid = isEmpty ? [] : parseTableFieldValue(raw);
+                return (
+                  <tr key={f.key}>
+                    <th>{f.label}</th>
+                    <td className="field-table-cell">
+                      {grid.length === 0 ? '-' : (
+                        <table className="issued-nested">
+                          <tbody>
+                            {grid.map((row, r) => (
+                              <tr key={r}>{row.map((cell, c) => <td key={c}>{cell}</td>)}</tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </td>
+                  </tr>
+                );
+              }
               const display = isEmpty ? '-' : f.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
               return (
                 <tr key={f.key}>

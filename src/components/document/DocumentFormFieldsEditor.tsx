@@ -17,6 +17,7 @@ const FIELD_TYPE_LABELS: Record<DocumentFormFieldType, string> = {
   number: '숫자',
   date: '날짜',
   select: '선택 목록',
+  table: '표 (엑셀 붙여넣기)',
 };
 
 const newField = (): DocumentFormField => ({ key: `field_${Date.now()}`, label: '', type: 'text', required: false });
