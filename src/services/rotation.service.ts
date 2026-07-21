@@ -575,8 +575,23 @@ export const rotationService = {
   /**
    * Delete rotation plan (soft delete — 삭제자/삭제일시를 남기고 목록에서만 제외.
    * 실행완료된 발령의 실제 선원 상태/계약/승선경력 등은 별도 데이터라 되돌리지 않음)
+   *
+   * 결재대기 중인 계획을 그냥 삭제하면 결재함에 붕 뜬 항목이 남고, 배정된 선원도 계속
+   * "임시저장" 상태로 잡혀 있게 된다(대상 계획 상태가 draft/pending_approval/approved인
+   * 동안은 예약으로 취급되므로). 삭제 전에 대기 중인 결재 요청이 있으면 먼저 철회(강제
+   * 반려 처리)해서 계획 상태를 rejected로 정리한 뒤 소프트 삭제한다.
    */
   async deleteRotationPlan(id: string, deletedBy: string): Promise<boolean> {
+    try {
+      const approvals = await rotationApprovalService.getApprovalsByTarget(id);
+      const openApproval = approvals.find(a => a.status === 'pending');
+      if (openApproval) {
+        await rotationApprovalService.adminForceReject(openApproval.id, deletedBy, '교대계획 삭제로 인한 결재 철회');
+      }
+    } catch (e) {
+      console.error('Error withdrawing pending approval before delete:', e);
+    }
+
     const { error } = await supabase
       .from('crew_rotation_plans')
       .update({ deleted_by: deletedBy, deleted_at: new Date().toISOString() })
