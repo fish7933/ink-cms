@@ -949,11 +949,11 @@ export default function RotationPlanFormPage() {
                   <div className="flex gap-1">
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-emerald-600 shrink-0">출국일</span>
-                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-emerald-600 shrink-0">승선일</span>
-                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-emerald-600 shrink-0 whitespace-nowrap">계약개월</span>
@@ -1015,11 +1015,11 @@ export default function RotationPlanFormPage() {
                   <div className="flex gap-1">
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-orange-600 shrink-0">하선일</span>
-                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-orange-600 shrink-0">귀국일</span>
-                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     {row.disembarkCrewId && (
                       <div className="flex items-center gap-1 flex-1 min-w-0">
