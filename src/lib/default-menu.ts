@@ -315,6 +315,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 6,
         is_active: true,
       },
+      {
+        id: 'crew-sick-pay',
+        label: '상병 수당 관리',
+        path: '/crew-sick-pay',
+        icon: 'Stethoscope',
+        roles: ['ship_manager'],
+        order: 7,
+        is_active: true,
+      },
     ],
   },
   {

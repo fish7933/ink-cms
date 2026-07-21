@@ -53,6 +53,8 @@ export interface CrewRotationAssignment {
   off_rank_grade: RankGrade | null;
   off_disembark_date: string | null;  // 하선일
   off_return_date: string | null;     // 귀국일
+  off_sign_off_reason_id: string | null; // 하선사유
+  off_sick_pay_monthly_amount: number | null; // 상병하선 시 상병급여 기준 월액
 
   // 승선자 (on-signing)
   on_crew_id: string | null;
@@ -77,6 +79,7 @@ export interface CrewRotationAssignmentWithDetails extends CrewRotationAssignmen
   off_crew_name?: string;
   off_rank_name?: string;
   off_rank_code?: string;
+  off_sign_off_reason_name?: string;
   on_crew_name?: string;
   on_rank_name?: string;
   on_rank_code?: string;
@@ -98,6 +101,8 @@ export interface CrewRotationAssignmentInput {
   off_rank_grade: RankGrade | null;
   off_disembark_date: string | null;
   off_return_date: string | null;
+  off_sign_off_reason_id?: string | null;
+  off_sick_pay_monthly_amount?: number | null; // 하선사유가 상병하선일 때만 사용 — 상병급여 기준 월액
   on_crew_id: string | null;
   on_rank_id: string | null;
   on_rank_grade: RankGrade | null;

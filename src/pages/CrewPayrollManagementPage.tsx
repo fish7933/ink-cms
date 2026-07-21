@@ -15,6 +15,7 @@ import { getEffectiveTemplateForShip, getSalaryComponents } from '@/lib/salary-s
 import { getRanks } from '@/services/rank.service';
 import { supervisorService } from '@/services/supervisor.service';
 import { crewPayrollService } from '@/services/crew-payroll.service';
+import { sickPayService } from '@/services/sick-pay.service';
 import { exportCrewPayrollLedgerToExcel } from '@/utils/crew-payroll-export';
 import CrewPayslipDetailView from '@/components/crew-payroll/CrewPayslipDetailView';
 import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixTable';
@@ -22,6 +23,7 @@ import type { Ship } from '@/lib/store';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
 import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow } from '@/types/crew-payroll';
+import type { CrewSickPayLedgerRow } from '@/types/sick-pay';
 
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
 const STATUS_COLORS: Record<string, string> = {
@@ -76,6 +78,13 @@ export default function CrewPayrollManagementPage() {
   const [historyCrew, setHistoryCrew] = useState<{ crewMemberId: string; crewName: string } | null>(null);
   const [historyRows, setHistoryRows] = useState<CrewPayrollHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // 상병(질병/부상) 하선 선원의 급여 — 선원 급여대장 자체에는 들어가지 않지만, 이 선박·이 달에
+  // 청구해야 할 상병급여가 있으면 급여대장 말미에 별도 안내로 보여주고 그 자리에서 수정/종결한다.
+  const [sickPayRows, setSickPayRows] = useState<CrewSickPayLedgerRow[]>([]);
+  const [sickPayDrafts, setSickPayDrafts] = useState<Record<string, string>>({});
+  const [closeDateDrafts, setCloseDateDrafts] = useState<Record<string, string>>({});
+  const [sickPaySaving, setSickPaySaving] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -145,6 +154,44 @@ export default function CrewPayrollManagementPage() {
   }, [toast]);
 
   useEffect(() => { loadPayslips(shipId, yearMonth); }, [shipId, yearMonth, loadPayslips]);
+
+  const loadSickPay = useCallback(async (sid: string, ym: string) => {
+    if (!sid) { setSickPayRows([]); return; }
+    setSickPayRows(await sickPayService.getSickPayForShipMonth(sid, ym));
+  }, []);
+
+  useEffect(() => { loadSickPay(shipId, yearMonth); }, [shipId, yearMonth, loadSickPay]);
+
+  const handleSaveSickPayAmount = async (row: CrewSickPayLedgerRow) => {
+    const draft = sickPayDrafts[row.id];
+    if (draft === undefined) return;
+    const amount = Number(draft);
+    if (Number.isNaN(amount)) return;
+    setSickPaySaving(row.id);
+    try {
+      await sickPayService.upsertMonthlyEntry(row.id, yearMonth, amount);
+      setSickPayDrafts(prev => { const next = { ...prev }; delete next[row.id]; return next; });
+      await loadSickPay(shipId, yearMonth);
+    } catch (e) {
+      toast({ title: 'Failed to save sick pay amount', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSickPaySaving(null);
+    }
+  };
+
+  const handleCloseSickPay = async (row: CrewSickPayLedgerRow) => {
+    const closedDate = closeDateDrafts[row.id] || new Date().toISOString().slice(0, 10);
+    if (!confirm(`${row.crew_name}의 상병급여를 ${closedDate}자로 종결하시겠습니까? 다음 달부터는 급여대장에 나타나지 않습니다.`)) return;
+    setSickPaySaving(row.id);
+    try {
+      await sickPayService.closeSickPayRecord(row.id, closedDate);
+      await loadSickPay(shipId, yearMonth);
+    } catch (e) {
+      toast({ title: 'Failed to close sick pay case', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSickPaySaving(null);
+    }
+  };
 
   const refresh = async () => {
     await loadPayslips(shipId, yearMonth);
@@ -558,6 +605,62 @@ export default function CrewPayrollManagementPage() {
                 {p.year_month} · {STATUS_LABELS[p.status]} ({p.payslip_count} crew)
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 상병급여는 선원 급여대장(crew_payslips)에는 들어가지 않지만, 이 선박·이 달에 청구해야
+          할 상병급여가 있으면 놓치지 않도록 대장 말미에 별도로 안내한다. */}
+      {sickPayRows.length > 0 && (
+        <div className="pt-2">
+          <p className="text-xs font-semibold text-red-700 mb-1.5">⚠ Sick Pay — claim separately for this month</p>
+          <div className="rounded-md border border-red-200 overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs whitespace-nowrap">
+              <thead className="bg-red-50 border-b border-red-200">
+                <tr>
+                  <th className="text-left py-1 px-2 font-medium text-red-700">Rank</th>
+                  <th className="text-left py-1 px-2 font-medium text-red-700">Name</th>
+                  <th className="text-center py-1 px-2 font-medium text-red-700">Sign-Off Date</th>
+                  <th className="text-center py-1 px-2 font-medium text-red-700">Sick Pay Since</th>
+                  <th className="text-right py-1 px-2 font-medium text-red-700">This Month Amount</th>
+                  <th className="text-center py-1 px-2 font-medium text-red-700 w-56">Close Case</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sickPayRows.map(row => (
+                  <tr key={row.id} className="border-b border-red-100">
+                    <td className="py-1 px-2 text-gray-600">{row.rank_code}</td>
+                    <td className="py-1 px-2 font-medium">{row.crew_name}</td>
+                    <td className="py-1 px-2 text-center text-gray-500">{row.disembark_date}</td>
+                    <td className="py-1 px-2 text-center text-gray-500">{row.start_date}</td>
+                    <td className="py-1 px-2 text-right">
+                      <Input
+                        type="number"
+                        value={sickPayDrafts[row.id] ?? String(row.this_month_amount)}
+                        onChange={e => setSickPayDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
+                        onBlur={() => handleSaveSickPayAmount(row)}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        disabled={sickPaySaving === row.id}
+                        className="h-6 text-xs w-24 text-right ml-auto"
+                      />
+                    </td>
+                    <td className="py-1 px-2">
+                      <div className="flex items-center justify-center gap-1">
+                        <Input
+                          type="date"
+                          value={closeDateDrafts[row.id] ?? new Date().toISOString().slice(0, 10)}
+                          onChange={e => setCloseDateDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
+                          className="h-6 text-xs w-32"
+                        />
+                        <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => handleCloseSickPay(row)} disabled={sickPaySaving === row.id}>
+                          Close
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

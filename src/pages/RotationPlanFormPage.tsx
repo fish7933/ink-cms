@@ -17,11 +17,13 @@ import { calculateContractPeriod } from '@/utils/contract-period';
 import { exportRotationPlanToExcel } from '@/utils/rotation-plan-export';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { supervisorService } from '@/services/supervisor.service';
+import { getSignOffReasons } from '@/services/sign-off-reason.service';
 import { getCurrentUser } from '@/lib/store';
 import type { Rank, Ship as ShipType, Company, Fleet } from '@/types/models';
 import type { RankGrade } from '@/types/dispatch';
 import type { CrewRotationAssignmentInput, CrewRotationPlanWithDetails } from '@/types/rotation';
 import type { Port } from '@/types/port';
+import type { SignOffReason } from '@/types/sign-off-reason';
 import { useToast } from '@/hooks/use-toast';
 import { useTabContext } from '@/contexts/TabContext';
 import CrewCandidateSelectDialog from '@/components/rotation/CrewCandidateSelectDialog';
@@ -49,6 +51,8 @@ interface AssignmentRow {
   disembarkGrade: RankGrade | null;
   disembarkDate: string;
   returnDate: string;
+  disembarkReasonId: string;
+  sickPayMonthlyAmount: string;
   contractMonths: string;
   notes: string;
 }
@@ -60,6 +64,7 @@ function makeRow(overrides?: Partial<AssignmentRow>): AssignmentRow {
     departureDate: '', boardingDate: '',
     disembarkCrewId: null, disembarkRankId: '', disembarkGrade: null,
     disembarkDate: '', returnDate: '',
+    disembarkReasonId: '', sickPayMonthlyAmount: '',
     contractMonths: '', notes: '',
     ...overrides,
   };
@@ -101,6 +106,7 @@ export default function RotationPlanFormPage() {
   const [crewReservations, setCrewReservations] = useState<Map<string, CrewReservation>>(new Map());
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
+  const [signOffReasons, setSignOffReasons] = useState<SignOffReason[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [owners, setOwners] = useState<Company[]>([]);
@@ -177,14 +183,16 @@ export default function RotationPlanFormPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [allCrew, ranksRes, ownersRes, portsData, reservations, user] = await Promise.all([
+    const [allCrew, ranksRes, ownersRes, portsData, reservations, user, reasons] = await Promise.all([
       crewService.getAllWithDetails(),
       supabase.from('ranks').select('*'),
       supabase.from('companies').select('*').eq('type', 'owner').order('name'),
       getPorts(),
       rotationService.getCrewReservations(),
       getCurrentUser(),
+      getSignOffReasons(),
     ]);
+    setSignOffReasons(reasons);
 
     // 관리자가 아니면 본인 담당 선박만 선택/자동배정 가능 — loadData 내에서 동기적으로 먼저 구해서
     // 아래 자동 선박 선택 로직에서도 즉시 반영되도록 한다(useEffect 경합으로 인한 순간적 미필터 방지).
@@ -248,6 +256,8 @@ export default function RotationPlanFormPage() {
             disembarkGrade: a.off_rank_grade,
             disembarkDate: a.off_disembark_date || '',
             returnDate: a.off_return_date || '',
+            disembarkReasonId: a.off_sign_off_reason_id || '',
+            sickPayMonthlyAmount: a.off_sick_pay_monthly_amount != null ? String(a.off_sick_pay_monthly_amount) : '',
             contractMonths: a.contract_months != null ? String(a.contract_months) : '',
             notes: a.notes || '',
           }))
@@ -578,6 +588,8 @@ export default function RotationPlanFormPage() {
         off_rank_grade: r.disembarkGrade,
         off_disembark_date: r.disembarkDate || null,
         off_return_date: r.returnDate || null,
+        off_sign_off_reason_id: r.disembarkReasonId || null,
+        off_sick_pay_monthly_amount: r.sickPayMonthlyAmount ? +r.sickPayMonthlyAmount : null,
         contract_months: r.contractMonths ? +r.contractMonths : null,
         salary_template_id: effectiveTemplate?.id || null,
         salary_amount: null,
@@ -937,6 +949,27 @@ export default function RotationPlanFormPage() {
                       <span className="absolute -top-1.5 left-1 text-[9px] text-orange-500 bg-orange-50 px-0.5">귀국</span>
                     </div>
                   </div>
+                  {row.disembarkCrewId && (
+                    <div className="grid grid-cols-2 gap-1">
+                      <Select value={row.disembarkReasonId || '_none'} onValueChange={v => updateRow(row.id, { disembarkReasonId: v === '_none' ? '' : v, sickPayMonthlyAmount: '' })} disabled={isReadOnly}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="하선사유" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">하선사유 선택</SelectItem>
+                          {signOffReasons.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {signOffReasons.find(r => r.id === row.disembarkReasonId)?.name === '상병하선' && (
+                        <div className="relative">
+                          <Input
+                            type="number" placeholder="상병급여 월액" value={row.sickPayMonthlyAmount}
+                            onChange={e => updateRow(row.id, { sickPayMonthlyAmount: e.target.value })}
+                            className="h-7 text-xs pr-1" disabled={isReadOnly}
+                          />
+                          <span className="absolute -top-1.5 left-1 text-[9px] text-red-500 bg-red-50 px-0.5">상병급여 월액</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -2,6 +2,7 @@ import { addMonths, format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
+import { sickPayService } from '@/services/sick-pay.service';
 import type {
   CrewRotationPlan,
   CrewRotationPlanWithDetails,
@@ -670,6 +671,10 @@ export const rotationService = {
       : { data: [] as { id: string; name: string }[] };
     const manningAgencyNameById = new Map((manningAgencies || []).map(c => [c.id, c.name]));
 
+    // 상병하선 여부 판정용 — 시스템 기본 하선사유 이름으로 매칭한다.
+    const { data: sickReason } = await supabase.from('sign_off_reasons').select('id').eq('name', '상병하선').maybeSingle();
+    const executedByUser = await getCurrentUser();
+
     for (const a of (assignments || [])) {
       // ── 하선자: 기존 승선 기록 완료 처리 + crew_members 초기화 ──
       if (a.off_crew_id) {
@@ -692,7 +697,7 @@ export const rotationService = {
           .update({ status: 'standby', current_ship_id: null, current_grade: null, updated_at: now })
           .eq('id', a.off_crew_id);
 
-        // 승선 경력의 진행중이던 항목을 하선일로 종결
+        // 승선 경력의 진행중이던 항목을 하선일로 종결 — 계획에서 하선사유를 입력했으면 함께 반영한다.
         const { data: openService } = await supabase
           .from('sea_service_records')
           .select('id')
@@ -701,12 +706,28 @@ export const rotationService = {
           .is('sign_off_date', null)
           .order('sign_on_date', { ascending: false })
           .limit(1);
+        let closedServiceRecordId: string | null = null;
         if (openService?.[0]) {
+          closedServiceRecordId = openService[0].id;
           await supabase.from('sea_service_records').update({
             sign_off_date: disembarkDate,
             port_of_sign_off: portLabel,
+            sign_off_reason_id: a.off_sign_off_reason_id || null,
             updated_at: now,
           }).eq('id', openService[0].id);
+        }
+
+        // 상병하선 + 상병급여 월액이 입력된 경우 — 하선일 다음날부터 청구되는 상병급여 케이스를 자동 등록한다.
+        if (sickReason && a.off_sign_off_reason_id === sickReason.id && a.off_sick_pay_monthly_amount && a.off_sick_pay_monthly_amount > 0) {
+          await sickPayService.createSickPayRecord({
+            crew_member_id: a.off_crew_id,
+            ship_id: plan.ship_id,
+            rank_id: a.off_rank_id,
+            sea_service_record_id: closedServiceRecordId,
+            disembark_date: disembarkDate,
+            monthly_amount: a.off_sick_pay_monthly_amount,
+            created_by: executedByUser?.id || '',
+          });
         }
 
         // 진행중이던 계약을 완료 처리 — 계약종료일(end_date)은 승선/하선일과 별개로
