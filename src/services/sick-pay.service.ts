@@ -97,6 +97,14 @@ export const sickPayService = {
     if (error) throw error;
   },
 
+  // 상병 수당 관리 화면의 체크박스 선택삭제 — 월별 청구 내역(crew_sick_pay_monthly_entries)은
+  // FK ON DELETE CASCADE라 케이스만 지우면 같이 정리된다.
+  async deleteSickPayRecords(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const { error } = await supabase.from('crew_sick_pay_records').delete().in('id', ids);
+    if (error) throw error;
+  },
+
   // 그 선박·그 달에 표시해야 할 상병급여 케이스 — 시작일이 그 달 말 이전이고, 종결됐다면
   // 종결일이 그 달 시작일 이후(=그 달까지는 표시)인 것만 대상. 그 달 항목이 없으면
   // 기준 월액을 기본값으로 보여준다(저장 전까지는 monthly_entry_id가 null).
