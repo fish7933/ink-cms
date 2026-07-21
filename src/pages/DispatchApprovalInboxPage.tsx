@@ -925,13 +925,13 @@ export default function DispatchApprovalInboxPage() {
                 <tr key={a.id} className="border-b last:border-0">
                   <td className="p-2">
                     {a.on_crew_id ? (
-                      <span>{a.on_rank_code && <span className="text-blue-700 font-medium mr-1">{a.on_rank_code}</span>}{a.on_crew_name || ''}</span>
+                      <span>{a.on_rank_code && <span className="text-blue-700 font-medium mr-1">{a.on_rank_code}{a.on_rank_grade ? `(${a.on_rank_grade})` : ''}</span>}{a.on_crew_name || ''}</span>
                     ) : <span className="text-gray-300">-</span>}
                   </td>
                   <td className="p-2 text-gray-600">{a.embark_date || '-'}</td>
                   <td className="p-2">
                     {a.off_crew_id ? (
-                      <span>{a.off_rank_code && <span className="text-amber-700 font-medium mr-1">{a.off_rank_code}</span>}{a.off_crew_name || ''}</span>
+                      <span>{a.off_rank_code && <span className="text-amber-700 font-medium mr-1">{a.off_rank_code}{a.off_rank_grade ? `(${a.off_rank_grade})` : ''}</span>}{a.off_crew_name || ''}</span>
                     ) : <span className="text-gray-300">-</span>}
                   </td>
                   <td className="p-2 text-gray-600">{a.off_disembark_date || '-'}</td>
