@@ -10,6 +10,7 @@ export interface CrewSickPayRecord {
   rank_id: string | null;
   sea_service_record_id: string | null;
   disembark_date: string;
+  return_date: string | null; // 귀국일 — start_date 계산 근거(없으면 disembark_date가 근거였음)
   start_date: string; // 귀국일 다음날(귀국일이 없으면 하선일 다음날)
   monthly_amount: number;
   currency: string;

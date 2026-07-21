@@ -92,6 +92,9 @@ export const crewPayrollBillingService = {
         const allowanceByName: Record<string, number> = {};
         const deductionByName: Record<string, number> = {};
         for (const item of pItems) {
+          // 하선월 일괄지급(Lump Sum)은 누적 적립액과 같은 값이라 청구서 열에서도 뺀다
+          // (net_amount/owner_billed_amount 계산에는 그대로 포함되어 있음).
+          if (item.payment_type === 'deferred_payout') continue;
           if (item.category === 'earning') {
             allowanceByName[item.name] = (allowanceByName[item.name] || 0) + item.amount;
             if (!allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);

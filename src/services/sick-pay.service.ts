@@ -2,16 +2,45 @@ import { supabase } from '@/lib/supabase';
 import { crewDisplayName } from '@/lib/utils';
 import type { CrewSickPayRecord, CrewSickPayRecordWithDetails, CrewSickPayLedgerRow } from '@/types/sick-pay';
 
+// 로컬 타임존으로 Date를 만들고 toISOString()(UTC)으로 읽으면, UTC보다 앞선 타임존(KST 등)에서
+// 날짜가 하루 밀려버린다(예: KST에서 2026-07-27 + 1일이 다시 2026-07-27로 나옴) — UTC 기준으로만
+// 계산해서 타임존 영향을 없앤다.
 function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function daysInMonth(yearMonth: string): number {
+  const [y, m] = yearMonth.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
 function monthRange(yearMonth: string): { start: string; end: string } {
-  const [y, m] = yearMonth.split('-').map(Number);
-  const end = new Date(y, m, 0).getDate();
+  const end = daysInMonth(yearMonth);
   return { start: `${yearMonth}-01`, end: `${yearMonth}-${String(end).padStart(2, '0')}` };
+}
+
+// 상병급여는 시작월/종결월을 일할계산으로 기본 산정한다(그 외 달은 기준 월액 그대로).
+// 시작월과 종결월이 같은 짧은 케이스도 처리한다.
+function defaultMonthlyAmount(record: CrewSickPayRecord, yearMonth: string): number {
+  const total = Number(record.monthly_amount);
+  const dim = daysInMonth(yearMonth);
+  const startYm = record.start_date.slice(0, 7);
+  const closedYm = record.closed_date?.slice(0, 7);
+
+  if (yearMonth === startYm) {
+    const startDay = Number(record.start_date.slice(8, 10));
+    const endDay = closedYm === yearMonth ? Number(record.closed_date!.slice(8, 10)) : dim;
+    const daysServed = Math.max(0, endDay - startDay + 1);
+    return Math.round(total * daysServed / dim);
+  }
+  if (closedYm === yearMonth) {
+    const closedDay = Number(record.closed_date!.slice(8, 10));
+    return Math.round(total * closedDay / dim);
+  }
+  return total;
 }
 
 async function attachDetails(records: CrewSickPayRecord[]): Promise<CrewSickPayRecordWithDetails[]> {
@@ -78,6 +107,7 @@ export const sickPayService = {
         rank_id: input.rank_id,
         sea_service_record_id: input.sea_service_record_id,
         disembark_date: input.disembark_date,
+        return_date: input.return_date,
         start_date: addDays(startBasis, 1),
         monthly_amount: input.monthly_amount,
         currency: input.currency || 'USD',
@@ -130,7 +160,7 @@ export const sickPayService = {
     const withDetails = await attachDetails(records);
     return withDetails.map(r => {
       const entry = entryByRecordId.get(r.id);
-      return { ...r, monthly_entry_id: entry?.id || null, this_month_amount: entry ? Number(entry.amount) : Number(r.monthly_amount) };
+      return { ...r, monthly_entry_id: entry?.id || null, this_month_amount: entry ? Number(entry.amount) : defaultMonthlyAmount(r, yearMonth) };
     });
   },
 

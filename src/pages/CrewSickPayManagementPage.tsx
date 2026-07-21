@@ -226,7 +226,7 @@ export default function CrewSickPayManagementPage() {
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선박</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선원</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">하선일</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">귀국일</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">상병급여 시작일</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">상태</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">종결일</TableHead>
@@ -245,7 +245,7 @@ export default function CrewSickPayManagementPage() {
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.ship_name}</TableCell>
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.rank_code}</TableCell>
                   <TableCell className="py-1 px-2 text-xs font-medium">{r.crew_name}</TableCell>
-                  <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.disembark_date}</TableCell>
+                  <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.return_date || '-'}</TableCell>
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.start_date}</TableCell>
                   <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></TableCell>
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.closed_date || '-'}</TableCell>

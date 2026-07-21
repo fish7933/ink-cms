@@ -876,8 +876,11 @@ export const crewPayrollService = {
     const deductionColumns: string[] = [];
     // 후불성 항목도 당월 발생분(amount)은 다른 항목과 동일하게 열로 보여준다 — 누적
     // 적립액(accrued_to_date)만 급여대장에는 표기하지 않는다(개인 급여명세서에서만 확인).
+    // 하선월 일괄지급(Lump Sum)은 그 값 자체가 누적 적립액과 같으므로 열에서 뺀다
+    // (net_amount 계산에는 그대로 포함되어 있음).
     for (const p of payslips) {
       for (const item of p.items) {
+        if (item.payment_type === 'deferred_payout') continue;
         if (item.category === 'earning' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
         if (item.category === 'deduction' && !deductionColumns.includes(item.name)) deductionColumns.push(item.name);
       }
@@ -887,6 +890,7 @@ export const crewPayrollService = {
       const allowanceByName: Record<string, number> = {};
       const deductionByName: Record<string, number> = {};
       for (const item of p.items) {
+        if (item.payment_type === 'deferred_payout') continue;
         if (item.category === 'earning') allowanceByName[item.name] = (allowanceByName[item.name] || 0) + item.amount;
         if (item.category === 'deduction') deductionByName[item.name] = (deductionByName[item.name] || 0) + item.amount;
       }

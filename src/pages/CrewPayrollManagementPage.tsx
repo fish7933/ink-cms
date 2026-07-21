@@ -335,14 +335,18 @@ export default function CrewPayrollManagementPage() {
   // (items는 display_order 순이라 급여 구성항목이 계약 수당보다 항상 앞선 열에 온다).
   // 후불성 항목도 당월 발생분(item.amount)은 다른 항목과 동일하게 열로 보여준다 — 다만
   // 누적된 적립액(accrued_to_date)은 급여대장에 표기하지 않고 개인 급여명세서에서만 보여준다.
+  // 하선월 일괄지급(Lump Sum) 항목은 그 자체가 누적 적립액과 같은 값이라 열로 노출하면
+  // 결국 적립액을 보여주는 셈이 되므로 급여대장에서는 뺀다(net_amount 계산에는 그대로 포함).
   const allowanceOrder: string[] = [];
   const deductionOrder: string[] = [];
   for (const p of payslips) {
     for (const item of p.items) {
+      if (item.payment_type === 'deferred_payout') continue;
       if (item.category === 'earning' && !allowanceOrder.includes(item.name)) allowanceOrder.push(item.name);
       if (item.category === 'deduction' && !deductionOrder.includes(item.name)) deductionOrder.push(item.name);
     }
   }
+  const isDeferredColumn = (name: string) => payslips.some(p => p.items.some(i => i.name === name && i.payment_type === 'deferred_accrual'));
   const findItem = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
     p.items.find(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name);
   const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => findItem(p, name, deduction)?.amount ?? 0;
@@ -482,11 +486,6 @@ export default function CrewPayrollManagementPage() {
           </Button>
         )}
         {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-purple-600 border-purple-300" onClick={handleSubmit} disabled={submitting}>
-            <Send className="w-3.5 h-3.5" />{submitting ? 'Submitting...' : 'Submit Expense Report'}
-          </Button>
-        )}
-        {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
           <Button size="sm" className="gap-1.5 h-7" onClick={handleConfirm} disabled={confirming}>
             <CheckCircle2 className="w-3.5 h-3.5" />{confirming ? 'Confirming...' : 'Confirm'}
           </Button>
@@ -524,12 +523,23 @@ export default function CrewPayrollManagementPage() {
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
+              <tr className="text-[10px] text-gray-400">
+                <th colSpan={4} />
+                <th colSpan={allowanceOrder.length + 1} className="text-center py-1 font-semibold text-blue-700 bg-blue-50/60">Earnings</th>
+                <th colSpan={deductionOrder.length + 1} className="text-center py-1 font-semibold text-red-600 bg-red-50/60">Deductions</th>
+                <th colSpan={2} />
+              </tr>
               <tr>
                 <th className="text-left p-2 font-medium text-gray-600">Rank</th>
                 <th className="text-left p-2 font-medium text-gray-600">Name</th>
                 <th className="text-center p-2 font-medium text-gray-600">Pay Period</th>
                 <th className="text-center p-2 font-medium text-gray-600">Days</th>
-                {allowanceOrder.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
+                {allowanceOrder.map(name => (
+                  <th key={name} className="text-right p-2 font-medium text-gray-600">
+                    {name}
+                    {isDeferredColumn(name) && <span className="block text-[9px] font-normal text-amber-500">Deferred</span>}
+                  </th>
+                ))}
                 <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">Total Earnings</th>
                 {deductionOrder.map(name => <th key={name} className="text-right p-2 font-medium text-red-500">{name}</th>)}
                 <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">Total Deductions</th>
