@@ -188,9 +188,10 @@ export const rotationService = {
       .from('crew_rotation_assignments')
       .select(`
         rotation_plan_id, on_crew_id, off_crew_id, salary_amount, salary_currency,
-        plan:crew_rotation_plans!inner(status, plan_name, ship:ships(name))
+        plan:crew_rotation_plans!inner(status, plan_name, deleted_at, ship:ships(name))
       `)
-      .in('plan.status', ['draft', 'pending_approval', 'approved']);
+      .in('plan.status', ['draft', 'pending_approval', 'approved'])
+      .is('plan.deleted_at', null);
 
     if (error) {
       console.error('Error fetching crew reservations:', error);

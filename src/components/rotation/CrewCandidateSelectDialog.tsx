@@ -154,9 +154,6 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
     onOpenChange(false);
   };
 
-  // 소속 표시: "선주 · 플릿 · 선박" 순
-  const affiliationOf = (c: CrewWithDetails) => [c.owner_name, c.fleet_name, c.current_ship_name].filter(Boolean).join(' · ') || '-';
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
@@ -220,33 +217,39 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                     />
                   </th>
                 )}
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">소속(선주·플릿·선박)</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">직급</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">이름</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">상태</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(c => (
-                <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => handleRowClick(c.id)}>
-                  {!isSingle && (
-                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                      <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
-                    </td>
-                  )}
-                  <td className="px-3 py-2 text-xs text-gray-500">{affiliationOf(c)}</td>
-                  <td className="px-3 py-2 text-gray-700">{c.rank_code || '-'}</td>
-                  <td className="px-3 py-2 font-medium">
-                    {crewDisplayName(c)}
-                    {getReservationNote?.(c) && (
-                      <div className="text-[10px] text-amber-600 font-normal mt-0.5">⚠ {getReservationNote(c)}</div>
+              {filtered.map(c => {
+                const reservationNote = getReservationNote?.(c);
+                return (
+                  <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => handleRowClick(c.id)}>
+                    {!isSingle && (
+                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                        <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
+                      </td>
                     )}
-                  </td>
-                  <td className="px-3 py-2 text-xs text-gray-500">{STATUS_LABELS[getCrewStatus(c)] || getCrewStatus(c) || '-'}</td>
-                </tr>
-              ))}
+                    <td className="px-3 py-2 text-gray-700">{c.rank_code || '-'}</td>
+                    <td className="px-3 py-2 font-medium">
+                      {crewDisplayName(c)}
+                      {reservationNote && (
+                        <div className="text-[10px] text-amber-600 font-normal mt-0.5">⚠ {reservationNote}</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-500">
+                      {/* "대기"만으로는 하선 후 대기 중인지 다른 계획에 이미 배정 예정인지 구분이 안 되므로,
+                          예약이 걸려 있으면 상태 옆에 명시한다. */}
+                      {STATUS_LABELS[getCrewStatus(c)] || getCrewStatus(c) || '-'}
+                      {reservationNote && <span className="text-amber-600"> (배정예정)</span>}
+                    </td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
-                <tr><td colSpan={isSingle ? 4 : 5} className="text-center py-8 text-xs text-gray-400">후보가 없습니다</td></tr>
+                <tr><td colSpan={isSingle ? 3 : 4} className="text-center py-8 text-xs text-gray-400">후보가 없습니다</td></tr>
               )}
             </tbody>
           </table>

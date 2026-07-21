@@ -207,11 +207,13 @@ export const crewService = {
         .lt('expiry_date', todayStr)
         .not('expiry_date', 'is', null),
       supabase.from('crew_rotation_assignments')
-        .select('on_crew_id, on_rank_id, on_rank_grade, embark_date, salary_template_id, salary_amount, salary_currency, contract_months, crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status, plan_name)')
-        .not('on_crew_id', 'is', null),
+        .select('on_crew_id, on_rank_id, on_rank_grade, embark_date, salary_template_id, salary_amount, salary_currency, contract_months, crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status, plan_name, deleted_at)')
+        .not('on_crew_id', 'is', null)
+        .is('crew_rotation_plans.deleted_at', null),
       supabase.from('crew_rotation_assignments')
-        .select('off_crew_id, crew_rotation_plans!inner(status)')
-        .not('off_crew_id', 'is', null),
+        .select('off_crew_id, crew_rotation_plans!inner(status, deleted_at)')
+        .not('off_crew_id', 'is', null)
+        .is('crew_rotation_plans.deleted_at', null),
       supabase.from('salary_templates')
         .select('ship_id')
         .eq('is_active', true)
@@ -716,8 +718,9 @@ export const crewService = {
     if (!shipId) {
       const { data: pendingRows } = await supabase
         .from('crew_rotation_assignments')
-        .select('crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status)')
-        .eq('on_crew_id', crewId);
+        .select('crew_rotation_plans!inner(ship_id, owner_id, fleet_id, status, deleted_at)')
+        .eq('on_crew_id', crewId)
+        .is('crew_rotation_plans.deleted_at', null);
       const PENDING_PLAN_STATUSES = new Set(['draft', 'pending_approval', 'approved']);
       const pending = (pendingRows || [])
         .map((r: any) => r.crew_rotation_plans)
