@@ -1091,63 +1091,57 @@ export default function RotationPlanFormPage() {
           {rows.every(r => !r.boardingCrewId && !r.disembarkCrewId) ? (
             <p className="text-xs text-gray-400">배정된 선원이 없습니다</p>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {rows.filter(r => r.boardingCrewId || r.disembarkCrewId).map((r, i) => {
-                const inCrew = getCrew(r.boardingCrewId);
-                const outCrew = getCrew(r.disembarkCrewId);
-                const inRankCode = r.boardingRankId ? ranks.find(rk => rk.id === r.boardingRankId)?.rank_code : '';
-                const outRankCode = r.disembarkRankId ? ranks.find(rk => rk.id === r.disembarkRankId)?.rank_code : '';
-                return (
-                  <div key={r.id} className="bg-white border rounded-md p-2 space-y-1.5 text-xs">
-                    <div className="flex items-center gap-1 border-b pb-1">
-                      <span className="text-[10px] text-gray-400 font-mono">#{i + 1}</span>
-                      {r.contractMonths && (
-                        <span className="ml-auto text-[10px] text-gray-400">{r.contractMonths}개월</span>
-                      )}
-                    </div>
-                    <div className="flex gap-2 divide-x">
-                      {/* On-Signer */}
-                      <div className="flex-1 min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-1">
-                          <LogIn className="w-3 h-3 text-emerald-500" />
-                          <span className="text-[10px] font-medium text-emerald-600 whitespace-nowrap">On-Signer</span>
-                        </div>
-                        {r.boardingCrewId ? (
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1 min-w-0">
+            <div className="rounded-md border bg-white overflow-hidden overflow-x-auto">
+              <table className="w-full text-xs whitespace-nowrap">
+                <thead className="bg-gray-50 border-b">
+                  <tr className="text-[10px] text-gray-400">
+                    <th className="text-left py-1 px-2 font-medium">#</th>
+                    <th className="text-left py-1 px-2 font-medium text-emerald-600">On-Signer</th>
+                    <th className="text-left py-1 px-2 font-medium">계약개월</th>
+                    <th className="text-left py-1 px-2 font-medium">승선일</th>
+                    <th className="text-left py-1 px-2 font-medium text-orange-600">Off-Signer</th>
+                    <th className="text-left py-1 px-2 font-medium">하선일</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.filter(r => r.boardingCrewId || r.disembarkCrewId).map((r, i) => {
+                    const inCrew = getCrew(r.boardingCrewId);
+                    const outCrew = getCrew(r.disembarkCrewId);
+                    const inRankCode = r.boardingRankId ? ranks.find(rk => rk.id === r.boardingRankId)?.rank_code : '';
+                    const outRankCode = r.disembarkRankId ? ranks.find(rk => rk.id === r.disembarkRankId)?.rank_code : '';
+                    return (
+                      <tr key={r.id} className="border-b last:border-0">
+                        <td className="py-1 px-2 text-gray-400 font-mono">{i + 1}</td>
+                        <td className="py-1 px-2">
+                          {r.boardingCrewId ? (
+                            <span className="flex items-center gap-1">
                               {inRankCode && <span className="font-mono text-[10px] bg-emerald-50 text-emerald-700 px-1 rounded shrink-0">{inRankCode}</span>}
                               {r.boardingGrade
                                 ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
                                 : gradesForRankId(r.boardingRankId).length > 0
                                   ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
                                   : null}
-                              <span className="font-medium text-emerald-800 truncate">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</span>
-                            </div>
-                            {r.boardingDate && <div className="text-[10px] text-gray-400">{r.boardingDate}</div>}
-                          </div>
-                        ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
-                      </div>
-                      {/* Off-Signer */}
-                      <div className="flex-1 min-w-0 space-y-0.5 pl-2">
-                        <div className="flex items-center gap-1">
-                          <LogOut className="w-3 h-3 text-orange-500" />
-                          <span className="text-[10px] font-medium text-orange-600 whitespace-nowrap">Off-Signer</span>
-                        </div>
-                        {r.disembarkCrewId ? (
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="font-medium text-emerald-800">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</span>
+                            </span>
+                          ) : <span className="text-gray-300 italic">미정</span>}
+                        </td>
+                        <td className="py-1 px-2 text-gray-400">{r.contractMonths ? `${r.contractMonths}개월` : '-'}</td>
+                        <td className="py-1 px-2 text-gray-400">{r.boardingDate || '-'}</td>
+                        <td className="py-1 px-2">
+                          {r.disembarkCrewId ? (
+                            <span className="flex items-center gap-1">
                               {outRankCode && <span className="font-mono text-[10px] bg-orange-50 text-orange-700 px-1 rounded shrink-0">{outRankCode}</span>}
                               {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
-                              <span className="font-medium text-orange-800 truncate">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
-                            </div>
-                            {r.disembarkDate && <div className="text-[10px] text-gray-400">{r.disembarkDate}</div>}
-                          </div>
-                        ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                              <span className="font-medium text-orange-800">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
+                            </span>
+                          ) : <span className="text-gray-300 italic">미정</span>}
+                        </td>
+                        <td className="py-1 px-2 text-gray-400">{r.disembarkDate || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
