@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Printer, RefreshCw, FileSpreadsheet, Send, ExternalLink, Trash2, Wallet, CheckCircle2 } from 'lucide-react';
+import { Printer, RefreshCw, FileSpreadsheet, Send, ExternalLink, Trash2, Wallet, CheckCircle2, Eye, History, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -21,7 +21,7 @@ import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixT
 import type { Ship } from '@/lib/store';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
-import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails } from '@/types/crew-payroll';
+import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow } from '@/types/crew-payroll';
 
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
 const STATUS_COLORS: Record<string, string> = {
@@ -57,13 +57,21 @@ export default function CrewPayrollManagementPage() {
   const [confirming, setConfirming] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const [editingPayslip, setEditingPayslip] = useState<CrewPayslipWithDetails | null>(null);
-  const [draftAmounts, setDraftAmounts] = useState<Record<string, string>>({});
-  const [savingItems, setSavingItems] = useState(false);
   const [viewingPayslip, setViewingPayslip] = useState<CrewPayslipWithDetails | null>(null);
   const [template, setTemplate] = useState<SalaryTemplateWithItems | null>(null);
   const [components, setComponents] = useState<SalaryComponent[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
+
+  // 급여대장 표 안에서 바로 금액을 고쳐 쓰는 인라인 편집 — 클릭한 셀 하나만 입력 상태가 되고,
+  // 바뀐 값이 하나라도 있으면 상단에 저장 버튼이 뜬다(저장 전까지는 로컬에만 보관).
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [cellDrafts, setCellDrafts] = useState<Record<string, string>>({});
+  const [savingCells, setSavingCells] = useState(false);
+
+  // 직급/이름을 클릭하면 그 선원의 선박 이력 전체를 급여대장 형태(월별 행 + 상태)로 보여준다.
+  const [historyCrew, setHistoryCrew] = useState<{ crewMemberId: string; crewName: string } | null>(null);
+  const [historyRows, setHistoryRows] = useState<CrewPayrollHistoryRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -220,28 +228,50 @@ export default function CrewPayrollManagementPage() {
     }
   };
 
-  const openEditDialog = (payslip: CrewPayslipWithDetails) => {
-    setEditingPayslip(payslip);
-    setDraftAmounts(Object.fromEntries(payslip.items.map(i => [i.id, String(i.amount)])));
+  const startCellEdit = (itemId: string, currentAmount: number) => {
+    setEditingItemId(itemId);
+    setCellDrafts(prev => (itemId in prev ? prev : { ...prev, [itemId]: String(currentAmount) }));
   };
 
-  const handleSaveItems = async () => {
-    if (!editingPayslip) return;
+  const itemById = new Map(payslips.flatMap(p => p.items.map(i => [i.id, i] as const)));
+  const hasCellChanges = Object.entries(cellDrafts).some(([id, v]) => {
+    const item = itemById.get(id);
+    return item && Number(v) !== item.amount && v.trim() !== '';
+  });
+
+  const handleSaveCells = async () => {
+    setSavingCells(true);
     try {
-      setSavingItems(true);
-      for (const item of editingPayslip.items) {
-        const next = Number(draftAmounts[item.id]);
-        if (!Number.isNaN(next) && next !== item.amount) {
-          await crewPayrollService.updatePayslipItemAmount(item.id, next);
-        }
+      const changed = Object.entries(cellDrafts).filter(([id, v]) => {
+        const item = itemById.get(id);
+        return item && v.trim() !== '' && !Number.isNaN(Number(v)) && Number(v) !== item.amount;
+      });
+      for (const [id, v] of changed) {
+        await crewPayrollService.updatePayslipItemAmount(id, Number(v));
       }
-      toast({ title: 'Saved.' });
-      setEditingPayslip(null);
+      toast({ title: `Saved (${changed.length} item${changed.length === 1 ? '' : 's'} updated).` });
+      setCellDrafts({});
+      setEditingItemId(null);
       await refresh();
     } catch (e) {
       toast({ title: 'Save failed', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
-      setSavingItems(false);
+      setSavingCells(false);
+    }
+  };
+
+  const handleDiscardCells = () => {
+    setCellDrafts({});
+    setEditingItemId(null);
+  };
+
+  const openCrewHistory = async (p: CrewPayslipWithDetails) => {
+    setHistoryCrew({ crewMemberId: p.crew_member_id, crewName: p.crew_name });
+    setHistoryLoading(true);
+    try {
+      setHistoryRows(await crewPayrollService.getCrewPayrollHistory(p.crew_member_id));
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -252,6 +282,8 @@ export default function CrewPayrollManagementPage() {
   // 급여대장은 급여 구성항목(BW/OT/OA/LP 등)과 계약별 수당을 "기본급" 한 칸으로 뭉치지 않고
   // 항목명별 열로 모두 펼친다 — 이번 회차에 실제로 쓰인 급여/공제 항목명의 합집합을 열로 만든다
   // (items는 display_order 순이라 급여 구성항목이 계약 수당보다 항상 앞선 열에 온다).
+  // 후불성 항목도 당월 발생분(item.amount)은 다른 항목과 동일하게 열로 보여준다 — 다만
+  // 누적된 적립액(accrued_to_date)은 급여대장에 표기하지 않고 개인 급여명세서에서만 보여준다.
   const allowanceOrder: string[] = [];
   const deductionOrder: string[] = [];
   for (const p of payslips) {
@@ -260,10 +292,52 @@ export default function CrewPayrollManagementPage() {
       if (item.category === 'deduction' && !deductionOrder.includes(item.name)) deductionOrder.push(item.name);
     }
   }
-  const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
-    p.items.filter(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name)
-      .reduce((sum, i) => sum + i.amount, 0);
+  const findItem = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
+    p.items.find(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name);
+  const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => findItem(p, name, deduction)?.amount ?? 0;
   const sumColumn = (f: (p: CrewPayslipWithDetails) => number) => payslips.reduce((sum, p) => sum + f(p), 0);
+
+  // 인라인 편집 가능한 금액 셀 — draft 상태에서만 클릭해 고칠 수 있고, 저장 전에는 화면에만
+  // 반영된다(합계 열/하단 합계는 저장 후 새로고침되면서 갱신된다).
+  const renderAmountCell = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => {
+    const item = findItem(p, name, deduction);
+    const editable = !!item && isDraft && permissions.canEdit;
+    if (!editable) {
+      return <td key={name} className={`p-2 text-right font-mono ${deduction ? 'text-red-600' : ''}`}>{fmt(amountByName(p, name, deduction))}</td>;
+    }
+    const draftValue = cellDrafts[item.id];
+    if (editingItemId === item.id) {
+      return (
+        <td key={name} className="py-1 px-2 text-right" onClick={e => e.stopPropagation()}>
+          <Input
+            type="number" autoFocus
+            className="h-6 text-xs w-20 text-right ml-auto px-1"
+            value={draftValue ?? String(item.amount)}
+            onChange={e => setCellDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+            onBlur={() => setEditingItemId(null)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+              if (e.key === 'Escape') {
+                setCellDrafts(prev => { const next = { ...prev }; delete next[item.id]; return next; });
+                setEditingItemId(null);
+              }
+            }}
+          />
+        </td>
+      );
+    }
+    const displayValue = draftValue !== undefined && !Number.isNaN(Number(draftValue)) ? Number(draftValue) : item.amount;
+    return (
+      <td key={name} className="py-1 px-2 text-right" onClick={e => e.stopPropagation()}>
+        <span
+          className={`font-mono cursor-text px-1 rounded hover:bg-amber-50 ${deduction ? 'text-red-600' : ''} ${draftValue !== undefined ? 'bg-amber-50 ring-1 ring-amber-300' : ''}`}
+          onClick={() => startCellEdit(item.id, item.amount)}
+        >
+          {fmt(displayValue)}
+        </span>
+      </td>
+    );
+  };
   const totalGross = payslips.reduce((sum, p) => sum + p.base_amount + p.total_allowance, 0);
   const totalDeduction = payslips.reduce((sum, p) => sum + p.total_deduction, 0);
   const totalNet = payslips.reduce((sum, p) => sum + p.net_amount, 0);
@@ -281,7 +355,7 @@ export default function CrewPayrollManagementPage() {
         <div className="space-y-1.5">
           <Label className="text-xs">Owner</Label>
           <Select value={ownerId || '_none'} onValueChange={v => handleOwnerChange(v === '_none' ? '' : v)}>
-            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="Select owner" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="Select owner" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">Select owner</SelectItem>
               {owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
@@ -291,7 +365,7 @@ export default function CrewPayrollManagementPage() {
         <div className="space-y-1.5">
           <Label className="text-xs">Fleet</Label>
           <Select value={fleetId || '_none'} onValueChange={v => handleFleetChange(v === '_none' ? '' : v)} disabled={!ownerId}>
-            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="All" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="All" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">All</SelectItem>
               {fleetsForOwner.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
@@ -301,7 +375,7 @@ export default function CrewPayrollManagementPage() {
         <div className="space-y-1.5">
           <Label className="text-xs">Vessel</Label>
           <Select value={shipId || '_none'} onValueChange={v => setShipId(v === '_none' ? '' : v)} disabled={!ownerId}>
-            <SelectTrigger className="h-9 text-sm w-48"><SelectValue placeholder="Select vessel" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-48"><SelectValue placeholder="Select vessel" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_none">Select vessel</SelectItem>
               {shipsForSelection.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -310,46 +384,60 @@ export default function CrewPayrollManagementPage() {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Pay Month</Label>
-          <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-9 text-sm w-40" />
+          <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-7 text-xs w-40" />
         </div>
         <Badge variant="outline" className={STATUS_COLORS[periodStatus]}>{STATUS_LABELS[periodStatus]}</Badge>
         <div className="flex-1" />
         {payslips.length > 0 && (
           <>
-            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => window.open(`/print/crew-payroll/${currentPeriod?.id}`, '_blank')}>
+            <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={() => window.open(`/print/crew-payroll/${currentPeriod?.id}`, '_blank')}>
               <Printer className="w-3.5 h-3.5" />Print Ledger
             </Button>
-            <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleExportExcel} disabled={exporting}>
+            <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={handleExportExcel} disabled={exporting}>
               <FileSpreadsheet className="w-3.5 h-3.5" />{exporting ? 'Downloading...' : 'Download Excel'}
             </Button>
           </>
         )}
         {permissions.canCreate && isDraft && shipId && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={handleGenerate} disabled={generating || loading}>
+          <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={handleGenerate} disabled={generating || loading}>
             <RefreshCw className="w-3.5 h-3.5" />{generating ? 'Generating...' : currentPeriod ? 'Regenerate' : 'Generate Payslips'}
           </Button>
         )}
         {permissions.canDelete && isDraft && currentPeriod && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-9 text-red-600 border-red-300" onClick={handleDeletePeriod}>
+          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-red-600 border-red-300" onClick={handleDeletePeriod}>
             <Trash2 className="w-3.5 h-3.5" />Delete Period
           </Button>
         )}
         {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-9 text-purple-600 border-purple-300" onClick={handleSubmit} disabled={submitting}>
+          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-purple-600 border-purple-300" onClick={handleSubmit} disabled={submitting}>
             <Send className="w-3.5 h-3.5" />{submitting ? 'Submitting...' : 'Submit Expense Report'}
           </Button>
         )}
         {permissions.canEdit && isDraft && currentPeriod && payslips.length > 0 && (
-          <Button size="sm" className="gap-1.5 h-9" onClick={handleConfirm} disabled={confirming}>
+          <Button size="sm" className="gap-1.5 h-7" onClick={handleConfirm} disabled={confirming}>
             <CheckCircle2 className="w-3.5 h-3.5" />{confirming ? 'Confirming...' : 'Confirm'}
           </Button>
         )}
         {isPendingApproval && currentPeriod?.approval_document_id && (
-          <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => window.open(`/documents/${currentPeriod.approval_document_id}`, '_blank')}>
+          <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={() => window.open(`/documents/${currentPeriod.approval_document_id}`, '_blank')}>
             <ExternalLink className="w-3.5 h-3.5" />View Approval Status
           </Button>
         )}
       </div>
+
+      {hasCellChanges && (
+        <div className="flex items-center justify-between gap-2 bg-blue-50 border border-blue-200 rounded-md px-4 py-2">
+          <span className="text-xs font-medium text-blue-800">Unsaved changes to one or more amounts.</span>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 bg-white" onClick={handleDiscardCells} disabled={savingCells}>
+              <X className="w-3.5 h-3.5" />Discard
+            </Button>
+            <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveCells} disabled={savingCells}>
+              <Save className="w-3.5 h-3.5" />{savingCells ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {!shipId ? (
         <div className="text-center py-12 text-sm text-gray-400">Please select a vessel first.</div>
@@ -378,23 +466,27 @@ export default function CrewPayrollManagementPage() {
             </thead>
             <tbody>
               {payslips.map(p => (
-                <tr key={p.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setViewingPayslip(p)}>
-                  <td className="p-2 text-gray-600">{p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}</td>
-                  <td className="p-2 font-medium">{p.crew_name}</td>
-                  <td className="p-2 text-center text-gray-500" title={`${p.period_start_date} ~ ${p.period_end_date}`}>
+                <tr key={p.id} className="border-b hover:bg-gray-50">
+                  <td className="py-1 px-2 text-gray-600 cursor-pointer hover:underline hover:text-blue-700" onClick={() => openCrewHistory(p)}>
+                    {p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}
+                  </td>
+                  <td className="py-1 px-2 font-medium cursor-pointer hover:underline hover:text-blue-700" onClick={() => openCrewHistory(p)}>
+                    {p.crew_name}
+                  </td>
+                  <td className="py-1 px-2 text-center text-gray-500" title={`${p.period_start_date} ~ ${p.period_end_date}`}>
                     {fmtMD(p.period_start_date)}~{fmtMD(p.period_end_date)}
                   </td>
-                  <td className="p-2 text-center text-gray-500">{p.days_served}/{p.days_in_month}</td>
-                  {allowanceOrder.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(amountByName(p, name, false))}</td>)}
-                  <td className="p-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>
-                  {deductionOrder.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(amountByName(p, name, true))}</td>)}
-                  <td className="p-2 text-right font-mono font-semibold text-red-600 bg-red-50/60">{fmt(p.total_deduction)}</td>
-                  <td className="p-2 text-right font-mono font-bold bg-green-50/60">{fmt(p.net_amount)}</td>
-                  <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
+                  <td className="py-1 px-2 text-center text-gray-500">{p.days_served}/{p.days_in_month}</td>
+                  {allowanceOrder.map(name => renderAmountCell(p, name, false))}
+                  <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>
+                  {deductionOrder.map(name => renderAmountCell(p, name, true))}
+                  <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60">{fmt(p.total_deduction)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60">{fmt(p.net_amount)}</td>
+                  <td className="py-1 px-2 text-right">
                     <div className="flex justify-end gap-1">
-                      {permissions.canEdit && isDraft && (
-                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openEditDialog(p)}>Edit</Button>
-                      )}
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewingPayslip(p)}>
+                        <Eye className="w-3.5 h-3.5" />View
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => window.open(`/print/crew-payslips/${p.id}`, '_blank')}>
                         <Printer className="w-3.5 h-3.5" />Print
                       </Button>
@@ -405,13 +497,13 @@ export default function CrewPayrollManagementPage() {
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t font-semibold">
-                <td className="p-2" colSpan={4}>Total ({payslips.length} crew)</td>
-                {allowanceOrder.map(name => <td key={name} className="p-2 text-right font-mono">{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
-                <td className="p-2 text-right font-mono bg-blue-50/60">{fmt(totalGross)}</td>
-                {deductionOrder.map(name => <td key={name} className="p-2 text-right font-mono text-red-600">{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
-                <td className="p-2 text-right font-mono text-red-600 bg-red-50/60">{fmt(totalDeduction)}</td>
-                <td className="p-2 text-right font-mono bg-green-50/60">{fmt(totalNet)}</td>
-                <td className="p-2" />
+                <td className="py-1 px-2" colSpan={4}>Total ({payslips.length} crew)</td>
+                {allowanceOrder.map(name => <td key={name} className="py-1 px-2 text-right font-mono">{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
+                <td className="py-1 px-2 text-right font-mono bg-blue-50/60">{fmt(totalGross)}</td>
+                {deductionOrder.map(name => <td key={name} className="py-1 px-2 text-right font-mono text-red-600">{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
+                <td className="py-1 px-2 text-right font-mono text-red-600 bg-red-50/60">{fmt(totalDeduction)}</td>
+                <td className="py-1 px-2 text-right font-mono bg-green-50/60">{fmt(totalNet)}</td>
+                <td className="py-1 px-2" />
               </tr>
             </tfoot>
           </table>
@@ -440,31 +532,45 @@ export default function CrewPayrollManagementPage() {
         </div>
       )}
 
-      <Dialog open={!!editingPayslip} onOpenChange={o => !savingItems && !o && setEditingPayslip(null)}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <Dialog open={!!historyCrew} onOpenChange={o => !o && setHistoryCrew(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">{editingPayslip?.crew_name} — {yearMonth} Payslip Edit</DialogTitle>
+            <DialogTitle className="text-base flex items-center gap-1.5"><History className="w-4 h-4 text-muted-foreground" />{historyCrew?.crewName} — Payroll History</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-1">
-            {editingPayslip?.items.map(item => (
-              <div key={item.id} className="flex items-center gap-1.5">
-                <span className={`text-xs w-14 shrink-0 ${item.category === 'deduction' ? 'text-red-600' : 'text-gray-600'}`}>
-                  {item.category === 'deduction' ? 'Deduction' : item.source === 'template' ? 'Base Pay' : 'Allowance'}
-                </span>
-                <span className="text-sm flex-1 truncate">{item.name}</span>
-                <Input
-                  type="number" className="h-8 text-sm w-28"
-                  value={draftAmounts[item.id] ?? String(item.amount)}
-                  onChange={e => setDraftAmounts(prev => ({ ...prev, [item.id]: e.target.value }))}
-                  disabled={savingItems}
-                />
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setEditingPayslip(null)} disabled={savingItems}>Cancel</Button>
-            <Button size="sm" onClick={handleSaveItems} disabled={savingItems}>{savingItems ? 'Saving...' : 'Save'}</Button>
-          </DialogFooter>
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+          ) : historyRows.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No payroll history found for this crew member.</p>
+          ) : (
+            <div className="rounded-md border overflow-hidden overflow-x-auto">
+              <table className="w-full text-xs whitespace-nowrap">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-2 font-medium text-gray-600">Month</th>
+                    <th className="text-left p-2 font-medium text-gray-600">Vessel</th>
+                    <th className="text-left p-2 font-medium text-gray-600">Status</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Base Pay</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Allowance</th>
+                    <th className="text-right p-2 font-medium text-red-600">Deduction</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Net Pay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyRows.map(r => (
+                    <tr key={r.period_id} className="border-b">
+                      <td className="py-1 px-2">{r.year_month}</td>
+                      <td className="py-1 px-2 text-gray-600">{r.ship_name}</td>
+                      <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
+                      <td className="py-1 px-2 text-right font-mono">{fmt(r.base_amount)}</td>
+                      <td className="py-1 px-2 text-right font-mono">{fmt(r.total_allowance)}</td>
+                      <td className="py-1 px-2 text-right font-mono text-red-600">{fmt(r.total_deduction)}</td>
+                      <td className="py-1 px-2 text-right font-mono font-semibold">{fmt(r.net_amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

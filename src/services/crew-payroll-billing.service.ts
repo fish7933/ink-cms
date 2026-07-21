@@ -61,8 +61,8 @@ export const crewPayrollBillingService = {
     const payslipIds = (payslips || []).map(p => p.id);
     const { data: items } = payslipIds.length > 0
       ? await supabase.from('crew_payslip_items').select('*').in('payslip_id', payslipIds).order('display_order')
-      : { data: [] as { payslip_id: string; category: string; source: string; name: string; amount: number }[] };
-    const itemsByPayslip = new Map<string, { category: string; source: string; name: string; amount: number }[]>();
+      : { data: [] as { payslip_id: string; category: string; source: string; name: string; amount: number; payment_type: string }[] };
+    const itemsByPayslip = new Map<string, { category: string; source: string; name: string; amount: number; payment_type: string }[]>();
     for (const it of items || []) {
       const arr = itemsByPayslip.get(it.payslip_id) || [];
       arr.push(it);

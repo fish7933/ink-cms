@@ -19,6 +19,8 @@ import type {
   CrewPayrollLedgerData,
   CrewPayrollDashboardRow,
   CrewDeferredPayRow,
+  CrewPayrollHistoryRow,
+  CrewPayrollPeriodStatus,
 } from '@/types/crew-payroll';
 
 function daysInMonth(yearMonth: string): number {
@@ -379,13 +381,41 @@ export const crewPayrollService = {
     });
   },
 
+  // 선원 개인의 월별 급여 이력 — 급여대장에서 직급/이름을 클릭했을 때, 선박이 바뀌었어도
+  // 이 선원의 전체 승선 이력에 걸친 급여를 급여대장과 같은 형태(월별 행 + 상태)로 보여준다.
+  async getCrewPayrollHistory(crewMemberId: string): Promise<CrewPayrollHistoryRow[]> {
+    const { data, error } = await supabase
+      .from('crew_payslips')
+      .select('*, crew_payroll_periods!period_id(year_month, status, ships!ship_id(name))')
+      .eq('crew_member_id', crewMemberId)
+      .order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching crew payroll history:', error); return []; }
+    return (data || []).map(p => {
+      const period = p.crew_payroll_periods as { year_month?: string; status?: string; ships?: { name?: string } } | null;
+      return {
+        period_id: p.period_id,
+        year_month: period?.year_month || '',
+        ship_name: period?.ships?.name || '',
+        status: (period?.status as CrewPayrollPeriodStatus) || 'draft',
+        base_amount: Number(p.base_amount),
+        total_allowance: Number(p.total_allowance),
+        total_deduction: Number(p.total_deduction),
+        total_owner_billed: Number(p.total_owner_billed),
+        net_amount: Number(p.net_amount),
+      };
+    }).sort((a, b) => b.year_month.localeCompare(a.year_month));
+  },
+
   // 후불성(deferred) 급여 항목 현황 — 그 달에 존재한 회차들의 명세서 항목 중
   // payment_type이 deferred_accrual/deferred_payout인 것만 모아, 회사 입장에서 선원별
   // 적립액/누적 잔액/그 달 지급액을 한눈에 본다.
-  async getDeferredPayReport(yearMonth: string, ships: { id: string; name: string }[]): Promise<CrewDeferredPayRow[]> {
+  async getDeferredPayReport(
+    yearMonth: string,
+    ships: { id: string; name: string; owner_id?: string; owner_name?: string; fleet_id?: string; fleet_name?: string }[]
+  ): Promise<CrewDeferredPayRow[]> {
     const shipIds = ships.map(s => s.id);
     if (shipIds.length === 0) return [];
-    const shipNameById = new Map(ships.map(s => [s.id, s.name]));
+    const shipById = new Map(ships.map(s => [s.id, s]));
 
     const { data: periods } = await supabase.from('crew_payroll_periods').select('id, ship_id').eq('year_month', yearMonth).in('ship_id', shipIds);
     if (!periods || periods.length === 0) return [];
@@ -394,11 +424,17 @@ export const crewPayrollService = {
 
     const { data: payslips } = await supabase
       .from('crew_payslips')
-      .select('id, period_id, crew_member_id, crew_members!crew_member_id(name, name_english), ranks:rank_id(rank_code)')
+      .select('id, period_id, crew_member_id, embarkation_record_id, crew_members!crew_member_id(name, name_english), ranks:rank_id(rank_code)')
       .in('period_id', periodIds);
     if (!payslips || payslips.length === 0) return [];
     const payslipMetaById = new Map(payslips.map(p => [p.id, p]));
     const payslipIds = payslips.map(p => p.id);
+
+    const embarkationIds = [...new Set(payslips.map(p => p.embarkation_record_id).filter((v): v is string => !!v))];
+    const { data: embarkRecords } = embarkationIds.length > 0
+      ? await supabase.from('crew_embarkation_records').select('id, embark_date, disembark_date').in('id', embarkationIds)
+      : { data: [] as { id: string; embark_date: string; disembark_date: string | null }[] };
+    const embarkById = new Map((embarkRecords || []).map(r => [r.id, r]));
 
     const { data: items } = await supabase
       .from('crew_payslip_items')
@@ -412,16 +448,25 @@ export const crewPayrollService = {
       const payslip = payslipMetaById.get(item.payslip_id);
       if (!payslip) continue;
       const shipId = shipByPeriod.get(payslip.period_id) || '';
+      const ship = shipById.get(shipId);
       const baseName = item.name.replace(/\s*\([^)]*\)\s*$/, '');
       const key = `${item.payslip_id}::${baseName}`;
       const crew = payslip.crew_members as { name?: string; name_english?: string } | null;
       const rank = payslip.ranks as { rank_code?: string } | null;
+      const embark = payslip.embarkation_record_id ? embarkById.get(payslip.embarkation_record_id) : undefined;
+      const disembarkThisMonth = embark?.disembark_date && embark.disembark_date.slice(0, 7) === yearMonth ? embark.disembark_date : null;
       const row = rowsByKey.get(key) || {
         crew_member_id: payslip.crew_member_id,
         crew_name: crew ? crewDisplayName(crew) : '',
         rank_code: rank?.rank_code || '',
+        owner_id: ship?.owner_id,
+        owner_name: ship?.owner_name,
+        fleet_id: ship?.fleet_id,
+        fleet_name: ship?.fleet_name,
         ship_id: shipId,
-        ship_name: shipNameById.get(shipId) || '',
+        ship_name: ship?.name || '',
+        embark_date: embark?.embark_date || '',
+        disembark_date: disembarkThisMonth,
         item_name: baseName,
         monthly_accrual: 0,
         accrued_to_date: 0,
@@ -436,7 +481,9 @@ export const crewPayrollService = {
       rowsByKey.set(key, row);
     }
 
-    return [...rowsByKey.values()].sort((a, b) => a.ship_name.localeCompare(b.ship_name) || a.crew_name.localeCompare(b.crew_name));
+    return [...rowsByKey.values()].sort((a, b) =>
+      (a.owner_name || '').localeCompare(b.owner_name || '') || a.ship_name.localeCompare(b.ship_name) || a.crew_name.localeCompare(b.crew_name)
+    );
   },
 
   // 여러 선박(최대 200척)을 한 번에 생성 — 선박 수와 무관하게 고정된 소수 쿼리로 읽고,
@@ -741,6 +788,8 @@ export const crewPayrollService = {
     const payslips: CrewPayslipWithDetails[] = await this.getPayslipsForPeriod(periodId);
     const allowanceColumns: string[] = [];
     const deductionColumns: string[] = [];
+    // 후불성 항목도 당월 발생분(amount)은 다른 항목과 동일하게 열로 보여준다 — 누적
+    // 적립액(accrued_to_date)만 급여대장에는 표기하지 않는다(개인 급여명세서에서만 확인).
     for (const p of payslips) {
       for (const item of p.items) {
         if (item.category === 'earning' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);

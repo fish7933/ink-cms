@@ -126,26 +126,43 @@ function buildLedgerWorksheet(ledger: CrewPayrollLedgerData): XLSX.WorkSheet {
   return worksheet;
 }
 
-// 선원 개인 급여명세서 — 지급/공제 내역과 실지급액, 맨 아래 서명란까지 포함한 시트 하나.
+const DEFERRED_HEADER = { bg: 'F5EDD0', fg: '7A6110' };
+const DEFERRED_BORDER = 'D9C58A';
+
+// 선원 개인 급여명세서 — 프린트용 CrewPayslipDetailView와 동일한 구성(항목 순서/후불성
+// 적립 표/설명 각주/계산 안내문/서명란)을 그대로 시트로 옮긴다.
 function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string): XLSX.WorkSheet {
-  const baseItems = payslip.items.filter(i => i.source === 'template' && i.category === 'earning');
+  const baseItems = payslip.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual');
   const allowanceItems = payslip.items.filter(i => i.source === 'contract' && i.category === 'earning');
   const deductionItems = payslip.items.filter(i => i.category === 'deduction');
+  const deferredItems = payslip.items.filter(i => i.payment_type === 'deferred_accrual');
+  const ratio = payslip.days_in_month > 0 ? Math.round((payslip.days_served / payslip.days_in_month) * 1000) / 10 : 0;
   const COLS = 4;
+
+  const legendEntries: [string, string][] = [];
+  const seenLegend = new Set<string>();
+  for (const item of payslip.items) {
+    if (!item.description) continue;
+    const baseName = item.name.replace(/\s*\([^)]*\)\s*$/, '');
+    if (seenLegend.has(baseName)) continue;
+    seenLegend.add(baseName);
+    legendEntries.push([baseName, item.description]);
+  }
 
   const aoa: ReturnType<typeof cell>[][] = [];
   const titleStyle = { font: { bold: true, sz: 13 }, alignment: { horizontal: 'center' as const } };
   const labelStyle = { font: { sz: BASE_SZ, color: { rgb: '777777' } } };
   const valueStyle = { font: { sz: BASE_SZ, bold: true } };
+  const blankRow = () => [cell('', {}), cell('', {}), cell('', {}), cell('', {})];
 
   aoa.push([cell('CREW PAYSLIP', titleStyle), cell('', {}), cell('', {}), cell('', {})]);
   aoa.push([cell(payslip.period_year_month || payslip.created_at.slice(0, 7), { alignment: { horizontal: 'center' }, font: { sz: BASE_SZ, color: { rgb: '777777' } } }), cell('', {}), cell('', {}), cell('', {})]);
-  aoa.push([cell('', {}), cell('', {}), cell('', {}), cell('', {})]);
+  aoa.push(blankRow());
 
-  aoa.push([cell('Vessel', labelStyle), cell(shipName || '-', valueStyle), cell('Rank', labelStyle), cell(`${payslip.rank_code || payslip.rank_name}${payslip.rank_grade ? `(${payslip.rank_grade})` : ''}`, valueStyle)]);
-  aoa.push([cell('Name', labelStyle), cell(payslip.crew_name, valueStyle), cell('Nationality', labelStyle), cell(payslip.nationality || '-', valueStyle)]);
-  aoa.push([cell('Pay Period', labelStyle), cell(`${payslip.period_start_date} ~ ${payslip.period_end_date}`, valueStyle), cell('Days Served', labelStyle), cell(`${payslip.days_served} / ${payslip.days_in_month} days`, valueStyle)]);
-  aoa.push([cell('', {}), cell('', {}), cell('', {}), cell('', {})]);
+  aoa.push([cell('Rank', labelStyle), cell(`${payslip.rank_code || payslip.rank_name}${payslip.rank_grade ? `(${payslip.rank_grade})` : ''}`, valueStyle), cell('Name', labelStyle), cell(payslip.crew_name, valueStyle)]);
+  aoa.push([cell('Vessel', labelStyle), cell(shipName || '-', valueStyle), cell('Nationality', labelStyle), cell(payslip.nationality || '-', valueStyle)]);
+  aoa.push([cell('Pay Period', labelStyle), cell(`${payslip.period_start_date} ~ ${payslip.period_end_date}`, valueStyle), cell('Days Served', labelStyle), cell(`${payslip.days_served} / ${payslip.days_in_month} days (${ratio}%)`, valueStyle)]);
+  aoa.push(blankRow());
 
   const sectionHeader = (label: string, deduction?: boolean) => [
     cell(label, { font: { bold: true, sz: BASE_SZ, color: { rgb: deduction ? DEDUCTION_HEADER.fg : HEADER.fg } }, fill: { fgColor: { rgb: deduction ? DEDUCTION_HEADER.bg : HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
@@ -155,6 +172,9 @@ function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string
   ];
 
   aoa.push(sectionHeader('EARNINGS'));
+  if (baseItems.length === 0 && allowanceItems.length === 0) {
+    aoa.push([cell('No earning items.', { font: { sz: BASE_SZ, color: { rgb: '999999' } }, border: border() }), cell('', { border: border() }), cell('', { border: border() }), cell('', { border: border() })]);
+  }
   [...baseItems.map(i => ({ item: i, type: 'Base Pay' })), ...allowanceItems.map(i => ({ item: i, type: 'Allowance' }))].forEach(({ item, type }) => {
     aoa.push([
       cell(item.name + (item.payment_method === 'owner_billed' ? ' (Owner Billed)' : ''), { font: { sz: BASE_SZ }, border: border() }),
@@ -192,12 +212,54 @@ function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string
   ]);
   aoa.push([cell('', {}), cell('', {}), cell('', {}), cell('', {})]);
 
+  if (legendEntries.length > 0) {
+    const legendText = legendEntries.map(([name, desc]) => `${name}: ${desc}`).join('  ·  ');
+    aoa.push([cell(legendText, { font: { sz: 8, color: { rgb: '999999' } } }), cell('', {}), cell('', {}), cell('', {})]);
+    aoa.push(blankRow());
+  }
+
   aoa.push([
     cell('NET PAY', { font: { bold: true, sz: 12 }, fill: { fgColor: { rgb: RESULT_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
     cell('', { fill: { fgColor: { rgb: RESULT_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
     cell('', { fill: { fgColor: { rgb: RESULT_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
     cell(`${payslip.net_amount.toLocaleString('en-US')} ${payslip.currency}`, { font: { bold: true, sz: 12 }, alignment: { horizontal: 'right' }, fill: { fgColor: { rgb: RESULT_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
   ]);
+
+  if (deferredItems.length > 0) {
+    aoa.push(blankRow());
+    aoa.push([cell('Deferred Pay (Accrued, Not Yet Paid)', { font: { bold: true, sz: BASE_SZ, color: { rgb: '333333' } } }), cell('', {}), cell('', {}), cell('', {})]);
+    aoa.push([
+      cell('Item', { font: { bold: true, sz: BASE_SZ, color: { rgb: DEFERRED_HEADER.fg } }, fill: { fgColor: { rgb: DEFERRED_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
+      cell('', { fill: { fgColor: { rgb: DEFERRED_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
+      cell('Accrued This Month', { font: { bold: true, sz: BASE_SZ, color: { rgb: DEFERRED_HEADER.fg } }, fill: { fgColor: { rgb: DEFERRED_HEADER.bg } }, alignment: { horizontal: 'right' }, border: border({ thickTop: true, thickBottom: true }) }),
+      cell('Total Accrued to Date', { font: { bold: true, sz: BASE_SZ, color: { rgb: DEFERRED_HEADER.fg } }, fill: { fgColor: { rgb: DEFERRED_HEADER.bg } }, alignment: { horizontal: 'right' }, border: border({ thickTop: true, thickBottom: true }) }),
+    ]);
+    deferredItems.forEach(item => {
+      aoa.push([
+        cell(item.name, { font: { sz: BASE_SZ }, border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
+        cell('', { border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
+        cell(item.amount, { numFmt: '#,##0', font: { sz: BASE_SZ }, alignment: { horizontal: 'right' }, border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
+        cell(item.accrued_to_date ?? item.amount, { numFmt: '#,##0', font: { sz: BASE_SZ, bold: true }, alignment: { horizontal: 'right' }, border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
+      ]);
+    });
+  }
+
+  aoa.push(blankRow());
+  aoa.push([cell('Calculation Notes', { font: { bold: true, sz: BASE_SZ, color: { rgb: '333333' } } }), cell('', {}), cell('', {}), cell('', {})]);
+  aoa.push([cell(
+    `Base pay, allowances and deductions are pro-rated based on the vessel's salary template and the crew member's contract terms, for the actual period served this month (${payslip.period_start_date} ~ ${payslip.period_end_date}, ${payslip.days_served}/${payslip.days_in_month} days).`,
+    { font: { sz: 8, color: { rgb: '666666' } } }
+  ), cell('', {}), cell('', {}), cell('', {})]);
+  aoa.push([cell(
+    'Allowances marked "(Owner Billed)" are billed separately to the shipowner rather than paid by the vessel/company, and are excluded from Net Pay.',
+    { font: { sz: 8, color: { rgb: '666666' } } }
+  ), cell('', {}), cell('', {}), cell('', {})]);
+  if (deferredItems.length > 0) {
+    aoa.push([cell(
+      'Deferred (leave-type) pay items accrue monthly but are not paid out until the sign-off month, when the full accrued balance is paid as a lump sum (see "Deferred Pay" above).',
+      { font: { sz: 8, color: { rgb: '666666' } } }
+    ), cell('', {}), cell('', {}), cell('', {})]);
+  }
 
   if (payslip.memo) {
     aoa.push([cell('', {}), cell('', {}), cell('', {}), cell('', {})]);

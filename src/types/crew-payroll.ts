@@ -127,14 +127,34 @@ export interface CrewPayrollDashboardRow {
   total_owner_billed: number;
 }
 
+// 선원 개인의 월별 급여 이력 한 행 — 급여대장 화면에서 직급/이름을 클릭하면 이 선원의
+// 전체 승선 이력(선박이 바뀌어도 전부) 급여를 월별로 모아 보여준다.
+export interface CrewPayrollHistoryRow {
+  period_id: string;
+  year_month: string;
+  ship_name: string;
+  status: CrewPayrollPeriodStatus;
+  base_amount: number;
+  total_allowance: number;
+  total_deduction: number;
+  total_owner_billed: number;
+  net_amount: number;
+}
+
 // 후불성(deferred) 급여 항목 현황 한 행 — 선원+선박+항목 단위로, 그 달 적립액/누적 잔액/
 // 그 달 지급액을 회사 내부 관점(부채 성격)에서 볼 수 있게 한다.
 export interface CrewDeferredPayRow {
   crew_member_id: string;
   crew_name: string;
   rank_code: string;
+  owner_id?: string;
+  owner_name?: string;
+  fleet_id?: string;
+  fleet_name?: string;
   ship_id: string;
   ship_name: string;
+  embark_date: string;
+  disembark_date: string | null; // 이번 달에 하선한 경우만 값이 있음(그 외엔 null)
   item_name: string; // 접미사(Accrued/Lump Sum) 뗀 기본 항목명, 예: "LP"
   monthly_accrual: number; // 이번 달 적립액(아직 안 쌓인 잔액에 더해지는 몫)
   accrued_to_date: number; // 승선일부터 이번 달까지 쌓인 총액(지급 여부와 무관한 원 수치)

@@ -236,12 +236,12 @@ export default function CrewPayrollDashboardPage() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Pay Month</Label>
-          <Input type="month" value={yearMonth} onChange={e => { setYearMonth(e.target.value); setSelectedIds([]); }} className="h-9 text-sm w-40" />
+          <Input type="month" value={yearMonth} onChange={e => { setYearMonth(e.target.value); setSelectedIds([]); }} className="h-7 text-xs w-40" />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Owner</Label>
           <Select value={ownerFilter || '_all'} onValueChange={v => handleOwnerFilterChange(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="All" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="All" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_all">All</SelectItem>
               {owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
@@ -251,7 +251,7 @@ export default function CrewPayrollDashboardPage() {
         <div className="space-y-1.5">
           <Label className="text-xs">Fleet</Label>
           <Select value={fleetFilter || '_all'} onValueChange={v => setFleetFilter(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-9 text-sm w-40"><SelectValue placeholder="All" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="All" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_all">All</SelectItem>
               {fleetsForOwnerFilter.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
@@ -262,11 +262,11 @@ export default function CrewPayrollDashboardPage() {
           <Label className="text-xs">Search Vessel</Label>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Vessel name" className="h-9 text-sm w-44 pl-7" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Vessel name" className="h-7 text-xs w-44 pl-7" />
           </div>
         </div>
         <div className="flex-1" />
-        <Button size="sm" variant="outline" className="gap-1.5 h-9" onClick={() => setBillingOpen(true)}>
+        <Button size="sm" variant="outline" className="gap-1.5 h-7" onClick={() => setBillingOpen(true)}>
           <FileSpreadsheet className="w-3.5 h-3.5" />Export Claim
         </Button>
       </div>
@@ -298,18 +298,18 @@ export default function CrewPayrollDashboardPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8">
+                <TableHead className="py-1 px-2 w-8">
                   <Checkbox
                     checked={allSelectableIds.length > 0 && allSelectableIds.every(id => selectedIds.includes(id))}
                     onCheckedChange={checked => toggleSelectAll(!!checked)}
                   />
                 </TableHead>
-                <TableHead className="text-xs whitespace-nowrap">Fleet</TableHead>
-                <TableHead className="text-xs whitespace-nowrap">Vessel</TableHead>
-                <TableHead className="text-xs whitespace-nowrap">Status</TableHead>
-                <TableHead className="text-xs text-center whitespace-nowrap">Crew</TableHead>
-                <TableHead className="text-xs text-right whitespace-nowrap">Total Net Pay</TableHead>
-                <TableHead className="text-xs text-right whitespace-nowrap">Total Owner Billed</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">Fleet</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">Vessel</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">Status</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-center whitespace-nowrap">Crew</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">Total Net Pay</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">Total Owner Billed</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -319,17 +319,17 @@ export default function CrewPayrollDashboardPage() {
                 return (
                   <Fragment key={group.ownerId}>
                     <TableRow className="bg-slate-50 hover:bg-slate-50">
-                      <TableCell onClick={e => e.stopPropagation()}>
+                      <TableCell className="py-1 px-2" onClick={e => e.stopPropagation()}>
                         <Checkbox
                           checked={groupIds.length > 0 && groupIds.every(id => selectedIds.includes(id))}
                           onCheckedChange={checked => setSelectedIds(prev => checked ? [...new Set([...prev, ...groupIds])] : prev.filter(id => !groupIds.includes(id)))}
                         />
                       </TableCell>
-                      <TableCell colSpan={5} className="text-xs font-semibold text-slate-700">
+                      <TableCell colSpan={5} className="py-1 px-2 text-xs font-semibold text-slate-700">
                         {group.ownerName}
                         <span className="ml-2 font-normal text-slate-500">({group.rows.length} vessels · {confirmedCount}/{group.rows.length} confirmed)</span>
                       </TableCell>
-                      <TableCell colSpan={2} className="text-right" onClick={e => e.stopPropagation()}>
+                      <TableCell colSpan={2} className="py-1 px-2 text-right" onClick={e => e.stopPropagation()}>
                         <Button
                           size="sm" variant="outline" className="h-6 text-[11px] gap-1 bg-white"
                           onClick={() => handleDownloadOwnerZip(group)}
@@ -341,15 +341,15 @@ export default function CrewPayrollDashboardPage() {
                     </TableRow>
                     {group.rows.map(row => (
                       <TableRow key={row.ship_id} className="cursor-pointer" onClick={() => openShip(row)}>
-                        <TableCell onClick={e => e.stopPropagation()}>
+                        <TableCell className="py-1 px-2" onClick={e => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.includes(row.ship_id)} onCheckedChange={() => toggleSelect(row.ship_id)} />
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{row.fleet_name || '-'}</TableCell>
-                        <TableCell className="text-xs font-medium">{row.ship_name}</TableCell>
-                        <TableCell><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
-                        <TableCell className="text-xs text-center">{row.payslip_count > 0 ? row.payslip_count : '-'}</TableCell>
-                        <TableCell className="text-xs text-right font-mono">{row.total_net_amount > 0 ? fmt(row.total_net_amount) : '-'}</TableCell>
-                        <TableCell className="text-xs text-right font-mono text-orange-700">{row.total_owner_billed > 0 ? fmt(row.total_owner_billed) : '-'}</TableCell>
+                        <TableCell className="py-1 px-2 text-xs text-muted-foreground">{row.fleet_name || '-'}</TableCell>
+                        <TableCell className="py-1 px-2 text-xs font-medium">{row.ship_name}</TableCell>
+                        <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
+                        <TableCell className="py-1 px-2 text-xs text-center">{row.payslip_count > 0 ? row.payslip_count : '-'}</TableCell>
+                        <TableCell className="py-1 px-2 text-xs text-right font-mono">{row.total_net_amount > 0 ? fmt(row.total_net_amount) : '-'}</TableCell>
+                        <TableCell className="py-1 px-2 text-xs text-right font-mono text-orange-700">{row.total_owner_billed > 0 ? fmt(row.total_owner_billed) : '-'}</TableCell>
                       </TableRow>
                     ))}
                   </Fragment>
@@ -410,7 +410,7 @@ export default function CrewPayrollDashboardPage() {
             <div className="space-y-1.5">
               <Label className="text-xs">Target</Label>
               <Select value={billingGroupId} onValueChange={setBillingGroupId}>
-                <SelectTrigger className="h-9 text-sm w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   {billingTargetOptions.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
