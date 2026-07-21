@@ -584,6 +584,61 @@ export default function CrewPayrollManagementPage() {
               </tr>
             </tfoot>
           </table>
+          {/* 상병급여는 선원 급여대장(crew_payslips)에는 들어가지 않지만, 이 선박·이 달에 청구해야
+              할 상병급여가 있으면 놓치지 않도록 대장 바로 아래(적용 템플릿보다 위)에 안내한다. */}
+          {sickPayRows.length > 0 && (
+            <div className="px-2 py-3 border-t">
+              <p className="text-xs font-semibold text-red-700 mb-1.5">⚠ Sick Pay — claim separately for this month</p>
+              <div className="rounded-md border border-red-200 overflow-hidden overflow-x-auto">
+                <table className="w-full text-xs whitespace-nowrap">
+                  <thead className="bg-red-50 border-b border-red-200">
+                    <tr>
+                      <th className="text-left py-1 px-2 font-medium text-red-700">Rank</th>
+                      <th className="text-left py-1 px-2 font-medium text-red-700">Name</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700">Sign-Off Date</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700">Sick Pay Since</th>
+                      <th className="text-right py-1 px-2 font-medium text-red-700">This Month Amount</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700 w-56">Close Case</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sickPayRows.map(row => (
+                      <tr key={row.id} className="border-b border-red-100">
+                        <td className="py-1 px-2 text-gray-600">{row.rank_code}</td>
+                        <td className="py-1 px-2 font-medium">{row.crew_name}</td>
+                        <td className="py-1 px-2 text-center text-gray-500">{row.disembark_date}</td>
+                        <td className="py-1 px-2 text-center text-gray-500">{row.start_date}</td>
+                        <td className="py-1 px-2 text-right">
+                          <Input
+                            type="number"
+                            value={sickPayDrafts[row.id] ?? String(row.this_month_amount)}
+                            onChange={e => setSickPayDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
+                            onBlur={() => handleSaveSickPayAmount(row)}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            disabled={sickPaySaving === row.id}
+                            className="h-6 text-xs w-24 text-right ml-auto"
+                          />
+                        </td>
+                        <td className="py-1 px-2">
+                          <div className="flex items-center justify-center gap-1">
+                            <Input
+                              type="date"
+                              value={closeDateDrafts[row.id] ?? new Date().toISOString().slice(0, 10)}
+                              onChange={e => setCloseDateDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
+                              className="h-6 text-xs w-32"
+                            />
+                            <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => handleCloseSickPay(row)} disabled={sickPaySaving === row.id}>
+                              Close
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {template && (
             <div className="px-2 py-3 border-t bg-gray-50 space-y-1.5">
               <p className="text-xs text-gray-500">Salary Template Applied: <span className="text-gray-700 font-medium">{template.name}</span></p>
@@ -605,62 +660,6 @@ export default function CrewPayrollManagementPage() {
                 {p.year_month} · {STATUS_LABELS[p.status]} ({p.payslip_count} crew)
               </button>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* 상병급여는 선원 급여대장(crew_payslips)에는 들어가지 않지만, 이 선박·이 달에 청구해야
-          할 상병급여가 있으면 놓치지 않도록 대장 말미에 별도로 안내한다. */}
-      {sickPayRows.length > 0 && (
-        <div className="pt-2">
-          <p className="text-xs font-semibold text-red-700 mb-1.5">⚠ Sick Pay — claim separately for this month</p>
-          <div className="rounded-md border border-red-200 overflow-hidden overflow-x-auto">
-            <table className="w-full text-xs whitespace-nowrap">
-              <thead className="bg-red-50 border-b border-red-200">
-                <tr>
-                  <th className="text-left py-1 px-2 font-medium text-red-700">Rank</th>
-                  <th className="text-left py-1 px-2 font-medium text-red-700">Name</th>
-                  <th className="text-center py-1 px-2 font-medium text-red-700">Sign-Off Date</th>
-                  <th className="text-center py-1 px-2 font-medium text-red-700">Sick Pay Since</th>
-                  <th className="text-right py-1 px-2 font-medium text-red-700">This Month Amount</th>
-                  <th className="text-center py-1 px-2 font-medium text-red-700 w-56">Close Case</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sickPayRows.map(row => (
-                  <tr key={row.id} className="border-b border-red-100">
-                    <td className="py-1 px-2 text-gray-600">{row.rank_code}</td>
-                    <td className="py-1 px-2 font-medium">{row.crew_name}</td>
-                    <td className="py-1 px-2 text-center text-gray-500">{row.disembark_date}</td>
-                    <td className="py-1 px-2 text-center text-gray-500">{row.start_date}</td>
-                    <td className="py-1 px-2 text-right">
-                      <Input
-                        type="number"
-                        value={sickPayDrafts[row.id] ?? String(row.this_month_amount)}
-                        onChange={e => setSickPayDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
-                        onBlur={() => handleSaveSickPayAmount(row)}
-                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                        disabled={sickPaySaving === row.id}
-                        className="h-6 text-xs w-24 text-right ml-auto"
-                      />
-                    </td>
-                    <td className="py-1 px-2">
-                      <div className="flex items-center justify-center gap-1">
-                        <Input
-                          type="date"
-                          value={closeDateDrafts[row.id] ?? new Date().toISOString().slice(0, 10)}
-                          onChange={e => setCloseDateDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
-                          className="h-6 text-xs w-32"
-                        />
-                        <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => handleCloseSickPay(row)} disabled={sickPaySaving === row.id}>
-                          Close
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
