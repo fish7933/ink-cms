@@ -30,6 +30,8 @@ interface CrewCandidateSelectDialogProps {
   selectionMode?: 'single' | 'multi';
   /** 해당 선원이 다른 임시저장 교대계획에도 포함돼 있으면 경고 문구를 반환 (없으면 null) */
   getReservationNote?: (crew: CrewWithDetails) => string | null;
+  /** 이미 선택돼 있는 선원을 바꾸려고 다시 여는 경우 — 그 선원의 소속/직급 등으로 필터를 미리 채워준다. */
+  initialCrew?: CrewWithDetails | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -42,7 +44,7 @@ const STATUS_LABELS: Record<string, string> = {
 // 실제 최신 상태는 status 컬럼 (CrewManagementPage / RotationPlanFormPage와 동일한 우회 패턴).
 const getCrewStatus = (c: CrewWithDetails) => (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
 
-export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote }: CrewCandidateSelectDialogProps) {
+export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote, initialCrew }: CrewCandidateSelectDialogProps) {
   const isSingle = selectionMode === 'single';
 
   const [search, setSearch] = useState('');
@@ -93,10 +95,16 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
     if (open) {
       setSelectedIds([]);
       setSearch('');
-      setFilterOwner('all'); setFilterFleet('all'); setFilterShip('all');
-      setFilterRank('all'); setFilterManning('all'); setFilterNationality('all');
+      // 이미 선택된 선원을 바꾸려고 다시 연 경우, 그 선원의 소속/직급 등으로 필터를 미리 채워
+      // 같은 배 안에서 후임을 고르는 등의 흔한 상황에서 다시 필터링할 필요가 없게 한다.
+      setFilterOwner(initialCrew?.owner_id || 'all');
+      setFilterFleet(initialCrew?.fleet_id || 'all');
+      setFilterShip(initialCrew?.current_ship_id || 'all');
+      setFilterRank(initialCrew?.rank_id || 'all');
+      setFilterManning(initialCrew?.manning_agency_id || 'all');
+      setFilterNationality(initialCrew?.nationality || 'all');
     }
-  }, [open]);
+  }, [open, initialCrew]);
 
   const filtered = useMemo(() => {
     let list = candidates;

@@ -516,6 +516,14 @@ export default function RotationPlanFormPage() {
     return onboardCrew.filter(c => c.id === row?.disembarkCrewId || (c.current_ship_id === shipId && !usedDisembarkIds.includes(c.id) && !isHardReserved(c.id)));
   };
 
+  // 이미 선택된 선원을 바꾸려고 다시 연 경우 필터를 그 선원 기준으로 미리 채우기 위한 값.
+  const rowPickerInitialCrew = (): CrewWithDetails | null => {
+    if (!rowPicker) return null;
+    const row = rows.find(r => r.id === rowPicker.rowId);
+    const currentId = rowPicker.side === 'boarding' ? row?.boardingCrewId : row?.disembarkCrewId;
+    return currentId ? getCrew(currentId) : null;
+  };
+
   const handleRowPickerConfirm = (ids: string[]) => {
     if (!rowPicker) return;
     const id = ids[0] || null;
@@ -940,15 +948,14 @@ export default function RotationPlanFormPage() {
                     >
                       <span className="truncate text-orange-800">{getCrewLabel(row.disembarkCrewId, row.disembarkCrewName)}</span>
                     </Button>
-                    <Select value={row.disembarkRankId || '_none'} onValueChange={v => updateRow(row.id, { disembarkRankId: v === '_none' ? '' : v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">직급</SelectItem>
-                        {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code || r.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    {/* 하선자는 이미 승선 중인 선원이라 등급이 배정 시점의 사실(현재 배정 선박 급여표
-                        기준)일 뿐 여기서 새로 고르는 값이 아니므로, 고정 표시만 하고 수정은 막는다. */}
+                    {/* 하선자는 이미 승선 중인 선원이라 직급/등급이 배정 시점의 사실(현재 배정 선박
+                        기준)일 뿐 여기서 새로 고르는 값이 아니므로, 둘 다 고정 표시만 하고 수정은 막는다. */}
+                    <div
+                      className="h-7 text-xs w-20 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
+                      title="현재 승선 중 직급 (고정)"
+                    >
+                      {ranks.find(r => r.id === row.disembarkRankId)?.rank_code || '-'}
+                    </div>
                     <div
                       className="h-7 text-xs w-16 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
                       title="현재 승선 중 등급 (고정)"
@@ -1094,6 +1101,7 @@ export default function RotationPlanFormPage() {
         onConfirm={handleRowPickerConfirm}
         selectionMode="single"
         getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
+        initialCrew={rowPickerInitialCrew()}
       />
     </div>
   );
