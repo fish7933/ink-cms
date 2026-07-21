@@ -200,7 +200,7 @@ export const crewService = {
         .select('crew_member_id, embark_date, rank_id, rank_grade, salary_template_id, ship_id, contract_months')
         .eq('status', 'active'),
       supabase.from('crew_embarkation_records')
-        .select('crew_member_id, embark_date, disembark_date')
+        .select('crew_member_id, embark_date, disembark_date, ship_id')
         .order('embark_date', { ascending: false }),
       supabase.from('crew_certificates')
         .select('crew_id')
@@ -235,10 +235,10 @@ export const crewService = {
     );
 
     // 최신 이력 맵 (embark_date 내림차순 첫 번째가 최신)
-    const latestHistoryMap = new Map<string, { embark_date: string; disembark_date: string | null }>();
+    const latestHistoryMap = new Map<string, { embark_date: string; disembark_date: string | null; ship_id: string | null }>();
     for (const rec of (allEmbarkData || [])) {
       if (!latestHistoryMap.has(rec.crew_member_id)) {
-        latestHistoryMap.set(rec.crew_member_id, { embark_date: rec.embark_date, disembark_date: rec.disembark_date });
+        latestHistoryMap.set(rec.crew_member_id, { embark_date: rec.embark_date, disembark_date: rec.disembark_date, ship_id: rec.ship_id });
       }
     }
 
@@ -333,6 +333,7 @@ export const crewService = {
     let crewList = (data || []).map((item: CrewMemberRow) => {
       // 현재 승선 중인 기록이 있으면 발령 당시의 rank/grade/ship 우선 사용
       const activeEmbark = activeEmbarkMap.get(item.id);
+      const latestHistory = latestHistoryMap.get(item.id);
 
       // 직급: 발령 기록 rank_id → crew_members rank_id → rank 이름 순으로 조회
       const rankIdToUse = activeEmbark?.rank_id || item.rank_id;
@@ -340,8 +341,9 @@ export const crewService = {
         ? ranksById.get(rankIdToUse)
         : ranksByName.get(item.rank);
 
-      // 선박/선주/플릿: 승선 기록의 ship_id → ship 테이블에서 owner_id/fleet_id 역참조
-      const shipIdToUse = activeEmbark?.ship_id || item.current_ship_id;
+      // 선박/선주/플릿: 승선 기록의 ship_id → crew_members.current_ship_id → 하선 완료면
+      // 최신 승선이력의 ship_id(하선 시 current_ship_id가 비워지므로 폴백 필요) 순으로 조회
+      const shipIdToUse = activeEmbark?.ship_id || item.current_ship_id || latestHistory?.ship_id;
       const ship = shipIdToUse ? shipsMap.get(shipIdToUse) : undefined;
       const ownerIdToUse = ship?.owner_id || item.owner_id;
       const fleetIdToUse = ship?.fleet_id || item.fleet_id;
@@ -353,7 +355,6 @@ export const crewService = {
       const currentGrade = activeEmbark?.rank_grade || item.current_grade || null;
 
       // 승선일 / 하선일: 승선 중이면 active record, 아니면 최신 이력
-      const latestHistory = latestHistoryMap.get(item.id);
       const latestEmbarkDate = activeEmbark?.embark_date || latestHistory?.embark_date;
       // 하선일: 현재 승선 중이면 null (UI에서 "승선중" 표시), 하선 완료면 날짜
       const latestDisembarkDate = activeEmbark ? null : (latestHistory?.disembark_date ?? null);
