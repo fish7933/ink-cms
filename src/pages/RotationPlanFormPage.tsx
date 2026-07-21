@@ -920,8 +920,8 @@ export default function RotationPlanFormPage() {
                               <SelectValue placeholder="등급 *" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="_none">선택 *</SelectItem>
-                              {opts.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                              <SelectItem value="_none" className="text-xs">선택 *</SelectItem>
+                              {opts.map(g => <SelectItem key={g} value={g} className="text-xs">{g}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         ) : (
