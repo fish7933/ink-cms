@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Trash2, Edit2, ArrowLeft, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import {
 import type { MedicalRecord } from '@/types/crew-extended';
 import type { SeaServiceRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
-import MedicalRecordFollowUp from '@/components/crew/MedicalRecordFollowUp';
+import MedicalRecordFollowUp, { type MedicalRecordFollowUpHandle } from '@/components/crew/MedicalRecordFollowUp';
 
 const RECORD_TYPES = [{ value: 'injury', label: '부상' }, { value: 'illness', label: '질병' }];
 const RECORD_TYPE_LABELS: Record<string, string> = { injury: '부상', illness: '질병' };
@@ -44,6 +44,7 @@ export default function SeaServiceMedicalDialog({ open, onOpenChange, crewId, re
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formView, setFormView] = useState<{ record?: MedicalRecord } | null>(null);
+  const followUpRef = useRef<MedicalRecordFollowUpHandle>(null);
   const [form, setForm] = useState({
     record_date: '', record_type: 'injury', diagnosis: '', treatment: '', doctor_name: '', hospital_clinic: '',
     location: '', days_off_duty: '', fitness_status: '', follow_up_required: false, follow_up_date: '', notes: '',
@@ -101,6 +102,9 @@ export default function SeaServiceMedicalDialog({ open, onOpenChange, crewId, re
       };
       if (formView?.record) {
         await updateMedicalRecord(formView.record.id, data);
+        // 치료 경과 로그 입력란에 "추가"를 누르지 않은 채 남아있는 내용이 있으면
+        // 목록으로 돌아가기 전에 먼저 저장한다 — 안 그러면 입력한 내용이 사라진다.
+        await followUpRef.current?.flushPendingLog();
         toast({ title: '수정 완료' });
         closeForm();
       } else {
@@ -208,6 +212,7 @@ export default function SeaServiceMedicalDialog({ open, onOpenChange, crewId, re
             {formView?.record && (
               <div className="border-t pt-3">
                 <MedicalRecordFollowUp
+                  ref={followUpRef}
                   medicalRecordId={formView.record.id}
                   attachments={formView.record.attachments || []}
                   onChanged={onChanged}
@@ -216,7 +221,12 @@ export default function SeaServiceMedicalDialog({ open, onOpenChange, crewId, re
             )}
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" className="h-8" onClick={() => setFormView(null)} disabled={saving}>{formView?.record ? '목록으로' : '취소'}</Button>
+              <Button
+                variant="outline" size="sm" className="h-8" disabled={saving}
+                onClick={async () => { if (formView?.record) await followUpRef.current?.flushPendingLog(); setFormView(null); }}
+              >
+                {formView?.record ? '목록으로' : '취소'}
+              </Button>
               <Button size="sm" className="h-8 gap-1.5" onClick={handleSave} disabled={saving}><Save className="w-3.5 h-3.5" />{saving ? '저장 중...' : '저장'}</Button>
             </div>
           </div>

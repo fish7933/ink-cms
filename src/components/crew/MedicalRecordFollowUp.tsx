@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Plus, Trash2, Upload, Download, X, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,13 @@ interface MedicalRecordFollowUpProps {
   medicalRecordId: string;
   attachments: MedicalAttachment[];
   onChanged?: () => void;
+}
+
+// 상위(MedicalRecordDialog)의 상병 기록 자체 저장 버튼(수정/닫기)이, 이 안의 로그 입력란에
+// 아직 "추가" 버튼을 누르지 않은 채 남아있는 경과 내용을 저장하지 않고 그대로 닫아버려
+// 입력한 내용이 사라지는 문제가 있었다 — 닫기 전에 이 메서드로 미저장 로그를 먼저 반영시킨다.
+export interface MedicalRecordFollowUpHandle {
+  flushPendingLog: () => Promise<void>;
 }
 
 async function uploadFiles(files: File[]): Promise<MedicalAttachment[]> {
@@ -40,7 +47,7 @@ const getAttachmentUrl = (path: string) => supabase.storage.from('documents').ge
 // 상병 기록 하나에 계속 쌓아나가는 치료 경과 로그와 첨부파일(진단서/청구서/영수증 등)을 관리한다.
 // 기록 전체에 딸린 첨부파일뿐 아니라, 로그 항목 하나하나에도 그때그때의 파일을 붙일 수 있다.
 // 기록 자체가 저장된 뒤(medicalRecordId가 있을 때)에만 사용할 수 있다.
-export default function MedicalRecordFollowUp({ medicalRecordId, attachments, onChanged }: MedicalRecordFollowUpProps) {
+const MedicalRecordFollowUp = forwardRef<MedicalRecordFollowUpHandle, MedicalRecordFollowUpProps>(function MedicalRecordFollowUp({ medicalRecordId, attachments, onChanged }, ref) {
   const { toast } = useToast();
   const [localAttachments, setLocalAttachments] = useState<MedicalAttachment[]>(attachments);
   const [logs, setLogs] = useState<MedicalRecordLog[]>([]);
@@ -69,22 +76,41 @@ export default function MedicalRecordFollowUp({ medicalRecordId, attachments, on
   };
   const removeNewLogFile = (idx: number) => setNewLogFiles(prev => prev.filter((_, i) => i !== idx));
 
-  const handleAddLog = async () => {
-    if (!newLogNote.trim()) { toast({ title: '내용을 입력하세요', variant: 'destructive' }); return; }
+  // 입력란에 남아있는 로그를 실제로 저장하는 공통 로직 — 버튼 클릭(handleAddLog)과
+  // 상위 다이얼로그가 닫히기 직전의 자동 저장(flushPendingLog) 양쪽에서 함께 쓴다.
+  const submitPendingLog = async (): Promise<void> => {
+    if (!newLogNote.trim()) return;
+    setAddingLog(true);
     try {
-      setAddingLog(true);
       const uploaded = await uploadFiles(newLogFiles);
       await addMedicalRecordLog(medicalRecordId, newLogDate, newLogNote.trim(), uploaded);
       setNewLogNote('');
       setNewLogFiles([]);
       await loadLogs();
       onChanged?.();
-    } catch (e) {
-      toast({ title: '로그 추가 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setAddingLog(false);
     }
   };
+
+  const handleAddLog = async () => {
+    if (!newLogNote.trim()) { toast({ title: '내용을 입력하세요', variant: 'destructive' }); return; }
+    try {
+      await submitPendingLog();
+    } catch (e) {
+      toast({ title: '로그 추가 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    flushPendingLog: async () => {
+      try {
+        await submitPendingLog();
+      } catch (e) {
+        toast({ title: '치료 경과 로그 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      }
+    },
+  }));
 
   const handleDeleteLog = async (logId: string) => {
     if (!confirm('이 로그를 삭제하시겠습니까?')) return;
@@ -235,4 +261,6 @@ export default function MedicalRecordFollowUp({ medicalRecordId, attachments, on
       </div>
     </div>
   );
-}
+});
+
+export default MedicalRecordFollowUp;

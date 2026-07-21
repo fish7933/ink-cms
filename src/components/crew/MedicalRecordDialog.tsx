@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,7 +22,7 @@ import { addMedicalRecord, updateMedicalRecord, getSeaServiceRecords } from '@/s
 import type { MedicalRecord, SeaServiceRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
-import MedicalRecordFollowUp from '@/components/crew/MedicalRecordFollowUp';
+import MedicalRecordFollowUp, { type MedicalRecordFollowUpHandle } from '@/components/crew/MedicalRecordFollowUp';
 
 interface CrewOption { id: string; name: string; rank: string; }
 
@@ -63,6 +63,7 @@ export default function MedicalRecordDialog({
   const [loading, setLoading] = useState(false);
   const [savedRecordId, setSavedRecordId] = useState<string | undefined>(record?.id);
   const [savedAttachments, setSavedAttachments] = useState(record?.attachments || []);
+  const followUpRef = useRef<MedicalRecordFollowUpHandle>(null);
 
   // crewId가 지정되지 않은 경우(상병 관리 화면 등)에만 사용 — 선원을 직접 고르고, 고른 선원의 승선 기록을 불러온다.
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
@@ -171,6 +172,9 @@ export default function MedicalRecordDialog({
 
       if (savedRecordId) {
         await updateMedicalRecord(savedRecordId, data);
+        // 치료 경과 로그 입력란에 "추가" 버튼을 누르지 않은 채 남아있는 내용이 있으면
+        // 다이얼로그를 닫기 전에 먼저 저장한다 — 그렇지 않으면 입력한 내용이 그대로 사라진다.
+        await followUpRef.current?.flushPendingLog();
         toast({ title: '수정 완료', description: '상병 기록이 수정되었습니다.' });
         onSuccess();
         onOpenChange(false);
@@ -305,6 +309,7 @@ export default function MedicalRecordDialog({
             {savedRecordId && (
               <div className="border-t pt-3">
                 <MedicalRecordFollowUp
+                  ref={followUpRef}
                   medicalRecordId={savedRecordId}
                   attachments={savedAttachments}
                   onChanged={() => { onSuccess(); }}
@@ -313,7 +318,12 @@ export default function MedicalRecordDialog({
             )}
           </div>
           <DialogFooter>
-            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">{savedRecordId ? '닫기' : '취소'}</Button>
+            <Button
+              type="button" size="sm" variant="outline" disabled={loading} className="h-8"
+              onClick={async () => { if (savedRecordId) await followUpRef.current?.flushPendingLog(); onOpenChange(false); }}
+            >
+              {savedRecordId ? '닫기' : '취소'}
+            </Button>
             <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (savedRecordId ? '수정' : '추가')}</Button>
           </DialogFooter>
         </form>

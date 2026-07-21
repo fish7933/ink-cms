@@ -595,7 +595,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 고과{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="medical" className="text-xs">
-                상병{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
+                상병기록{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="salary_records" className="text-xs">
                 급여이력{salaryRecords.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{salaryRecords.length}</span>}
@@ -928,7 +928,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">하선사유</th><th className="text-left p-2">유형</th><th className="text-center p-2">고과</th><th className="text-center p-2">상병</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">하선사유</th><th className="text-left p-2">유형</th><th className="text-center p-2">고과</th><th className="text-center p-2">상병기록</th><th className="text-center p-2">작업</th>
                     </tr></thead>
                     <tbody>
                       {seaServiceRecords.map(r => (
@@ -956,11 +956,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             {medicalCounts[r.id] ? (
                               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-orange-700 bg-orange-50 hover:bg-orange-100" onClick={() => { setSeaServiceMedicalDialogRecord(r); setSeaServiceMedicalDialogOpen(true); }}>
-                                <Stethoscope className="h-3 w-3" />상병 {medicalCounts[r.id]}건
+                                <Stethoscope className="h-3 w-3" />상병기록 {medicalCounts[r.id]}건
                               </Button>
                             ) : (
                               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-gray-400" onClick={() => { setSeaServiceMedicalDialogRecord(r); setSeaServiceMedicalDialogOpen(true); }}>
-                                <Stethoscope className="h-3 w-3" />상병
+                                <Stethoscope className="h-3 w-3" />상병기록
                               </Button>
                             )}
                           </td>
