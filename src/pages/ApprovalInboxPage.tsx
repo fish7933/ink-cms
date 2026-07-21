@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import {
   CheckCircle2, XCircle, Clock, FileText, ArrowLeft, Inbox, Plus, Paperclip, ChevronLeft, ChevronRight, Search,
+  Eye, Trash2, RotateCcw, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -351,12 +352,12 @@ export default function ApprovalInboxPage() {
             </th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">유형</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">결재 현황</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">시행일시</th>
-            <th className="text-right p-2 text-xs font-medium text-gray-600 w-60">작업</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-40">작업</th>
           </tr>
         </thead>
         <tbody>
@@ -379,7 +380,7 @@ export default function ApprovalInboxPage() {
                   </div>
                 </td>
                 <td className="p-2 font-medium">{doc.title}</td>
-                <td className="p-2 text-gray-500">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
+                <td className="p-2 text-gray-500">{doc.document_type_name}</td>
                 <td className="p-2 text-gray-500">{doc.creator_name}</td>
                 <td className="p-2">
                   <div className="flex items-center gap-1 text-xs whitespace-nowrap">
@@ -404,20 +405,20 @@ export default function ApprovalInboxPage() {
                   <div className="flex justify-end gap-1">
                     {myTurn && (
                       <>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => openDocAction(doc, 'approved')}>승인</Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => openDocAction(doc, 'rejected')}>반려</Button>
+                        <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-green-600 border-green-300" title="승인" onClick={() => openDocAction(doc, 'approved')}><CheckCircle2 className="w-3.5 h-3.5" /></Button>
+                        <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-red-600 border-red-300" title="반려" onClick={() => openDocAction(doc, 'rejected')}><XCircle className="w-3.5 h-3.5" /></Button>
                       </>
                     )}
                     {canAdminForceDoc(doc) && (
                       <>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => openDocAction(doc, 'approved', true)}>강제승인</Button>
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => openDocAction(doc, 'rejected', true)}>강제반려</Button>
+                        <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-amber-600 border-amber-300" title="강제승인" onClick={() => openDocAction(doc, 'approved', true)}><CheckCircle2 className="w-3.5 h-3.5" /></Button>
+                        <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-amber-600 border-amber-300" title="강제반려" onClick={() => openDocAction(doc, 'rejected', true)}><XCircle className="w-3.5 h-3.5" /></Button>
                       </>
                     )}
-                    {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => handleCancelDoc(doc)}>기안 취소</Button>}
-                    {canResubmitDoc(doc) && <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-blue-600 border-blue-300" onClick={() => handleResubmitDoc(doc)}>다시 상신</Button>}
-                    {canDeleteDoc(doc) && <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-gray-400 hover:text-red-600" onClick={() => handleDeleteDoc(doc)}>삭제</Button>}
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
+                    {canCancelDoc(doc) && <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" title="기안 취소" onClick={() => handleCancelDoc(doc)}><X className="w-3.5 h-3.5" /></Button>}
+                    {canResubmitDoc(doc) && <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-blue-600 border-blue-300" title="다시 상신" onClick={() => handleResubmitDoc(doc)}><RotateCcw className="w-3.5 h-3.5" /></Button>}
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="보기" onClick={() => openDocDetail(doc)}><Eye className="w-3.5 h-3.5" /></Button>
+                    {canDeleteDoc(doc) && <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-gray-400 hover:text-red-600" title="삭제" onClick={() => handleDeleteDoc(doc)}><Trash2 className="w-3.5 h-3.5" /></Button>}
                   </div>
                 </td>
               </tr>
@@ -446,7 +447,7 @@ export default function ApprovalInboxPage() {
             </th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">유형/부서</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">유형</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">시행일시</th>
@@ -461,7 +462,7 @@ export default function ApprovalInboxPage() {
               </td>
               <td className="p-2">{getStatusBadge(doc.status)}</td>
               <td className="p-2 font-medium">{doc.title}</td>
-              <td className="p-2">{doc.document_type_name}{doc.org_unit_name ? ` · ${doc.org_unit_name}` : ''}</td>
+              <td className="p-2">{doc.document_type_name}</td>
               <td className="p-2">{doc.creator_name}</td>
               <td className="p-2">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
               <td className="p-2">{doc.completed_at ? format(new Date(doc.completed_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</td>
