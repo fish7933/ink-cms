@@ -11,10 +11,37 @@ export function sanitizeTableHtml(html: string): string {
   return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false });
 }
 
+// 엑셀은 글꼴 크기/굵기 등 서식 대부분을 인라인 style이 아니라 <head><style>의 클래스
+// 규칙(.xl65 등)으로 내보내고 셀에는 class만 붙여둔다 — sanitize 단계에서 <style>/class를
+// 통째로 제거하면 그 서식이 전부 사라지므로, 제거하기 전에 클래스 규칙을 각 셀의 인라인
+// style로 먼저 합쳐넣는다(기존 인라인 style이 있으면 그게 더 구체적인 값이므로 뒤에 이어붙여 우선한다).
+function inlineClassStyles(rawHtml: string): string {
+  const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+  const styleByClass = new Map<string, string>();
+  doc.querySelectorAll('style').forEach(styleEl => {
+    const cssText = styleEl.textContent || '';
+    const ruleRe = /\.([\w-]+)\s*\{([^}]*)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = ruleRe.exec(cssText))) {
+      const [, cls, body] = m;
+      styleByClass.set(cls, `${styleByClass.get(cls) || ''}${body.trim()};`);
+    }
+  });
+  if (styleByClass.size > 0) {
+    doc.querySelectorAll('[class]').forEach(el => {
+      const classes = (el.getAttribute('class') || '').split(/\s+/).filter(Boolean);
+      const fromClasses = classes.map(c => styleByClass.get(c) || '').filter(Boolean).join('');
+      if (fromClasses) el.setAttribute('style', `${fromClasses}${el.getAttribute('style') || ''}`);
+      el.removeAttribute('class');
+    });
+  }
+  return doc.body.innerHTML;
+}
+
 // 클립보드 text/html은 보통 <html><head><style>...</style></head><body><table>...</table></body></html>
-// 형태(엑셀/구글시트 공통)이므로, 그 안의 <table>만 뽑아 정제한다.
+// 형태(엑셀/구글시트 공통)이므로, 클래스 서식을 인라인으로 합친 뒤 그 안의 <table>만 뽑아 정제한다.
 export function extractSanitizedTable(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = new DOMParser().parseFromString(inlineClassStyles(html), 'text/html');
   const table = doc.querySelector('table');
   if (!table) return '';
   return sanitizeTableHtml(table.outerHTML);
