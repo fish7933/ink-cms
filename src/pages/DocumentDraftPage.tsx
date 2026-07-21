@@ -255,6 +255,11 @@ export default function DocumentDraftPage() {
   const [resubmitOriginalDocTypeId, setResubmitOriginalDocTypeId] = useState('');
   const resubmitChainUnchanged = !!resubmitId && orgUnitId === resubmitOriginalOrgUnitId && documentTypeId === resubmitOriginalDocTypeId;
   const effectiveChain = useManualLine ? manualChain : (resubmitChainUnchanged ? resubmitOriginalChain : previewChain);
+  // 결재선의 결재자가 전부 본인/하위직급이라 제외되어 실제 남은 단계가 0인 경우는 정상 상황
+  // (상신 즉시 승인)이므로, 제출 버튼도 이 경우엔 effectiveChain이 비어있어도 잠그면 안 된다 —
+  // 이 조건 없이 effectiveChain.length === 0만으로 버튼을 막으면 기안자 본인이 전결권자이거나
+  // 본인보다 하위직급만 있는 결재선을 고른 정상적인 경우에도 제출 버튼이 영구히 잠겨버린다.
+  const manualLineFullyExcluded = useManualLine && !!manualLineId && manualChainExcluded.length > 0;
 
   const selfStepIndexes = useMemo(
     () => effectiveChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
@@ -502,7 +507,6 @@ export default function DocumentDraftPage() {
     if (useManualLine && !manualLineId) { toast({ title: '사용할 결재선을 선택해주세요.', variant: 'destructive' }); return; }
     // 결재선의 결재자가 전부 본인/하위직급이라 제외되어 실제 남은 단계가 0인 경우는 정상
     // 상황(상신 즉시 승인)이므로 막지 않는다 — 라인 자체에 애초에 단계가 없는 경우만 막는다.
-    const manualLineFullyExcluded = useManualLine && manualLineId && manualChainExcluded.length > 0;
     if (effectiveChain.length === 0 && !manualLineFullyExcluded) {
       toast({ title: useManualLine ? '선택한 결재선에 단계가 없습니다.' : '결재라인을 구성할 수 없는 부서입니다.', variant: 'destructive' });
       return;
@@ -885,7 +889,7 @@ export default function DocumentDraftPage() {
                   </Button>
                 )}
                 {permissions.canCreate && (
-                  <Button size="sm" onClick={handleSubmit} disabled={submitting || savingDraft || effectiveChain.length === 0}>
+                  <Button size="sm" onClick={handleSubmit} disabled={submitting || savingDraft || (effectiveChain.length === 0 && !manualLineFullyExcluded)}>
                     {submitting ? '제출 중...' : resubmitId ? '다시 상신' : '제출'}
                   </Button>
                 )}

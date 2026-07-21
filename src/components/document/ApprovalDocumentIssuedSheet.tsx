@@ -45,7 +45,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
         table.issued-fields td.field-table-cell { padding: 4px; }
         table.issued-nested { border-collapse: collapse; width: 100%; }
-        table.issued-nested td { border: 1px solid #ccc; padding: 5px 7px; font-size: 12px; }
+        table.issued-nested > tbody > tr > td { border: 1px solid #999 !important; padding: 5px 7px; font-size: 12px; }
         table.approval-block { border-collapse: collapse; table-layout: auto; }
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }

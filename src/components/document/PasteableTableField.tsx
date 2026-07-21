@@ -45,13 +45,13 @@ export default function PasteableTableField({ value, onChange, disabled }: Props
         <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-[11px] gap-0.5 text-red-500" onClick={clearAll} disabled={disabled}><Trash2 className="w-3 h-3" />전체 지우기</Button>
         <span className="text-[10px] text-gray-400 ml-auto">엑셀에서 범위를 복사(Ctrl+C)한 뒤 셀을 클릭하고 붙여넣기(Ctrl+V)하세요</span>
       </div>
-      <div className="border rounded-md overflow-x-auto">
+      <div className="border border-gray-300 rounded-md overflow-x-auto">
         <table className="border-collapse w-full">
           <tbody>
             {grid.map((row, r) => (
               <tr key={r}>
                 {row.map((cellVal, c) => (
-                  <td key={c} className="border p-0">
+                  <td key={c} className="border border-gray-300 p-0">
                     <input
                       value={cellVal}
                       disabled={disabled}
