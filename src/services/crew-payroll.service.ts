@@ -397,7 +397,7 @@ export const crewPayrollService = {
 
     const payslipIds = data.map(p => p.id);
     const { data: items } = await supabase.from('crew_payslip_items').select('*').in('payslip_id', payslipIds);
-    const itemsByPayslip = new Map<string, { category: string; name: string; amount: number }[]>();
+    const itemsByPayslip = new Map<string, { category: string; name: string; amount: number; payment_type: string }[]>();
     for (const it of items || []) {
       const arr = itemsByPayslip.get(it.payslip_id) || [];
       arr.push(it);
@@ -409,7 +409,10 @@ export const crewPayrollService = {
       const pItems = itemsByPayslip.get(p.id) || [];
       const allowanceByName: Record<string, number> = {};
       const deductionByName: Record<string, number> = {};
+      // 후불성 적립/지급(Accrued·Lump Sum) 항목은 별도 "후불성 적립 히스토리" 표에서 다루므로
+      // 급여명세 히스토리(월별 급여대장 형태)에는 항목 열로 노출하지 않는다.
       for (const item of pItems) {
+        if (item.payment_type === 'deferred_accrual' || item.payment_type === 'deferred_payout') continue;
         if (item.category === 'earning') allowanceByName[item.name] = (allowanceByName[item.name] || 0) + Number(item.amount);
         if (item.category === 'deduction') deductionByName[item.name] = (deductionByName[item.name] || 0) + Number(item.amount);
       }
