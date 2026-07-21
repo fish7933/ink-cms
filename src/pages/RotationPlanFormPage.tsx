@@ -1134,12 +1134,14 @@ export default function RotationPlanFormPage() {
                         <td className="py-1 px-2">
                           {r.boardingCrewId ? (
                             <span className="flex items-center gap-1">
-                              {inRankCode && <span className="font-mono text-[10px] bg-emerald-50 text-emerald-700 px-1 rounded shrink-0">{inRankCode}</span>}
-                              {r.boardingGrade
-                                ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
-                                : gradesForRankId(r.boardingRankId).length > 0
-                                  ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
-                                  : null}
+                              <span className="flex items-center gap-1 w-[70px] shrink-0">
+                                {inRankCode && <span className="font-mono text-[10px] bg-emerald-50 text-emerald-700 px-1 rounded shrink-0">{inRankCode}</span>}
+                                {r.boardingGrade
+                                  ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
+                                  : gradesForRankId(r.boardingRankId).length > 0
+                                    ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
+                                    : null}
+                              </span>
                               <span className="font-medium text-emerald-800">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</span>
                             </span>
                           ) : <span className="text-gray-300 italic">미정</span>}
@@ -1149,8 +1151,10 @@ export default function RotationPlanFormPage() {
                         <td className="py-1 pl-6 pr-2 border-l">
                           {r.disembarkCrewId ? (
                             <span className="flex items-center gap-1">
-                              {outRankCode && <span className="font-mono text-[10px] bg-orange-50 text-orange-700 px-1 rounded shrink-0">{outRankCode}</span>}
-                              {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
+                              <span className="flex items-center gap-1 w-[70px] shrink-0">
+                                {outRankCode && <span className="font-mono text-[10px] bg-orange-50 text-orange-700 px-1 rounded shrink-0">{outRankCode}</span>}
+                                {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
+                              </span>
                               <span className="font-medium text-orange-800">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
                             </span>
                           ) : <span className="text-gray-300 italic">미정</span>}

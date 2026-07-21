@@ -73,8 +73,8 @@ export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, peri
                 {r.shipGroupStart && <td className="owner-ship" rowSpan={r.shipGroupSize}>{r.shipName}</td>}
                 <td>{r.boarding}</td>
                 <td>{r.disembark}</td>
-                <td className="center">{r.rotationDate}</td>
-                <td className="center">{r.portLabel}</td>
+                {r.planGroupStart && <td className="center" rowSpan={r.planGroupSize}>{r.rotationDate}</td>}
+                {r.planGroupStart && <td className="center" rowSpan={r.planGroupSize}>{r.portLabel}</td>}
                 {r.planGroupStart && <td rowSpan={r.planGroupSize}>{r.notes}</td>}
               </tr>
             ))}

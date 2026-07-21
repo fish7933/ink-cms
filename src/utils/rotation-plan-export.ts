@@ -327,6 +327,9 @@ export async function exportRotationPlansLedgerToExcel(
       merges.push({ s: { r: DATA_START + i, c: 1 }, e: { r: DATA_START + i + r.shipGroupSize - 1, c: 1 } });
     }
     if (r.planGroupStart && r.planGroupSize > 1) {
+      // 교대일/항구는 배정(승선·하선 쌍)이 아니라 계획 단위 값이라 비고와 같은 범위로 병합한다.
+      merges.push({ s: { r: DATA_START + i, c: 5 }, e: { r: DATA_START + i + r.planGroupSize - 1, c: 5 } });
+      merges.push({ s: { r: DATA_START + i, c: 6 }, e: { r: DATA_START + i + r.planGroupSize - 1, c: 6 } });
       merges.push({ s: { r: DATA_START + i, c: 7 }, e: { r: DATA_START + i + r.planGroupSize - 1, c: 7 } });
     }
   });
