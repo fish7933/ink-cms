@@ -181,9 +181,26 @@ export const sickPayService = {
     return attachDetails(data || []);
   },
 
-  async getMonthlyEntriesForRecord(sickPayRecordId: string): Promise<{ year_month: string; amount: number }[]> {
-    const { data, error } = await supabase.from('crew_sick_pay_monthly_entries').select('year_month, amount').eq('sick_pay_record_id', sickPayRecordId).order('year_month', { ascending: false });
+  // 실제로 급여대장에서 저장된 달(confirmed)뿐 아니라, 시작월부터 종결월(진행중이면 이번 달)까지
+  // 아직 급여대장에서 확인/저장하지 않은 달도 일할계산 기본값으로 함께 보여준다(미확정 표시).
+  async getMonthlyEntriesForRecord(record: CrewSickPayRecord): Promise<{ year_month: string; amount: number; confirmed: boolean }[]> {
+    const { data, error } = await supabase.from('crew_sick_pay_monthly_entries').select('year_month, amount').eq('sick_pay_record_id', record.id);
     if (error) { console.error('Error fetching sick pay monthly entries:', error); return []; }
-    return (data || []).map(e => ({ year_month: e.year_month, amount: Number(e.amount) }));
+    const confirmedByMonth = new Map((data || []).map(e => [e.year_month, Number(e.amount)]));
+
+    const endYm = record.status === 'closed' && record.closed_date ? record.closed_date.slice(0, 7) : new Date().toISOString().slice(0, 7);
+    const months: string[] = [];
+    let cursor = record.start_date.slice(0, 7);
+    while (cursor <= endYm) {
+      months.push(cursor);
+      const [y, m] = cursor.split('-').map(Number);
+      cursor = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+    }
+
+    return months
+      .map(ym => confirmedByMonth.has(ym)
+        ? { year_month: ym, amount: confirmedByMonth.get(ym)!, confirmed: true }
+        : { year_month: ym, amount: defaultMonthlyAmount(record, ym), confirmed: false })
+      .sort((a, b) => b.year_month.localeCompare(a.year_month));
   },
 };

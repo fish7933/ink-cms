@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Stethoscope, History, Trash2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser, getShips } from '@/lib/store';
@@ -40,8 +41,12 @@ export default function CrewSickPayManagementPage() {
   const [shipFilter, setShipFilter] = useState('');
 
   const [historyRecord, setHistoryRecord] = useState<CrewSickPayRecordWithDetails | null>(null);
-  const [historyEntries, setHistoryEntries] = useState<{ year_month: string; amount: number }[]>([]);
+  const [historyEntries, setHistoryEntries] = useState<{ year_month: string; amount: number; confirmed: boolean }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [closingRecord, setClosingRecord] = useState<CrewSickPayRecordWithDetails | null>(null);
+  const [closeDate, setCloseDate] = useState('');
+  const [closing, setClosing] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
@@ -128,7 +133,7 @@ export default function CrewSickPayManagementPage() {
     setHistoryRecord(record);
     setHistoryLoading(true);
     try {
-      setHistoryEntries(await sickPayService.getMonthlyEntriesForRecord(record.id));
+      setHistoryEntries(await sickPayService.getMonthlyEntriesForRecord(record));
     } finally {
       setHistoryLoading(false);
     }
@@ -141,6 +146,26 @@ export default function CrewSickPayManagementPage() {
       await loadRecords(statusFilter, ships);
     } catch (e) {
       toast({ title: '재개 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
+
+  const openCloseDialog = (record: CrewSickPayRecordWithDetails) => {
+    setClosingRecord(record);
+    setCloseDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const handleConfirmClose = async () => {
+    if (!closingRecord) return;
+    setClosing(true);
+    try {
+      await sickPayService.closeSickPayRecord(closingRecord.id, closeDate);
+      toast({ title: '종결되었습니다', description: '다음 달부터는 급여대장에 나타나지 않습니다.' });
+      setClosingRecord(null);
+      await loadRecords(statusFilter, ships);
+    } catch (e) {
+      toast({ title: '종결 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setClosing(false);
     }
   };
 
@@ -221,9 +246,9 @@ export default function CrewSickPayManagementPage() {
                     onCheckedChange={checked => toggleSelectAll(!!checked)}
                   />
                 </TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선주</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">플릿</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선박</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[70px]">선주</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[70px]">플릿</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[90px]">선박</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선원</TableHead>
                 <TableHead className="py-1 px-2 text-xs whitespace-nowrap">귀국일</TableHead>
@@ -240,9 +265,9 @@ export default function CrewSickPayManagementPage() {
                   <TableCell className="py-1 px-2">
                     <Checkbox checked={selectedIds.includes(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
                   </TableCell>
-                  <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.owner_name || '-'}</TableCell>
-                  <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.fleet_name || '-'}</TableCell>
-                  <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.ship_name}</TableCell>
+                  <TableCell className="py-1 px-2 text-xs text-muted-foreground max-w-[70px] truncate" title={r.owner_name}>{r.owner_name || '-'}</TableCell>
+                  <TableCell className="py-1 px-2 text-xs text-muted-foreground max-w-[70px] truncate" title={r.fleet_name}>{r.fleet_name || '-'}</TableCell>
+                  <TableCell className="py-1 px-2 text-xs text-muted-foreground max-w-[90px] truncate" title={r.ship_name}>{r.ship_name}</TableCell>
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.rank_code}</TableCell>
                   <TableCell className="py-1 px-2 text-xs font-medium">{r.crew_name}</TableCell>
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.return_date || '-'}</TableCell>
@@ -255,6 +280,9 @@ export default function CrewSickPayManagementPage() {
                       <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="월별 청구 내역" onClick={() => openHistory(r)}>
                         <History className="w-3.5 h-3.5 text-muted-foreground" />
                       </Button>
+                      {r.status === 'active' && (
+                        <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => openCloseDialog(r)}>종결</Button>
+                      )}
                       {r.status === 'closed' && (
                         <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => handleReopen(r)}>재개</Button>
                       )}
@@ -306,24 +334,49 @@ export default function CrewSickPayManagementPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-2 font-medium text-gray-600">월</th>
+                    <th className="text-center p-2 font-medium text-gray-600">상태</th>
                     <th className="text-right p-2 font-medium text-gray-600">청구액</th>
                   </tr>
                 </thead>
                 <tbody>
                   {historyEntries.map(e => (
-                    <tr key={e.year_month} className="border-b">
+                    <tr key={e.year_month} className={`border-b ${e.confirmed ? '' : 'text-gray-400'}`}>
                       <td className="py-1 px-2">{e.year_month}</td>
+                      <td className="py-1 px-2 text-center">
+                        {e.confirmed
+                          ? <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">확정</Badge>
+                          : <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-400 border-gray-200">미확정(계산값)</Badge>}
+                      </td>
                       <td className="py-1 px-2 text-right font-mono">{fmt(e.amount)}</td>
                     </tr>
                   ))}
                   <tr className="bg-gray-50 font-semibold">
-                    <td className="py-1 px-2">합계 ({historyEntries.length}개월)</td>
+                    <td className="py-1 px-2" colSpan={2}>합계 ({historyEntries.length}개월)</td>
                     <td className="py-1 px-2 text-right font-mono">{fmt(historyEntries.reduce((s, e) => s + e.amount, 0))}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!closingRecord} onOpenChange={o => !o && setClosingRecord(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">{closingRecord?.crew_name} — 상병급여 종결</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label className="text-xs">종결일</Label>
+            <Input type="date" value={closeDate} onChange={e => setCloseDate(e.target.value)} className="h-8 text-xs" />
+            <p className="text-xs text-muted-foreground">종결일 다음 달부터는 급여대장 상병급여 섹션에 더 이상 나타나지 않습니다.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setClosingRecord(null)} disabled={closing}>취소</Button>
+            <Button size="sm" className="bg-red-600 hover:bg-red-700" onClick={handleConfirmClose} disabled={closing || !closeDate}>
+              {closing ? '종결 중...' : '종결'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
