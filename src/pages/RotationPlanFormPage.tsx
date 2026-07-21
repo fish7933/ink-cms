@@ -749,6 +749,9 @@ export default function RotationPlanFormPage() {
     </div>
   );
 
+  // 배정 요약 표의 상병급여 열은 상병하선이 하나라도 있을 때만 보여준다 — 평소엔 안 쓰는 열이라 숨겨둔다.
+  const hasSickPayInSummary = rows.some(r => signOffReasons.find(sr => sr.id === r.disembarkReasonId)?.name === '상병하선');
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-3">
 
@@ -1106,7 +1109,7 @@ export default function RotationPlanFormPage() {
                     <th className="text-left py-1 pl-6 pr-2 font-medium text-orange-600 border-l">Off-Signer</th>
                     <th className="text-left py-1 px-2 font-medium">하선일</th>
                     <th className="text-left py-1 px-2 font-medium">하선사유</th>
-                    <th className="text-left py-1 px-2 font-medium text-red-500">상병급여</th>
+                    {hasSickPayInSummary && <th className="text-left py-1 px-2 font-medium text-red-500">상병급여</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1145,7 +1148,9 @@ export default function RotationPlanFormPage() {
                         </td>
                         <td className="py-1 px-2 text-gray-400">{r.disembarkDate || '-'}</td>
                         <td className="py-1 px-2 text-gray-400">{disembarkReasonName || '-'}</td>
-                        <td className="py-1 px-2 text-red-600 font-mono">{disembarkReasonName === '상병하선' && r.sickPayMonthlyAmount ? r.sickPayMonthlyAmount : '-'}</td>
+                        {hasSickPayInSummary && (
+                          <td className="py-1 px-2 text-red-600 font-mono">{disembarkReasonName === '상병하선' && r.sickPayMonthlyAmount ? r.sickPayMonthlyAmount : '-'}</td>
+                        )}
                       </tr>
                     );
                   })}
