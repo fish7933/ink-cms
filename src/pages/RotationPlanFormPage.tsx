@@ -926,7 +926,7 @@ export default function RotationPlanFormPage() {
                           </Select>
                         ) : (
                           <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
-                            placeholder="등급" className="h-7 text-xs w-16 shrink-0" disabled={isReadOnly} />
+                            placeholder="등급" className="h-7 text-[10px] md:text-[10px] w-16 shrink-0" disabled={isReadOnly} />
                         );
                       })()}
                     </div>
