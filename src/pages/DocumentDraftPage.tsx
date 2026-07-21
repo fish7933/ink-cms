@@ -705,15 +705,12 @@ export default function DocumentDraftPage() {
               </div>
 
               {formFields.length > 0 ? (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{selectedType?.name} 양식</Label>
-                  <DynamicDocumentForm
-                    fields={formFields}
-                    values={formValues}
-                    onChange={(key, value) => setFormValues(prev => ({ ...prev, [key]: value }))}
-                    disabled={submitting}
-                  />
-                </div>
+                <DynamicDocumentForm
+                  fields={formFields}
+                  values={formValues}
+                  onChange={(key, value) => setFormValues(prev => ({ ...prev, [key]: value }))}
+                  disabled={submitting}
+                />
               ) : (
                 <div className="space-y-1.5">
                   <Label className="text-xs">본문</Label>
