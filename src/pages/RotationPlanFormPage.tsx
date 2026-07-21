@@ -916,12 +916,12 @@ export default function RotationPlanFormPage() {
                         const opts = gradesForRankId(row.boardingRankId);
                         return opts.length > 0 ? (
                           <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })} disabled={isReadOnly}>
-                            <SelectTrigger className={`h-7 text-xs w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
+                            <SelectTrigger className={`h-7 text-[10px] md:text-[10px] w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
                               <SelectValue placeholder="등급 *" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="_none" className="text-xs">선택 *</SelectItem>
-                              {opts.map(g => <SelectItem key={g} value={g} className="text-xs">{g}</SelectItem>)}
+                              <SelectItem value="_none" className="text-[10px]">선택 *</SelectItem>
+                              {opts.map(g => <SelectItem key={g} value={g} className="text-[10px]">{g}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         ) : (
@@ -949,11 +949,11 @@ export default function RotationPlanFormPage() {
                   <div className="flex gap-1">
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-emerald-600 shrink-0">출국일</span>
-                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-emerald-600 shrink-0">승선일</span>
-                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-emerald-600 shrink-0 whitespace-nowrap">계약개월</span>
@@ -1015,11 +1015,11 @@ export default function RotationPlanFormPage() {
                   <div className="flex gap-1">
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-orange-600 shrink-0">하선일</span>
-                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     <div className="flex items-center gap-1 flex-1 min-w-0">
                       <span className="text-[9px] text-orange-600 shrink-0">귀국일</span>
-                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-[8px] md:text-[8px] px-1 min-w-0" disabled={isReadOnly} />
+                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                     </div>
                     {row.disembarkCrewId && (
                       <div className="flex items-center gap-1 flex-1 min-w-0">
