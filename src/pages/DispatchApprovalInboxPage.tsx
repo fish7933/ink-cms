@@ -20,6 +20,7 @@ import { approvalService } from '@/services/approval.service';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
 import { rotationService } from '@/services/rotation.service';
 import { getRanks } from '@/services/rank.service';
+import { getPorts } from '@/services/port.service';
 import { contractApprovalService } from '@/services/contract-approval.service';
 import { dispatchOrderApprovalService } from '@/services/dispatch-order-approval.service';
 import { dispatchApprovalLogService } from '@/services/dispatch-approval-log.service';
@@ -39,7 +40,10 @@ type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & {
     fleet?: { name?: string } | null;
   };
 };
-type RotationApprovalWithPlan = ApprovalRequestWithDetails & { plan_name?: string; ship_name?: string };
+type RotationApprovalWithPlan = ApprovalRequestWithDetails & {
+  plan_name?: string; ship_name?: string;
+  rotation_date?: string; port_label?: string; notes?: string | null;
+};
 type ContractApprovalWithContract = ApprovalRequestWithDetails & {
   crew_name?: string; rank_code?: string; rank_grade?: string | null; ship_name?: string;
   owner_name?: string; fleet_name?: string;
@@ -352,14 +356,24 @@ export default function DispatchApprovalInboxPage() {
       const approvals = admin ? await rotationApprovalService.getAllApprovals() : await rotationApprovalService.getMyRelatedApprovals(userId);
       if (approvals.length === 0) { setRotationApprovals([]); return; }
       const planIds = [...new Set(approvals.map(a => a.crew_rotation_plan_id as string))];
-      const { data: plans, error } = await supabase.from('crew_rotation_plans').select('id, plan_name, ship_id, ships:ship_id(name)').in('id', planIds);
+      const [{ data: plans, error }, ports] = await Promise.all([
+        supabase.from('crew_rotation_plans').select('id, plan_name, ship_id, rotation_date, port_id, notes, ships:ship_id(name)').in('id', planIds),
+        getPorts(),
+      ]);
       if (error) throw error;
+      const portMap = new Map(ports.map(p => [p.id, `${p.country_name} ${p.city_name}`]));
       const planMap = new Map((plans || []).map((p: Record<string, unknown>) => [p.id as string, p]));
       const merged = approvals
         .map(a => {
           const plan = planMap.get(a.crew_rotation_plan_id as string) as Record<string, unknown> | undefined;
           const ship = plan?.ships as Record<string, unknown> | null;
-          return { ...a, plan_name: (plan?.plan_name as string) || '교대계획', ship_name: (ship?.name as string) || '-' };
+          const portId = plan?.port_id as string | null;
+          return {
+            ...a,
+            plan_name: (plan?.plan_name as string) || '교대계획', ship_name: (ship?.name as string) || '-',
+            rotation_date: (plan?.rotation_date as string) || '', port_label: portId ? portMap.get(portId) || '-' : '-',
+            notes: (plan?.notes as string) || null,
+          };
         })
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setRotationApprovals(merged);
@@ -890,6 +904,11 @@ export default function DispatchApprovalInboxPage() {
     return (
       <div className="mb-4">
         <h4 className="text-sm font-semibold mb-2">교대 배정 요약</h4>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 mb-2">
+          <span><span className="text-gray-400">교대일</span> {selectedRotation.rotation_date || '-'}</span>
+          <span><span className="text-gray-400">교대지</span> {selectedRotation.port_label || '-'}</span>
+          {selectedRotation.notes && <span><span className="text-gray-400">비고</span> {selectedRotation.notes}</span>}
+        </div>
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
