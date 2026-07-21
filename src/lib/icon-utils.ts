@@ -42,6 +42,7 @@ import {
   Folder,
   IdCard,
   Wallet,
+  PiggyBank,
   LucideIcon,
 } from 'lucide-react';
 
@@ -89,6 +90,7 @@ const iconMap: Record<string, LucideIcon> = {
   Folder,
   IdCard,
   Wallet,
+  PiggyBank,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {

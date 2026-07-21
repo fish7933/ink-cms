@@ -306,6 +306,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 5,
         is_active: true,
       },
+      {
+        id: 'crew-deferred-pay',
+        label: '선원 후불성 급여 현황',
+        path: '/crew-deferred-pay',
+        icon: 'PiggyBank',
+        roles: ['ship_manager'],
+        order: 6,
+        is_active: true,
+      },
     ],
   },
   {
