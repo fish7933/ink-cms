@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Plus, X, Ship, LogIn, LogOut, Download, Printer } from 'lucide-react';
+import { Plus, X, Ship, LogIn, LogOut, Download, Printer, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -148,6 +148,7 @@ export default function RotationPlanFormPage() {
   const [loadedPlan, setLoadedPlan] = useState<CrewRotationPlanWithDetails | null>(null);
   const [portLabel, setPortLabel] = useState('');
   const [executing, setExecuting] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const isReadOnly = isEditMode && planStatus !== 'draft';
@@ -669,6 +670,25 @@ export default function RotationPlanFormPage() {
     } finally { setSavingNotes(false); }
   };
 
+  const handleWithdraw = async () => {
+    if (!editPlanId || !confirm('이 교대 계획의 결재 상신을 철회하시겠습니까? 배정됐던 선원들의 임시저장 표시도 함께 풀립니다.')) return;
+    setWithdrawing(true);
+    try {
+      const ok = await rotationService.withdrawRotationPlan(editPlanId, (await getCurrentUser())?.id || '');
+      if (ok) {
+        toast({ title: '철회되었습니다', description: '결재 상신이 철회되고 계획이 반려 상태로 정리되었습니다.' });
+        setPlanStatus('rejected');
+        window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
+      } else {
+        toast({ title: '철회할 대기 중인 결재가 없습니다', variant: 'destructive' });
+      }
+    } catch (e) {
+      toast({ title: '철회 중 오류가 발생했습니다', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   const handleExecute = async () => {
     if (!editPlanId || !confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
     setExecuting(true);
@@ -731,6 +751,11 @@ export default function RotationPlanFormPage() {
                   {planStatus === 'approved' && (
                     <Button size="sm" className="h-8" onClick={handleExecute} disabled={executing}>
                       {executing ? '실행 중...' : '발령 실행'}
+                    </Button>
+                  )}
+                  {planStatus === 'pending_approval' && (
+                    <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50" onClick={handleWithdraw} disabled={withdrawing}>
+                      <Undo2 className="w-3.5 h-3.5 mr-1" />{withdrawing ? '철회 중...' : '계획 철회'}
                     </Button>
                   )}
                   <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={handleSaveNotes} disabled={savingNotes}>

@@ -573,21 +573,30 @@ export const rotationService = {
   },
 
   /**
+   * 결재대기 중인 계획을 삭제하지 않고 철회만 한다 — 대기 중인 결재 요청을 강제 반려
+   * 처리해 계획 상태를 rejected로 되돌린다. rejected는 선원 예약(draft/pending_approval/
+   * approved) 집계 대상에서 빠지므로, 배정됐던 선원의 "임시저장" 표시도 함께 풀린다.
+   * 결재대기 상태가 아니면(대기 중인 결재 요청이 없으면) 아무 일도 하지 않고 false를 반환한다.
+   */
+  async withdrawRotationPlan(planId: string, withdrawnBy: string): Promise<boolean> {
+    const approvals = await rotationApprovalService.getApprovalsByTarget(planId);
+    const openApproval = approvals.find(a => a.status === 'pending');
+    if (!openApproval) return false;
+    await rotationApprovalService.adminForceReject(openApproval.id, withdrawnBy, '작성자 철회');
+    return true;
+  },
+
+  /**
    * Delete rotation plan (soft delete — 삭제자/삭제일시를 남기고 목록에서만 제외.
    * 실행완료된 발령의 실제 선원 상태/계약/승선경력 등은 별도 데이터라 되돌리지 않음)
    *
    * 결재대기 중인 계획을 그냥 삭제하면 결재함에 붕 뜬 항목이 남고, 배정된 선원도 계속
-   * "임시저장" 상태로 잡혀 있게 된다(대상 계획 상태가 draft/pending_approval/approved인
-   * 동안은 예약으로 취급되므로). 삭제 전에 대기 중인 결재 요청이 있으면 먼저 철회(강제
-   * 반려 처리)해서 계획 상태를 rejected로 정리한 뒤 소프트 삭제한다.
+   * "임시저장" 상태로 잡혀 있게 된다. 삭제 전에 대기 중인 결재 요청이 있으면 먼저
+   * withdrawRotationPlan으로 철회해 계획 상태를 정리한 뒤 소프트 삭제한다.
    */
   async deleteRotationPlan(id: string, deletedBy: string): Promise<boolean> {
     try {
-      const approvals = await rotationApprovalService.getApprovalsByTarget(id);
-      const openApproval = approvals.find(a => a.status === 'pending');
-      if (openApproval) {
-        await rotationApprovalService.adminForceReject(openApproval.id, deletedBy, '교대계획 삭제로 인한 결재 철회');
-      }
+      await this.withdrawRotationPlan(id, deletedBy);
     } catch (e) {
       console.error('Error withdrawing pending approval before delete:', e);
     }
