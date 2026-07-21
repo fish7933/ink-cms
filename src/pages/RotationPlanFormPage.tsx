@@ -751,6 +751,10 @@ export default function RotationPlanFormPage() {
 
   // 배정 요약 표의 상병급여 열은 상병하선이 하나라도 있을 때만 보여준다 — 평소엔 안 쓰는 열이라 숨겨둔다.
   const hasSickPayInSummary = rows.some(r => signOffReasons.find(sr => sr.id === r.disembarkReasonId)?.name === '상병하선');
+  // 선원이 여러 명 나열되는 표/리스트는 항상 직급순(ranks는 이미 sortRanksByDisplayOrder로 정렬됨)을
+  // 따라야 한다 — "교대 배정 요약"에 이 규칙을 적용하기 위한 직급 인덱스 조회.
+  const rankIndexById = new Map(ranks.map((r, i) => [r.id, i]));
+  const rankSortIndex = (rankId: string) => rankIndexById.get(rankId) ?? 999;
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-3">
@@ -842,46 +846,47 @@ export default function RotationPlanFormPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">교대지 국가</Label>
-              {manualCountry ? (
-                <div className="flex gap-1">
-                  <Input value={countryName} onChange={e => handleManualCountryChange(e.target.value)} placeholder="국가명 (영어)" className="h-8 text-xs" disabled={isReadOnly} />
-                  {!isReadOnly && (
-                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCountry(false); setCountryName(''); }}>목록</Button>
-                  )}
-                </div>
-              ) : (
-                <Select value={countryName || '_none'} onValueChange={handleCountrySelect} disabled={isReadOnly}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="국가 선택" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_manual">직접 입력...</SelectItem>
-                    <SelectItem value="_none">국가 선택</SelectItem>
-                    {countryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">교대지 도시</Label>
-              {(manualCountry || manualCity) ? (
-                <div className="flex gap-1">
-                  <Input value={cityName} onChange={e => setCityName(e.target.value)} placeholder="도시명 (영어)" className="h-8 text-xs" disabled={isReadOnly} />
-                  {!manualCountry && !isReadOnly && (
-                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCity(false); setCityName(''); }}>목록</Button>
-                  )}
-                </div>
-              ) : (
-                <Select value={cityName || '_none'} onValueChange={handleCitySelect} disabled={isReadOnly || !countryName}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={countryName ? '도시 선택' : '국가를 먼저 선택'} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_manual">직접 입력...</SelectItem>
-                    <SelectItem value="_none">도시 선택</SelectItem>
-                    {cityOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
+              {/* 교대 계획 하나는 항상 한 장소에서 이루어지므로, 국가/도시를 두 칸으로 나누지 않고
+                  비고와 같은 방식으로 한 칸 안에 같이 보여준다. */}
+              <Label className="text-xs">교대지 (국가/도시)</Label>
+              <div className="flex gap-1">
+                {manualCountry ? (
+                  <>
+                    <Input value={countryName} onChange={e => handleManualCountryChange(e.target.value)} placeholder="국가명 (영어)" className="h-8 text-xs flex-1 min-w-0" disabled={isReadOnly} />
+                    {!isReadOnly && (
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCountry(false); setCountryName(''); }}>목록</Button>
+                    )}
+                  </>
+                ) : (
+                  <Select value={countryName || '_none'} onValueChange={handleCountrySelect} disabled={isReadOnly}>
+                    <SelectTrigger className="h-8 text-xs flex-1 min-w-0"><SelectValue placeholder="국가 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_manual">직접 입력...</SelectItem>
+                      <SelectItem value="_none">국가 선택</SelectItem>
+                      {countryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {(manualCountry || manualCity) ? (
+                  <>
+                    <Input value={cityName} onChange={e => setCityName(e.target.value)} placeholder="도시명 (영어)" className="h-8 text-xs flex-1 min-w-0" disabled={isReadOnly} />
+                    {!manualCountry && !isReadOnly && (
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCity(false); setCityName(''); }}>목록</Button>
+                    )}
+                  </>
+                ) : (
+                  <Select value={cityName || '_none'} onValueChange={handleCitySelect} disabled={isReadOnly || !countryName}>
+                    <SelectTrigger className="h-8 text-xs flex-1 min-w-0"><SelectValue placeholder={countryName ? '도시 선택' : '국가를 먼저 선택'} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_manual">직접 입력...</SelectItem>
+                      <SelectItem value="_none">도시 선택</SelectItem>
+                      {cityOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">기준 교대일</Label>
@@ -1113,7 +1118,11 @@ export default function RotationPlanFormPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.filter(r => r.boardingCrewId || r.disembarkCrewId).map((r, i) => {
+                  {rows
+                    .filter(r => r.boardingCrewId || r.disembarkCrewId)
+                    .slice()
+                    .sort((a, b) => rankSortIndex(a.boardingRankId || a.disembarkRankId) - rankSortIndex(b.boardingRankId || b.disembarkRankId))
+                    .map((r, i) => {
                     const inCrew = getCrew(r.boardingCrewId);
                     const outCrew = getCrew(r.disembarkCrewId);
                     const inRankCode = r.boardingRankId ? ranks.find(rk => rk.id === r.boardingRankId)?.rank_code : '';

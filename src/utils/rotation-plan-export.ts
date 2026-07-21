@@ -30,7 +30,7 @@ const border = (opts: { thickTop?: boolean; thickBottom?: boolean; thickLeft?: b
   right: { style: opts.thickRight ? 'medium' : 'thin', color: { rgb: opts.thickRight ? THICK : THIN } },
 });
 
-const COL_LABELS = ['No.', '직급', '성명', '출국일', '승선일', '직급', '성명', '하선일', '귀국일'];
+const COL_LABELS = ['No.', 'Rank', 'Name', 'Departure', 'Boarding', 'Rank', 'Name', 'Disembark', 'Return'];
 const COL_ALIGN: ('center' | 'left')[] = ['center', 'center', 'left', 'center', 'center', 'center', 'left', 'center', 'center'];
 
 // 배승계획서 한 건의 워크시트를 만든다 — 좌: 신규 승선(IN), 우: 기존 하선(OUT). 단건 내보내기 전용.
@@ -40,12 +40,12 @@ function buildRotationPlanWorksheet(plan: CrewRotationPlanWithDetails & { creato
 
   // 제목
   rows.push([
-    cell('배승계획서', { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }),
+    cell('CREW DISPATCH PLAN', { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   // 메타정보
-  const metaLine1 = `계획명: ${plan.plan_name}   |   선박: ${plan.ship_name}   |   선주/플릿: ${plan.owner_name}${plan.fleet_name ? ` / ${plan.fleet_name}` : ''}`;
-  const metaLine2 = `교대일: ${plan.rotation_date}   |   교대 항구: ${portLabel || '-'}   |   작성자: ${plan.creator_name || '-'}`;
+  const metaLine1 = `Plan: ${plan.plan_name}   |   Vessel: ${plan.ship_name}   |   Owner/Fleet: ${plan.owner_name}${plan.fleet_name ? ` / ${plan.fleet_name}` : ''}`;
+  const metaLine2 = `Rotation Date: ${plan.rotation_date}   |   Port: ${portLabel || '-'}   |   Prepared By: ${plan.creator_name || '-'}`;
   rows.push([
     cell(metaLine1, { font: { sz: BASE_SZ, color: { rgb: '444444' } }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
@@ -282,12 +282,12 @@ export async function exportRotationPlansLedgerToExcel(
   const ledgerRows = buildRotationPlanLedgerRows(plans, portLabelByPlanId);
   if (ledgerRows.length === 0) return;
 
-  const LABELS = ['선주', '선박', '번호', '승선자', '하선자', '교대일', '교대국가/도시(항구)', '비고'];
+  const LABELS = ['Owner', 'Vessel', 'No.', 'On-Signer', 'Off-Signer', 'Rotation Date', 'Port (Country/City)', 'Remarks'];
   const colCount = LABELS.length;
   const rows: ReturnType<typeof cell>[][] = [];
 
   rows.push([
-    cell('배승 계획 목록', { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }),
+    cell('CREW DISPATCH PLAN', { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } }),
     ...Array.from({ length: colCount - 1 }, () => cell('', {})),
   ]);
   rows.push(Array.from({ length: colCount }, () => cell('', {})));
@@ -333,6 +333,6 @@ export async function exportRotationPlansLedgerToExcel(
   worksheet['!merges'] = merges;
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, '배승계획목록');
-  await writeWorkbook(workbook, `${fileNameHint}_배승계획목록.xlsx`);
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Dispatch Plan');
+  await writeWorkbook(workbook, `${fileNameHint}_Dispatch_Plan.xlsx`);
 }

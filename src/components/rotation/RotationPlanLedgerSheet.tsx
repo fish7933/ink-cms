@@ -60,12 +60,12 @@ export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, peri
           </colgroup>
           <thead>
             <tr>
-              <th>No.</th><th>선주</th><th>선박</th><th>승선자</th><th>하선자</th><th>교대일</th><th>교대국가/도시(항구)</th><th>비고</th>
+              <th>No.</th><th>Owner</th><th>Vessel</th><th>On-Signer</th><th>Off-Signer</th><th>Rotation Date</th><th>Port (Country/City)</th><th>Remarks</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#bbb' }}>해당하는 교대 계획이 없습니다</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#bbb' }}>No matching rotation plans found.</td></tr>
             ) : rows.map((r, i) => (
               <tr key={i}>
                 <td className="center">{r.no}</td>
