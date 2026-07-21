@@ -18,6 +18,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useNavigate } from 'react-router-dom';
 import { approvalService } from '@/services/approval.service';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
+import { rotationService } from '@/services/rotation.service';
+import { getRanks } from '@/services/rank.service';
 import { contractApprovalService } from '@/services/contract-approval.service';
 import { dispatchOrderApprovalService } from '@/services/dispatch-order-approval.service';
 import { dispatchApprovalLogService } from '@/services/dispatch-approval-log.service';
@@ -25,6 +27,8 @@ import { supabase } from '@/lib/supabase';
 import type { CrewRecommendationApprovalWithDetails, ApprovalLineStep, ApprovalAction } from '@/types/approval';
 import type { CrewRecommendation } from '@/types/crew-recommendation';
 import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
+import type { CrewRotationAssignmentWithDetails } from '@/types/rotation';
+import type { Rank } from '@/types/models';
 
 type ApprovalWithRecommendation = CrewRecommendationApprovalWithDetails & {
   recommendation?: CrewRecommendation & {
@@ -148,6 +152,11 @@ export default function DispatchApprovalInboxPage() {
   const [rotationForce, setRotationForce] = useState(false);
   const [rotationComment, setRotationComment] = useState('');
   const [rotationProcessing, setRotationProcessing] = useState(false);
+  // 결재 대상 확인/승인·반려 화면에서 최소한 그 계획의 교대 배정 요약은 보여야 하므로,
+  // 선택된 배승 결재 건의 실제 배정(승/하선 쌍)을 여기서 별도로 불러온다.
+  const [rotationAssignments, setRotationAssignments] = useState<CrewRotationAssignmentWithDetails[]>([]);
+  const [rotationAssignmentsLoading, setRotationAssignmentsLoading] = useState(false);
+  const [ranks, setRanks] = useState<Rank[]>([]);
 
   // 계약
   const [contractApprovals, setContractApprovals] = useState<ContractApprovalWithContract[]>([]);
@@ -207,11 +216,24 @@ export default function DispatchApprovalInboxPage() {
         loadContractApprovals(currentUser.id, admin),
         loadDispatchApprovals(currentUser.id, admin),
         loadDeletionLogs(),
+        getRanks().then(setRanks),
       ]);
     } finally {
       setInitializing(false);
     }
   };
+
+  // 배승 결재 대상을 확인/처리할 때 최소한 교대 배정 요약은 보여야 하므로,
+  // 선택된 건이 바뀔 때마다 그 계획의 실제 배정 목록을 불러온다.
+  useEffect(() => {
+    const planId = selectedRotation?.crew_rotation_plan_id as string | undefined;
+    if (!planId) { setRotationAssignments([]); return; }
+    setRotationAssignmentsLoading(true);
+    rotationService.getRotationAssignments(planId)
+      .then(setRotationAssignments)
+      .catch(e => { console.error(e); setRotationAssignments([]); })
+      .finally(() => setRotationAssignmentsLoading(false));
+  }, [selectedRotation]);
 
   // --- 삭제 이력함 ---
 
@@ -779,6 +801,7 @@ export default function DispatchApprovalInboxPage() {
     description: React.ReactNode,
     canDeleteThis: boolean,
     onDelete: () => void,
+    extraContent?: React.ReactNode,
   ) => {
     if (!approval) return null;
     return (
@@ -797,7 +820,10 @@ export default function DispatchApprovalInboxPage() {
               )}
             </div>
           </DialogHeader>
-          <div className="pt-2">{renderProgress(approval)}</div>
+          <div className="pt-2">
+            {extraContent}
+            {renderProgress(approval)}
+          </div>
         </DialogContent>
       </Dialog>
     );
@@ -848,6 +874,57 @@ export default function DispatchApprovalInboxPage() {
       </div>
     </div>
   );
+
+  // 배승 결재 대상 확인/처리 화면에 최소한 보여야 하는 교대 배정 요약 (직급순 정렬).
+  const renderRotationAssignmentSummary = () => {
+    if (!selectedRotation) return null;
+    if (rotationAssignmentsLoading) {
+      return <div className="text-xs text-gray-400 py-2">배정 정보를 불러오는 중...</div>;
+    }
+    if (rotationAssignments.length === 0) return null;
+    const rankIndexById = new Map(ranks.map((r, i) => [r.id, i]));
+    const rankSortIndex = (rankId: string | null) => (rankId ? rankIndexById.get(rankId) ?? 999 : 999);
+    const rows = rotationAssignments
+      .slice()
+      .sort((a, b) => rankSortIndex(a.on_rank_id || a.off_rank_id) - rankSortIndex(b.on_rank_id || b.off_rank_id));
+    return (
+      <div className="mb-4">
+        <h4 className="text-sm font-semibold mb-2">교대 배정 요약</h4>
+        <div className="rounded-md border overflow-hidden overflow-x-auto">
+          <table className="w-full text-xs whitespace-nowrap">
+            <thead className="bg-gray-50 border-b">
+              <tr>
+                <th className="text-left p-2 font-medium text-gray-600">On-Signer</th>
+                <th className="text-left p-2 font-medium text-gray-600">승선일</th>
+                <th className="text-left p-2 font-medium text-gray-600">Off-Signer</th>
+                <th className="text-left p-2 font-medium text-gray-600">하선일</th>
+                <th className="text-left p-2 font-medium text-gray-600">하선사유</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(a => (
+                <tr key={a.id} className="border-b last:border-0">
+                  <td className="p-2">
+                    {a.on_crew_id ? (
+                      <span>{a.on_rank_code && <span className="text-blue-700 font-medium mr-1">{a.on_rank_code}</span>}{a.on_crew_name || ''}</span>
+                    ) : <span className="text-gray-300">-</span>}
+                  </td>
+                  <td className="p-2 text-gray-600">{a.embark_date || '-'}</td>
+                  <td className="p-2">
+                    {a.off_crew_id ? (
+                      <span>{a.off_rank_code && <span className="text-amber-700 font-medium mr-1">{a.off_rank_code}</span>}{a.off_crew_name || ''}</span>
+                    ) : <span className="text-gray-300">-</span>}
+                  </td>
+                  <td className="p-2 text-gray-600">{a.off_disembark_date || '-'}</td>
+                  <td className="p-2 text-gray-600">{a.off_sign_off_reason_name || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   const renderTable = <T extends ApprovalLike>(
     list: T[],
@@ -989,6 +1066,7 @@ export default function DispatchApprovalInboxPage() {
     action: 'approve' | 'reject' | null, processing: boolean,
     onBack: () => void, onSubmit: () => void,
     forceMode = false,
+    extraContent?: React.ReactNode,
   ) => (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -998,6 +1076,7 @@ export default function DispatchApprovalInboxPage() {
       <Card>
         <CardHeader><CardTitle className="text-base">{title}</CardTitle><CardDescription>{subject}</CardDescription></CardHeader>
         <CardContent className="space-y-4">
+          {extraContent}
           {forceMode && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5">
               관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 건을 즉시 {action === 'approve' ? '승인' : '반려'} 처리합니다. 남은 결재 단계는 진행되지 않습니다.
@@ -1089,6 +1168,7 @@ export default function DispatchApprovalInboxPage() {
             selectedRotation.plan_name || '교대계획', `결재선: ${selectedRotation.approval_line.name} · ${selectedRotation.ship_name}`,
             rotationComment, setRotationComment, rotationAction, rotationProcessing,
             () => { setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); setRotationForce(false); }, handleRotationAction, rotationForce,
+            renderRotationAssignmentSummary(),
           ) : (
             <div className="space-y-4">
               {renderFilterBar(rotationFilter, setRotationFilter)}
@@ -1119,6 +1199,7 @@ export default function DispatchApprovalInboxPage() {
             `${selectedRotation?.ship_name || ''} · 요청자: ${selectedRotation?.requester_name || ''}`,
             !!selectedRotation && selectedRotation.status !== 'pending' && (selectedRotation.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedRotation && handleDeleteRotation(selectedRotation),
+            renderRotationAssignmentSummary(),
           )}
         </TabsContent>
 
