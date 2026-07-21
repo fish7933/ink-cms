@@ -38,6 +38,8 @@ import {
   getCrewSalaryRecords, deleteCrewSalaryRecord,
 } from '@/services/crew-extended.service';
 import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord } from '@/types/crew-extended';
+import { crewPayrollService } from '@/services/crew-payroll.service';
+import type { CrewPayrollHistoryRow } from '@/types/crew-payroll';
 
 const REC_LABELS: Record<string, string> = { highly_recommend: '강력 추천', recommend: '추천', neutral: '보통', not_recommend: '비추천' };
 
@@ -178,6 +180,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
   const [medicalCounts, setMedicalCounts] = useState<Record<string, number>>({});
   const [salaryRecords, setSalaryRecords] = useState<CrewSalaryRecord[]>([]);
+  const [payrollHistory, setPayrollHistory] = useState<CrewPayrollHistoryRow[]>([]);
   const [seaServiceDialogOpen, setSeaServiceDialogOpen] = useState(false);
   const [evaluationDialogOpen, setEvaluationDialogOpen] = useState(false);
   const [evaluationDialogRecord, setEvaluationDialogRecord] = useState<SeaServiceRecord | null>(null);
@@ -291,18 +294,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   const loadExtendedRecords = async (crewId: string) => {
     try {
-      const [sea, train, med, sal, evals] = await Promise.all([
+      const [sea, train, med, sal, evals, payroll] = await Promise.all([
         getSeaServiceRecords(crewId),
         getTrainingRecords(crewId),
         getMedicalRecords(crewId),
         getCrewSalaryRecords(crewId),
         getEvaluations(crewId),
+        crewPayrollService.getCrewPayrollHistory(crewId),
       ]);
       setSeaServiceRecords(sea);
       setTrainingRecords(train);
       setMedicalRecords(med);
       setSalaryRecords(sal);
       setEvaluations(evals);
+      setPayrollHistory(payroll);
       const counts: Record<string, number> = {};
       evals.forEach(e => { if (e.sea_service_record_id) counts[e.sea_service_record_id] = (counts[e.sea_service_record_id] || 0) + 1; });
       setEvaluationCounts(counts);
@@ -598,7 +603,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 상병기록{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="salary_records" className="text-xs">
-                급여이력{salaryRecords.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{salaryRecords.length}</span>}
+                급여이력{(payrollHistory.length + salaryRecords.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length}</span>}
               </TabsTrigger>
             </TabsList>
           )}
@@ -1123,8 +1128,38 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         {!isNew && (
           <TabsContent value="salary_records" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">급여 이력 ({salaryRecords.length}건)</span>
+              <div className="space-y-2">
+                <span className="text-sm font-semibold">지급된 급여명세 ({payrollHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 선원 급여명세 메뉴에서 생성된 실제 급여명세</span></span>
+                {payrollHistory.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">생성된 급여명세가 없습니다.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead><tr className="border-b bg-gray-50">
+                        <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">기간</th><th className="text-right p-2">근무일수</th><th className="text-right p-2">실지급액</th><th className="text-left p-2">상태</th>
+                      </tr></thead>
+                      <tbody>
+                        {payrollHistory.map(r => (
+                          <tr key={r.period_id} className="border-b hover:bg-gray-50">
+                            <td className="p-2">{r.year_month}</td>
+                            <td className="p-2">{r.ship_name}</td>
+                            <td className="p-2">{r.period_start_date} ~ {r.period_end_date}</td>
+                            <td className="p-2 text-right">{r.days_served}/{r.days_in_month}일</td>
+                            <td className="p-2 text-right font-mono font-semibold">{r.net_amount.toLocaleString()}</td>
+                            <td className="p-2">
+                              {r.status === 'confirmed' ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
+                                : r.status === 'pending_approval' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">상신중</Badge>
+                                : <Badge className="bg-gray-100 text-gray-600 text-xs">작성중</Badge>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between border-t pt-3">
+                <span className="text-sm font-semibold">수동 등록 급여 이력 ({salaryRecords.length}건) <span className="text-xs text-gray-400 font-normal">— 직접 입력한 기록</span></span>
                 <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSalary(undefined); setSalaryDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
               </div>
               {salaryRecords.length === 0 ? (
