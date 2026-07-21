@@ -485,12 +485,15 @@ export default function RotationPlanFormPage() {
     setRows(prev => [...prev.filter(r => r.boardingCrewId || r.disembarkCrewId), ...newRows]);
   };
 
+  // 하선사유 기본값 — 대부분의 하선은 계약만료이므로, 매번 고르지 않아도 되게 기본 선택해둔다.
+  const defaultDisembarkReasonId = () => signOffReasons.find(r => r.name === '계약만료')?.id || '';
+
   const addDisembarkCrewIdsAsRows = (ids: string[]) => {
     const seed = cascadeDatesFromBase(baseDepartureDate);
     const newRows = ids.map(id => {
       const crew = onboardCrew.find(c => c.id === id);
       const auto = crew ? computeDisembarkAutoFields(crew) : { rankId: '', grade: null };
-      return makeRow({ disembarkCrewId: id, disembarkRankId: auto.rankId, disembarkGrade: auto.grade, ...seed });
+      return makeRow({ disembarkCrewId: id, disembarkRankId: auto.rankId, disembarkGrade: auto.grade, disembarkReasonId: defaultDisembarkReasonId(), ...seed });
     });
     setRows(prev => [...prev.filter(r => r.boardingCrewId || r.disembarkCrewId), ...newRows]);
   };
@@ -542,7 +545,8 @@ export default function RotationPlanFormPage() {
     } else {
       const crew = onboardCrew.find(c => c.id === id);
       const auto = crew ? computeDisembarkAutoFields(crew) : { rankId: '', grade: null };
-      updateRow(rowPicker.rowId, { disembarkCrewId: id, disembarkRankId: auto.rankId, disembarkGrade: auto.grade });
+      const existingRow = rows.find(r => r.id === rowPicker.rowId);
+      updateRow(rowPicker.rowId, { disembarkCrewId: id, disembarkRankId: auto.rankId, disembarkGrade: auto.grade, disembarkReasonId: existingRow?.disembarkReasonId || defaultDisembarkReasonId() });
     }
   };
 
@@ -1097,10 +1101,12 @@ export default function RotationPlanFormPage() {
                   <tr className="text-[10px] text-gray-400">
                     <th className="text-left py-1 px-2 font-medium">#</th>
                     <th className="text-left py-1 px-2 font-medium text-emerald-600">On-Signer</th>
-                    <th className="text-left py-1 px-2 font-medium">계약개월</th>
                     <th className="text-left py-1 px-2 font-medium">승선일</th>
-                    <th className="text-left py-1 px-2 font-medium text-orange-600">Off-Signer</th>
+                    <th className="text-left py-1 px-2 font-medium">계약개월</th>
+                    <th className="text-left py-1 pl-6 pr-2 font-medium text-orange-600 border-l">Off-Signer</th>
                     <th className="text-left py-1 px-2 font-medium">하선일</th>
+                    <th className="text-left py-1 px-2 font-medium">하선사유</th>
+                    <th className="text-left py-1 px-2 font-medium text-red-500">상병급여</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1109,6 +1115,7 @@ export default function RotationPlanFormPage() {
                     const outCrew = getCrew(r.disembarkCrewId);
                     const inRankCode = r.boardingRankId ? ranks.find(rk => rk.id === r.boardingRankId)?.rank_code : '';
                     const outRankCode = r.disembarkRankId ? ranks.find(rk => rk.id === r.disembarkRankId)?.rank_code : '';
+                    const disembarkReasonName = signOffReasons.find(sr => sr.id === r.disembarkReasonId)?.name;
                     return (
                       <tr key={r.id} className="border-b last:border-0">
                         <td className="py-1 px-2 text-gray-400 font-mono">{i + 1}</td>
@@ -1125,9 +1132,9 @@ export default function RotationPlanFormPage() {
                             </span>
                           ) : <span className="text-gray-300 italic">미정</span>}
                         </td>
-                        <td className="py-1 px-2 text-gray-400">{r.contractMonths ? `${r.contractMonths}개월` : '-'}</td>
                         <td className="py-1 px-2 text-gray-400">{r.boardingDate || '-'}</td>
-                        <td className="py-1 px-2">
+                        <td className="py-1 px-2 text-gray-400">{r.contractMonths ? `${r.contractMonths}개월` : '-'}</td>
+                        <td className="py-1 pl-6 pr-2 border-l">
                           {r.disembarkCrewId ? (
                             <span className="flex items-center gap-1">
                               {outRankCode && <span className="font-mono text-[10px] bg-orange-50 text-orange-700 px-1 rounded shrink-0">{outRankCode}</span>}
@@ -1137,6 +1144,8 @@ export default function RotationPlanFormPage() {
                           ) : <span className="text-gray-300 italic">미정</span>}
                         </td>
                         <td className="py-1 px-2 text-gray-400">{r.disembarkDate || '-'}</td>
+                        <td className="py-1 px-2 text-gray-400">{disembarkReasonName || '-'}</td>
+                        <td className="py-1 px-2 text-red-600 font-mono">{disembarkReasonName === '상병하선' && r.sickPayMonthlyAmount ? r.sickPayMonthlyAmount : '-'}</td>
                       </tr>
                     );
                   })}
