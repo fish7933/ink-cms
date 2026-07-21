@@ -383,9 +383,9 @@ export default function ApprovalInboxPage() {
                 <td className="p-2 text-gray-500">{doc.creator_name}</td>
                 <td className="p-2">
                   <div className="flex items-center gap-1 text-xs whitespace-nowrap">
-                    {doc.steps.map(s => (
+                    {doc.steps.map((s, i) => (
                       <span key={s.id} className="flex items-center gap-1">
-                        <span className="text-gray-300">→</span>
+                        {i > 0 && <span className="text-gray-300">→</span>}
                         <span className={
                           s.status === 'approved' ? 'text-green-600'
                           : s.status === 'rejected' ? 'text-red-600 font-medium'
