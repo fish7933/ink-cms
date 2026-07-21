@@ -11,28 +11,41 @@ export function sanitizeTableHtml(html: string): string {
   return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false });
 }
 
-// 엑셀은 글꼴 크기/굵기 등 서식 대부분을 인라인 style이 아니라 <head><style>의 클래스
-// 규칙(.xl65 등)으로 내보내고 셀에는 class만 붙여둔다 — sanitize 단계에서 <style>/class를
-// 통째로 제거하면 그 서식이 전부 사라지므로, 제거하기 전에 클래스 규칙을 각 셀의 인라인
-// style로 먼저 합쳐넣는다(기존 인라인 style이 있으면 그게 더 구체적인 값이므로 뒤에 이어붙여 우선한다).
+// 엑셀은 글꼴 크기/굵기 같은 서식은 클래스 규칙(.xl65 등)으로, 셀 줄바꿈 방지(white-space:nowrap)
+// 같은 기본값은 태그 선택자 규칙(td {...})으로 <head><style>에 내보내고 실제 셀에는 class만
+// 붙여둔다 — sanitize 단계에서 <style>/class를 통째로 제거하면 이 서식들이 전부 사라져 버려서,
+// (셀 하나에 들어가던 짧은 텍스트가 줄바꿈되는 등의 원인이 된다) 제거하기 전에 태그 규칙 →
+// 클래스 규칙 순으로(이 순서가 실제 CSS 우선순위와 같다) 각 셀의 인라인 style로 먼저 합쳐넣는다
+// (기존 인라인 style이 있으면 그게 가장 구체적인 값이므로 맨 뒤에 이어붙여 우선한다).
 function inlineClassStyles(rawHtml: string): string {
   const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
   const styleByClass = new Map<string, string>();
+  const styleByTag = new Map<string, string>();
   doc.querySelectorAll('style').forEach(styleEl => {
     const cssText = styleEl.textContent || '';
-    const ruleRe = /\.([\w-]+)\s*\{([^}]*)\}/g;
+    const ruleRe = /([^{},]+)\{([^}]*)\}/g;
     let m: RegExpExecArray | null;
     while ((m = ruleRe.exec(cssText))) {
-      const [, cls, body] = m;
-      styleByClass.set(cls, `${styleByClass.get(cls) || ''}${body.trim()};`);
+      const selector = m[1].trim();
+      const body = m[2].trim();
+      if (!selector || !body) continue;
+      if (selector.startsWith('.')) {
+        const cls = selector.slice(1);
+        styleByClass.set(cls, `${styleByClass.get(cls) || ''}${body};`);
+      } else if (/^[a-zA-Z][\w-]*$/.test(selector)) {
+        const tag = selector.toLowerCase();
+        styleByTag.set(tag, `${styleByTag.get(tag) || ''}${body};`);
+      }
     }
   });
-  if (styleByClass.size > 0) {
-    doc.querySelectorAll('[class]').forEach(el => {
+  if (styleByClass.size > 0 || styleByTag.size > 0) {
+    doc.querySelectorAll('td, th, tr, table').forEach(el => {
+      const fromTag = styleByTag.get(el.tagName.toLowerCase()) || '';
       const classes = (el.getAttribute('class') || '').split(/\s+/).filter(Boolean);
       const fromClasses = classes.map(c => styleByClass.get(c) || '').filter(Boolean).join('');
-      if (fromClasses) el.setAttribute('style', `${fromClasses}${el.getAttribute('style') || ''}`);
-      el.removeAttribute('class');
+      const merged = `${fromTag}${fromClasses}${el.getAttribute('style') || ''}`;
+      if (merged) el.setAttribute('style', merged);
+      if (el.hasAttribute('class')) el.removeAttribute('class');
     });
   }
   return doc.body.innerHTML;

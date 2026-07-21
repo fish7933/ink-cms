@@ -21,7 +21,7 @@ export default function DynamicDocumentForm({ fields, values, onChange, disabled
         const span = field.type === 'textarea' || field.type === 'table' ? 'col-span-2' : 'col-span-1';
         return (
           <div key={field.key} className={`space-y-1.5 ${span}`}>
-            <Label className="text-xs">{field.label}{field.required && ' *'}</Label>
+            {field.type !== 'table' && <Label className="text-xs">{field.label}{field.required && ' *'}</Label>}
             {field.type === 'textarea' ? (
               <Textarea value={String(value)} onChange={e => onChange(field.key, e.target.value)} rows={3} disabled={disabled} />
             ) : field.type === 'table' ? (
