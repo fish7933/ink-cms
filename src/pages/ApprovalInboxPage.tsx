@@ -383,7 +383,6 @@ export default function ApprovalInboxPage() {
                 <td className="p-2 text-gray-500">{doc.creator_name}</td>
                 <td className="p-2">
                   <div className="flex items-center gap-1 text-xs whitespace-nowrap">
-                    <span className="text-gray-400">기안</span>
                     {doc.steps.map(s => (
                       <span key={s.id} className="flex items-center gap-1">
                         <span className="text-gray-300">→</span>
