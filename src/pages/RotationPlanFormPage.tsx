@@ -1101,46 +1101,49 @@ export default function RotationPlanFormPage() {
                   <div key={r.id} className="bg-white border rounded-md p-2 space-y-1.5 text-xs">
                     <div className="flex items-center gap-1 border-b pb-1">
                       <span className="text-[10px] text-gray-400 font-mono">#{i + 1}</span>
-                      {(inRankCode || outRankCode) && (
-                        <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
-                          {inRankCode || outRankCode}
-                        </span>
-                      )}
                       {r.contractMonths && (
                         <span className="ml-auto text-[10px] text-gray-400">{r.contractMonths}개월</span>
                       )}
                     </div>
-                    {/* On-Signer */}
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1 w-20 shrink-0">
-                        <LogIn className="w-3 h-3 text-emerald-500" />
-                        <span className="text-[10px] font-medium text-emerald-600 whitespace-nowrap">On-Signer</span>
-                      </div>
-                      {r.boardingCrewId ? (
-                        <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-emerald-800 truncate">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</span>
-                          {r.boardingGrade
-                            ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
-                            : gradesForRankId(r.boardingRankId).length > 0
-                              ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
-                              : null}
-                          {r.boardingDate && <span className="text-[10px] text-gray-400 shrink-0">{r.boardingDate}</span>}
+                    <div className="flex gap-2 divide-x">
+                      {/* On-Signer */}
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1">
+                          <LogIn className="w-3 h-3 text-emerald-500" />
+                          <span className="text-[10px] font-medium text-emerald-600 whitespace-nowrap">On-Signer</span>
                         </div>
-                      ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
-                    </div>
-                    {/* Off-Signer */}
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-center gap-1 w-20 shrink-0">
-                        <LogOut className="w-3 h-3 text-orange-500" />
-                        <span className="text-[10px] font-medium text-orange-600 whitespace-nowrap">Off-Signer</span>
+                        {r.boardingCrewId ? (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {inRankCode && <span className="font-mono text-[10px] bg-emerald-50 text-emerald-700 px-1 rounded shrink-0">{inRankCode}</span>}
+                              {r.boardingGrade
+                                ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
+                                : gradesForRankId(r.boardingRankId).length > 0
+                                  ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
+                                  : null}
+                            </div>
+                            <div className="font-medium text-emerald-800 truncate">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</div>
+                            {r.boardingDate && <div className="text-[10px] text-gray-400">{r.boardingDate}</div>}
+                          </div>
+                        ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
                       </div>
-                      {r.disembarkCrewId ? (
-                        <div className="flex items-center gap-1 min-w-0">
-                          <span className="font-medium text-orange-800 truncate">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
-                          {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
-                          {r.disembarkDate && <span className="text-[10px] text-gray-400 shrink-0">{r.disembarkDate}</span>}
+                      {/* Off-Signer */}
+                      <div className="flex-1 min-w-0 space-y-0.5 pl-2">
+                        <div className="flex items-center gap-1">
+                          <LogOut className="w-3 h-3 text-orange-500" />
+                          <span className="text-[10px] font-medium text-orange-600 whitespace-nowrap">Off-Signer</span>
                         </div>
-                      ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
+                        {r.disembarkCrewId ? (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {outRankCode && <span className="font-mono text-[10px] bg-orange-50 text-orange-700 px-1 rounded shrink-0">{outRankCode}</span>}
+                              {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
+                            </div>
+                            <div className="font-medium text-orange-800 truncate">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</div>
+                            {r.disembarkDate && <div className="text-[10px] text-gray-400">{r.disembarkDate}</div>}
+                          </div>
+                        ) : <span className="text-gray-300 italic text-[10px]">미정</span>}
+                      </div>
                     </div>
                   </div>
                 );
