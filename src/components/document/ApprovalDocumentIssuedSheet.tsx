@@ -55,7 +55,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   const isDelegated = doc.status === 'approved' && !!topPosition && !!lastStepPositionName && lastStepPositionName !== topPosition.name;
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
+    <div className="issued-sheet-root" style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
       <style>{`
         table.issued-fields { border-collapse: collapse; width: 100%; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
@@ -89,9 +89,14 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           /* position:fixed로 매 페이지 하단에 고정을 시도했었으나, 브라우저(Chrome 등)가 인쇄 시
              fixed 요소를 페이지마다 반복 배치하지 않고 문서 전체 기준 좌표로 한 번만 배치해버려
              본문이 한 장을 넘어가면 그 좌표가 뒤쪽 페이지의 본문 중간과 겹쳐 보이는 문제가 있었다.
-             그래서 고정 배치를 포기하고 본문 뒤에 자연스럽게 한 번만 흐르도록 두되, 중간에 페이지가
-             나뉘어 반토막나지 않도록만 막는다. */
-          .issued-footer { page-break-inside: avoid; break-inside: avoid; }
+             그래서 고정 배치 대신 flex column + min-height(A4 내용영역 높이)로 바꿔, 본문이 짧아
+             한 장 안에서 끝나면 남는 여백만큼 footer가 그 페이지의 진짜 하단까지 밀려나도록 하고,
+             본문이 이미 한 장을 넘어가 min-height를 채우고도 남는 경우엔(min-height는 "최소"일
+             뿐이라) 이전과 동일하게 본문 바로 뒤에 자연스럽게 이어붙는다 — 임의 길이 문서에서
+             매 페이지 하단에 반복 고정시키는 것은 실제 페이지 수를 알 수 없는 일반 브라우저 인쇄로는
+             불가능하므로, 최소한 마지막 페이지 안에서는 항상 하단에 붙도록 하는 절충이다. */
+          .issued-sheet-root { display: flex; flex-direction: column; min-height: 269mm; }
+          .issued-footer { margin-top: auto; page-break-inside: avoid; break-inside: avoid; }
         }
       `}</style>
 
