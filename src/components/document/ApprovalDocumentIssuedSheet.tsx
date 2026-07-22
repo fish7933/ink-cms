@@ -263,25 +263,37 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   // 안 채워진 채 footer가 바로 따라붙는다). 그래서 본문 뒤에 "다음 페이지 경계까지의 나머지
   // 높이"만큼 빈 여백 행을 추가로 넣어, 매 페이지(마지막 페이지 포함)가 항상 꽉 차서 그 다음에
   // 오는 tfoot이 실제로 각 페이지 맨 하단에 오도록 만든다.
+  //
+  // 페이지당 실제로 본문에 쓸 수 있는 높이는 269mm 전체가 아니라 거기서 footer 자신의 높이를
+  // 뺀 만큼이다 — tfoot은 "매 페이지" 하단에 반복되므로 마지막 페이지뿐 아니라 중간 페이지들도
+  // 이미 그만큼 자리를 내주고 있다. 이걸 빼지 않고 269mm 전체를 기준으로 채워야 할 여백을
+  // 계산하면 실제로 필요한 것보다 여백이 부족해져, 인쇄 시 그 부족분이 새 페이지로 넘어가면서
+  // 거의 빈 페이지가 하나 더 생겨버린다(그 페이지에도 footer는 정상적으로 반복되니 얼핏 보면
+  // "잘 붙어있는데 페이지가 하나 남는" 것처럼 보인다).
   const measureRef = useRef<HTMLTableSectionElement>(null);
+  const footerMeasureRef = useRef<HTMLDivElement>(null);
   const [spacerPx, setSpacerPx] = useState(0);
 
   useLayoutEffect(() => {
-    const el = measureRef.current;
-    if (!el) return;
+    const bodyEl = measureRef.current;
+    const footerEl = footerMeasureRef.current;
+    if (!bodyEl || !footerEl) return;
 
     const recompute = () => {
-      const contentHeightPx = el.getBoundingClientRect().height;
-      if (contentHeightPx <= 0) return;
-      const pages = Math.max(1, Math.ceil((contentHeightPx - ROUNDING_TOLERANCE_PX) / PAGE_CONTENT_HEIGHT_PX));
-      const spacer = pages * PAGE_CONTENT_HEIGHT_PX - contentHeightPx;
+      const contentHeightPx = bodyEl.getBoundingClientRect().height;
+      const footerHeightPx = footerEl.getBoundingClientRect().height;
+      if (contentHeightPx <= 0 || footerHeightPx <= 0) return;
+      const usablePageHeightPx = PAGE_CONTENT_HEIGHT_PX - footerHeightPx;
+      const pages = Math.max(1, Math.ceil((contentHeightPx - ROUNDING_TOLERANCE_PX) / usablePageHeightPx));
+      const spacer = pages * usablePageHeightPx - contentHeightPx;
       setSpacerPx(spacer > 0 ? spacer : 0);
     };
 
     recompute();
     // 이미지 로딩 등으로 실제 렌더링 높이가 나중에 바뀔 수 있어 계속 관찰한다.
     const ro = new ResizeObserver(recompute);
-    ro.observe(el);
+    ro.observe(bodyEl);
+    ro.observe(footerEl);
     return () => ro.disconnect();
   }, [doc, documentType, company, positions, creatorPositionName, includeAttachments, leaveDetail, referenceLabels]);
 
@@ -353,12 +365,20 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
 
       {/* 측정 전용 사본 — 실제 인쇄 폭(180mm = A4 폭에서 좌우 여백 15mm×2 제외, 위 @page와
           일치)으로 화면 밖에 렌더링해 인쇄 시 실제로 차지할 높이를 정확히 잰다. 화면 미리보기
-          폭(위 800px)에서 그대로 재면 줄바꿈이 달라져 실제 인쇄 결과와 어긋난다. */}
+          폭(위 800px)에서 그대로 재면 줄바꿈이 달라져 실제 인쇄 결과와 어긋난다. footer도 같은
+          폭으로 따로 재는데, footer 자신의 높이만큼은 매 페이지에서 본문 몫이 줄어들기 때문이다. */}
       <table aria-hidden style={{ position: 'fixed', left: -99999, top: 0, width: PRINT_CONTENT_WIDTH, visibility: 'hidden' }}>
         <tbody ref={measureRef}>
           <IssuedSheetBody {...bodyProps} />
         </tbody>
       </table>
+      <div aria-hidden style={{ position: 'fixed', left: -99999, top: 0, width: PRINT_CONTENT_WIDTH, visibility: 'hidden' }}>
+        <div className="issued-footer" ref={footerMeasureRef}>
+          <span>{documentType?.code ? `양식번호 ${documentType.code}` : ''}</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{company?.name || ''}</span>
+          <span />
+        </div>
+      </div>
     </div>
   );
 }
