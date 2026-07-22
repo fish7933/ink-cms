@@ -60,8 +60,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.issued-fields { border-collapse: collapse; width: 100%; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
-        .issued-table-block table { border-collapse: collapse; width: 100%; }
-        .issued-table-block td, .issued-table-block th { padding: 4px 7px; font-size: 12px; }
+        .issued-table-block { overflow-x: auto; max-width: 100%; }
+        .issued-table-block table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+        .issued-table-block td, .issued-table-block th {
+          padding: 4px 7px; font-size: 12px;
+          overflow-wrap: break-word; word-break: break-word; white-space: normal !important;
+        }
         table.approval-block { border-collapse: collapse; table-layout: auto; }
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
