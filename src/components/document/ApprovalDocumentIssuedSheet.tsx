@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeTableHtml } from '@/utils/table-field';
 import type { CompanyInfo } from '@/services/company-info.service';
@@ -28,13 +28,19 @@ function groupFields(fields: DocumentFormField[]): FieldGroup[] {
 // 실제 인쇄 시 px 환산이 항상 정확히 일치한다.
 const PX_PER_MM = 96 / 25.4;
 const PAGE_CONTENT_HEIGHT_PX = 269 * PX_PER_MM;
-// 브라우저마다 서브픽셀 반올림 오차가 있어, 내용이 페이지 경계에 딱 걸치면 그 오차 때문에
-// 불필요한 빈 페이지가 하나 더 끼어들 수 있다 — 이를 흡수할 여유값.
-const ROUNDING_TOLERANCE_PX = 3;
+// 서브픽셀 반올림 오차를 흡수할 여유값.
+const ROUNDING_TOLERANCE_PX = 2;
 // 인쇄 폭(@page 좌우 여백 15mm×2 제외)과 동일하게 맞춰야 측정한 높이가 실제 인쇄 결과와 일치한다.
 const PRINT_CONTENT_WIDTH = '180mm';
 
-interface BodyProps {
+interface Block {
+  key: string;
+  content: ReactNode;
+  // 첨부 이미지처럼 항상 새 페이지에서 시작해야 하는 블록.
+  forceOwnPage?: boolean;
+}
+
+interface BuildBlocksArgs {
   doc: ApprovalDocumentWithDetails;
   documentType: ApprovalDocumentType | null;
   company: CompanyInfo | null;
@@ -52,174 +58,201 @@ interface BodyProps {
   isDelegated: boolean;
 }
 
-// 시행문 본문(footer 제외) — 화면에 실제로 보여줄 사본과, 실제 인쇄 폭 기준 높이를 재기 위한
-// 화면 밖 사본 양쪽에 동일하게 쓰인다.
-function IssuedSheetBody({ doc, documentType, company, creatorPositionName, includeAttachments, leaveDetail, referenceLabels, docNumber, draftedDate, issuedDate, fields, positionOf, topPosition, lastStepPositionName, isDelegated }: BodyProps) {
-  return (
-    <>
-      {company && (
-        <tr><td>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 40 }} />}
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{company.name}</div>
-              <div style={{ fontSize: 10.5, color: '#666', marginTop: 2 }}>
-                {[company.address, company.phone && `Tel. ${company.phone}`, company.fax && `Fax. ${company.fax}`].filter(Boolean).join('  ·  ')}
-              </div>
-              {(company.email || company.website) && (
-                <div style={{ fontSize: 10.5, color: '#666' }}>
-                  {[company.email, company.website].filter(Boolean).join('  ·  ')}
-                </div>
-              )}
+// 시행문 본문(footer 제외)을 페이지 배치 단위인 "블록" 목록으로 만든다. 각 블록은 그 자체로
+// 하나의 독립된 세로 조각이라, 아래에서 실측한 높이를 기준으로 페이지 경계를 우리가 직접
+// 정할 수 있다(브라우저의 자체 표 페이지네이션에 기대지 않는다).
+function buildBlocks({ doc, documentType, company, creatorPositionName, includeAttachments, leaveDetail, referenceLabels, docNumber, draftedDate, issuedDate, fields, positionOf, topPosition, lastStepPositionName, isDelegated }: BuildBlocksArgs): Block[] {
+  const blocks: Block[] = [];
+
+  if (company) {
+    blocks.push({
+      key: 'company',
+      content: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 40 }} />}
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{company.name}</div>
+            <div style={{ fontSize: 10.5, color: '#666', marginTop: 2 }}>
+              {[company.address, company.phone && `Tel. ${company.phone}`, company.fax && `Fax. ${company.fax}`].filter(Boolean).join('  ·  ')}
             </div>
-          </div>
-        </td></tr>
-      )}
-
-      <tr><td style={{ paddingBottom: 18 }}>
-        <div style={{ borderBottom: '3px solid #1a1a1a' }} />
-      </td></tr>
-
-      <tr><td>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          <table style={{ flex: 1, fontSize: 13 }}>
-            <tbody>
-              <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
-              <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
-              <tr><td style={{ padding: '3px 0' }}><b>시행일시</b>&nbsp;&nbsp;{issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중'}</td></tr>
-              <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
-              {referenceLabels.length > 0 && (
-                <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
-              )}
-              <tr><td style={{ padding: '3px 0' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td></tr>
-            </tbody>
-          </table>
-
-          <div style={{ flexShrink: 0 }}>
-            <div style={{ marginBottom: 4, fontSize: 11, color: '#555', textAlign: 'center' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 4 }}>({lastStepPositionName} 전결)</span>}</div>
-            <table className="approval-block">
-              <thead>
-                <tr>
-                  <th>기안</th>
-                  {doc.steps.map(s => <th key={s.id}>{positionOf(s.approver_label) || `${s.step_order}차 결재`}</th>)}
-                  {isDelegated && <th>{topPosition!.name}</th>}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="sign-cell">
-                    <div>{creatorPositionName ? `${creatorPositionName} ` : ''}{doc.creator_name}</div>
-                    <div style={{ fontSize: 10, color: '#777' }}>{new Date(doc.created_at).toLocaleDateString('ko-KR')}</div>
-                  </td>
-                  {doc.steps.map((s, i) => {
-                    const isLast = i === doc.steps.length - 1;
-                    return (
-                      <td key={s.id} className="sign-cell">
-                        <div>{positionOf(s.approver_label)} {s.approver_name}</div>
-                        <div style={{ fontSize: 10, color: s.status === 'approved' ? '#1e40af' : '#999' }}>
-                          {s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : '대기'}
-                          {isLast && isDelegated ? ' (전결)' : ''}
-                          {s.acted_at ? ` · ${new Date(s.acted_at).toLocaleDateString('ko-KR')}` : ''}
-                        </div>
-                      </td>
-                    );
-                  })}
-                  {isDelegated && (
-                    <td className="sign-cell">
-                      <div style={{ fontWeight: 700, color: '#b91c1c' }}>전결</div>
-                    </td>
-                  )}
-                </tr>
-              </tbody>
-            </table>
+            {(company.email || company.website) && (
+              <div style={{ fontSize: 10.5, color: '#666' }}>
+                {[company.email, company.website].filter(Boolean).join('  ·  ')}
+              </div>
+            )}
           </div>
         </div>
-      </td></tr>
+      ),
+    });
+  }
 
-      <tr><td>
-        <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center' }}>{doc.title}</div>
-      </td></tr>
+  blocks.push({ key: 'divider', content: <div style={{ borderBottom: '3px solid #1a1a1a' }} /> });
 
-      {leaveDetail ? (
-        <tr><td>
-          <table className="issued-fields">
+  blocks.push({
+    key: 'docinfo',
+    content: (
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <table style={{ flex: 1, fontSize: 13 }}>
+          <tbody>
+            <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
+            <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
+            <tr><td style={{ padding: '3px 0' }}><b>시행일시</b>&nbsp;&nbsp;{issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중'}</td></tr>
+            <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
+            {referenceLabels.length > 0 && (
+              <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
+            )}
+            <tr><td style={{ padding: '3px 0' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td></tr>
+          </tbody>
+        </table>
+
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ marginBottom: 4, fontSize: 11, color: '#555', textAlign: 'center' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 4 }}>({lastStepPositionName} 전결)</span>}</div>
+          <table className="approval-block">
+            <thead>
+              <tr>
+                <th>기안</th>
+                {doc.steps.map(s => <th key={s.id}>{positionOf(s.approver_label) || `${s.step_order}차 결재`}</th>)}
+                {isDelegated && <th>{topPosition!.name}</th>}
+              </tr>
+            </thead>
             <tbody>
-              <tr><th>휴가 종류</th><td>{leaveDetail.typeLabel}</td></tr>
-              <tr><th>신청 기간</th><td>{leaveDetail.period}</td></tr>
-              <tr><th>신청 시간</th><td>{leaveDetail.hoursLabel}</td></tr>
-              <tr><th>사유</th><td>{leaveDetail.reason}</td></tr>
+              <tr>
+                <td className="sign-cell">
+                  <div>{creatorPositionName ? `${creatorPositionName} ` : ''}{doc.creator_name}</div>
+                  <div style={{ fontSize: 10, color: '#777' }}>{new Date(doc.created_at).toLocaleDateString('ko-KR')}</div>
+                </td>
+                {doc.steps.map((s, i) => {
+                  const isLast = i === doc.steps.length - 1;
+                  return (
+                    <td key={s.id} className="sign-cell">
+                      <div>{positionOf(s.approver_label)} {s.approver_name}</div>
+                      <div style={{ fontSize: 10, color: s.status === 'approved' ? '#1e40af' : '#999' }}>
+                        {s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : '대기'}
+                        {isLast && isDelegated ? ' (전결)' : ''}
+                        {s.acted_at ? ` · ${new Date(s.acted_at).toLocaleDateString('ko-KR')}` : ''}
+                      </div>
+                    </td>
+                  );
+                })}
+                {isDelegated && (
+                  <td className="sign-cell">
+                    <div style={{ fontWeight: 700, color: '#b91c1c' }}>전결</div>
+                  </td>
+                )}
+              </tr>
             </tbody>
           </table>
-        </td></tr>
-      ) : fields.length > 0 ? (
-        groupFields(fields).map((g, gi) => {
-          if (g.kind === 'table') {
-            const raw = doc.form_data?.[g.field.key];
-            const isEmpty = raw === null || raw === undefined || raw === '';
-            // 표 필드는 라벨(양식 제목)을 따로 보여주지 않고 표 자체만 그대로 보여준다 —
-            // 라벨이 표 내용과 중복돼 보인다는 피드백에 따라 제거.
-            return isEmpty ? null : (
-              <tr key={gi}><td>
-                <div className="issued-table-block" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(String(raw)) }} />
-              </td></tr>
-            );
-          }
-          return (
-            <tr key={gi}><td>
-              <table className="issued-fields">
-                <tbody>
-                  {g.fields.map(f => {
-                    const raw = doc.form_data?.[f.key];
-                    const isEmpty = raw === null || raw === undefined || raw === '';
-                    const display = isEmpty ? '-' : f.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
-                    return (
-                      <tr key={f.key}>
-                        <th>{f.label}</th>
-                        <td style={f.type === 'textarea' ? { whiteSpace: 'pre-wrap' } : undefined}>{display}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </td></tr>
-          );
-        })
-      ) : (
-        doc.content && (
-          <tr><td>
-            <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>
-          </td></tr>
-        )
-      )}
+        </div>
+      </div>
+    ),
+  });
 
-      {doc.attachments.length > 0 && (
-        <tr><td>
-          <div style={{ fontSize: 13 }}>
-            <b>붙임</b>
-            {doc.attachments.map((a, i) => (
-              <div key={i} style={{ marginLeft: 28 }}>{i + 1}. {a.name}</div>
-            ))}
-          </div>
-        </td></tr>
-      )}
+  blocks.push({ key: 'title', content: <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center' }}>{doc.title}</div> });
 
-      {/* 이미지만 각자 새 페이지에 인쇄물로 합쳐 넣는다. PDF는 iframe으로 끼워넣으면 뷰어의
-          현재 화면(보통 첫 페이지)만 찍히고 스크롤바까지 인쇄되는 등 브라우저 인쇄와 근본적으로
-          맞지 않아 제외한다 — PDF/기타 형식은 위 "붙임" 줄의 파일명 표기로 충분하고, 원본은
-          화면(인쇄 전 미리보기)의 "새 탭에서 열기"로 따로 인쇄하게 한다. */}
-      {includeAttachments && doc.attachments.map((a, i) => {
-        const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
-        const url = data?.publicUrl;
-        const isImage = a.type?.startsWith('image/');
-        if (!(isImage && url)) return null;
-        return (
-          <tr key={i} style={{ pageBreakBefore: 'always' }}><td style={{ paddingTop: 8 }}>
+  if (leaveDetail) {
+    blocks.push({
+      key: 'leave',
+      content: (
+        <table className="issued-fields">
+          <tbody>
+            <tr><th>휴가 종류</th><td>{leaveDetail.typeLabel}</td></tr>
+            <tr><th>신청 기간</th><td>{leaveDetail.period}</td></tr>
+            <tr><th>신청 시간</th><td>{leaveDetail.hoursLabel}</td></tr>
+            <tr><th>사유</th><td>{leaveDetail.reason}</td></tr>
+          </tbody>
+        </table>
+      ),
+    });
+  } else if (fields.length > 0) {
+    groupFields(fields).forEach((g, gi) => {
+      if (g.kind === 'table') {
+        const raw = doc.form_data?.[g.field.key];
+        const isEmpty = raw === null || raw === undefined || raw === '';
+        // 표 필드는 라벨(양식 제목)을 따로 보여주지 않고 표 자체만 그대로 보여준다 —
+        // 라벨이 표 내용과 중복돼 보인다는 피드백에 따라 제거.
+        if (!isEmpty) {
+          blocks.push({
+            key: `field-${gi}`,
+            content: <div className="issued-table-block" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(String(raw)) }} />,
+          });
+        }
+      } else {
+        blocks.push({
+          key: `field-${gi}`,
+          content: (
+            <table className="issued-fields">
+              <tbody>
+                {g.fields.map(f => {
+                  const raw = doc.form_data?.[f.key];
+                  const isEmpty = raw === null || raw === undefined || raw === '';
+                  const display = isEmpty ? '-' : f.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
+                  return (
+                    <tr key={f.key}>
+                      <th>{f.label}</th>
+                      <td style={f.type === 'textarea' ? { whiteSpace: 'pre-wrap' } : undefined}>{display}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ),
+        });
+      }
+    });
+  } else if (doc.content) {
+    blocks.push({
+      key: 'content',
+      content: <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>,
+    });
+  }
+
+  if (doc.attachments.length > 0) {
+    blocks.push({
+      key: 'attachments',
+      content: (
+        <div style={{ fontSize: 13 }}>
+          <b>붙임</b>
+          {doc.attachments.map((a, i) => (
+            <div key={i} style={{ marginLeft: 28 }}>{i + 1}. {a.name}</div>
+          ))}
+        </div>
+      ),
+    });
+  }
+
+  // 이미지만 각자 새 페이지에 인쇄물로 합쳐 넣는다. PDF는 iframe으로 끼워넣으면 뷰어의 현재
+  // 화면(보통 첫 페이지)만 찍히고 스크롤바까지 인쇄되는 등 브라우저 인쇄와 근본적으로 맞지
+  // 않아 제외한다 — PDF/기타 형식은 위 "붙임" 줄의 파일명 표기로 충분하고, 원본은 화면(인쇄
+  // 전 미리보기)의 "새 탭에서 열기"로 따로 인쇄하게 한다.
+  if (includeAttachments) {
+    doc.attachments.forEach((a, i) => {
+      const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
+      const url = data?.publicUrl;
+      const isImage = a.type?.startsWith('image/');
+      if (!(isImage && url)) return;
+      blocks.push({
+        key: `img-${i}`,
+        forceOwnPage: true,
+        content: (
+          <>
             <p style={{ fontSize: 12, color: '#555', marginBottom: 8 }}>붙임 {i + 1}. {a.name}</p>
             <img src={url} alt={a.name} style={{ maxWidth: '100%' }} />
-          </td></tr>
-        );
-      })}
-    </>
+          </>
+        ),
+      });
+    });
+  }
+
+  return blocks;
+}
+
+function FooterRow({ documentType, company }: { documentType: ApprovalDocumentType | null; company: CompanyInfo | null }) {
+  return (
+    <div className="issued-footer">
+      <span>{documentType?.code ? `양식번호 ${documentType.code}` : ''}</span>
+      <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{company?.name || ''}</span>
+      <span />
+    </div>
   );
 }
 
@@ -255,46 +288,68 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   const lastStepPositionName = positionOf(lastStep?.approver_label);
   const isDelegated = doc.status === 'approved' && !!topPosition && !!lastStepPositionName && lastStepPositionName !== topPosition.name;
 
-  const bodyProps: BodyProps = { doc, documentType, company, creatorPositionName, includeAttachments, leaveDetail, referenceLabels, docNumber, draftedDate, issuedDate, fields, positionOf, topPosition, lastStepPositionName, isDelegated };
+  const blocks = buildBlocks({ doc, documentType, company, creatorPositionName, includeAttachments, leaveDetail, referenceLabels, docNumber, draftedDate, issuedDate, fields, positionOf, topPosition, lastStepPositionName, isDelegated });
 
-  // 표+tfoot만으로는 마지막 페이지에서 footer가 본문 바로 뒤(페이지 하단이 아니라)에 붙는다 —
-  // tfoot은 표가 실제로 페이지 경계에서 끊길 때만 "그 경계 지점"에 반복되는 것이지, 매 페이지를
-  // 하단까지 채워주는 게 아니기 때문이다(내용이 마지막 페이지를 다 채우지 못하면 그만큼 빈틈이
-  // 안 채워진 채 footer가 바로 따라붙는다). 그래서 본문 뒤에 "다음 페이지 경계까지의 나머지
-  // 높이"만큼 빈 여백 행을 추가로 넣어, 매 페이지(마지막 페이지 포함)가 항상 꽉 차서 그 다음에
-  // 오는 tfoot이 실제로 각 페이지 맨 하단에 오도록 만든다.
-  //
-  // 페이지당 실제로 본문에 쓸 수 있는 높이는 269mm 전체가 아니라 거기서 footer 자신의 높이를
-  // 뺀 만큼이다 — tfoot은 "매 페이지" 하단에 반복되므로 마지막 페이지뿐 아니라 중간 페이지들도
-  // 이미 그만큼 자리를 내주고 있다. 이걸 빼지 않고 269mm 전체를 기준으로 채워야 할 여백을
-  // 계산하면 실제로 필요한 것보다 여백이 부족해져, 인쇄 시 그 부족분이 새 페이지로 넘어가면서
-  // 거의 빈 페이지가 하나 더 생겨버린다(그 페이지에도 footer는 정상적으로 반복되니 얼핏 보면
-  // "잘 붙어있는데 페이지가 하나 남는" 것처럼 보인다).
-  const measureRef = useRef<HTMLTableSectionElement>(null);
+  // "footer가 매 페이지 하단에 오게" 하려고 브라우저의 표 자동 페이지네이션(<tfoot> 반복)에
+  // 기대는 방식을 두 번 시도했지만 둘 다 브라우저가 실제로 어디서 페이지를 끊을지 예측/보정하려
+  // 한 것이라 어긋났다(특히 마지막 페이지 — 내용이 다 채우지 못한 만큼을 빈 여백 행으로
+  // 메꾸려 했더니 페이지당 실사용 가능 높이 추정이 살짝만 어긋나도 불필요한 빈 페이지가 하나
+  // 더 생겼다). 그래서 방향을 바꿔, 페이지 경계 자체를 브라우저에 맡기지 않고 우리가 직접
+  // 정한다: 각 콘텐츠 블록의 높이를 화면 밖에서 실측해 "한 페이지에 들어갈 만큼"씩 직접
+  // 묶고(bucketing), 각 묶음을 완전히 분리된 하나의 페이지 div로 렌더링한다. 각 페이지 div는
+  // 항상 실제 페이지보다 작거나 같도록 우리가 보장하므로, 그 안에서는 원래 검증됐던 단순한
+  // "flex column + min-height + footer margin-top:auto" 방식이 안전하게 매번 통한다.
+  const blockNodesRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const footerMeasureRef = useRef<HTMLDivElement>(null);
-  const [spacerPx, setSpacerPx] = useState(0);
+  const hiddenContainerRef = useRef<HTMLDivElement>(null);
+  const [pages, setPages] = useState<Block[][] | null>(null);
 
   useLayoutEffect(() => {
-    const bodyEl = measureRef.current;
     const footerEl = footerMeasureRef.current;
-    if (!bodyEl || !footerEl) return;
+    if (!footerEl) return;
 
     const recompute = () => {
-      const contentHeightPx = bodyEl.getBoundingClientRect().height;
       const footerHeightPx = footerEl.getBoundingClientRect().height;
-      if (contentHeightPx <= 0 || footerHeightPx <= 0) return;
+      if (footerHeightPx <= 0) return;
       const usablePageHeightPx = PAGE_CONTENT_HEIGHT_PX - footerHeightPx;
-      const pages = Math.max(1, Math.ceil((contentHeightPx - ROUNDING_TOLERANCE_PX) / usablePageHeightPx));
-      const spacer = pages * usablePageHeightPx - contentHeightPx;
-      setSpacerPx(spacer > 0 ? spacer : 0);
+
+      const newPages: Block[][] = [[]];
+      let currentHeight = 0;
+      for (const b of blocks) {
+        const node = blockNodesRef.current.get(b.key);
+        const h = node ? node.getBoundingClientRect().height : 0;
+        let currentPage = newPages[newPages.length - 1];
+
+        if (b.forceOwnPage && currentPage.length > 0) {
+          newPages.push([]);
+          currentPage = newPages[newPages.length - 1];
+          currentHeight = 0;
+        } else if (currentHeight + h > usablePageHeightPx + ROUNDING_TOLERANCE_PX && currentPage.length > 0) {
+          newPages.push([]);
+          currentPage = newPages[newPages.length - 1];
+          currentHeight = 0;
+        }
+
+        currentPage.push(b);
+        currentHeight += h;
+
+        if (b.forceOwnPage) {
+          newPages.push([]);
+          currentHeight = 0;
+        }
+      }
+      while (newPages.length > 1 && newPages[newPages.length - 1].length === 0) newPages.pop();
+
+      setPages(newPages);
     };
 
     recompute();
     // 이미지 로딩 등으로 실제 렌더링 높이가 나중에 바뀔 수 있어 계속 관찰한다.
     const ro = new ResizeObserver(recompute);
-    ro.observe(bodyEl);
+    if (hiddenContainerRef.current) ro.observe(hiddenContainerRef.current);
     ro.observe(footerEl);
     return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc, documentType, company, positions, creatorPositionName, includeAttachments, leaveDetail, referenceLabels]);
 
   return (
@@ -313,15 +368,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
         table.approval-block td.sign-cell { height: 40px; vertical-align: middle; }
-        /* 본문 전체를 표 하나로 감싸고 footer를 <tfoot>에 둔다 — 표가 인쇄 중 여러 페이지에 걸쳐
-           나뉘면 브라우저(Chrome/Firefox 모두)가 tfoot 행을 나뉘는 매 페이지 하단에 반복해서
-           그려준다. 다만 이것만으로는 "각 페이지 끝까지 내용이 꽉 찼을 때"만 footer가 정확히
-           하단에 오므로, 아래 .issued-print-spacer(JS로 계산한 여백 행)로 매 페이지를 실제 페이지
-           높이만큼 채워 넣는다. */
-        table.issued-page-table { width: 100%; border-collapse: collapse; }
-        table.issued-page-table > tbody > tr > td { border: none; padding: 0 0 14px; vertical-align: top; }
-        table.issued-page-table > tfoot > tr > td { border: none; padding: 0; }
-        .issued-print-spacer { display: none; }
+        .issued-block { padding-bottom: 14px; }
         .issued-footer {
           margin-top: 10px;
           padding-top: 8px;
@@ -338,45 +385,46 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           body { margin: 0; }
           @page { size: A4 portrait; margin: 14mm 15mm; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .issued-print-spacer { display: table-row-group; }
-          .issued-footer { page-break-inside: avoid; break-inside: avoid; }
+          /* 각 페이지는 우리가 이미 실제 페이지보다 작거나 같게 나눠뒀으므로, 짧으면 남는
+             공간만큼 footer를 flex로 그 페이지 맨 아래까지 밀어내기만 하면 된다. */
+          .issued-print-page { display: flex; flex-direction: column; min-height: 269mm; }
+          .issued-footer { margin-top: auto; page-break-inside: avoid; break-inside: avoid; }
         }
       `}</style>
 
-      <table className="issued-page-table">
-        <tbody>
-          <IssuedSheetBody {...bodyProps} />
-        </tbody>
-        {spacerPx > 0 && (
-          <tbody className="issued-print-spacer">
-            <tr><td style={{ height: spacerPx, padding: 0 }} /></tr>
-          </tbody>
-        )}
-        <tfoot>
-          <tr><td>
-            <div className="issued-footer">
-              <span>{documentType?.code ? `양식번호 ${documentType.code}` : ''}</span>
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{company?.name || ''}</span>
-              <span />
-            </div>
-          </td></tr>
-        </tfoot>
-      </table>
+      {pages && pages.map((pageBlocks, pageIndex) => (
+        <div
+          key={pageIndex}
+          className="issued-print-page"
+          style={{ pageBreakAfter: pageIndex < pages.length - 1 ? 'always' : 'auto' }}
+        >
+          <div>
+            {pageBlocks.map(b => <div key={b.key} className="issued-block">{b.content}</div>)}
+          </div>
+          <FooterRow documentType={documentType} company={company} />
+        </div>
+      ))}
 
       {/* 측정 전용 사본 — 실제 인쇄 폭(180mm = A4 폭에서 좌우 여백 15mm×2 제외, 위 @page와
-          일치)으로 화면 밖에 렌더링해 인쇄 시 실제로 차지할 높이를 정확히 잰다. 화면 미리보기
-          폭(위 800px)에서 그대로 재면 줄바꿈이 달라져 실제 인쇄 결과와 어긋난다. footer도 같은
-          폭으로 따로 재는데, footer 자신의 높이만큼은 매 페이지에서 본문 몫이 줄어들기 때문이다. */}
-      <table aria-hidden style={{ position: 'fixed', left: -99999, top: 0, width: PRINT_CONTENT_WIDTH, visibility: 'hidden' }}>
-        <tbody ref={measureRef}>
-          <IssuedSheetBody {...bodyProps} />
-        </tbody>
-      </table>
-      <div aria-hidden style={{ position: 'fixed', left: -99999, top: 0, width: PRINT_CONTENT_WIDTH, visibility: 'hidden' }}>
-        <div className="issued-footer" ref={footerMeasureRef}>
-          <span>{documentType?.code ? `양식번호 ${documentType.code}` : ''}</span>
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{company?.name || ''}</span>
-          <span />
+          일치)으로 화면 밖에 블록별로 렌더링해 각 블록이 인쇄 시 실제로 차지할 높이를 잰다.
+          화면 미리보기 폭(위 800px)에서 그대로 재면 줄바꿈이 달라져 실제 인쇄 결과와 어긋난다.
+          footer도 같은 폭으로 따로 재는데, footer 자신의 높이만큼은 매 페이지에서 본문 몫이
+          줄어들기 때문이다. */}
+      <div aria-hidden ref={hiddenContainerRef} style={{ position: 'fixed', left: -99999, top: 0, width: PRINT_CONTENT_WIDTH, visibility: 'hidden' }}>
+        {blocks.map(b => (
+          <div
+            key={b.key}
+            className="issued-block"
+            ref={el => {
+              if (el) blockNodesRef.current.set(b.key, el);
+              else blockNodesRef.current.delete(b.key);
+            }}
+          >
+            {b.content}
+          </div>
+        ))}
+        <div ref={footerMeasureRef}>
+          <FooterRow documentType={documentType} company={company} />
         </div>
       </div>
     </div>
