@@ -86,9 +86,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           body { margin: 0; }
           @page { size: A4 portrait; margin: 14mm 15mm; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          /* 하단 바(양식번호/회사명)가 매 페이지 하단에 고정되도록 — @page 여백(14mm) 안쪽에
-             자리잡아 본문 내용과 겹치지 않는다. */
-          .issued-footer { position: fixed; bottom: 6mm; left: 15mm; right: 15mm; margin-top: 0; }
+          /* position:fixed로 매 페이지 하단에 고정을 시도했었으나, 브라우저(Chrome 등)가 인쇄 시
+             fixed 요소를 페이지마다 반복 배치하지 않고 문서 전체 기준 좌표로 한 번만 배치해버려
+             본문이 한 장을 넘어가면 그 좌표가 뒤쪽 페이지의 본문 중간과 겹쳐 보이는 문제가 있었다.
+             그래서 고정 배치를 포기하고 본문 뒤에 자연스럽게 한 번만 흐르도록 두되, 중간에 페이지가
+             나뉘어 반토막나지 않도록만 막는다. */
+          .issued-footer { page-break-inside: avoid; break-inside: avoid; }
         }
       `}</style>
 
