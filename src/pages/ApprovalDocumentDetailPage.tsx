@@ -18,7 +18,6 @@ import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
-import ApprovalDocumentPrintDialog from '@/components/document/ApprovalDocumentPrintDialog';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType, ApprovalDocumentRejectionHistoryEntry } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 
@@ -51,7 +50,6 @@ export default function ApprovalDocumentDetailPage() {
   const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
   const [rejectionHistory, setRejectionHistory] = useState<ApprovalDocumentRejectionHistoryEntry[]>([]);
   const [referenceLabels, setReferenceLabels] = useState<string[]>([]);
-  const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
   useEffect(() => { loadData(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -213,7 +211,7 @@ export default function ApprovalDocumentDetailPage() {
           <Badge variant="outline" className={statusInfo.className}><StatusIcon className="w-3 h-3 mr-1" />{statusInfo.label}</Badge>
           {doc.resubmit_count > 0 && <Badge variant="outline" className="text-blue-700 border-blue-300">{doc.resubmit_count + 1}차 상신</Badge>}
           {isMyTurn && <Badge className="bg-blue-500">내 차례</Badge>}
-          <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setPrintDialogOpen(true)}>
+          <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => window.open(`/print/documents/${doc.id}`, '_blank')}>
             <Printer className="w-3.5 h-3.5" />{doc.status === 'approved' ? '시행문 출력' : '기안문 출력'}
           </Button>
           {isMyTurn && !actionType && (
@@ -314,18 +312,6 @@ export default function ApprovalDocumentDetailPage() {
           </div>
         </div>
       )}
-
-      <ApprovalDocumentPrintDialog
-        open={printDialogOpen}
-        onOpenChange={setPrintDialogOpen}
-        doc={doc}
-        documentType={docType}
-        company={company}
-        positions={positions}
-        creatorPositionName={creatorPositionName}
-        leaveDetail={leaveDetail}
-        referenceLabels={referenceLabels}
-      />
     </div>
   );
 }
