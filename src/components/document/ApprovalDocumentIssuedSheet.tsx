@@ -57,8 +57,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
       <style>{`
-        table.issued-fields { border-collapse: collapse; width: 100%; }
-        table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
+        /* box-sizing이 없으면 padding이 퍼센트 폭 위에 더 얹혀 계산돼(.issued-table-block과 동일한
+           원인) 표 전체가 100%를 넘어서고, 인쇄는 스크롤이 없어 그 초과분(주로 표 맨 오른쪽
+           테두리선)이 잘린다. border-box로 padding을 폭 안에 포함시키고, width도 100%가 아니라
+           살짝 여유를 둬 서로 다른 표끼리 폭이 미세하게 달라져 줄이 안 맞는 것도 방지한다. */
+        table.issued-fields { border-collapse: collapse; width: calc(100% - 2mm); box-sizing: border-box; }
+        table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; box-sizing: border-box; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
         /* table-layout: fixed는 "첫 번째 행의 열 구조"만 보고 나머지 모든 행에 그대로 적용하는데,
            엑셀에서 여러 섹션(예: 계좌별 표)을 colspan으로 한 표에 이어붙여 붙여넣은 경우 섹션마다
@@ -81,7 +85,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           overflow-wrap: break-word; word-break: break-word; white-space: normal !important;
         }
         table.approval-block { border-collapse: collapse; table-layout: auto; }
-        table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; }
+        table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; box-sizing: border-box; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
         table.approval-block td.sign-cell { height: 40px; vertical-align: middle; }
         /* 본문 전체를 표 하나로 감싸고, 표 바깥 껍데기(.issued-page-table)는 셀 경계선 없이
@@ -145,7 +149,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
 
           <tr><td>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <table style={{ flex: 1, fontSize: 13 }}>
+              {/* flex 아이템은 기본적으로 min-width: auto라 내용(긴 참조/부서명 등) 이하로는
+                  줄어들지 않는다 — 오른쪽 결재란(flexShrink: 0, white-space: nowrap이라 아예
+                  줄어들지 않음)이 넓어질 때 이 표가 안 줄어들면 행 전체가 페이지 폭을 넘어가
+                  결재란 오른쪽 테두리가 잘린다. min-width: 0으로 필요하면 줄어들 수 있게 한다. */}
+              <table style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
                 <tbody>
                   <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
                   <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
