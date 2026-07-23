@@ -302,7 +302,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         <tfoot>
           <tr><td>
             <div className="issued-footer">
-              <span>{documentType?.code ? `양식번호 ${documentType.code}` : ''}</span>
+              <span>{documentType?.code || ''}</span>
               <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{company?.name || ''}</span>
               <span />
             </div>
