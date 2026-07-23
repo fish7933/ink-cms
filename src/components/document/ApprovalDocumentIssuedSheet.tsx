@@ -68,6 +68,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         .issued-table-block { overflow-x: auto; max-width: 100%; }
         .issued-table-block table { border-collapse: collapse; width: 100%; }
         .issued-table-block td, .issued-table-block th {
+          /* box-sizing: border-box가 없으면 auto 레이아웃에서 padding이 각 셀의 퍼센트 폭 위에
+             더 얹혀 계산된다 — 좁은 컬럼이 여러 개면 이 padding들이 누적돼 표 전체가 100%를
+             넘어서고, 인쇄 시 스크롤이 없어 그 초과분(주로 가장 오른쪽 열의 테두리선)이 그대로
+             잘려나간다. border-box로 padding이 선언한 폭 "안"에 포함되게 한다. */
+          box-sizing: border-box;
           padding: 4px 7px; font-size: 12px;
           overflow-wrap: break-word; word-break: break-word; white-space: normal !important;
         }
