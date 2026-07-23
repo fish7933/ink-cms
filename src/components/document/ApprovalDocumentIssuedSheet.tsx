@@ -84,8 +84,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           padding: 4px 7px; font-size: 12px;
           overflow-wrap: break-word; word-break: break-word; white-space: normal !important;
         }
+        /* min-width: 0(왼쪽 표가 줄어들 수 있게)만으로는 부족했다 — 결재란 자체가 flexShrink: 0 +
+           white-space: nowrap이라 필요한 최소 폭이 얼마든 절대 줄어들지 않으니, 결재 단계가
+           많거나 이름이 길면 왼쪽 표가 아무리 줄어도 행 전체가 폭을 넘어간다. nowrap을 풀어
+           필요하면 줄바꿈되게 하는 게 "안 잘리는 것"을 보장하는 유일한 방법이라 그렇게 바꾼다. */
         table.approval-block { border-collapse: collapse; table-layout: auto; }
-        table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: nowrap; box-sizing: border-box; }
+        table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: normal; overflow-wrap: break-word; box-sizing: border-box; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
         table.approval-block td.sign-cell { height: 40px; vertical-align: middle; }
         /* 본문 전체를 표 하나로 감싸고, 표 바깥 껍데기(.issued-page-table)는 셀 경계선 없이
