@@ -59,9 +59,10 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
       <style>{`
         /* box-sizing이 없으면 padding이 퍼센트 폭 위에 더 얹혀 계산돼(.issued-table-block과 동일한
            원인) 표 전체가 100%를 넘어서고, 인쇄는 스크롤이 없어 그 초과분(주로 표 맨 오른쪽
-           테두리선)이 잘린다. border-box로 padding을 폭 안에 포함시키고, width도 100%가 아니라
-           살짝 여유를 둬 서로 다른 표끼리 폭이 미세하게 달라져 줄이 안 맞는 것도 방지한다. */
-        table.issued-fields { border-collapse: collapse; width: calc(100% - 2mm); box-sizing: border-box; }
+           테두리선)이 잘린다. border-box로 padding을 폭 안에 포함시킨다. 여유 폭은 여기서
+           개별로 주지 않는다 — 아래 issued-page-table의 td에서 모든 블록(표/구분선/결재란 등)에
+           공통으로 한 번만 줘야 서로 오른쪽 끝이 어긋나지 않는다. */
+        table.issued-fields { border-collapse: collapse; width: 100%; box-sizing: border-box; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; box-sizing: border-box; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
         /* table-layout: fixed는 "첫 번째 행의 열 구조"만 보고 나머지 모든 행에 그대로 적용하는데,
@@ -69,11 +70,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
            실제 열 구성이 달라 아래쪽 섹션들의 열 너비가 어긋나 버린다(직접 저장된 문서 데이터로
            확인). 그래서 table-layout은 auto(기본값)로 두고, 넘침 방지는 원래 진짜 원인이었던
            white-space: normal(줄바꿈 강제) + overflow-wrap/word-break + 아래 overflow-x로 처리한다. */
-        /* auto 레이아웃은 폭 힌트가 없는 행들(엑셀 원본의 첫 행 외 나머지 전부)의 폭을 자체
-           추정하는데, 이 추정이 100%를 미세하게 넘기는 경우가 있다 — 인쇄는 스크롤이 없어 그
-           초과분(주로 표 맨 바깥 오른쪽 테두리선)이 그대로 잘린다. 완벽히 예측할 수 없으니
-           표 폭을 100%가 아니라 살짝 작게 잡아 여유 공간을 둔다. */
-        .issued-table-block { overflow-x: auto; max-width: 100%; padding-right: 3mm; }
+        .issued-table-block { overflow-x: auto; max-width: 100%; }
         .issued-table-block table { border-collapse: collapse; width: 100%; }
         .issued-table-block td, .issued-table-block th {
           /* box-sizing: border-box가 없으면 auto 레이아웃에서 padding이 각 셀의 퍼센트 폭 위에
@@ -91,7 +88,9 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.approval-block { border-collapse: collapse; table-layout: auto; }
         table.approval-block th, table.approval-block td { border: 1px solid #999; text-align: center; font-size: 11px; padding: 5px 8px; white-space: normal; overflow-wrap: break-word; box-sizing: border-box; }
         table.approval-block th { background: #f5f5f5; font-weight: 600; }
-        table.approval-block td.sign-cell { height: 40px; vertical-align: middle; }
+        /* height(고정)로 두면 nowrap을 풀어 줄바꿈이 생겼을 때 2~3줄짜리 내용이 40px 안에 눌려
+           겹쳐 보인다 — min-height로 바꿔 내용이 많으면 칸 자체가 늘어나게 한다. */
+        table.approval-block td.sign-cell { min-height: 40px; vertical-align: middle; }
         /* 본문 전체를 표 하나로 감싸고, 표 바깥 껍데기(.issued-page-table)는 셀 경계선 없이
            레이아웃 용도로만 쓴다 — 아래 tfoot(.issued-footer) 때문이다: 표가 인쇄 중 여러 페이지에
            걸쳐 나뉘면 브라우저(Chrome/Firefox 모두)가 tfoot 행을 나뉘는 매 페이지 하단에 자동으로
@@ -100,8 +99,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
            페이지네이션 자체가 반복해주는 것이라 몇 장이 되든 항상 각 장 맨 아래 footer 영역에 온다.
            행 사이(각 <tr>)에서만 페이지가 나뉘도록 블록을 최대한 잘게 <tr>로 쪼갠다. */
         table.issued-page-table { width: 100%; border-collapse: collapse; }
-        table.issued-page-table > tbody > tr > td { border: none; padding: 0 0 14px; vertical-align: top; }
-        table.issued-page-table > tfoot > tr > td { border: none; padding: 0; }
+        /* 여유 폭(오른쪽 3mm)을 여기 한 곳에서만 준다 — 표든 구분선이든 결재란이든 이 td 안에서
+           그려지는 모든 블록이 똑같은 오른쪽 경계를 공유하게 되어, 블록마다 제각각 다른 여유
+           폭을 따로 줬을 때 생기던 "끝선이 서로 안 맞는" 문제가 없어진다. auto 레이아웃 표의
+           폭 추정 초과분도 이 여유 안에서 흡수된다. */
+        table.issued-page-table > tbody > tr > td { border: none; padding: 0 3mm 14px 0; vertical-align: top; }
+        table.issued-page-table > tfoot > tr > td { border: none; padding: 0 3mm 0 0; }
         .issued-footer {
           margin-top: 10px;
           padding-top: 8px;
