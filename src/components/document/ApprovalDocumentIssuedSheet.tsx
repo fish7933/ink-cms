@@ -65,7 +65,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
            실제 열 구성이 달라 아래쪽 섹션들의 열 너비가 어긋나 버린다(직접 저장된 문서 데이터로
            확인). 그래서 table-layout은 auto(기본값)로 두고, 넘침 방지는 원래 진짜 원인이었던
            white-space: normal(줄바꿈 강제) + overflow-wrap/word-break + 아래 overflow-x로 처리한다. */
-        .issued-table-block { overflow-x: auto; max-width: 100%; }
+        /* auto 레이아웃은 폭 힌트가 없는 행들(엑셀 원본의 첫 행 외 나머지 전부)의 폭을 자체
+           추정하는데, 이 추정이 100%를 미세하게 넘기는 경우가 있다 — 인쇄는 스크롤이 없어 그
+           초과분(주로 표 맨 바깥 오른쪽 테두리선)이 그대로 잘린다. 완벽히 예측할 수 없으니
+           표 폭을 100%가 아니라 살짝 작게 잡아 여유 공간을 둔다. */
+        .issued-table-block { overflow-x: auto; max-width: 100%; padding-right: 3mm; }
         .issued-table-block table { border-collapse: collapse; width: 100%; }
         .issued-table-block td, .issued-table-block th {
           /* box-sizing: border-box가 없으면 auto 레이아웃에서 padding이 각 셀의 퍼센트 폭 위에
