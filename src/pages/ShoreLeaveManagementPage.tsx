@@ -24,6 +24,7 @@ import { formatLeaveHours, formatLeaveDays, getCurrentLeaveYearStart, explainAcc
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import LeaveUsageCalendar from '@/components/leave/LeaveUsageCalendar';
+import LeaveUsageList from '@/components/leave/LeaveUsageList';
 import type { User } from '@/types/models';
 import type { SickLeaveRequestWithDetails } from '@/types/sick-leave';
 import type { ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment, ShoreLeaveAdminLogWithNames } from '@/types/shore-leave';
@@ -469,6 +470,16 @@ export default function ShoreLeaveManagementPage() {
             </CardHeader>
             <CardContent>
               <LeaveUsageCalendar requests={approvedLeaveRequests} positionByUser={positionByUser} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">연차 사용/예정 내역</CardTitle>
+              <p className="text-xs text-gray-500">사용한 연차와 앞으로 사용 예정인 승인 건을 최근 발생순으로 나열합니다.</p>
+            </CardHeader>
+            <CardContent>
+              <LeaveUsageList requests={approvedLeaveRequests} positionByUser={positionByUser} />
             </CardContent>
           </Card>
         </TabsContent>
