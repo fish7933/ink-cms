@@ -60,8 +60,13 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.issued-fields { border-collapse: collapse; width: 100%; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
+        /* table-layout: fixed는 "첫 번째 행의 열 구조"만 보고 나머지 모든 행에 그대로 적용하는데,
+           엑셀에서 여러 섹션(예: 계좌별 표)을 colspan으로 한 표에 이어붙여 붙여넣은 경우 섹션마다
+           실제 열 구성이 달라 아래쪽 섹션들의 열 너비가 어긋나 버린다(직접 저장된 문서 데이터로
+           확인). 그래서 table-layout은 auto(기본값)로 두고, 넘침 방지는 원래 진짜 원인이었던
+           white-space: normal(줄바꿈 강제) + overflow-wrap/word-break + 아래 overflow-x로 처리한다. */
         .issued-table-block { overflow-x: auto; max-width: 100%; }
-        .issued-table-block table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+        .issued-table-block table { border-collapse: collapse; width: 100%; }
         .issued-table-block td, .issued-table-block th {
           padding: 4px 7px; font-size: 12px;
           overflow-wrap: break-word; word-break: break-word; white-space: normal !important;
