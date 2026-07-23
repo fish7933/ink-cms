@@ -99,7 +99,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         .issued-footer > span:last-child { text-align: right; }
         @media print {
           body { margin: 0; }
-          @page { size: A4 portrait; margin: 14mm 15mm; }
+          /* 화면 미리보기는 800px 폭인데, A4는 210mm(≈794px)라 여백을 아무리 줄여도 800px를
+             완전히 맞출 수는 없다 — 좌우 여백을 인쇄 가능한 선에서 최대한 줄여(15mm → 8mm)
+             인쇄 폭을 180mm(≈680px)에서 194mm(≈733px)로 넓혀, 화면에서 한 줄이던 내용이
+             인쇄 시 줄바뀜되는 경우를 최대한 줄인다. */
+          @page { size: A4 portrait; margin: 14mm 8mm; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .issued-footer { page-break-inside: avoid; break-inside: avoid; }
         }
