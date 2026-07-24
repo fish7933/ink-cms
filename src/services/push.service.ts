@@ -76,8 +76,40 @@ export async function unsubscribeFromPush(): Promise<void> {
 // 에러를 던지지 않고 콘솔에만 남긴다.
 export async function notifyApprovalStep(documentId: string, stepOrder: number): Promise<void> {
   try {
-    await supabase.functions.invoke('notify-approval-step', { body: { document_id: documentId, step_order: stepOrder } });
+    await supabase.functions.invoke('notify-approval-step', { body: { document_id: documentId, step_order: stepOrder, event: 'request' } });
   } catch (e) {
     console.error('결재 알림 발송 실패', e);
   }
+}
+
+// 문서가 최종 승인됐을 때 기안자에게 알림을 보내달라고 Edge Function을 호출한다.
+export async function notifyApprovalComplete(documentId: string): Promise<void> {
+  try {
+    await supabase.functions.invoke('notify-approval-step', { body: { document_id: documentId, event: 'complete' } });
+  } catch (e) {
+    console.error('결재 완료 알림 발송 실패', e);
+  }
+}
+
+export interface NotificationPreferences {
+  notify_approval_request: boolean;
+  notify_approval_complete: boolean;
+}
+
+export async function getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('notify_approval_request, notify_approval_complete')
+    .eq('id', userId)
+    .single();
+  if (error) throw error;
+  return {
+    notify_approval_request: data.notify_approval_request ?? true,
+    notify_approval_complete: data.notify_approval_complete ?? true,
+  };
+}
+
+export async function updateNotificationPreferences(userId: string, prefs: Partial<NotificationPreferences>): Promise<void> {
+  const { error } = await supabase.from('users').update(prefs).eq('id', userId);
+  if (error) throw error;
 }

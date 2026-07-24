@@ -10,7 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser, updatePassword } from '@/services/auth.service';
 import { supabase } from '@/lib/supabase';
 import { User, Mail, Building2, Shield, Calendar, Lock, Bell } from 'lucide-react';
-import { isPushSupported, isSubscribed, subscribeToPush, unsubscribeFromPush } from '@/services/push.service';
+import {
+  isPushSupported, isSubscribed, subscribeToPush, unsubscribeFromPush,
+  getNotificationPreferences, updateNotificationPreferences, type NotificationPreferences,
+} from '@/services/push.service';
 
 interface UserData {
   id: string;
@@ -46,6 +49,8 @@ export default function ProfilePage() {
   });
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [prefs, setPrefs] = useState<NotificationPreferences>({ notify_approval_request: true, notify_approval_complete: true });
+  const [prefsBusy, setPrefsBusy] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -53,6 +58,10 @@ export default function ProfilePage() {
     loadUserData();
     isSubscribed().then(setPushEnabled);
   }, []);
+
+  useEffect(() => {
+    if (user) getNotificationPreferences(user.id).then(setPrefs).catch(() => {});
+  }, [user]);
 
   const handleTogglePush = async (checked: boolean) => {
     if (!user) return;
@@ -71,6 +80,21 @@ export default function ProfilePage() {
       toast({ title: '알림 설정 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setPushBusy(false);
+    }
+  };
+
+  const handleTogglePref = async (key: keyof NotificationPreferences, checked: boolean) => {
+    if (!user) return;
+    const prev = prefs;
+    setPrefs({ ...prefs, [key]: checked });
+    setPrefsBusy(true);
+    try {
+      await updateNotificationPreferences(user.id, { [key]: checked });
+    } catch (e) {
+      setPrefs(prev);
+      toast({ title: '설정 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setPrefsBusy(false);
     }
   };
 
@@ -276,17 +300,46 @@ export default function ProfilePage() {
               내 차례의 결재 문서가 도착하면 이 브라우저(또는 홈 화면에 추가한 앱)로 알림을 받습니다.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             {isPushSupported() ? (
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-sm">이 브라우저에서 결재 알림 받기</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {pushEnabled ? '알림이 켜져 있습니다.' : '알림이 꺼져 있습니다.'}
-                  </p>
+              <>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-sm">이 브라우저에서 결재 알림 받기</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {pushEnabled ? '알림이 켜져 있습니다.' : '알림이 꺼져 있습니다.'}
+                    </p>
+                  </div>
+                  <Switch checked={pushEnabled} disabled={pushBusy} onCheckedChange={handleTogglePush} />
                 </div>
-                <Switch checked={pushEnabled} disabled={pushBusy} onCheckedChange={handleTogglePush} />
-              </div>
+
+                {pushEnabled && (
+                  <div className="space-y-2 pl-1">
+                    <div className="flex items-center justify-between py-1.5">
+                      <div>
+                        <p className="text-sm">결재 요청 알림</p>
+                        <p className="text-xs text-gray-500">내 차례의 결재가 도착했을 때</p>
+                      </div>
+                      <Switch
+                        checked={prefs.notify_approval_request}
+                        disabled={prefsBusy}
+                        onCheckedChange={c => handleTogglePref('notify_approval_request', c)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between py-1.5">
+                      <div>
+                        <p className="text-sm">결재 완료 알림</p>
+                        <p className="text-xs text-gray-500">내가 상신한 문서가 최종 승인됐을 때</p>
+                      </div>
+                      <Switch
+                        checked={prefs.notify_approval_complete}
+                        disabled={prefsBusy}
+                        onCheckedChange={c => handleTogglePref('notify_approval_complete', c)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <p className="text-sm text-gray-500">이 브라우저는 알림 기능을 지원하지 않습니다.</p>
             )}

@@ -10,6 +10,8 @@ export interface User {
   is_executive?: boolean; // 임원 여부 (직원카드 관리에서 임원/직원 구분)
   is_leave_exempt?: boolean; // 연차 적용 제외자 (임원 등) — true면 연차 현황/관리 대상에서 제외
   resident_registration_number?: string | null; // 육상 직원 주민등록번호 (급여대장/세무 신고용)
+  notify_approval_request?: boolean; // 내 차례가 됐을 때 결재 요청 알림을 받을지 (기본 true)
+  notify_approval_complete?: boolean; // 내가 상신한 문서가 최종 승인됐을 때 알림을 받을지 (기본 true)
   created_at: string;
 }
 

@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { formatLeaveHours } from '@/lib/leave-calc';
-import { notifyApprovalStep } from '@/services/push.service';
+import { notifyApprovalStep, notifyApprovalComplete } from '@/services/push.service';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import type {
@@ -697,6 +697,7 @@ export const approvalDocumentService = {
         .eq('status', 'pending');
       if (error) throw error;
       if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
+      void notifyApprovalComplete(documentId);
     } else {
       const { error } = await supabase
         .from('approval_documents')
@@ -759,6 +760,7 @@ export const approvalDocumentService = {
       .eq('id', documentId);
     if (error) throw error;
     if (doc.reference_type) await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
+    void notifyApprovalComplete(documentId);
   },
 
   // 관리자 전용: 결재라인 무관하게 즉시 반려
