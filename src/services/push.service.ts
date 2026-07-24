@@ -91,21 +91,33 @@ export async function notifyApprovalComplete(documentId: string): Promise<void> 
   }
 }
 
+// 문서가 기안/재상신되어 수신·참조 대상으로 지정된 사람들에게 알림을 보내달라고 Edge Function을
+// 호출한다.
+export async function notifyApprovalReference(documentId: string): Promise<void> {
+  try {
+    await supabase.functions.invoke('notify-approval-step', { body: { document_id: documentId, event: 'reference' } });
+  } catch (e) {
+    console.error('수신/참조 알림 발송 실패', e);
+  }
+}
+
 export interface NotificationPreferences {
   notify_approval_request: boolean;
   notify_approval_complete: boolean;
+  notify_approval_reference: boolean;
 }
 
 export async function getNotificationPreferences(userId: string): Promise<NotificationPreferences> {
   const { data, error } = await supabase
     .from('users')
-    .select('notify_approval_request, notify_approval_complete')
+    .select('notify_approval_request, notify_approval_complete, notify_approval_reference')
     .eq('id', userId)
     .single();
   if (error) throw error;
   return {
     notify_approval_request: data.notify_approval_request ?? true,
     notify_approval_complete: data.notify_approval_complete ?? true,
+    notify_approval_reference: data.notify_approval_reference ?? true,
   };
 }
 

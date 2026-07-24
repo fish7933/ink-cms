@@ -49,7 +49,7 @@ export default function ProfilePage() {
   });
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
-  const [prefs, setPrefs] = useState<NotificationPreferences>({ notify_approval_request: true, notify_approval_complete: true });
+  const [prefs, setPrefs] = useState<NotificationPreferences>({ notify_approval_request: true, notify_approval_complete: true, notify_approval_reference: true });
   const [prefsBusy, setPrefsBusy] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -335,6 +335,17 @@ export default function ProfilePage() {
                         checked={prefs.notify_approval_complete}
                         disabled={prefsBusy}
                         onCheckedChange={c => handleTogglePref('notify_approval_complete', c)}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between py-1.5">
+                      <div>
+                        <p className="text-sm">수신/참조 문서 알림</p>
+                        <p className="text-xs text-gray-500">수신 또는 참조로 지정된 문서가 최종 승인됐을 때</p>
+                      </div>
+                      <Switch
+                        checked={prefs.notify_approval_reference}
+                        disabled={prefsBusy}
+                        onCheckedChange={c => handleTogglePref('notify_approval_reference', c)}
                       />
                     </div>
                   </div>

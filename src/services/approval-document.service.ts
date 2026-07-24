@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { formatLeaveHours } from '@/lib/leave-calc';
-import { notifyApprovalStep, notifyApprovalComplete } from '@/services/push.service';
+import { notifyApprovalStep, notifyApprovalComplete, notifyApprovalReference } from '@/services/push.service';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import type {
@@ -435,6 +435,7 @@ export const approvalDocumentService = {
     if (refRows.length > 0) {
       const { error: refError } = await supabase.from('approval_document_references').insert(refRows);
       if (refError) throw refError;
+      void notifyApprovalReference(doc.id);
     }
 
     const { data: steps, error: stepsError } = await supabase
@@ -927,6 +928,7 @@ export const approvalDocumentService = {
     if (refRows.length > 0) {
       const { error: refError } = await supabase.from('approval_document_references').insert(refRows);
       if (refError) throw refError;
+      void notifyApprovalReference(documentId);
     }
 
     if (existing.reference_type) {

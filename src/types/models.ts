@@ -12,6 +12,7 @@ export interface User {
   resident_registration_number?: string | null; // 육상 직원 주민등록번호 (급여대장/세무 신고용)
   notify_approval_request?: boolean; // 내 차례가 됐을 때 결재 요청 알림을 받을지 (기본 true)
   notify_approval_complete?: boolean; // 내가 상신한 문서가 최종 승인됐을 때 알림을 받을지 (기본 true)
+  notify_approval_reference?: boolean; // 수신/참조로 지정된 문서가 최종 승인됐을 때 알림을 받을지 (기본 true)
   created_at: string;
 }
 
