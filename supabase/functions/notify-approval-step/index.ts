@@ -28,9 +28,10 @@ Deno.serve(async req => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    const [{ data: doc }, { data: step }] = await Promise.all([
-      supabase.from('approval_documents').select('title').eq('id', document_id).maybeSingle(),
+    const [{ data: doc }, { data: step }, { count: totalSteps }] = await Promise.all([
+      supabase.from('approval_documents').select('title, created_by, document_type_id, org_unit_id, created_at').eq('id', document_id).maybeSingle(),
       supabase.from('approval_document_steps').select('approver_id').eq('document_id', document_id).eq('step_order', step_order).maybeSingle(),
+      supabase.from('approval_document_steps').select('id', { count: 'exact', head: true }).eq('document_id', document_id),
     ]);
     if (!doc || !step) {
       return new Response(JSON.stringify({ error: '문서 또는 결재 단계를 찾을 수 없음' }), { status: 404, headers: CORS_HEADERS });
@@ -41,9 +42,24 @@ Deno.serve(async req => {
       return new Response(JSON.stringify({ sent: 0 }), { headers: CORS_HEADERS });
     }
 
+    const [{ data: creator }, { data: docType }, { data: orgUnit }] = await Promise.all([
+      doc.created_by ? supabase.from('users').select('name').eq('id', doc.created_by).maybeSingle() : Promise.resolve({ data: null }),
+      doc.document_type_id ? supabase.from('approval_document_types').select('name').eq('id', doc.document_type_id).maybeSingle() : Promise.resolve({ data: null }),
+      doc.org_unit_id ? supabase.from('org_units').select('name').eq('id', doc.org_unit_id).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
+
+    const draftedDate = doc.created_at
+      ? new Date(doc.created_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })
+      : null;
+    const bodyParts = [
+      creator?.name ? `${creator.name}${orgUnit?.name ? `(${orgUnit.name})` : ''}님이 상신` : null,
+      draftedDate ? `${draftedDate}` : null,
+      totalSteps ? `${step_order}/${totalSteps}차 결재` : null,
+    ].filter(Boolean);
+
     const payload = JSON.stringify({
-      title: '결재 요청',
-      body: `[${doc.title}] 결재를 기다리고 있습니다.`,
+      title: docType?.name ? `[${docType.name}] 결재 요청` : '결재 요청',
+      body: `${doc.title}${bodyParts.length > 0 ? ` — ${bodyParts.join(' · ')}` : ''}`,
       url: `/documents/${document_id}`,
     });
 
