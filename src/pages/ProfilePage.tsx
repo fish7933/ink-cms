@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser, updatePassword } from '@/services/auth.service';
 import { supabase } from '@/lib/supabase';
-import { User, Mail, Building2, Shield, Calendar, Lock } from 'lucide-react';
+import { User, Mail, Building2, Shield, Calendar, Lock, Bell } from 'lucide-react';
+import { isPushSupported, isSubscribed, subscribeToPush, unsubscribeFromPush } from '@/services/push.service';
 
 interface UserData {
   id: string;
@@ -42,12 +44,35 @@ export default function ProfilePage() {
     newPassword: '',
     confirmPassword: '',
   });
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
     loadUserData();
+    isSubscribed().then(setPushEnabled);
   }, []);
+
+  const handleTogglePush = async (checked: boolean) => {
+    if (!user) return;
+    setPushBusy(true);
+    try {
+      if (checked) {
+        await subscribeToPush(user.id);
+        setPushEnabled(true);
+        toast({ title: '알림이 켜졌습니다.', description: '결재 차례가 되면 이 브라우저로 알림을 받습니다.' });
+      } else {
+        await unsubscribeFromPush();
+        setPushEnabled(false);
+        toast({ title: '알림이 꺼졌습니다.' });
+      }
+    } catch (e) {
+      toast({ title: '알림 설정 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -237,6 +262,34 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Push Notification Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              결재 알림
+            </CardTitle>
+            <CardDescription>
+              내 차례의 결재 문서가 도착하면 이 브라우저(또는 홈 화면에 추가한 앱)로 알림을 받습니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isPushSupported() ? (
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-sm">이 브라우저에서 결재 알림 받기</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {pushEnabled ? '알림이 켜져 있습니다.' : '알림이 꺼져 있습니다.'}
+                  </p>
+                </div>
+                <Switch checked={pushEnabled} disabled={pushBusy} onCheckedChange={handleTogglePush} />
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">이 브라우저는 알림 기능을 지원하지 않습니다.</p>
+            )}
           </CardContent>
         </Card>
 

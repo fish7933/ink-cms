@@ -1,0 +1,15 @@
+{
+  "name": "크루 매니지먼트 플랫폼",
+  "short_name": "크루 매니지먼트",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a1a1a",
+  "icons": [
+    {
+      "src": "https://public-frontend-cos.metadl.com/mgx/img/favicon.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}

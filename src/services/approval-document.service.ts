@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { formatLeaveHours } from '@/lib/leave-calc';
+import { notifyApprovalStep } from '@/services/push.service';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import type {
@@ -442,6 +443,8 @@ export const approvalDocumentService = {
       .select();
     if (stepsError) throw stepsError;
 
+    if (firstPending) void notifyApprovalStep(doc.id, firstPending.step_order);
+
     const [enriched] = await enrichDocuments([doc]);
     return { ...enriched, steps: (steps || []) as ApprovalDocumentStep[] };
   },
@@ -701,6 +704,7 @@ export const approvalDocumentService = {
         .eq('id', documentId)
         .eq('status', 'pending');
       if (error) throw error;
+      void notifyApprovalStep(documentId, doc.current_step + 1);
     }
   },
 
@@ -926,6 +930,8 @@ export const approvalDocumentService = {
     if (existing.reference_type) {
       await applyReferenceSideEffect(existing.reference_type, existing.reference_id, allApproved ? 'approved' : 'pending');
     }
+
+    if (firstPending) void notifyApprovalStep(documentId, firstPending.step_order);
 
     const [enriched] = await enrichDocuments([doc]);
     return { ...enriched, steps: (steps || []) as ApprovalDocumentStep[] };
