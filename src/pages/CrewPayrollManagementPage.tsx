@@ -22,7 +22,7 @@ import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixT
 import type { Ship } from '@/lib/store';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
-import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow } from '@/types/crew-payroll';
+import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow, CrewPayslipItem } from '@/types/crew-payroll';
 import type { CrewSickPayLedgerRow } from '@/types/sick-pay';
 
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
@@ -349,11 +349,27 @@ export default function CrewPayrollManagementPage() {
   const isDeferredColumn = (name: string) => payslips.some(p => p.items.some(i => i.name === name && i.payment_type === 'deferred_accrual'));
   const findItem = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
     p.items.find(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name);
-  const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => findItem(p, name, deduction)?.amount ?? 0;
+  // 아직 저장하지 않은 draft 입력값이 있으면 그 값을, 없으면 저장된 금액을 쓴다 — 항목 셀뿐
+  // 아니라 Total Earnings/Deductions/Net Pay, 하단 합계까지 전부 이 값 기준으로 다시 계산해야
+  // 편집 중인 내용이 바로 합계에 반영된다(저장 서버 로직 updatePayslipItemAmount와 동일 기준).
+  const effectiveAmount = (item: CrewPayslipItem) => {
+    const draft = cellDrafts[item.id];
+    return draft !== undefined && draft.trim() !== '' && !Number.isNaN(Number(draft)) ? Number(draft) : item.amount;
+  };
+  const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => {
+    const item = findItem(p, name, deduction);
+    return item ? effectiveAmount(item) : 0;
+  };
   const sumColumn = (f: (p: CrewPayslipWithDetails) => number) => payslips.reduce((sum, p) => sum + f(p), 0);
+  const computeRowTotals = (p: CrewPayslipWithDetails) => {
+    const base = p.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual').reduce((s, i) => s + effectiveAmount(i), 0);
+    const allowance = p.items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + effectiveAmount(i), 0);
+    const deduction = p.items.filter(i => i.category === 'deduction').reduce((s, i) => s + effectiveAmount(i), 0);
+    return { gross: base + allowance, deduction, net: base + allowance - deduction };
+  };
 
-  // 인라인 편집 가능한 금액 셀 — draft 상태에서만 클릭해 고칠 수 있고, 저장 전에는 화면에만
-  // 반영된다(합계 열/하단 합계는 저장 후 새로고침되면서 갱신된다).
+  // 인라인 편집 가능한 금액 셀 — draft 상태에서만 클릭해 고칠 수 있고, 편집 중에도 Total
+  // Earnings/Deductions/Net Pay와 하단 합계까지 바로 반영된다(computeRowTotals 참고).
   const renderAmountCell = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => {
     const item = findItem(p, name, deduction);
     const editable = !!item && isDraft && permissions.canEdit;
@@ -381,7 +397,7 @@ export default function CrewPayrollManagementPage() {
         </td>
       );
     }
-    const displayValue = draftValue !== undefined && !Number.isNaN(Number(draftValue)) ? Number(draftValue) : item.amount;
+    const displayValue = effectiveAmount(item);
     return (
       <td key={name} className="py-1 px-2 text-right" onClick={e => e.stopPropagation()}>
         <span
@@ -393,9 +409,9 @@ export default function CrewPayrollManagementPage() {
       </td>
     );
   };
-  const totalGross = payslips.reduce((sum, p) => sum + p.base_amount + p.total_allowance, 0);
-  const totalDeduction = payslips.reduce((sum, p) => sum + p.total_deduction, 0);
-  const totalNet = payslips.reduce((sum, p) => sum + p.net_amount, 0);
+  const totalGross = payslips.reduce((sum, p) => sum + computeRowTotals(p).gross, 0);
+  const totalDeduction = payslips.reduce((sum, p) => sum + computeRowTotals(p).deduction, 0);
+  const totalNet = payslips.reduce((sum, p) => sum + computeRowTotals(p).net, 0);
 
   // 이력 다이얼로그도 급여대장과 동일하게 항목명별 열을 펼친다 — 월마다 적용 템플릿이
   // 달라질 수 있어 전체 이력에 등장한 항목명의 합집합을 열로 만든다.
@@ -548,7 +564,9 @@ export default function CrewPayrollManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {payslips.map(p => (
+              {payslips.map(p => {
+                const rowTotals = computeRowTotals(p);
+                return (
                 <tr key={p.id} className="border-b hover:bg-gray-50">
                   <td className="py-1 px-2 text-gray-600 cursor-pointer hover:underline hover:text-blue-700" onClick={() => openCrewHistory(p)}>
                     {p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}
@@ -565,10 +583,10 @@ export default function CrewPayrollManagementPage() {
                   </td>
                   <td className="py-1 px-2 text-center text-gray-500">{p.days_served}/{p.days_in_month}</td>
                   {allowanceOrder.map(name => renderAmountCell(p, name, false))}
-                  <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(rowTotals.gross)}</td>
                   {deductionOrder.map(name => renderAmountCell(p, name, true))}
-                  <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60">{fmt(p.total_deduction)}</td>
-                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60">{fmt(p.net_amount)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60">{fmt(rowTotals.deduction)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60">{fmt(rowTotals.net)}</td>
                   <td className="py-1 px-2 text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewingPayslip(p)}>
@@ -580,7 +598,8 @@ export default function CrewPayrollManagementPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t font-semibold">
