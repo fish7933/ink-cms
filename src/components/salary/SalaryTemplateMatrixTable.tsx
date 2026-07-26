@@ -66,15 +66,15 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
               return (
                 <th key={comp.id} className={`text-right p-2 font-semibold min-w-24 ${isLast ? '' : 'border-r'} ${isDeduction ? 'text-red-600' : isDeferred ? 'text-amber-700' : ''}`}>
                   {comp.name}
-                  {isDeferred && <span className="block text-[10px] font-normal text-amber-500">{t.deferred}</span>}
+                  {isDeferred && <span className="text-[10px] font-normal text-amber-500"> ({t.deferred})</span>}
                 </th>
               );
             })}
             <th className="text-right p-2 font-semibold min-w-20 border-l">
-              <div className="text-[10px] font-bold text-gray-500">TW</div><div>{t.total}</div>
+              <div className="text-[10px] font-bold text-gray-500">TW</div>{lang === 'ko' && <div>{t.total}</div>}
             </th>
             <th className="text-right p-2 font-semibold min-w-20 text-blue-700 bg-blue-50">
-              <div className="text-[10px] font-bold text-blue-500">AW</div><div>{t.net}</div>
+              <div className="text-[10px] font-bold text-blue-500">AW</div>{lang === 'ko' && <div>{t.net}</div>}
             </th>
           </tr>
         </thead>
