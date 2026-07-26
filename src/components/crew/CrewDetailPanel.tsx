@@ -518,7 +518,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     const activeTab = tabs.find(t => t.id === activeTabId);
     if (!activeTab || activeTab.path !== `/crew/${id}`) return;
     const label = [selectedRank?.rank_code, crewDisplayName(formData)].filter(Boolean).join(' ');
-    if (label) updateTab(activeTabId, { title: label });
+    // updateTab은 값이 같아도 항상 tabs 배열을 새로 만들어 리렌더를 일으킨다 — tabs가 이 effect의
+    // 의존성이므로, 제목이 이미 같은데도 매번 updateTab을 부르면 리렌더→effect 재실행→updateTab→
+    // 리렌더…로 무한루프에 빠진다(실제로 선원카드가 빈 화면이 되는 원인이었음). 이미 같으면 건너뛴다.
+    if (label && activeTab.title !== label) updateTab(activeTabId, { title: label });
   }, [activeTabId, tabs, isNew, id, selectedRank?.rank_code, formData.name, formData.name_english, updateTab]);
 
   if (loading) {
