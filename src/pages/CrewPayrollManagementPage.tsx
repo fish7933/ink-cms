@@ -363,7 +363,7 @@ export default function CrewPayrollManagementPage() {
   };
   const sumColumn = (f: (p: CrewPayslipWithDetails) => number) => payslips.reduce((sum, p) => sum + f(p), 0);
   const computeRowTotals = (p: CrewPayslipWithDetails) => {
-    const base = p.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual').reduce((s, i) => s + effectiveAmount(i), 0);
+    const base = p.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual' && i.payment_type !== 'deferred_payout').reduce((s, i) => s + effectiveAmount(i), 0);
     const allowance = p.items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + effectiveAmount(i), 0);
     const deduction = p.items.filter(i => i.category === 'deduction').reduce((s, i) => s + effectiveAmount(i), 0);
     return { gross: base + allowance, deduction, net: base + allowance - deduction };
@@ -414,6 +414,14 @@ export default function CrewPayrollManagementPage() {
   const totalGross = payslips.reduce((sum, p) => sum + computeRowTotals(p).gross, 0);
   const totalDeduction = payslips.reduce((sum, p) => sum + computeRowTotals(p).deduction, 0);
   const totalNet = payslips.reduce((sum, p) => sum + computeRowTotals(p).net, 0);
+
+  // 하선월의 후불성 급여 일괄지급(Lump Sum)은 이 급여대장(net_amount)에는 포함되지 않고
+  // 급여와는 별도로 정산된다 — 상병급여와 같은 방식으로, 이번 회차에 하선한 선원의 정산 대상
+  // 금액을 놓치지 않도록 별도 구간에 안내한다. payslips에 이미 포함된 항목이라 별도 조회 없이
+  // 그대로 뽑아 쓴다.
+  const deferredPayoutRows = payslips.flatMap(p =>
+    p.items.filter(i => i.payment_type === 'deferred_payout').map(item => ({ payslip: p, item }))
+  );
 
   // 이력 다이얼로그도 급여대장과 동일하게 항목명별 열을 펼친다 — 월마다 적용 템플릿이
   // 달라질 수 있어 전체 이력에 등장한 항목명의 합집합을 열로 만든다.
@@ -612,6 +620,35 @@ export default function CrewPayrollManagementPage() {
               </tr>
             </tfoot>
           </table>
+          {/* 하선월 후불성 급여 일괄지급은 net_amount에서 빠지므로(급여와는 별도 정산), 상병급여와
+              같은 방식으로 이번 회차에 하선한 선원의 정산 대상 금액을 놓치지 않게 안내한다. */}
+          {deferredPayoutRows.length > 0 && (
+            <div className="px-2 py-3 border-t">
+              <p className="text-xs font-semibold text-amber-700 mb-1.5">⚠ Deferred Pay — sign-off crew this month, settled separately (not included in Net Pay)</p>
+              <div className="rounded-md border border-amber-200 overflow-hidden overflow-x-auto">
+                <table className="w-full text-xs whitespace-nowrap">
+                  <thead className="bg-amber-50 border-b border-amber-200">
+                    <tr>
+                      <th className="text-left py-1 px-2 font-medium text-amber-700">Rank</th>
+                      <th className="text-left py-1 px-2 font-medium text-amber-700">Name</th>
+                      <th className="text-left py-1 px-2 font-medium text-amber-700">Item</th>
+                      <th className="text-right py-1 px-2 font-medium text-amber-700">Settlement Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deferredPayoutRows.map(({ payslip, item }) => (
+                      <tr key={item.id} className="border-b border-amber-100">
+                        <td className="py-1 px-2 text-gray-600">{payslip.rank_code}</td>
+                        <td className="py-1 px-2 font-medium">{payslip.crew_name}</td>
+                        <td className="py-1 px-2 text-gray-600">{item.name.replace(/\s*\(Lump Sum\)\s*$/, '')}</td>
+                        <td className="py-1 px-2 text-right font-mono font-semibold">{fmt(item.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {/* 상병급여는 선원 급여대장(crew_payslips)에는 들어가지 않지만, 이 선박·이 달에 청구해야
               할 상병급여가 있으면 놓치지 않도록 대장 바로 아래(적용 템플릿보다 위)에 안내한다. */}
           {sickPayRows.length > 0 && (

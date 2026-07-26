@@ -60,10 +60,12 @@ interface Props {
 }
 
 export default function CrewPayslipDetailView({ payslip, shipName, showTitle = true }: Props) {
-  const baseItems = payslip.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual');
+  const baseItems = payslip.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual' && i.payment_type !== 'deferred_payout');
   const allowanceItems = payslip.items.filter(i => i.source === 'contract' && i.category === 'earning');
   const deductionItems = payslip.items.filter(i => i.category === 'deduction');
-  const deferredItems = payslip.items.filter(i => i.payment_type === 'deferred_accrual');
+  // 하선월의 (Lump Sum)도 여기 함께 보여준다 — Total Earnings/Net Pay 계산에서는 빠지고
+  // (급여와는 별도로 정산되므로), 참고용으로 이번달 적립분과 함께 안내만 한다.
+  const deferredItems = payslip.items.filter(i => i.payment_type === 'deferred_accrual' || i.payment_type === 'deferred_payout');
   const paymentGroups: GridGroup[] = [
     ...(baseItems.length > 0 ? [{ key: 'base', label: 'Base Pay', items: baseItems }] : []),
     ...(allowanceItems.length > 0 ? [{ key: 'allowance', label: 'Allowance', items: allowanceItems }] : []),
@@ -145,7 +147,7 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
 
       {deferredItems.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, margin: '0 0 4px', color: '#333' }}>Deferred Pay (Accrued, Not Yet Paid)</div>
+          <div style={{ fontSize: 11, fontWeight: 600, margin: '0 0 4px', color: '#333' }}>Deferred Pay (Settled Separately, Not Included in Net Pay)</div>
           <div style={{ border: '1px solid #d9c58a', background: '#fffbea' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
               <thead>
@@ -159,7 +161,7 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
                 {deferredItems.map(item => (
                   <tr key={item.id}>
                     <td style={{ padding: '3px 8px', borderTop: '1px solid #e6dba8' }}>{item.name}</td>
-                    <td style={{ padding: '3px 8px', textAlign: 'right', borderTop: '1px solid #e6dba8', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.amount)}</td>
+                    <td style={{ padding: '3px 8px', textAlign: 'right', borderTop: '1px solid #e6dba8', fontVariantNumeric: 'tabular-nums' }}>{item.payment_type === 'deferred_payout' ? '-' : fmt(item.amount)}</td>
                     <td style={{ padding: '3px 8px', textAlign: 'right', borderTop: '1px solid #e6dba8', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(item.accrued_to_date ?? item.amount)}</td>
                   </tr>
                 ))}
@@ -174,7 +176,7 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
         <div>Base pay, allowances and deductions are pro-rated based on the vessel&apos;s salary template and the crew member&apos;s contract terms, for the actual period served this month ({payslip.period_start_date} ~ {payslip.period_end_date}, {payslip.days_served}/{payslip.days_in_month} days).</div>
         <div>Allowances marked &quot;(Owner Billed)&quot; are billed separately to the shipowner rather than paid by the vessel/company, and are excluded from Net Pay.</div>
         {deferredItems.length > 0 && (
-          <div>Deferred (leave-type) pay items accrue monthly but are not paid out until the sign-off month, when the full accrued balance is paid as a lump sum (see &quot;Deferred Pay&quot; above).</div>
+          <div>Deferred (leave-type) pay items accrue monthly but are withheld from Net Pay every month (see &quot;Deferred Pay&quot; above) and settled separately from regular salary, not as part of this payslip.</div>
         )}
       </div>
 

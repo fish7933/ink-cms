@@ -181,10 +181,12 @@ const DEFERRED_BORDER = 'D9C58A';
 // 선원 개인 급여명세서 — 프린트용 CrewPayslipDetailView와 동일한 구성(항목 순서/후불성
 // 적립 표/설명 각주/계산 안내문/서명란)을 그대로 시트로 옮긴다.
 function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string): XLSX.WorkSheet {
-  const baseItems = payslip.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual');
+  const baseItems = payslip.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual' && i.payment_type !== 'deferred_payout');
   const allowanceItems = payslip.items.filter(i => i.source === 'contract' && i.category === 'earning');
   const deductionItems = payslip.items.filter(i => i.category === 'deduction');
-  const deferredItems = payslip.items.filter(i => i.payment_type === 'deferred_accrual');
+  // 하선월의 (Lump Sum)도 여기 함께 보여준다 — Total Earnings/Net Pay 계산에서는 빠지고
+  // (급여와는 별도로 정산되므로), 참고용으로 이번달 적립분과 함께 안내만 한다.
+  const deferredItems = payslip.items.filter(i => i.payment_type === 'deferred_accrual' || i.payment_type === 'deferred_payout');
   const ratio = payslip.days_in_month > 0 ? Math.round((payslip.days_served / payslip.days_in_month) * 1000) / 10 : 0;
   const COLS = 4;
 
@@ -276,7 +278,7 @@ function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string
 
   if (deferredItems.length > 0) {
     aoa.push(blankRow());
-    aoa.push([cell('Deferred Pay (Accrued, Not Yet Paid)', { font: { bold: true, sz: BASE_SZ, color: { rgb: '333333' } } }), cell('', {}), cell('', {}), cell('', {})]);
+    aoa.push([cell('Deferred Pay (Settled Separately, Not Included in Net Pay)', { font: { bold: true, sz: BASE_SZ, color: { rgb: '333333' } } }), cell('', {}), cell('', {}), cell('', {})]);
     aoa.push([
       cell('Item', { font: { bold: true, sz: BASE_SZ, color: { rgb: DEFERRED_HEADER.fg } }, fill: { fgColor: { rgb: DEFERRED_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
       cell('', { fill: { fgColor: { rgb: DEFERRED_HEADER.bg } }, border: border({ thickTop: true, thickBottom: true }) }),
@@ -287,7 +289,7 @@ function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string
       aoa.push([
         cell(item.name, { font: { sz: BASE_SZ }, border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
         cell('', { border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
-        cell(item.amount, { numFmt: '#,##0', font: { sz: BASE_SZ }, alignment: { horizontal: 'right' }, border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
+        cell(item.payment_type === 'deferred_payout' ? '-' : item.amount, { numFmt: '#,##0', font: { sz: BASE_SZ }, alignment: { horizontal: 'right' }, border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
         cell(item.accrued_to_date ?? item.amount, { numFmt: '#,##0', font: { sz: BASE_SZ, bold: true }, alignment: { horizontal: 'right' }, border: { ...border(), top: { style: 'thin', color: { rgb: DEFERRED_BORDER } } } }),
       ]);
     });
@@ -305,7 +307,7 @@ function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string
   ), cell('', {}), cell('', {}), cell('', {})]);
   if (deferredItems.length > 0) {
     aoa.push([cell(
-      'Deferred (leave-type) pay items accrue monthly but are not paid out until the sign-off month, when the full accrued balance is paid as a lump sum (see "Deferred Pay" above).',
+      'Deferred (leave-type) pay items accrue monthly but are withheld from Net Pay every month (see "Deferred Pay" above) and settled separately from regular salary, not as part of this payslip.',
       { font: { sz: 8, color: { rgb: '666666' } } }
     ), cell('', {}), cell('', {}), cell('', {})]);
   }
