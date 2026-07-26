@@ -478,6 +478,18 @@ export default function CrewPayrollManagementPage() {
   const totalDeduction = payslips.reduce((sum, p) => sum + computeRowTotals(p).deduction, 0);
   const totalNet = payslips.reduce((sum, p) => sum + computeRowTotals(p).net, 0);
 
+  // Payment History는 회차가 쌓일수록 무한정 늘어나던 걸 막기 위해 현재 선택된 달 기준
+  // 앞뒤로 3개월(총 최대 7개)만 보여준다 — 더 먼 과거/미래 달은 상단의 월 선택 입력으로
+  // 바로 이동할 수 있으니(이 목록은 그 주변 빠른 이동용일 뿐) 잘려도 접근성엔 문제없다.
+  const monthDiff = (a: string, b: string) => {
+    const [ay, am] = a.split('-').map(Number);
+    const [by, bm] = b.split('-').map(Number);
+    return (ay - by) * 12 + (am - bm);
+  };
+  const nearbyPeriods = periods
+    .filter(p => Math.abs(monthDiff(p.year_month, yearMonth)) <= 3)
+    .sort((a, b) => a.year_month.localeCompare(b.year_month));
+
   // 하선월의 후불성 급여 일괄지급(Lump Sum)은 이 급여대장(net_amount)에는 포함되지 않고
   // 급여와는 별도로 정산된다 — 상병급여와 같은 방식으로, 이번 회차에 하선한 선원의 정산 대상
   // 금액을 놓치지 않도록 별도 구간에 안내한다. payslips에 이미 포함된 항목이라 별도 조회 없이
@@ -794,7 +806,7 @@ export default function CrewPayrollManagementPage() {
         <div className="pt-2">
           <p className="text-xs text-gray-500 mb-1.5">Payment History</p>
           <div className="flex flex-wrap gap-1.5">
-            {periods.map(p => (
+            {nearbyPeriods.map(p => (
               <button
                 key={p.id} type="button" onClick={() => setYearMonth(p.year_month)}
                 className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${yearMonth === p.year_month ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
