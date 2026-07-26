@@ -333,20 +333,23 @@ export default function CrewPayrollManagementPage() {
   // 급여대장은 급여 구성항목(BW/OT/OA/LP 등)과 계약별 수당을 "기본급" 한 칸으로 뭉치지 않고
   // 항목명별 열로 모두 펼친다 — 이번 회차에 실제로 쓰인 급여/공제 항목명의 합집합을 열로 만든다
   // (items는 display_order 순이라 급여 구성항목이 계약 수당보다 항상 앞선 열에 온다).
-  // 후불성 항목도 당월 발생분(item.amount)은 다른 항목과 동일하게 열로 보여준다 — 다만
-  // 누적된 적립액(accrued_to_date)은 급여대장에 표기하지 않고 개인 급여명세서에서만 보여준다.
-  // 하선월 일괄지급(Lump Sum) 항목은 그 자체가 누적 적립액과 같은 값이라 열로 노출하면
+  // 후불성 항목은 부분월(승선 중)에 "정상 어닝"(예: BW) + "공제 X (Deferred)" 쌍으로
+  // 나타나 Total Earnings/Total Deductions 양쪽에 그 관계가 투명하게 보이게 한다(net_amount
+  // 에는 서로 상쇄돼 영향 없음, 기존과 동일). 내부 추적 전용인 "X (Accrued)"(deferred_accrual)
+  // 항목은 이미 위 두 항목이 같은 정보를 보여주므로 급여대장 열에는 중복 노출하지 않는다.
+  // 하선월 일괄지급(Lump Sum) 항목도 그 자체가 누적 적립액과 같은 값이라 열로 노출하면
   // 결국 적립액을 보여주는 셈이 되므로 급여대장에서는 뺀다(net_amount 계산에는 그대로 포함).
   const allowanceOrder: string[] = [];
   const deductionOrder: string[] = [];
   for (const p of payslips) {
     for (const item of p.items) {
-      if (item.payment_type === 'deferred_payout') continue;
+      if (item.payment_type === 'deferred_payout' || item.payment_type === 'deferred_accrual') continue;
       if (item.category === 'earning' && !allowanceOrder.includes(item.name)) allowanceOrder.push(item.name);
       if (item.category === 'deduction' && !deductionOrder.includes(item.name)) deductionOrder.push(item.name);
     }
   }
-  const isDeferredColumn = (name: string) => payslips.some(p => p.items.some(i => i.name === name && i.payment_type === 'deferred_accrual'));
+  // "X" 어닝 열이 후불성 짝("X (Deferred)" 공제)을 가지고 있으면 Deferred 표시를 붙인다.
+  const isDeferredColumn = (name: string) => payslips.some(p => p.items.some(i => i.category === 'deduction' && i.name === `${name} (Deferred)`));
   const findItem = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
     p.items.find(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name);
   // 아직 저장하지 않은 draft 입력값이 있으면 그 값을, 없으면 저장된 금액을 쓴다 — 항목 셀뿐

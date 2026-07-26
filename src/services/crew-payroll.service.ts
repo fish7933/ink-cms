@@ -71,7 +71,7 @@ interface GeneratedItem {
   category: 'earning' | 'deduction';
   name: string;
   payment_method: 'ship_direct' | 'owner_billed' | null;
-  payment_type: 'immediate' | 'deferred_accrual' | 'deferred_payout';
+  payment_type: 'immediate' | 'deferred_accrual' | 'deferred_payout' | 'deferred_withhold';
   standard_amount: number;
   amount: number;
   accrued_to_date: number | null;
@@ -175,9 +175,16 @@ function buildShipPayslips(input: {
           return;
         }
 
-        // 후불성 급여 — 계속 승선 중이면 이 달분은 누적만 되고(net_amount 제외), 하선월이면
-        // 이 달분은 정상 어닝으로 당월 정산에 포함시키고 그 이전까지 쌓인 금액만 리브페이로
-        // 별도 일괄 지급한다(둘 다 net_amount 포함 — 이 달분을 Lump Sum에 다시 합치면 중복).
+        // 후불성 급여 — 하선월이면 이 달분은 정상 어닝으로 당월 정산에 포함시키고 그 이전까지
+        // 쌓인 금액만 리브페이로 별도 일괄 지급한다(둘 다 net_amount 포함 — 이 달분을 Lump
+        // Sum에 다시 합치면 중복). 계속 승선 중인 달(부분월)에는 실제로 이번달 번 만큼을
+        // 정상 어닝(Total Earnings)에 반영하고, 같은 금액을 공제(Total Deductions)로 즉시
+        // 되돌려받는 형태로 명세서/급여대장에 투명하게 보여준다 — "매달 정산되지만 지금 주지
+        // 않고 하선월까지 보류한다"는 사실이 어닝/공제 양쪽에 드러나게 하기 위함이며, 이 두
+        // 항목은 항상 같은 금액이라 그 달 net_amount에는 영향이 없다(기존과 동일). 내부
+        // 추적용으로 별도의 "(Accrued)" 항목도 그대로 유지(후불성 리포트/명세서의 후불성
+        // 현황표·누적잔액 계산에 필요) — 다만 급여대장/이력의 정상 어닝·공제 열에는 노출하지
+        // 않는다(위 두 항목이 이미 그 관계를 보여주므로 중복 노출 방지).
         const isDisembarkMonth = !!rec.disembark_date && rec.disembark_date >= start && rec.disembark_date <= end;
         const thisMonthAmount = Math.round(standard * ratio);
 
@@ -211,12 +218,41 @@ function buildShipPayslips(input: {
           }
         } else {
           const cumulativeToDate = sumDeferredAccrualThroughDate(rec.embark_date, overlapEnd, standard);
+          // 내부 추적 전용(급여대장/이력에는 노출 안 함) — 후불성 리포트·명세서의 후불성
+          // 현황표가 이번달 적립액/누적액을 여기서 읽는다.
           items.push({
             source: 'template',
             category: 'earning',
             name: `${i.component.name} (Accrued)`,
             payment_method: null,
             payment_type: 'deferred_accrual',
+            standard_amount: standard,
+            amount: thisMonthAmount,
+            accrued_to_date: cumulativeToDate,
+            description: i.component.description || null,
+            display_order: idx,
+          });
+          // 이번달 번 만큼을 정상 어닝으로 반영(Total Earnings에 포함)
+          items.push({
+            source: 'template',
+            category: 'earning',
+            name: i.component.name,
+            payment_method: null,
+            payment_type: 'immediate',
+            standard_amount: standard,
+            amount: thisMonthAmount,
+            accrued_to_date: null,
+            description: i.component.description || null,
+            display_order: idx,
+          });
+          // 같은 금액을 공제로 즉시 되돌려받아(Total Deductions에 포함) 이번달 Net Pay에는
+          // 영향이 없다 — 하선월까지 보류(적립)된다는 사실을 급여대장/명세서에 드러낸다.
+          items.push({
+            source: 'template',
+            category: 'deduction',
+            name: `${i.component.name} (Deferred)`,
+            payment_method: null,
+            payment_type: 'deferred_withhold',
             standard_amount: standard,
             amount: thisMonthAmount,
             accrued_to_date: cumulativeToDate,
@@ -902,13 +938,14 @@ export const crewPayrollService = {
     const payslips: CrewPayslipWithDetails[] = await this.getPayslipsForPeriod(periodId);
     const allowanceColumns: string[] = [];
     const deductionColumns: string[] = [];
-    // 후불성 항목도 당월 발생분(amount)은 다른 항목과 동일하게 열로 보여준다 — 누적
-    // 적립액(accrued_to_date)만 급여대장에는 표기하지 않는다(개인 급여명세서에서만 확인).
-    // 하선월 일괄지급(Lump Sum)은 그 값 자체가 누적 적립액과 같으므로 열에서 뺀다
-    // (net_amount 계산에는 그대로 포함되어 있음).
+    // 후불성 항목은 부분월에 "정상 어닝"(예: BW) + "공제 X (Deferred)" 쌍으로 나타나
+    // Total Earnings/Deductions 양쪽에 그 관계가 투명하게 보이게 한다(net_amount에는 서로
+    // 상쇄돼 영향 없음). 내부 추적 전용인 "X (Accrued)"(deferred_accrual)와 하선월 일괄지급
+    // Lump Sum(deferred_payout, 누적 적립액과 같은 값)은 급여대장 열에서 뺀다(net_amount
+    // 계산에는 그대로 포함되어 있음, 개인 급여명세서에서만 확인 가능).
     for (const p of payslips) {
       for (const item of p.items) {
-        if (item.payment_type === 'deferred_payout') continue;
+        if (item.payment_type === 'deferred_payout' || item.payment_type === 'deferred_accrual') continue;
         if (item.category === 'earning' && !allowanceColumns.includes(item.name)) allowanceColumns.push(item.name);
         if (item.category === 'deduction' && !deductionColumns.includes(item.name)) deductionColumns.push(item.name);
       }
@@ -918,7 +955,7 @@ export const crewPayrollService = {
       const allowanceByName: Record<string, number> = {};
       const deductionByName: Record<string, number> = {};
       for (const item of p.items) {
-        if (item.payment_type === 'deferred_payout') continue;
+        if (item.payment_type === 'deferred_payout' || item.payment_type === 'deferred_accrual') continue;
         if (item.category === 'earning') allowanceByName[item.name] = (allowanceByName[item.name] || 0) + item.amount;
         if (item.category === 'deduction') deductionByName[item.name] = (deductionByName[item.name] || 0) + item.amount;
       }
