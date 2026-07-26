@@ -401,6 +401,35 @@ export default function CrewPayrollManagementPage() {
     return { gross: base + allowance, deduction, net: base + allowance - deduction };
   };
 
+  // 항목/합계 셀에 마우스를 올리면 어떻게 그 금액이 나왔는지 보여주는 네이티브 title 툴팁 —
+  // 이 화면 다른 곳(선박명, Pay Period)에서도 이미 title로 호버 설명을 쓰는 관례를 따른다.
+  const buildItemCalcTitle = (p: CrewPayslipWithDetails, item: CrewPayslipItem) => {
+    const calculated = Math.round(item.standard_amount * (p.days_served / (p.days_in_month || 1)));
+    const actual = effectiveAmount(item);
+    let text = `${fmt(item.standard_amount)} × ${p.days_served}/${p.days_in_month} days = ${fmt(calculated)}`;
+    if (actual !== calculated) {
+      text += actual === 0 && calculated > 0 ? ' (waived this partial month)' : ` (manually adjusted to ${fmt(actual)})`;
+    }
+    return text;
+  };
+  const buildGrossTitle = (p: CrewPayslipWithDetails) => {
+    const items = p.items.filter(i =>
+      (i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual' && i.payment_type !== 'deferred_payout') ||
+      (i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed')
+    );
+    const lines = items.map(i => `${i.name}: ${fmt(effectiveAmount(i))}`);
+    return [...lines, `= GROSS ${fmt(computeRowTotals(p).gross)}`].join('\n');
+  };
+  const buildDeductTitle = (p: CrewPayslipWithDetails) => {
+    const items = p.items.filter(i => i.category === 'deduction');
+    const lines = items.map(i => `${i.name}: ${fmt(effectiveAmount(i))}`);
+    return [...lines, `= DEDUCT ${fmt(computeRowTotals(p).deduction)}`].join('\n');
+  };
+  const buildNetTitle = (p: CrewPayslipWithDetails) => {
+    const t = computeRowTotals(p);
+    return `${fmt(t.gross)} (GROSS) − ${fmt(t.deduction)} (DEDUCT) = ${fmt(t.net)} (Net Pay)`;
+  };
+
   // 인라인 편집 가능한 금액 셀 — draft 상태에서만 클릭해 고칠 수 있고, 편집 중에도 Total
   // Earnings/Deductions/Net Pay와 하단 합계까지 바로 반영된다(computeRowTotals 참고).
   const renderAmountCell = (p: CrewPayslipWithDetails, name: string, deduction: boolean, isFirst = false) => {
@@ -408,7 +437,7 @@ export default function CrewPayrollManagementPage() {
     const editable = !!item && isDraft && permissions.canEdit;
     const dividerClass = isFirst ? 'border-l-2 border-gray-300' : '';
     if (!editable) {
-      return <td key={name} className={`p-2 text-right font-mono ${deduction ? 'text-red-600' : ''} ${dividerClass}`}>{fmt(amountByName(p, name, deduction))}</td>;
+      return <td key={name} className={`p-2 text-right font-mono ${deduction ? 'text-red-600' : ''} ${dividerClass}`} title={item ? buildItemCalcTitle(p, item) : undefined}>{fmt(amountByName(p, name, deduction))}</td>;
     }
     const draftValue = cellDrafts[item.id];
     if (editingItemId === item.id) {
@@ -437,6 +466,7 @@ export default function CrewPayrollManagementPage() {
         <span
           className={`font-mono cursor-text px-1 rounded hover:bg-amber-50 ${deduction ? 'text-red-600' : ''} ${draftValue !== undefined ? 'bg-amber-50 ring-1 ring-amber-300' : ''}`}
           onClick={() => startCellEdit(item.id, item.amount)}
+          title={buildItemCalcTitle(p, item)}
         >
           {fmt(displayValue)}
         </span>
@@ -622,10 +652,10 @@ export default function CrewPayrollManagementPage() {
                   </td>
                   <td className="py-1 px-2 text-center text-gray-500">{p.days_served}/{p.days_in_month}</td>
                   {allowanceOrder.map((name, i) => renderAmountCell(p, name, false, i === 0))}
-                  <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(rowTotals.gross)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60" title={buildGrossTitle(p)}>{fmt(rowTotals.gross)}</td>
                   {deductionOrder.map((name, i) => renderAmountCell(p, name, true, i === 0))}
-                  <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60">{fmt(rowTotals.deduction)}</td>
-                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60 border-l-2 border-gray-300">{fmt(rowTotals.net)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60" title={buildDeductTitle(p)}>{fmt(rowTotals.deduction)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60 border-l-2 border-gray-300" title={buildNetTitle(p)}>{fmt(rowTotals.net)}</td>
                   <td className="py-1 px-2 text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewingPayslip(p)}>
@@ -644,10 +674,10 @@ export default function CrewPayrollManagementPage() {
               <tr className="bg-gray-50 border-t font-semibold">
                 <td className="py-1 px-2" colSpan={4}>Total ({payslips.length} crew)</td>
                 {allowanceOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
-                <td className="py-1 px-2 text-right font-mono bg-blue-50/60">{fmt(totalGross)}</td>
+                <td className="py-1 px-2 text-right font-mono bg-blue-50/60" title={`Sum of GROSS across ${payslips.length} crew`}>{fmt(totalGross)}</td>
                 {deductionOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
-                <td className="py-1 px-2 text-right font-mono text-red-600 bg-red-50/60">{fmt(totalDeduction)}</td>
-                <td className="py-1 px-2 text-right font-mono bg-green-50/60 border-l-2 border-gray-300">{fmt(totalNet)}</td>
+                <td className="py-1 px-2 text-right font-mono text-red-600 bg-red-50/60" title={`Sum of DEDUCT across ${payslips.length} crew`}>{fmt(totalDeduction)}</td>
+                <td className="py-1 px-2 text-right font-mono bg-green-50/60 border-l-2 border-gray-300" title={`${fmt(totalGross)} (GROSS) − ${fmt(totalDeduction)} (DEDUCT) = ${fmt(totalNet)} (Net Pay)`}>{fmt(totalNet)}</td>
                 <td className="py-1 px-2" />
               </tr>
             </tfoot>
