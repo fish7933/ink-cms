@@ -125,7 +125,7 @@ function calculateAge(dateOfBirth: string): number {
 
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
   const { toast } = useToast();
-  const { activeTabId, updateTab } = useTabContext();
+  const { activeTabId, updateTab, tabs } = useTabContext();
   const panelRef = useRef<HTMLDivElement>(null);
 
   const scrollToTop = useCallback(() => {
@@ -509,11 +509,17 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   // 탭 제목을 이름만이 아니라 "직급 이름"으로 유지 — 목록에서 열 때 붙는 제목은 그 시점의
   // 직급코드로 고정되므로, 직급/이름을 이 화면에서 고쳤을 때도 탭 제목이 따라가도록 갱신한다.
+  // 탭은 비활성 상태에서도(display:none) 컴포넌트가 계속 마운트돼 있으므로, activeTabId가
+  // "지금 화면에 보이는 다른 탭"으로 바뀌어도 이 effect는 여전히 실행된다 — activeTabId를
+  // 무조건 내 탭이라고 믿으면 그 다른 탭의 제목을 이 선원 이름으로 덮어써 버리게 된다.
+  // 실제로 활성화된 탭의 경로가 이 선원의 상세 경로일 때만(=이 패널이 진짜 보이고 있을 때만) 갱신한다.
   useEffect(() => {
-    if (!activeTabId || isNew) return;
+    if (!activeTabId || isNew || !id) return;
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (!activeTab || activeTab.path !== `/crew/${id}`) return;
     const label = [selectedRank?.rank_code, crewDisplayName(formData)].filter(Boolean).join(' ');
     if (label) updateTab(activeTabId, { title: label });
-  }, [activeTabId, isNew, selectedRank?.rank_code, formData.name, formData.name_english, updateTab]);
+  }, [activeTabId, tabs, isNew, id, selectedRank?.rank_code, formData.name, formData.name_english, updateTab]);
 
   if (loading) {
     return (
