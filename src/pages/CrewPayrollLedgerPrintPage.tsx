@@ -66,6 +66,9 @@ export default function CrewPayrollLedgerPrintPage() {
         table.ledger td.amount { text-align: right; font-variant-numeric: tabular-nums; }
         table.ledger td.name { text-align: center; }
         table.ledger tr.total td { font-weight: 600; background: #f7f7f7; border-top: 2px solid #888; }
+        table.ledger th.group-earnings { background: #eaf1fb; color: #1d4ed8; font-weight: 600; }
+        table.ledger th.group-deductions { background: #fdeaea; color: #b91c1c; font-weight: 600; }
+        table.ledger .section-divider { border-left: 2px solid #888; }
         .payslip-page { page-break-before: always; padding-top: 16px; max-width: 760px; margin: 0 auto; }
       `}</style>
 
@@ -89,16 +92,22 @@ export default function CrewPayrollLedgerPrintPage() {
       <table className="ledger">
         <thead>
           <tr>
+            <th colSpan={5} style={{ background: '#fff', border: 'none' }} />
+            <th colSpan={allowance_columns.length + 1} className="group-earnings section-divider">Earnings</th>
+            <th colSpan={deduction_columns.length + 1} className="group-deductions section-divider">Deductions</th>
+            <th style={{ background: '#fff', border: 'none' }} />
+          </tr>
+          <tr>
             <th>Rank</th>
             <th>Grade</th>
             <th>Name</th>
             <th>Pay Period</th>
             <th>Days</th>
-            {allowance_columns.map(name => <th key={name}>{name}</th>)}
+            {allowance_columns.map((name, i) => <th key={name} className={i === 0 ? 'section-divider' : ''}>{name}</th>)}
             <th>GROSS</th>
-            {deduction_columns.map(name => <th key={name}>{name}</th>)}
+            {deduction_columns.map((name, i) => <th key={name} className={i === 0 ? 'section-divider' : ''}>{name}</th>)}
             <th>DEDUCT</th>
-            <th>Net Pay</th>
+            <th className="section-divider">Net Pay</th>
           </tr>
         </thead>
         <tbody>
@@ -109,20 +118,20 @@ export default function CrewPayrollLedgerPrintPage() {
               <td className="name">{r.crew_name}</td>
               <td className="name">{fmtMD(r.period_start_date)}~{fmtMD(r.period_end_date)}</td>
               <td className="name">{r.days_served}/{r.days_in_month}</td>
-              {allowance_columns.map(name => <td key={name} className="amount">{fmt(r.allowance_by_name[name] || 0)}</td>)}
+              {allowance_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`}>{fmt(r.allowance_by_name[name] || 0)}</td>)}
               <td className="amount">{fmt(r.gross_amount)}</td>
-              {deduction_columns.map(name => <td key={name} className="amount" style={{ color: '#a33' }}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
+              {deduction_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`} style={{ color: '#a33' }}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
               <td className="amount" style={{ color: '#a33' }}>{fmt(r.total_deduction)}</td>
-              <td className="amount" style={{ fontWeight: 600 }}>{fmt(r.net_amount)}</td>
+              <td className="amount section-divider" style={{ fontWeight: 600 }}>{fmt(r.net_amount)}</td>
             </tr>
           ))}
           <tr className="total">
             <td colSpan={5} className="name">Total ({rows.length} crew)</td>
-            {allowance_columns.map(name => <td key={name} className="amount">{fmt(totalByAllowance(name))}</td>)}
+            {allowance_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`}>{fmt(totalByAllowance(name))}</td>)}
             <td className="amount">{fmt(totalGross)}</td>
-            {deduction_columns.map(name => <td key={name} className="amount" style={{ color: '#a33' }}>{fmt(totalByDeduction(name))}</td>)}
+            {deduction_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`} style={{ color: '#a33' }}>{fmt(totalByDeduction(name))}</td>)}
             <td className="amount" style={{ color: '#a33' }}>{fmt(totalDeduction)}</td>
-            <td className="amount">{fmt(totalNet)}</td>
+            <td className="amount section-divider">{fmt(totalNet)}</td>
           </tr>
         </tbody>
       </table>
