@@ -43,7 +43,7 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
       <table className="text-xs w-full bg-white">
         <thead>
           <tr className="bg-gray-50 border-b">
-            <th className="sticky left-0 bg-gray-50 border-r p-1" />
+            <th rowSpan={2} className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100">{t.rank}</th>
             {earningIds.length > 0 && (
               <th colSpan={earningIds.length} className="text-center py-1 px-2 text-blue-700 font-semibold border-r bg-blue-50/50">
                 {t.earnings}
@@ -57,7 +57,6 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
             <th colSpan={2} className="text-center py-1 px-2 text-gray-600 font-semibold bg-gray-100">{t.result}</th>
           </tr>
           <tr className="bg-gray-100">
-            <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100">{t.rank}</th>
             {orderedComps.map((comp, idx) => {
               const isDeduction = comp.component_type === 'deduction';
               const isDeferred = !isDeduction && comp.payment_type === 'deferred';

@@ -92,22 +92,20 @@ export default function CrewPayrollLedgerPrintPage() {
       <table className="ledger">
         <thead>
           <tr>
-            <th colSpan={5} style={{ background: '#fff', border: 'none' }} />
+            <th rowSpan={2}>Rank</th>
+            <th rowSpan={2}>Grade</th>
+            <th rowSpan={2}>Name</th>
+            <th rowSpan={2}>Pay Period</th>
+            <th rowSpan={2}>Days</th>
             <th colSpan={allowance_columns.length + 1} className="group-earnings section-divider">Earnings</th>
             <th colSpan={deduction_columns.length + 1} className="group-deductions section-divider">Deductions</th>
-            <th style={{ background: '#fff', border: 'none' }} />
+            <th rowSpan={2} className="section-divider">Net Pay</th>
           </tr>
           <tr>
-            <th>Rank</th>
-            <th>Grade</th>
-            <th>Name</th>
-            <th>Pay Period</th>
-            <th>Days</th>
             {allowance_columns.map((name, i) => <th key={name} className={i === 0 ? 'section-divider' : ''}>{name}</th>)}
             <th>GROSS</th>
             {deduction_columns.map((name, i) => <th key={name} className={i === 0 ? 'section-divider' : ''}>{name}</th>)}
             <th>DEDUCT</th>
-            <th className="section-divider">Net Pay</th>
           </tr>
         </thead>
         <tbody>

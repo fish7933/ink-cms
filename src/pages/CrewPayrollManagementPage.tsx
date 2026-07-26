@@ -612,25 +612,23 @@ export default function CrewPayrollManagementPage() {
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
-              <tr className="text-[10px] text-gray-400">
-                <th colSpan={4} />
-                <th colSpan={allowanceOrder.length + 1} className="text-center py-1 font-semibold text-blue-700 bg-blue-50/60 border-l">Earnings</th>
-                <th colSpan={deductionOrder.length + 1} className="text-center py-1 font-semibold text-red-600 bg-red-50/60 border-l">Deductions</th>
-                <th colSpan={2} className="border-l" />
+              <tr>
+                <th rowSpan={2} className="text-left p-2 font-medium text-gray-600">Rank</th>
+                <th rowSpan={2} className="text-left p-2 font-medium text-gray-600">Name</th>
+                <th rowSpan={2} className="text-center p-2 font-medium text-gray-600">Pay Period</th>
+                <th rowSpan={2} className="text-center p-2 font-medium text-gray-600">Days</th>
+                <th colSpan={allowanceOrder.length + 1} className="text-center py-1 text-[10px] font-semibold text-blue-700 bg-blue-50/60 border-l">Earnings</th>
+                <th colSpan={deductionOrder.length + 1} className="text-center py-1 text-[10px] font-semibold text-red-600 bg-red-50/60 border-l">Deductions</th>
+                <th rowSpan={2} className="text-right p-2 font-medium text-gray-600 bg-green-50/60 border-l">Net Pay</th>
+                <th rowSpan={2} className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
               </tr>
               <tr>
-                <th className="text-left p-2 font-medium text-gray-600">Rank</th>
-                <th className="text-left p-2 font-medium text-gray-600">Name</th>
-                <th className="text-center p-2 font-medium text-gray-600">Pay Period</th>
-                <th className="text-center p-2 font-medium text-gray-600">Days</th>
                 {allowanceOrder.map((name, i) => (
                   <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>
                 ))}
                 <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">GROSS</th>
                 {deductionOrder.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-500 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
                 <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">DEDUCT</th>
-                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60 border-l">Net Pay</th>
-                <th className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
               </tr>
             </thead>
             <tbody>
