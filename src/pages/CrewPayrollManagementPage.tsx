@@ -616,7 +616,7 @@ export default function CrewPayrollManagementPage() {
                 <th colSpan={4} />
                 <th colSpan={allowanceOrder.length + 1} className="text-center py-1 font-semibold text-blue-700 bg-blue-50/60 border-l-2 border-gray-300">Earnings</th>
                 <th colSpan={deductionOrder.length + 1} className="text-center py-1 font-semibold text-red-600 bg-red-50/60 border-l-2 border-gray-300">Deductions</th>
-                <th colSpan={2} className="border-l-4 border-gray-500" />
+                <th colSpan={2} className="border-l-2 border-gray-300" />
               </tr>
               <tr>
                 <th className="text-left p-2 font-medium text-gray-600">Rank</th>
@@ -629,7 +629,7 @@ export default function CrewPayrollManagementPage() {
                 <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">GROSS</th>
                 {deductionOrder.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-500 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{name}</th>)}
                 <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">DEDUCT</th>
-                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60 border-l-4 border-gray-500">Net Pay</th>
+                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60 border-l-2 border-gray-300">Net Pay</th>
                 <th className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
               </tr>
             </thead>
@@ -656,7 +656,7 @@ export default function CrewPayrollManagementPage() {
                   <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60" title={buildGrossTitle(p)}>{fmt(rowTotals.gross)}</td>
                   {deductionOrder.map((name, i) => renderAmountCell(p, name, true, i === 0))}
                   <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60" title={buildDeductTitle(p)}>{fmt(rowTotals.deduction)}</td>
-                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60 border-l-4 border-gray-500" title={buildNetTitle(p)}>{fmt(rowTotals.net)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60 border-l-2 border-gray-300" title={buildNetTitle(p)}>{fmt(rowTotals.net)}</td>
                   <td className="py-1 px-2 text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewingPayslip(p)}>
@@ -678,7 +678,7 @@ export default function CrewPayrollManagementPage() {
                 <td className="py-1 px-2 text-right font-mono bg-blue-50/60" title={`Sum of GROSS across ${payslips.length} crew`}>{fmt(totalGross)}</td>
                 {deductionOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
                 <td className="py-1 px-2 text-right font-mono text-red-600 bg-red-50/60" title={`Sum of DEDUCT across ${payslips.length} crew`}>{fmt(totalDeduction)}</td>
-                <td className="py-1 px-2 text-right font-mono bg-green-50/60 border-l-4 border-gray-500" title={`${fmt(totalGross)} (GROSS) − ${fmt(totalDeduction)} (DEDUCT) = ${fmt(totalNet)} (Net Pay)`}>{fmt(totalNet)}</td>
+                <td className="py-1 px-2 text-right font-mono bg-green-50/60 border-l-2 border-gray-300" title={`${fmt(totalGross)} (GROSS) − ${fmt(totalDeduction)} (DEDUCT) = ${fmt(totalNet)} (Net Pay)`}>{fmt(totalNet)}</td>
                 <td className="py-1 px-2" />
               </tr>
             </tfoot>
@@ -831,7 +831,7 @@ export default function CrewPayrollManagementPage() {
                     <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">GROSS</th>
                     {historyDeductionColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{name}</th>)}
                     <th className="text-right p-2 font-medium text-red-700 bg-gray-100">DEDUCT</th>
-                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100 border-l-4 border-gray-500">Net Pay</th>
+                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100 border-l-2 border-gray-300">Net Pay</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -846,7 +846,7 @@ export default function CrewPayrollManagementPage() {
                       <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50">{fmt(r.gross_amount)}</td>
                       {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
                       <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-gray-50">{fmt(r.total_deduction)}</td>
-                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50 border-l-4 border-gray-500">{fmt(r.net_amount)}</td>
+                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50 border-l-2 border-gray-300">{fmt(r.net_amount)}</td>
                     </tr>
                   ))}
                   {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
@@ -861,7 +861,7 @@ export default function CrewPayrollManagementPage() {
                     <td className="py-1 px-2 text-right font-mono">{fmt(historyTotals.gross)}</td>
                     {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(historyTotals.deductionByName[name] || 0)}</td>)}
                     <td className="py-1 px-2 text-right font-mono text-red-600">{fmt(historyTotals.deduction)}</td>
-                    <td className="py-1 px-2 text-right font-mono border-l-4 border-gray-500">{fmt(historyTotals.net)}</td>
+                    <td className="py-1 px-2 text-right font-mono border-l-2 border-gray-300">{fmt(historyTotals.net)}</td>
                   </tr>
                 </tbody>
               </table>
