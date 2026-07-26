@@ -626,6 +626,7 @@ export default function CrewPayrollManagementPage() {
                       <th className="text-left py-1 px-2 font-medium text-red-700">Name</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700">Sign-Off Date</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700">Sick Pay Since</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700">Status</th>
                       <th className="text-right py-1 px-2 font-medium text-red-700">This Month Amount</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700 w-56">Close Case</th>
                     </tr>
@@ -637,6 +638,11 @@ export default function CrewPayrollManagementPage() {
                         <td className="py-1 px-2 font-medium">{row.crew_name}</td>
                         <td className="py-1 px-2 text-center text-gray-500">{row.disembark_date}</td>
                         <td className="py-1 px-2 text-center text-gray-500">{row.start_date}</td>
+                        <td className="py-1 px-2 text-center">
+                          {row.status === 'closed'
+                            ? <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Closed{row.closed_date ? ` ${row.closed_date}` : ''}</Badge>
+                            : <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">Active</Badge>}
+                        </td>
                         <td className="py-1 px-2 text-right">
                           <Input
                             type="number"
@@ -644,22 +650,26 @@ export default function CrewPayrollManagementPage() {
                             onChange={e => setSickPayDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
                             onBlur={() => handleSaveSickPayAmount(row)}
                             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            disabled={sickPaySaving === row.id}
+                            disabled={sickPaySaving === row.id || row.status === 'closed'}
                             className="h-6 text-xs w-24 text-right ml-auto"
                           />
                         </td>
                         <td className="py-1 px-2">
-                          <div className="flex items-center justify-center gap-1">
-                            <Input
-                              type="date"
-                              value={closeDateDrafts[row.id] ?? new Date().toISOString().slice(0, 10)}
-                              onChange={e => setCloseDateDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
-                              className="h-6 text-xs w-32"
-                            />
-                            <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => handleCloseSickPay(row)} disabled={sickPaySaving === row.id}>
-                              Close
-                            </Button>
-                          </div>
+                          {row.status === 'closed' ? (
+                            <p className="text-center text-[11px] text-gray-400">Already closed</p>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <Input
+                                type="date"
+                                value={closeDateDrafts[row.id] ?? new Date().toISOString().slice(0, 10)}
+                                onChange={e => setCloseDateDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
+                                className="h-6 text-xs w-32"
+                              />
+                              <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => handleCloseSickPay(row)} disabled={sickPaySaving === row.id}>
+                                Close
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
