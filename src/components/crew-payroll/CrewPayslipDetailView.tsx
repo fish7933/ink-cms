@@ -33,7 +33,7 @@ function PayGridTable({ groups, negative, totalLabel, totalValue }: { groups: Gr
               </tr>
               <tr>
                 {row.map((item, j) => item ? (
-                  <td key={item.id} className={negative ? 'neg' : ''}>{item.amount === 0 ? '-' : `${negative ? '-' : ''}${fmt(item.amount)}`}</td>
+                  <td key={item.id} className={negative ? 'neg' : ''}>{item.amount === 0 ? '0' : `${negative ? '-' : ''}${fmt(item.amount)}`}</td>
                 ) : <td key={j} className="empty" />)}
               </tr>
             </Fragment>
