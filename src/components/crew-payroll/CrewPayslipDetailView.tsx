@@ -1,5 +1,7 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import type { CrewPayslipWithDetails, CrewPayslipItem } from '@/types/crew-payroll';
+import { getSalaryComponents } from '@/lib/salary-store';
+import { allowanceService } from '@/services/allowance.service';
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 const ITEM_COLS = 4;
@@ -60,6 +62,23 @@ interface Props {
 }
 
 export default function CrewPayslipDetailView({ payslip, shipName, showTitle = true }: Props) {
+  // 항목 설명은 명세서 생성 시점 스냅샷(item.description)이 기본이지만, 급여 구성항목/수당유형
+  // 설명은 사후에 바뀔 수 있고 각주는 금액과 달리 과거 시점을 보존해야 하는 값이 아니므로
+  // 최신 설명이 있으면 그걸 우선해서 보여준다(이름으로 매칭 — 스냅샷엔 component_id가 없음).
+  const [liveDescriptions, setLiveDescriptions] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [components, allowanceTypes] = await Promise.all([getSalaryComponents(), allowanceService.getTypes(true)]);
+      if (cancelled) return;
+      const map = new Map<string, string>();
+      for (const c of components) if (c.description) map.set(c.name, c.description);
+      for (const t of allowanceTypes) if (t.description) map.set(t.name, t.description);
+      setLiveDescriptions(map);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const baseItems = payslip.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual' && i.payment_type !== 'deferred_payout');
   const allowanceItems = payslip.items.filter(i => i.source === 'contract' && i.category === 'earning');
   const deductionItems = payslip.items.filter(i => i.category === 'deduction');
@@ -81,11 +100,12 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
   const legendEntries: [string, string][] = [];
   const seenLegend = new Set<string>();
   for (const item of [...baseItems, ...allowanceItems, ...deductionItems, ...deferredItems]) {
-    if (!item.description) continue;
     const baseName = item.name.replace(/\s*\([^)]*\)\s*$/, '');
+    const description = liveDescriptions.get(baseName) ?? item.description;
+    if (!description) continue;
     if (seenLegend.has(baseName)) continue;
     seenLegend.add(baseName);
-    legendEntries.push([baseName, item.description]);
+    legendEntries.push([baseName, description]);
   }
 
   return (
