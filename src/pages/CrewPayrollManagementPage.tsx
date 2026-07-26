@@ -448,6 +448,7 @@ export default function CrewPayrollManagementPage() {
             className="h-6 text-xs w-20 text-right ml-auto px-1"
             value={draftValue ?? String(item.amount)}
             onChange={e => setCellDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+            onFocus={e => e.target.select()}
             onBlur={() => setEditingItemId(null)}
             onKeyDown={e => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
