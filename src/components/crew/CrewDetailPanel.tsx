@@ -40,7 +40,10 @@ import {
 } from '@/services/crew-extended.service';
 import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord } from '@/types/crew-extended';
 import { crewPayrollService } from '@/services/crew-payroll.service';
-import type { CrewPayrollHistoryRow } from '@/types/crew-payroll';
+import type { CrewPayrollHistoryRow, CrewPayslipWithDetails } from '@/types/crew-payroll';
+import CrewPayslipDetailView from '@/components/crew-payroll/CrewPayslipDetailView';
+import { sickPayService } from '@/services/sick-pay.service';
+import type { CrewSickPayHistoryRow } from '@/types/sick-pay';
 
 const REC_LABELS: Record<string, string> = { highly_recommend: '강력 추천', recommend: '추천', neutral: '보통', not_recommend: '비추천' };
 
@@ -185,6 +188,18 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [payrollShipFilter, setPayrollShipFilter] = useState('all');
   const [payrollYearFilter, setPayrollYearFilter] = useState('all');
   const [payrollPage, setPayrollPage] = useState(1);
+  const [payrollSubTab, setPayrollSubTab] = useState<'onboard' | 'sick'>('onboard');
+  // 지급된 급여명세 행 클릭 시 새 탭 대신 모달로 상세를 보여준다.
+  const [payslipModalOpen, setPayslipModalOpen] = useState(false);
+  const [viewingPayslip, setViewingPayslip] = useState<(CrewPayslipWithDetails & { ship_name: string }) | null>(null);
+  const [viewingPayslipLoading, setViewingPayslipLoading] = useState(false);
+  const [sickPayHistory, setSickPayHistory] = useState<CrewSickPayHistoryRow[]>([]);
+  const [sickPayHistoryShipFilter, setSickPayHistoryShipFilter] = useState('all');
+  const [sickPayHistoryYearFilter, setSickPayHistoryYearFilter] = useState('all');
+  const [sickPayHistoryPage, setSickPayHistoryPage] = useState(1);
+  // 상병급여 이력 행 클릭 시 그 케이스의 월별 내역을 모달로 보여준다 — 이미 불러온
+  // sickPayHistory에서 같은 record_id끼리 걸러내면 되므로 별도 조회가 필요 없다.
+  const [viewingSickPayRecordId, setViewingSickPayRecordId] = useState<string | null>(null);
   const [seaServiceDialogOpen, setSeaServiceDialogOpen] = useState(false);
   const [evaluationDialogOpen, setEvaluationDialogOpen] = useState(false);
   const [evaluationDialogRecord, setEvaluationDialogRecord] = useState<SeaServiceRecord | null>(null);
@@ -298,13 +313,14 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   const loadExtendedRecords = async (crewId: string) => {
     try {
-      const [sea, train, med, sal, evals, payroll] = await Promise.all([
+      const [sea, train, med, sal, evals, payroll, sickPay] = await Promise.all([
         getSeaServiceRecords(crewId),
         getTrainingRecords(crewId),
         getMedicalRecords(crewId),
         getCrewSalaryRecords(crewId),
         getEvaluations(crewId),
         crewPayrollService.getCrewPayrollHistory(crewId),
+        sickPayService.getCrewSickPayHistory(crewId),
       ]);
       setSeaServiceRecords(sea);
       setTrainingRecords(train);
@@ -312,6 +328,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setSalaryRecords(sal);
       setEvaluations(evals);
       setPayrollHistory(payroll);
+      setSickPayHistory(sickPay);
       const counts: Record<string, number> = {};
       evals.forEach(e => { if (e.sea_service_record_id) counts[e.sea_service_record_id] = (counts[e.sea_service_record_id] || 0) + 1; });
       setEvaluationCounts(counts);
@@ -529,6 +546,19 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   }, [activeTabId, tabs, isNew, id, selectedRank?.rank_code, formData.name, formData.name_english, updateTab]);
 
   useEffect(() => { setPayrollPage(1); }, [payrollShipFilter, payrollYearFilter]);
+  useEffect(() => { setSickPayHistoryPage(1); }, [sickPayHistoryShipFilter, sickPayHistoryYearFilter]);
+
+  const openPayslipModal = async (payslipId: string) => {
+    setPayslipModalOpen(true);
+    setViewingPayslip(null);
+    setViewingPayslipLoading(true);
+    try {
+      const data = await crewPayrollService.getPayslipById(payslipId);
+      setViewingPayslip(data);
+    } finally {
+      setViewingPayslipLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -547,6 +577,18 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   );
   const payrollTotalPages = Math.max(1, Math.ceil(filteredPayrollHistory.length / PAYROLL_PAGE_SIZE));
   const pagedPayrollHistory = filteredPayrollHistory.slice((payrollPage - 1) * PAYROLL_PAGE_SIZE, payrollPage * PAYROLL_PAGE_SIZE);
+
+  // 상병급여 이력도 지급된 급여명세와 완전히 동일한 필터/페이징 로직을 쓴다.
+  const SICK_PAY_PAGE_SIZE = 10;
+  const sickPayHistoryYearOptions = [...new Set(sickPayHistory.map(r => r.year_month.slice(0, 4)))].sort().reverse();
+  const sickPayHistoryShipOptions = [...new Set(sickPayHistory.map(r => r.ship_name).filter(Boolean))].sort();
+  const filteredSickPayHistory = sickPayHistory.filter(r =>
+    (sickPayHistoryYearFilter === 'all' || r.year_month.startsWith(sickPayHistoryYearFilter)) &&
+    (sickPayHistoryShipFilter === 'all' || r.ship_name === sickPayHistoryShipFilter)
+  );
+  const sickPayHistoryTotalPages = Math.max(1, Math.ceil(filteredSickPayHistory.length / SICK_PAY_PAGE_SIZE));
+  const pagedSickPayHistory = filteredSickPayHistory.slice((sickPayHistoryPage - 1) * SICK_PAY_PAGE_SIZE, sickPayHistoryPage * SICK_PAY_PAGE_SIZE);
+  const viewingSickPayEntries = sickPayHistory.filter(r => r.record_id === viewingSickPayRecordId);
 
   const formBody = (
     <>
@@ -628,7 +670,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 상병기록{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="salary_records" className="text-xs">
-                급여이력{(payrollHistory.length + salaryRecords.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length}</span>}
+                급여이력{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
               </TabsTrigger>
             </TabsList>
           )}
@@ -1152,123 +1194,255 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         {/* 급여이력 */}
         {!isNew && (
           <TabsContent value="salary_records" className="mt-3 data-[state=inactive]:hidden">
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-sm font-semibold">지급된 급여명세 ({payrollHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 선원 급여명세 메뉴에서 생성된 실제 급여명세, 행을 클릭하면 명세서를 볼 수 있습니다</span></span>
-                  {payrollHistory.length > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <Select value={payrollYearFilter} onValueChange={setPayrollYearFilter}>
-                        <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="연도" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all" className="text-xs">전체 연도</SelectItem>
-                          {payrollYearOptions.map(y => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <Select value={payrollShipFilter} onValueChange={setPayrollShipFilter}>
-                        <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="선박" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all" className="text-xs">전체 선박</SelectItem>
-                          {payrollShipOptions.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+            <Tabs value={payrollSubTab} onValueChange={v => setPayrollSubTab(v as 'onboard' | 'sick')}>
+              <TabsList className="h-8">
+                <TabsTrigger value="onboard" className="text-xs">
+                  승선중 급여{(payrollHistory.length + salaryRecords.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="sick" className="text-xs">
+                  상병 급여{sickPayHistory.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{sickPayHistory.length}</span>}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="onboard" className="mt-3 data-[state=inactive]:hidden">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-sm font-semibold">지급된 급여명세 ({payrollHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 선원 급여명세 메뉴에서 생성된 실제 급여명세, 행을 클릭하면 명세서를 볼 수 있습니다</span></span>
+                      {payrollHistory.length > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <Select value={payrollYearFilter} onValueChange={setPayrollYearFilter}>
+                            <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="연도" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all" className="text-xs">전체 연도</SelectItem>
+                              {payrollYearOptions.map(y => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Select value={payrollShipFilter} onValueChange={setPayrollShipFilter}>
+                            <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="선박" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all" className="text-xs">전체 선박</SelectItem>
+                              {payrollShipOptions.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                {payrollHistory.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">생성된 급여명세가 없습니다.</div>
-                ) : filteredPayrollHistory.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">조건에 맞는 급여명세가 없습니다.</div>
-                ) : (
-                  <>
+                    {payrollHistory.length === 0 ? (
+                      <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">생성된 급여명세가 없습니다.</div>
+                    ) : filteredPayrollHistory.length === 0 ? (
+                      <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">조건에 맞는 급여명세가 없습니다.</div>
+                    ) : (
+                      <>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead><tr className="border-b bg-gray-50">
+                              <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">기간</th><th className="text-right p-2">근무일수</th><th className="text-right p-2">실지급액</th><th className="text-left p-2">상태</th>
+                            </tr></thead>
+                            <tbody>
+                              {pagedPayrollHistory.map(r => (
+                                <tr key={r.payslip_id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openPayslipModal(r.payslip_id)}>
+                                  <td className="p-2">{r.year_month}</td>
+                                  <td className="p-2">{r.ship_name}</td>
+                                  <td className="p-2">{r.period_start_date} ~ {r.period_end_date}</td>
+                                  <td className="p-2 text-right">{r.days_served}/{r.days_in_month}일</td>
+                                  <td className="p-2 text-right font-mono font-semibold">{r.net_amount.toLocaleString()}</td>
+                                  <td className="p-2">
+                                    {r.status === 'confirmed' ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
+                                      : r.status === 'pending_approval' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">상신중</Badge>
+                                      : <Badge className="bg-gray-100 text-gray-600 text-xs">작성중</Badge>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {payrollTotalPages > 1 && (
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-gray-400">
+                              총 {filteredPayrollHistory.length}건 중 {(payrollPage - 1) * PAYROLL_PAGE_SIZE + 1}-{Math.min(payrollPage * PAYROLL_PAGE_SIZE, filteredPayrollHistory.length)}건 표시
+                            </p>
+                            <Pagination className="mx-0 w-auto">
+                              <PaginationContent>
+                                <PaginationItem><PaginationPrevious onClick={() => payrollPage > 1 && setPayrollPage(payrollPage - 1)} className={payrollPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                                {Array.from({ length: payrollTotalPages }, (_, i) => i + 1).map(p => {
+                                  if (p === 1 || p === payrollTotalPages || (p >= payrollPage - 1 && p <= payrollPage + 1)) {
+                                    return <PaginationItem key={p}><PaginationLink onClick={() => setPayrollPage(p)} isActive={payrollPage === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
+                                  } else if (p === payrollPage - 2 || p === payrollPage + 2) {
+                                    return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
+                                  }
+                                  return null;
+                                })}
+                                <PaginationItem><PaginationNext onClick={() => payrollPage < payrollTotalPages && setPayrollPage(payrollPage + 1)} className={payrollPage === payrollTotalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                              </PaginationContent>
+                            </Pagination>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-3">
+                    <span className="text-sm font-semibold">수동 등록 급여 이력 ({salaryRecords.length}건) <span className="text-xs text-gray-400 font-normal">— 직접 입력한 기록</span></span>
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSalary(undefined); setSalaryDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                  </div>
+                  {salaryRecords.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">급여 이력을 추가하세요.</div>
+                  ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead><tr className="border-b bg-gray-50">
-                          <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">기간</th><th className="text-right p-2">근무일수</th><th className="text-right p-2">실지급액</th><th className="text-left p-2">상태</th>
+                          <th className="text-left p-2">기간</th><th className="text-right p-2">기본급</th><th className="text-right p-2">순수령</th><th className="text-left p-2">통화</th><th className="text-left p-2">상태</th><th className="text-center p-2">작업</th>
                         </tr></thead>
                         <tbody>
-                          {pagedPayrollHistory.map(r => (
-                            <tr key={r.payslip_id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => window.open(`/print/crew-payslips/${r.payslip_id}`, '_blank')}>
-                              <td className="p-2">{r.year_month}</td>
-                              <td className="p-2">{r.ship_name}</td>
-                              <td className="p-2">{r.period_start_date} ~ {r.period_end_date}</td>
-                              <td className="p-2 text-right">{r.days_served}/{r.days_in_month}일</td>
-                              <td className="p-2 text-right font-mono font-semibold">{r.net_amount.toLocaleString()}</td>
+                          {salaryRecords.map(r => (
+                            <tr key={r.id} className="border-b hover:bg-gray-50">
+                              <td className="p-2">{r.payment_period_start} ~ {r.payment_period_end}</td>
+                              <td className="p-2 text-right font-mono">{r.basic_salary.toLocaleString()}</td>
+                              <td className="p-2 text-right font-mono font-semibold">{r.net_salary.toLocaleString()}</td>
+                              <td className="p-2">{r.currency}</td>
                               <td className="p-2">
-                                {r.status === 'confirmed' ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
-                                  : r.status === 'pending_approval' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">상신중</Badge>
-                                  : <Badge className="bg-gray-100 text-gray-600 text-xs">작성중</Badge>}
+                                {r.payment_status === 'paid' ? <Badge className="bg-green-100 text-green-700 text-xs">지급완료</Badge>
+                                  : r.payment_status === 'pending' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">대기</Badge>
+                                  : <Badge className="bg-red-100 text-red-700 text-xs">취소</Badge>}
+                              </td>
+                              <td className="p-2 text-center">
+                                <div className="flex justify-center gap-1">
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingSalary(r); setSalaryDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteSalary(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                                </div>
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                    {payrollTotalPages > 1 && (
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-gray-400">
-                          총 {filteredPayrollHistory.length}건 중 {(payrollPage - 1) * PAYROLL_PAGE_SIZE + 1}-{Math.min(payrollPage * PAYROLL_PAGE_SIZE, filteredPayrollHistory.length)}건 표시
-                        </p>
-                        <Pagination className="mx-0 w-auto">
-                          <PaginationContent>
-                            <PaginationItem><PaginationPrevious onClick={() => payrollPage > 1 && setPayrollPage(payrollPage - 1)} className={payrollPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
-                            {Array.from({ length: payrollTotalPages }, (_, i) => i + 1).map(p => {
-                              if (p === 1 || p === payrollTotalPages || (p >= payrollPage - 1 && p <= payrollPage + 1)) {
-                                return <PaginationItem key={p}><PaginationLink onClick={() => setPayrollPage(p)} isActive={payrollPage === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
-                              } else if (p === payrollPage - 2 || p === payrollPage + 2) {
-                                return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
-                              }
-                              return null;
-                            })}
-                            <PaginationItem><PaginationNext onClick={() => payrollPage < payrollTotalPages && setPayrollPage(payrollPage + 1)} className={payrollPage === payrollTotalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
-                          </PaginationContent>
-                        </Pagination>
+                  )}
+                </div>
+                <SalaryRecordDialog open={salaryDialogOpen} onOpenChange={setSalaryDialogOpen} crewId={id!} record={editingSalary} onSuccess={() => loadExtendedRecords(id!)} />
+              </TabsContent>
+
+              <TabsContent value="sick" className="mt-3 data-[state=inactive]:hidden">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-sm font-semibold">상병급여 이력 ({sickPayHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 지급된 급여명세와 동일한 방식, 행을 클릭하면 월별 내역을 볼 수 있습니다</span></span>
+                    {sickPayHistory.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <Select value={sickPayHistoryYearFilter} onValueChange={setSickPayHistoryYearFilter}>
+                          <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="연도" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="text-xs">전체 연도</SelectItem>
+                            {sickPayHistoryYearOptions.map(y => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <Select value={sickPayHistoryShipFilter} onValueChange={setSickPayHistoryShipFilter}>
+                          <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="선박" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all" className="text-xs">전체 선박</SelectItem>
+                            {sickPayHistoryShipOptions.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
-                  </>
-                )}
-              </div>
-              <div className="flex items-center justify-between border-t pt-3">
-                <span className="text-sm font-semibold">수동 등록 급여 이력 ({salaryRecords.length}건) <span className="text-xs text-gray-400 font-normal">— 직접 입력한 기록</span></span>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSalary(undefined); setSalaryDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
-              </div>
-              {salaryRecords.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">급여 이력을 추가하세요.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">기간</th><th className="text-right p-2">기본급</th><th className="text-right p-2">순수령</th><th className="text-left p-2">통화</th><th className="text-left p-2">상태</th><th className="text-center p-2">작업</th>
-                    </tr></thead>
-                    <tbody>
-                      {salaryRecords.map(r => (
-                        <tr key={r.id} className="border-b hover:bg-gray-50">
-                          <td className="p-2">{r.payment_period_start} ~ {r.payment_period_end}</td>
-                          <td className="p-2 text-right font-mono">{r.basic_salary.toLocaleString()}</td>
-                          <td className="p-2 text-right font-mono font-semibold">{r.net_salary.toLocaleString()}</td>
-                          <td className="p-2">{r.currency}</td>
-                          <td className="p-2">
-                            {r.payment_status === 'paid' ? <Badge className="bg-green-100 text-green-700 text-xs">지급완료</Badge>
-                              : r.payment_status === 'pending' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">대기</Badge>
-                              : <Badge className="bg-red-100 text-red-700 text-xs">취소</Badge>}
-                          </td>
-                          <td className="p-2 text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingSalary(r); setSalaryDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteSalary(r.id)}><Trash2 className="h-3 w-3" /></Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  </div>
+                  {sickPayHistory.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">상병급여 이력이 없습니다.</div>
+                  ) : filteredSickPayHistory.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">조건에 맞는 상병급여 이력이 없습니다.</div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead><tr className="border-b bg-gray-50">
+                            <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-right p-2">금액</th><th className="text-left p-2">상태</th>
+                          </tr></thead>
+                          <tbody>
+                            {pagedSickPayHistory.map(r => (
+                              <tr key={`${r.record_id}:${r.year_month}`} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setViewingSickPayRecordId(r.record_id)}>
+                                <td className="p-2">{r.year_month}</td>
+                                <td className="p-2">{r.ship_name}</td>
+                                <td className="p-2">{r.rank_code}</td>
+                                <td className="p-2 text-right font-mono font-semibold">{r.amount.toLocaleString()} {r.currency}</td>
+                                <td className="p-2">
+                                  {r.status === 'closed'
+                                    ? <Badge className="bg-green-100 text-green-700 text-xs">종결</Badge>
+                                    : <Badge className="bg-blue-100 text-blue-700 text-xs">진행중</Badge>}
+                                  {!r.confirmed && <Badge variant="outline" className="text-[10px] ml-1 text-gray-400 border-gray-300">미확정</Badge>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {sickPayHistoryTotalPages > 1 && (
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-gray-400">
+                            총 {filteredSickPayHistory.length}건 중 {(sickPayHistoryPage - 1) * SICK_PAY_PAGE_SIZE + 1}-{Math.min(sickPayHistoryPage * SICK_PAY_PAGE_SIZE, filteredSickPayHistory.length)}건 표시
+                          </p>
+                          <Pagination className="mx-0 w-auto">
+                            <PaginationContent>
+                              <PaginationItem><PaginationPrevious onClick={() => sickPayHistoryPage > 1 && setSickPayHistoryPage(sickPayHistoryPage - 1)} className={sickPayHistoryPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                              {Array.from({ length: sickPayHistoryTotalPages }, (_, i) => i + 1).map(p => {
+                                if (p === 1 || p === sickPayHistoryTotalPages || (p >= sickPayHistoryPage - 1 && p <= sickPayHistoryPage + 1)) {
+                                  return <PaginationItem key={p}><PaginationLink onClick={() => setSickPayHistoryPage(p)} isActive={sickPayHistoryPage === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
+                                } else if (p === sickPayHistoryPage - 2 || p === sickPayHistoryPage + 2) {
+                                  return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
+                                }
+                                return null;
+                              })}
+                              <PaginationItem><PaginationNext onClick={() => sickPayHistoryPage < sickPayHistoryTotalPages && setSickPayHistoryPage(sickPayHistoryPage + 1)} className={sickPayHistoryPage === sickPayHistoryTotalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                            </PaginationContent>
+                          </Pagination>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-            <SalaryRecordDialog open={salaryDialogOpen} onOpenChange={setSalaryDialogOpen} crewId={id!} record={editingSalary} onSuccess={() => loadExtendedRecords(id!)} />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         )}
       </Tabs>
+
+      {/* 지급된 급여명세 상세 — 새 탭 대신 모달로 보여준다. */}
+      <Dialog open={payslipModalOpen} onOpenChange={o => { setPayslipModalOpen(o); if (!o) setViewingPayslip(null); }}>
+        <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
+          <DialogTitle className="sr-only">급여명세서</DialogTitle>
+          {viewingPayslipLoading ? (
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400">불러오는 중...</div>
+          ) : viewingPayslip ? (
+            <CrewPayslipDetailView payslip={viewingPayslip} shipName={viewingPayslip.ship_name} />
+          ) : (
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400">명세서를 찾을 수 없습니다.</div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 상병급여 케이스 월별 내역 — 이미 불러온 sickPayHistory에서 같은 케이스만 걸러서 보여준다. */}
+      <Dialog open={!!viewingSickPayRecordId} onOpenChange={o => !o && setViewingSickPayRecordId(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogTitle className="text-base flex items-center gap-1.5"><Stethoscope className="w-4 h-4 text-muted-foreground" />상병급여 월별 내역</DialogTitle>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="border-b bg-gray-50">
+                <th className="text-left p-2">회차</th><th className="text-right p-2">금액</th><th className="text-left p-2">상태</th>
+              </tr></thead>
+              <tbody>
+                {viewingSickPayEntries.map(e => (
+                  <tr key={e.year_month} className="border-b">
+                    <td className="p-2">{e.year_month}</td>
+                    <td className="p-2 text-right font-mono">{e.amount.toLocaleString()} {e.currency}</td>
+                    <td className="p-2">
+                      {e.confirmed
+                        ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
+                        : <Badge variant="outline" className="text-xs text-gray-400 border-gray-300">미확정(계산값)</Badge>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
