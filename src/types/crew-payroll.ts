@@ -132,6 +132,7 @@ export interface CrewPayrollDashboardRow {
 // 급여 구성항목/계약 수당/공제를 항목명별로 모두 펼쳐서(allowance_by_name/deduction_by_name)
 // 보여준다 — 요약(기본급/수당 합계)만 보여주지 않는다.
 export interface CrewPayrollHistoryRow {
+  payslip_id: string;
   period_id: string;
   year_month: string;
   ship_name: string;

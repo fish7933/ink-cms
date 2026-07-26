@@ -441,6 +441,7 @@ export const crewPayrollService = {
         if (item.category === 'deduction') deductionByName[item.name] = (deductionByName[item.name] || 0) + Number(item.amount);
       }
       return {
+        payslip_id: p.id,
         period_id: p.period_id,
         year_month: period?.year_month || '',
         ship_name: period?.ships?.name || '',

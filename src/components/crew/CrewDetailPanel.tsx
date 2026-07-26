@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -181,6 +182,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [medicalCounts, setMedicalCounts] = useState<Record<string, number>>({});
   const [salaryRecords, setSalaryRecords] = useState<CrewSalaryRecord[]>([]);
   const [payrollHistory, setPayrollHistory] = useState<CrewPayrollHistoryRow[]>([]);
+  const [payrollShipFilter, setPayrollShipFilter] = useState('all');
+  const [payrollYearFilter, setPayrollYearFilter] = useState('all');
+  const [payrollPage, setPayrollPage] = useState(1);
   const [seaServiceDialogOpen, setSeaServiceDialogOpen] = useState(false);
   const [evaluationDialogOpen, setEvaluationDialogOpen] = useState(false);
   const [evaluationDialogRecord, setEvaluationDialogRecord] = useState<SeaServiceRecord | null>(null);
@@ -524,6 +528,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     if (label && activeTab.title !== label) updateTab(activeTabId, { title: label });
   }, [activeTabId, tabs, isNew, id, selectedRank?.rank_code, formData.name, formData.name_english, updateTab]);
 
+  useEffect(() => { setPayrollPage(1); }, [payrollShipFilter, payrollYearFilter]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -531,6 +537,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       </div>
     );
   }
+
+  const PAYROLL_PAGE_SIZE = 10;
+  const payrollYearOptions = [...new Set(payrollHistory.map(r => r.year_month.slice(0, 4)))].sort().reverse();
+  const payrollShipOptions = [...new Set(payrollHistory.map(r => r.ship_name).filter(Boolean))].sort();
+  const filteredPayrollHistory = payrollHistory.filter(r =>
+    (payrollYearFilter === 'all' || r.year_month.startsWith(payrollYearFilter)) &&
+    (payrollShipFilter === 'all' || r.ship_name === payrollShipFilter)
+  );
+  const payrollTotalPages = Math.max(1, Math.ceil(filteredPayrollHistory.length / PAYROLL_PAGE_SIZE));
+  const pagedPayrollHistory = filteredPayrollHistory.slice((payrollPage - 1) * PAYROLL_PAGE_SIZE, payrollPage * PAYROLL_PAGE_SIZE);
 
   const formBody = (
     <>
@@ -1138,33 +1154,78 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <TabsContent value="salary_records" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="space-y-2">
-                <span className="text-sm font-semibold">지급된 급여명세 ({payrollHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 선원 급여명세 메뉴에서 생성된 실제 급여명세</span></span>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-sm font-semibold">지급된 급여명세 ({payrollHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 선원 급여명세 메뉴에서 생성된 실제 급여명세, 행을 클릭하면 명세서를 볼 수 있습니다</span></span>
+                  {payrollHistory.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <Select value={payrollYearFilter} onValueChange={setPayrollYearFilter}>
+                        <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="연도" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="text-xs">전체 연도</SelectItem>
+                          {payrollYearOptions.map(y => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={payrollShipFilter} onValueChange={setPayrollShipFilter}>
+                        <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="선박" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" className="text-xs">전체 선박</SelectItem>
+                          {payrollShipOptions.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
                 {payrollHistory.length === 0 ? (
                   <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">생성된 급여명세가 없습니다.</div>
+                ) : filteredPayrollHistory.length === 0 ? (
+                  <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">조건에 맞는 급여명세가 없습니다.</div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead><tr className="border-b bg-gray-50">
-                        <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">기간</th><th className="text-right p-2">근무일수</th><th className="text-right p-2">실지급액</th><th className="text-left p-2">상태</th>
-                      </tr></thead>
-                      <tbody>
-                        {payrollHistory.map(r => (
-                          <tr key={r.period_id} className="border-b hover:bg-gray-50">
-                            <td className="p-2">{r.year_month}</td>
-                            <td className="p-2">{r.ship_name}</td>
-                            <td className="p-2">{r.period_start_date} ~ {r.period_end_date}</td>
-                            <td className="p-2 text-right">{r.days_served}/{r.days_in_month}일</td>
-                            <td className="p-2 text-right font-mono font-semibold">{r.net_amount.toLocaleString()}</td>
-                            <td className="p-2">
-                              {r.status === 'confirmed' ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
-                                : r.status === 'pending_approval' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">상신중</Badge>
-                                : <Badge className="bg-gray-100 text-gray-600 text-xs">작성중</Badge>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead><tr className="border-b bg-gray-50">
+                          <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">기간</th><th className="text-right p-2">근무일수</th><th className="text-right p-2">실지급액</th><th className="text-left p-2">상태</th>
+                        </tr></thead>
+                        <tbody>
+                          {pagedPayrollHistory.map(r => (
+                            <tr key={r.payslip_id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => window.open(`/print/crew-payslips/${r.payslip_id}`, '_blank')}>
+                              <td className="p-2">{r.year_month}</td>
+                              <td className="p-2">{r.ship_name}</td>
+                              <td className="p-2">{r.period_start_date} ~ {r.period_end_date}</td>
+                              <td className="p-2 text-right">{r.days_served}/{r.days_in_month}일</td>
+                              <td className="p-2 text-right font-mono font-semibold">{r.net_amount.toLocaleString()}</td>
+                              <td className="p-2">
+                                {r.status === 'confirmed' ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
+                                  : r.status === 'pending_approval' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">상신중</Badge>
+                                  : <Badge className="bg-gray-100 text-gray-600 text-xs">작성중</Badge>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {payrollTotalPages > 1 && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-gray-400">
+                          총 {filteredPayrollHistory.length}건 중 {(payrollPage - 1) * PAYROLL_PAGE_SIZE + 1}-{Math.min(payrollPage * PAYROLL_PAGE_SIZE, filteredPayrollHistory.length)}건 표시
+                        </p>
+                        <Pagination className="mx-0 w-auto">
+                          <PaginationContent>
+                            <PaginationItem><PaginationPrevious onClick={() => payrollPage > 1 && setPayrollPage(payrollPage - 1)} className={payrollPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                            {Array.from({ length: payrollTotalPages }, (_, i) => i + 1).map(p => {
+                              if (p === 1 || p === payrollTotalPages || (p >= payrollPage - 1 && p <= payrollPage + 1)) {
+                                return <PaginationItem key={p}><PaginationLink onClick={() => setPayrollPage(p)} isActive={payrollPage === p} className="cursor-pointer">{p}</PaginationLink></PaginationItem>;
+                              } else if (p === payrollPage - 2 || p === payrollPage + 2) {
+                                return <PaginationItem key={p}><span className="px-4">...</span></PaginationItem>;
+                              }
+                              return null;
+                            })}
+                            <PaginationItem><PaginationNext onClick={() => payrollPage < payrollTotalPages && setPayrollPage(payrollPage + 1)} className={payrollPage === payrollTotalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'} /></PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div className="flex items-center justify-between border-t pt-3">
