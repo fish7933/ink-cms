@@ -95,9 +95,9 @@ export default function CrewPayrollLedgerPrintPage() {
             <th>Pay Period</th>
             <th>Days</th>
             {allowance_columns.map(name => <th key={name}>{name}</th>)}
-            <th>Total Earnings</th>
+            <th>GROSS</th>
             {deduction_columns.map(name => <th key={name}>{name}</th>)}
-            <th>Total Deductions</th>
+            <th>DEDUCT</th>
             <th>Net Pay</th>
           </tr>
         </thead>

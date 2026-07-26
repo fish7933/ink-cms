@@ -348,8 +348,6 @@ export default function CrewPayrollManagementPage() {
       if (item.category === 'deduction' && !deductionOrder.includes(item.name)) deductionOrder.push(item.name);
     }
   }
-  // "X" 어닝 열이 후불성 짝("X (Deferred)" 공제)을 가지고 있으면 Deferred 표시를 붙인다.
-  const isDeferredColumn = (name: string) => payslips.some(p => p.items.some(i => i.category === 'deduction' && i.name === `${name} (Deferred)`));
   const findItem = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
     p.items.find(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name);
   // 아직 저장하지 않은 draft 입력값이 있으면 그 값을, 없으면 저장된 금액을 쓴다 — 항목 셀뿐
@@ -554,14 +552,11 @@ export default function CrewPayrollManagementPage() {
                 <th className="text-center p-2 font-medium text-gray-600">Pay Period</th>
                 <th className="text-center p-2 font-medium text-gray-600">Days</th>
                 {allowanceOrder.map(name => (
-                  <th key={name} className="text-right p-2 font-medium text-gray-600">
-                    {name}
-                    {isDeferredColumn(name) && <span className="block text-[9px] font-normal text-amber-500">Deferred</span>}
-                  </th>
+                  <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>
                 ))}
-                <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">Total Earnings</th>
+                <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">GROSS</th>
                 {deductionOrder.map(name => <th key={name} className="text-right p-2 font-medium text-red-500">{name}</th>)}
-                <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">Total Deductions</th>
+                <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">DEDUCT</th>
                 <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60">Net Pay</th>
                 <th className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
               </tr>
@@ -726,9 +721,9 @@ export default function CrewPayrollManagementPage() {
                     <th className="text-left p-2 font-medium text-gray-600">Pay Period</th>
                     <th className="text-left p-2 font-medium text-gray-600">Days</th>
                     {historyAllowanceColumns.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
-                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">Total Earnings</th>
+                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">GROSS</th>
                     {historyDeductionColumns.map(name => <th key={name} className="text-right p-2 font-medium text-red-600">{name}</th>)}
-                    <th className="text-right p-2 font-medium text-red-700 bg-gray-100">Total Deductions</th>
+                    <th className="text-right p-2 font-medium text-red-700 bg-gray-100">DEDUCT</th>
                     <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">Net Pay</th>
                   </tr>
                 </thead>

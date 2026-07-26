@@ -110,7 +110,7 @@ export function appendTemplateMatrixRows(aoa: ReturnType<typeof cell>[][], templ
 // 계약별 수당을 "기본급" 한 칸으로 뭉치지 않고 항목명별 열로 모두 펼쳐 보여준다.
 function buildLedgerWorksheet(ledger: CrewPayrollLedgerData): XLSX.WorkSheet {
   const { period, ship_name, owner_name, fleet_name, template_name, allowance_columns, deduction_columns, rows } = ledger;
-  const headerLabels = ['Rank', 'Grade', 'Name', 'Pay Period', 'Days', ...allowance_columns, 'Total Earnings', ...deduction_columns, 'Total Deductions', 'Net Pay'];
+  const headerLabels = ['Rank', 'Grade', 'Name', 'Pay Period', 'Days', ...allowance_columns, 'GROSS', ...deduction_columns, 'DEDUCT', 'Net Pay'];
   const colCount = headerLabels.length;
   const grossCol = 4 + allowance_columns.length; // 0-indexed position
 
@@ -124,8 +124,8 @@ function buildLedgerWorksheet(ledger: CrewPayrollLedgerData): XLSX.WorkSheet {
   aoa.push(Array.from({ length: colCount }, () => cell('', {})));
 
   aoa.push(headerLabels.map((label, i) => {
-    const isDeduction = i > grossCol && label !== 'Total Deductions' && label !== 'Net Pay';
-    const isResult = label === 'Total Deductions' || label === 'Net Pay' || label === 'Total Earnings';
+    const isDeduction = i > grossCol && label !== 'DEDUCT' && label !== 'Net Pay';
+    const isResult = label === 'DEDUCT' || label === 'Net Pay' || label === 'GROSS';
     const colors = isDeduction ? DEDUCTION_HEADER : isResult ? RESULT_HEADER : HEADER;
     return cell(label, {
       font: { bold: true, sz: BASE_SZ, color: { rgb: colors.fg } },
