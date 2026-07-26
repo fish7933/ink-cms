@@ -686,7 +686,7 @@ export default function CrewPayrollManagementPage() {
                             onChange={e => setSickPayDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
                             onBlur={() => handleSaveSickPayAmount(row)}
                             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            disabled={sickPaySaving === row.id || row.status === 'closed'}
+                            disabled={sickPaySaving === row.id}
                             className="h-6 text-xs w-24 text-right ml-auto"
                           />
                         </td>
