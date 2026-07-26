@@ -9,8 +9,8 @@ interface SalaryTemplateMatrixTableProps {
 }
 
 const LABELS = {
-  ko: { noRanks: '등록된 직급 없음', earnings: '급여 구성 항목', deductions: '공제 항목', rank: '직급', deferred: '후불', total: '월 총액', net: '월 실지급액' },
-  en: { noRanks: 'No ranks registered', earnings: 'Earnings', deductions: 'Deductions', rank: 'Rank', deferred: 'Deferred', total: 'Total Wage', net: 'Net Wage' },
+  ko: { noRanks: '등록된 직급 없음', earnings: '급여 구성 항목', deductions: '공제 항목', result: '계산 결과', rank: '직급', deferred: '후불' },
+  en: { noRanks: 'No ranks registered', earnings: 'Earnings', deductions: 'Deductions', result: 'Total', rank: 'Rank', deferred: 'Deferred' },
 };
 
 /**
@@ -54,7 +54,7 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
                 {t.deductions}
               </th>
             )}
-            <th colSpan={2} className="bg-gray-100" />
+            <th colSpan={2} className="text-center py-1 px-2 text-gray-600 font-semibold bg-gray-100">{t.result}</th>
           </tr>
           <tr className="bg-gray-100">
             {orderedComps.map((comp, idx) => {
@@ -71,10 +71,10 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
               );
             })}
             <th className="text-right p-2 font-semibold min-w-20 border-l">
-              <div className="text-[10px] font-bold text-gray-500">TW</div>{lang === 'ko' && <div>{t.total}</div>}
+              <div className="text-[10px] font-bold text-gray-500">TW</div>
             </th>
             <th className="text-right p-2 font-semibold min-w-20 text-blue-700 bg-blue-50">
-              <div className="text-[10px] font-bold text-blue-500">AW</div>{lang === 'ko' && <div>{t.net}</div>}
+              <div className="text-[10px] font-bold text-blue-500">AW</div>
             </th>
           </tr>
         </thead>
