@@ -69,6 +69,7 @@ export default function CrewPayrollLedgerPrintPage() {
         table.ledger th.group-earnings { background: #eaf1fb; color: #1d4ed8; font-weight: 600; }
         table.ledger th.group-deductions { background: #fdeaea; color: #b91c1c; font-weight: 600; }
         table.ledger .section-divider { border-left: 2px solid #888; }
+        table.ledger .section-divider-strong { border-left: 4px solid #555; }
         .payslip-page { page-break-before: always; padding-top: 16px; max-width: 760px; margin: 0 auto; }
       `}</style>
 
@@ -107,7 +108,7 @@ export default function CrewPayrollLedgerPrintPage() {
             <th>GROSS</th>
             {deduction_columns.map((name, i) => <th key={name} className={i === 0 ? 'section-divider' : ''}>{name}</th>)}
             <th>DEDUCT</th>
-            <th className="section-divider">Net Pay</th>
+            <th className="section-divider-strong">Net Pay</th>
           </tr>
         </thead>
         <tbody>
@@ -122,7 +123,7 @@ export default function CrewPayrollLedgerPrintPage() {
               <td className="amount">{fmt(r.gross_amount)}</td>
               {deduction_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`} style={{ color: '#a33' }}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
               <td className="amount" style={{ color: '#a33' }}>{fmt(r.total_deduction)}</td>
-              <td className="amount section-divider" style={{ fontWeight: 600 }}>{fmt(r.net_amount)}</td>
+              <td className="amount section-divider-strong" style={{ fontWeight: 600 }}>{fmt(r.net_amount)}</td>
             </tr>
           ))}
           <tr className="total">
@@ -131,7 +132,7 @@ export default function CrewPayrollLedgerPrintPage() {
             <td className="amount">{fmt(totalGross)}</td>
             {deduction_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`} style={{ color: '#a33' }}>{fmt(totalByDeduction(name))}</td>)}
             <td className="amount" style={{ color: '#a33' }}>{fmt(totalDeduction)}</td>
-            <td className="amount section-divider">{fmt(totalNet)}</td>
+            <td className="amount section-divider-strong">{fmt(totalNet)}</td>
           </tr>
         </tbody>
       </table>

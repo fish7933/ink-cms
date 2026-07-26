@@ -71,7 +71,7 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
                 </th>
               );
             })}
-            <th className="text-right p-2 font-semibold min-w-20 border-l-2 border-l-gray-300">
+            <th className="text-right p-2 font-semibold min-w-20 border-l-4 border-l-gray-500">
               <div className="text-[10px] font-bold text-gray-500">TW</div><div>{t.total}</div>
             </th>
             <th className="text-right p-2 font-semibold min-w-20 text-blue-700 bg-blue-50">
@@ -118,7 +118,7 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
                       </td>
                     );
                   })}
-                  <td className="p-2 text-right font-semibold border-l-2 border-l-gray-300 bg-gray-50">{earningTotal.toLocaleString()}</td>
+                  <td className="p-2 text-right font-semibold border-l-4 border-l-gray-500 bg-gray-50">{earningTotal.toLocaleString()}</td>
                   <td className="p-2 text-right font-bold text-blue-700 bg-blue-50">{(earningTotal - deferred - deduction).toLocaleString()}</td>
                 </tr>
               );
