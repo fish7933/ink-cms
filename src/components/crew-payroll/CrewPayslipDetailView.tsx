@@ -74,9 +74,13 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
 
   // 급여 구성항목/수당유형 약어(BW/OT/OA/LP 등) 설명을 한 줄짜리 각주로 — 최대한 자리를
   // 안 차지하게, (Accrued)/(Lump Sum) 같은 접미사는 뭉쳐서 항목당 한 번만 보여준다.
+  // payslip.items 원본 순서(display_order)로 그냥 훑으면 급여/공제 항목이 뒤섞여 나올 수
+  // 있다 — salary_components의 display_order가 급여/공제 탭마다 따로 1부터 시작해서 겹치기
+  // 때문. 실제 표에 보이는 순서(어닝 → 공제 → 후불성)를 그대로 따라가도록 이미 분류해둔
+  // 배열을 순서대로 합쳐서 쓴다.
   const legendEntries: [string, string][] = [];
   const seenLegend = new Set<string>();
-  for (const item of payslip.items) {
+  for (const item of [...baseItems, ...allowanceItems, ...deductionItems, ...deferredItems]) {
     if (!item.description) continue;
     const baseName = item.name.replace(/\s*\([^)]*\)\s*$/, '');
     if (seenLegend.has(baseName)) continue;

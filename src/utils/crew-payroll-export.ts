@@ -190,9 +190,12 @@ function buildPayslipWorksheet(payslip: CrewPayslipWithDetails, shipName: string
   const ratio = payslip.days_in_month > 0 ? Math.round((payslip.days_served / payslip.days_in_month) * 1000) / 10 : 0;
   const COLS = 4;
 
+  // payslip.items 원본 순서(display_order)로 훑으면 급여/공제 항목이 뒤섞여 나올 수 있다 —
+  // salary_components의 display_order가 급여/공제 탭마다 따로 1부터 시작해서 겹치기 때문.
+  // 실제 표에 보이는 순서(어닝 → 공제 → 후불성)를 그대로 따라가도록 이미 분류해둔 배열을 순서대로 합친다.
   const legendEntries: [string, string][] = [];
   const seenLegend = new Set<string>();
-  for (const item of payslip.items) {
+  for (const item of [...baseItems, ...allowanceItems, ...deductionItems, ...deferredItems]) {
     if (!item.description) continue;
     const baseName = item.name.replace(/\s*\([^)]*\)\s*$/, '');
     if (seenLegend.has(baseName)) continue;
