@@ -68,7 +68,7 @@ export default function CrewPayrollLedgerPrintPage() {
         table.ledger tr.total td { font-weight: 600; background: #f7f7f7; border-top: 2px solid #888; }
         table.ledger th.group-earnings { background: #eaf1fb; color: #1d4ed8; font-weight: 600; }
         table.ledger th.group-deductions { background: #fdeaea; color: #b91c1c; font-weight: 600; }
-        table.ledger .section-divider { border-left: 2px solid #888; }
+        table.ledger .section-divider { border-left: 1px solid #ccc; }
         .payslip-page { page-break-before: always; padding-top: 16px; max-width: 760px; margin: 0 auto; }
       `}</style>
 

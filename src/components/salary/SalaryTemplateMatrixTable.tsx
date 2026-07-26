@@ -61,8 +61,8 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
             {orderedComps.map((comp, idx) => {
               const isDeduction = comp.component_type === 'deduction';
               const isDeferred = !isDeduction && comp.payment_type === 'deferred';
-              // 마지막 열은 오른쪽에 border-r을 안 준다 — 바로 옆 Total 열의 border-l-2와
-              // 겹쳐서 선이 두 겹으로 보이는 문제를 막기 위해(Total 열의 굵은 선 하나로 충분).
+              // 마지막 열은 오른쪽에 border-r을 안 준다 — 바로 옆 Total 열의 border-l과
+              // 겹쳐서 선이 두 겹으로 보이는 문제를 막기 위해(Total 열의 선 하나로 충분).
               const isLast = idx === orderedComps.length - 1;
               return (
                 <th key={comp.id} className={`text-right p-2 font-semibold min-w-24 ${isLast ? '' : 'border-r'} ${isDeduction ? 'text-red-600' : isDeferred ? 'text-amber-700' : ''}`}>
@@ -71,7 +71,7 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
                 </th>
               );
             })}
-            <th className="text-right p-2 font-semibold min-w-20 border-l-2 border-l-gray-300">
+            <th className="text-right p-2 font-semibold min-w-20 border-l">
               <div className="text-[10px] font-bold text-gray-500">TW</div><div>{t.total}</div>
             </th>
             <th className="text-right p-2 font-semibold min-w-20 text-blue-700 bg-blue-50">
@@ -118,7 +118,7 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
                       </td>
                     );
                   })}
-                  <td className="p-2 text-right font-semibold border-l-2 border-l-gray-300 bg-gray-50">{earningTotal.toLocaleString()}</td>
+                  <td className="p-2 text-right font-semibold border-l bg-gray-50">{earningTotal.toLocaleString()}</td>
                   <td className="p-2 text-right font-bold text-blue-700 bg-blue-50">{(earningTotal - deferred - deduction).toLocaleString()}</td>
                 </tr>
               );

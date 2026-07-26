@@ -435,7 +435,7 @@ export default function CrewPayrollManagementPage() {
   const renderAmountCell = (p: CrewPayslipWithDetails, name: string, deduction: boolean, isFirst = false) => {
     const item = findItem(p, name, deduction);
     const editable = !!item && isDraft && permissions.canEdit;
-    const dividerClass = isFirst ? 'border-l-2 border-gray-300' : '';
+    const dividerClass = isFirst ? 'border-l' : '';
     if (!editable) {
       return <td key={name} className={`p-2 text-right font-mono ${deduction ? 'text-red-600' : ''} ${dividerClass}`} title={item ? buildItemCalcTitle(p, item) : undefined}>{fmt(amountByName(p, name, deduction))}</td>;
     }
@@ -614,9 +614,9 @@ export default function CrewPayrollManagementPage() {
             <thead className="bg-gray-50 border-b">
               <tr className="text-[10px] text-gray-400">
                 <th colSpan={4} />
-                <th colSpan={allowanceOrder.length + 1} className="text-center py-1 font-semibold text-blue-700 bg-blue-50/60 border-l-2 border-gray-300">Earnings</th>
-                <th colSpan={deductionOrder.length + 1} className="text-center py-1 font-semibold text-red-600 bg-red-50/60 border-l-2 border-gray-300">Deductions</th>
-                <th colSpan={2} className="border-l-2 border-gray-300" />
+                <th colSpan={allowanceOrder.length + 1} className="text-center py-1 font-semibold text-blue-700 bg-blue-50/60 border-l">Earnings</th>
+                <th colSpan={deductionOrder.length + 1} className="text-center py-1 font-semibold text-red-600 bg-red-50/60 border-l">Deductions</th>
+                <th colSpan={2} className="border-l" />
               </tr>
               <tr>
                 <th className="text-left p-2 font-medium text-gray-600">Rank</th>
@@ -624,12 +624,12 @@ export default function CrewPayrollManagementPage() {
                 <th className="text-center p-2 font-medium text-gray-600">Pay Period</th>
                 <th className="text-center p-2 font-medium text-gray-600">Days</th>
                 {allowanceOrder.map((name, i) => (
-                  <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{name}</th>
+                  <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>
                 ))}
                 <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">GROSS</th>
-                {deductionOrder.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-500 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{name}</th>)}
+                {deductionOrder.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-500 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
                 <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">DEDUCT</th>
-                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60 border-l-2 border-gray-300">Net Pay</th>
+                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60 border-l">Net Pay</th>
                 <th className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
               </tr>
             </thead>
@@ -656,7 +656,7 @@ export default function CrewPayrollManagementPage() {
                   <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60" title={buildGrossTitle(p)}>{fmt(rowTotals.gross)}</td>
                   {deductionOrder.map((name, i) => renderAmountCell(p, name, true, i === 0))}
                   <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60" title={buildDeductTitle(p)}>{fmt(rowTotals.deduction)}</td>
-                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60 border-l-2 border-gray-300" title={buildNetTitle(p)}>{fmt(rowTotals.net)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60 border-l" title={buildNetTitle(p)}>{fmt(rowTotals.net)}</td>
                   <td className="py-1 px-2 text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewingPayslip(p)}>
@@ -674,11 +674,11 @@ export default function CrewPayrollManagementPage() {
             <tfoot>
               <tr className="bg-gray-50 border-t font-semibold">
                 <td className="py-1 px-2" colSpan={4}>Total ({payslips.length} crew)</td>
-                {allowanceOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
+                {allowanceOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
                 <td className="py-1 px-2 text-right font-mono bg-blue-50/60" title={`Sum of GROSS across ${payslips.length} crew`}>{fmt(totalGross)}</td>
-                {deductionOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
+                {deductionOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
                 <td className="py-1 px-2 text-right font-mono text-red-600 bg-red-50/60" title={`Sum of DEDUCT across ${payslips.length} crew`}>{fmt(totalDeduction)}</td>
-                <td className="py-1 px-2 text-right font-mono bg-green-50/60 border-l-2 border-gray-300" title={`${fmt(totalGross)} (GROSS) − ${fmt(totalDeduction)} (DEDUCT) = ${fmt(totalNet)} (Net Pay)`}>{fmt(totalNet)}</td>
+                <td className="py-1 px-2 text-right font-mono bg-green-50/60 border-l" title={`${fmt(totalGross)} (GROSS) − ${fmt(totalDeduction)} (DEDUCT) = ${fmt(totalNet)} (Net Pay)`}>{fmt(totalNet)}</td>
                 <td className="py-1 px-2" />
               </tr>
             </tfoot>
@@ -827,11 +827,11 @@ export default function CrewPayrollManagementPage() {
                     <th className="text-left p-2 font-medium text-gray-600">Status</th>
                     <th className="text-left p-2 font-medium text-gray-600">Pay Period</th>
                     <th className="text-left p-2 font-medium text-gray-600">Days</th>
-                    {historyAllowanceColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{name}</th>)}
+                    {historyAllowanceColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
                     <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">GROSS</th>
-                    {historyDeductionColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{name}</th>)}
+                    {historyDeductionColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
                     <th className="text-right p-2 font-medium text-red-700 bg-gray-100">DEDUCT</th>
-                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100 border-l-2 border-gray-300">Net Pay</th>
+                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100 border-l">Net Pay</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -842,11 +842,11 @@ export default function CrewPayrollManagementPage() {
                       <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
                       <td className="py-1 px-2 text-gray-600">{r.period_start_date}~{r.period_end_date}</td>
                       <td className="py-1 px-2 text-gray-600">{r.days_served}/{r.days_in_month}</td>
-                      {historyAllowanceColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(r.allowance_by_name[name] || 0)}</td>)}
+                      {historyAllowanceColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>{fmt(r.allowance_by_name[name] || 0)}</td>)}
                       <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50">{fmt(r.gross_amount)}</td>
-                      {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
+                      {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l' : ''}`}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
                       <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-gray-50">{fmt(r.total_deduction)}</td>
-                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50 border-l-2 border-gray-300">{fmt(r.net_amount)}</td>
+                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50 border-l">{fmt(r.net_amount)}</td>
                     </tr>
                   ))}
                   {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
@@ -854,14 +854,14 @@ export default function CrewPayrollManagementPage() {
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                     <td className="py-1 px-2" colSpan={5}>Total ({historyRows.length} months)</td>
                     {historyAllowanceColumns.map((name, i) => (
-                      <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>
+                      <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>
                         {name.endsWith('(Accrued)') ? <span className="text-gray-300">-</span> : fmt(historyTotals.allowanceByName[name] || 0)}
                       </td>
                     ))}
                     <td className="py-1 px-2 text-right font-mono">{fmt(historyTotals.gross)}</td>
-                    {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l-2 border-gray-300' : ''}`}>{fmt(historyTotals.deductionByName[name] || 0)}</td>)}
+                    {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l' : ''}`}>{fmt(historyTotals.deductionByName[name] || 0)}</td>)}
                     <td className="py-1 px-2 text-right font-mono text-red-600">{fmt(historyTotals.deduction)}</td>
-                    <td className="py-1 px-2 text-right font-mono border-l-2 border-gray-300">{fmt(historyTotals.net)}</td>
+                    <td className="py-1 px-2 text-right font-mono border-l">{fmt(historyTotals.net)}</td>
                   </tr>
                 </tbody>
               </table>
