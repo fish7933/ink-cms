@@ -135,8 +135,15 @@ export default function CrewPayrollLedgerPrintPage() {
           </tr>
         </tbody>
       </table>
+      {payslips.map(p => (
+        <div key={p.id} className="payslip-page">
+          <CrewPayslipDetailView payslip={p} shipName={ship_name} />
+        </div>
+      ))}
+
+      {/* 급여 템플릿 참고표는 선원별 급여명세서보다 뒤, 가장 마지막 장에 배치한다. */}
       {template_name && (
-        <div style={{ marginTop: 14 }}>
+        <div className="payslip-page" style={{ maxWidth: 'none' }}>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: '#333', marginBottom: 4 }}>Salary Template Applied: {template_name}</div>
           {ledger.template_matrix && ledger.template_matrix.rows.length > 0 && (
             <table className="ledger">
@@ -162,12 +169,6 @@ export default function CrewPayrollLedgerPrintPage() {
           )}
         </div>
       )}
-
-      {payslips.map(p => (
-        <div key={p.id} className="payslip-page">
-          <CrewPayslipDetailView payslip={p} shipName={ship_name} />
-        </div>
-      ))}
     </div>
   );
 }
