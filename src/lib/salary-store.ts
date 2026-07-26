@@ -11,6 +11,7 @@ export interface SalaryComponent {
   is_active: boolean;
   component_type: 'earning' | 'deduction'; // 급여 구성 항목 vs 공제 항목
   payment_type: 'monthly' | 'deferred';    // 매월 지급 vs 후불성(하선 후)
+  skip_deduction_on_partial_month: boolean; // 공제 항목: 승/하선 등 부분월(일할계산 대상)에는 공제하지 않고 0으로 처리
   created_at: string;
   updated_at: string;
 }
@@ -87,7 +88,7 @@ export interface OwnerSalaryAssignment {
 export async function getSalaryComponents(): Promise<SalaryComponent[]> {
   const { data, error } = await supabase
     .from('salary_components')
-    .select('id, name, description, display_order, is_active, component_type, payment_type, created_at, updated_at')
+    .select('id, name, description, display_order, is_active, component_type, payment_type, skip_deduction_on_partial_month, created_at, updated_at')
     .eq('is_active', true)
     .order('display_order', { ascending: true });
 

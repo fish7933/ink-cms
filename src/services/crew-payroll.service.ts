@@ -83,7 +83,7 @@ interface TemplateItemWithComponent {
   rank?: string;
   rank_grade?: string | null;
   amount: number;
-  component: { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; description?: string | null };
+  component: { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; description?: string | null; skip_deduction_on_partial_month?: boolean };
 }
 
 interface EmbarkRecord {
@@ -157,6 +157,9 @@ function buildShipPayslips(input: {
         const isDeferred = !isDeduction && i.component.payment_type === 'deferred';
 
         if (!isDeferred) {
+          // 공제 항목 중 "부분월(승/하선월)에는 공제 안 함" 옵션이 켜진 항목은, 이 달이
+          // 그 선원에게 부분월(ratio < 1)이면 일할계산 대신 0으로 처리한다.
+          const skipDeductionThisMonth = isDeduction && i.component.skip_deduction_on_partial_month && ratio < 1;
           items.push({
             source: 'template',
             category: isDeduction ? 'deduction' : 'earning',
@@ -164,7 +167,7 @@ function buildShipPayslips(input: {
             payment_method: null,
             payment_type: 'immediate',
             standard_amount: standard,
-            amount: Math.round(standard * ratio),
+            amount: skipDeductionThisMonth ? 0 : Math.round(standard * ratio),
             accrued_to_date: null,
             description: i.component.description || null,
             display_order: idx,
@@ -670,7 +673,7 @@ export const crewPayrollService = {
       ? await supabase.from('salary_template_items').select('*').in('template_id', templateIds)
       : { data: [] as { template_id: string; component_id: string; rank?: string; rank_grade?: string | null; amount: number }[] };
     const { data: allComponents } = await supabase.from('salary_components').select('*');
-    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean; description?: string | null }]));
+    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean; description?: string | null; skip_deduction_on_partial_month?: boolean }]));
     const templateItemsByTemplateId = new Map<string, TemplateItemWithComponent[]>();
     for (const item of templateItemsRaw || []) {
       const component = componentById.get(String(item.component_id));

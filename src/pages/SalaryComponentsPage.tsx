@@ -48,6 +48,7 @@ export default function SalaryComponentsPage() {
     display_order: 0,
     component_type: 'earning' as 'earning' | 'deduction',
     payment_type: 'monthly' as 'monthly' | 'deferred',
+    skip_deduction_on_partial_month: false,
   });
   const [error, setError] = useState('');
 
@@ -91,6 +92,7 @@ export default function SalaryComponentsPage() {
         display_order: component.display_order,
         component_type: component.component_type,
         payment_type: component.payment_type,
+        skip_deduction_on_partial_month: component.skip_deduction_on_partial_month || false,
       });
       setFormView({ id: component.id });
     } else {
@@ -101,6 +103,7 @@ export default function SalaryComponentsPage() {
         display_order: typeComponents.length + 1,
         component_type: activeTab,
         payment_type: 'monthly',
+        skip_deduction_on_partial_month: false,
       });
       setFormView({});
     }
@@ -257,6 +260,20 @@ export default function SalaryComponentsPage() {
                   </div>
                 </div>
               )}
+              {activeTab === 'deduction' && (
+                <label className="flex items-start gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.skip_deduction_on_partial_month}
+                    onChange={e => setFormData({ ...formData, skip_deduction_on_partial_month: e.target.checked })}
+                    className="mt-0.5 accent-red-600 w-3.5 h-3.5"
+                  />
+                  <span>
+                    <span className="font-medium">승/하선 등 부분월에는 공제 안 함</span>
+                    <span className="block text-gray-400 mt-0.5">체크하면 일할계산 대신 승선/하선 달(일부만 근무한 달)에는 이 항목을 0원으로 처리합니다.</span>
+                  </span>
+                </label>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-xs">설명</Label>
                 <Textarea
@@ -307,6 +324,9 @@ export default function SalaryComponentsPage() {
                     {activeTab === 'earning' && (
                       <TableHead className="text-xs w-28">지급 방식</TableHead>
                     )}
+                    {activeTab === 'deduction' && (
+                      <TableHead className="text-xs w-32">부분월 처리</TableHead>
+                    )}
                     <TableHead className="text-xs">설명</TableHead>
                     {(permissions.canEdit || permissions.canDelete) && (
                       <TableHead className="text-right text-xs w-16">작업</TableHead>
@@ -324,6 +344,15 @@ export default function SalaryComponentsPage() {
                               <span className={`text-xs px-2 py-0.5 rounded border ${PAYMENT_TYPE_COLOR[component.payment_type]}`}>
                                 {PAYMENT_TYPE_LABEL[component.payment_type]}
                               </span>
+                            </TableCell>
+                          )}
+                          {activeTab === 'deduction' && (
+                            <TableCell>
+                              {component.skip_deduction_on_partial_month ? (
+                                <span className="text-xs px-2 py-0.5 rounded border bg-gray-50 text-gray-600 border-gray-200">부분월 미공제</span>
+                              ) : (
+                                <span className="text-xs text-gray-400">일할계산</span>
+                              )}
                             </TableCell>
                           )}
                           <TableCell className="text-gray-500 text-xs">{component.description || '-'}</TableCell>
