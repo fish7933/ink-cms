@@ -9,8 +9,8 @@ interface SalaryTemplateMatrixTableProps {
 }
 
 const LABELS = {
-  ko: { noRanks: '등록된 직급 없음', earnings: '급여 구성 항목', deductions: '공제 항목', result: '계산 결과', rank: '직급', deduction: '공제', deferred: '후불', total: '월 총액', net: '월 실지급액' },
-  en: { noRanks: 'No ranks registered', earnings: 'Earnings', deductions: 'Deductions', result: 'Total', rank: 'Rank', deduction: 'Deduction', deferred: 'Deferred', total: 'Total Wage', net: 'Net Wage' },
+  ko: { noRanks: '등록된 직급 없음', earnings: '급여 구성 항목', deductions: '공제 항목', result: '계산 결과', rank: '직급', deferred: '후불', total: '월 총액', net: '월 실지급액' },
+  en: { noRanks: 'No ranks registered', earnings: 'Earnings', deductions: 'Deductions', result: 'Total', rank: 'Rank', deferred: 'Deferred', total: 'Total Wage', net: 'Net Wage' },
 };
 
 /**
@@ -58,13 +58,15 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
           </tr>
           <tr className="bg-gray-100">
             <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100">{t.rank}</th>
-            {orderedComps.map(comp => {
+            {orderedComps.map((comp, idx) => {
               const isDeduction = comp.component_type === 'deduction';
               const isDeferred = !isDeduction && comp.payment_type === 'deferred';
+              // 마지막 열은 오른쪽에 border-r을 안 준다 — 바로 옆 Total 열의 border-l-2와
+              // 겹쳐서 선이 두 겹으로 보이는 문제를 막기 위해(Total 열의 굵은 선 하나로 충분).
+              const isLast = idx === orderedComps.length - 1;
               return (
-                <th key={comp.id} className={`text-right p-2 border-r font-semibold min-w-24 ${isDeduction ? 'text-red-600' : isDeferred ? 'text-amber-700' : ''}`}>
+                <th key={comp.id} className={`text-right p-2 font-semibold min-w-24 ${isLast ? '' : 'border-r'} ${isDeduction ? 'text-red-600' : isDeferred ? 'text-amber-700' : ''}`}>
                   {comp.name}
-                  {isDeduction && <span className="block text-[10px] font-normal text-red-400">{t.deduction}</span>}
                   {isDeferred && <span className="block text-[10px] font-normal text-amber-500">{t.deferred}</span>}
                 </th>
               );
@@ -106,11 +108,12 @@ export default function SalaryTemplateMatrixTable({ template, components, ranks,
                       )}
                     </div>
                   </td>
-                  {orderedComps.map(comp => {
+                  {orderedComps.map((comp, idx) => {
                     const item = findItem(comp.id);
                     const isDeduction = comp.component_type === 'deduction';
+                    const isLast = idx === orderedComps.length - 1;
                     return (
-                      <td key={comp.id} className={`p-2 border-r text-right ${isDeduction ? 'text-red-600 bg-red-50/20' : ''}`}>
+                      <td key={comp.id} className={`p-2 text-right ${isLast ? '' : 'border-r'} ${isDeduction ? 'text-red-600 bg-red-50/20' : ''}`}>
                         {item ? item.amount.toLocaleString() : '-'}
                       </td>
                     );

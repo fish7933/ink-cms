@@ -22,7 +22,7 @@ import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixT
 import type { Ship } from '@/lib/store';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
-import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow, CrewPayslipItem } from '@/types/crew-payroll';
+import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow, CrewPayslipItem, CrewDeferredPayHistoryRow } from '@/types/crew-payroll';
 import type { CrewSickPayLedgerRow } from '@/types/sick-pay';
 
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
@@ -78,6 +78,17 @@ export default function CrewPayrollManagementPage() {
   const [historyCrew, setHistoryCrew] = useState<{ crewMemberId: string; crewName: string } | null>(null);
   const [historyRows, setHistoryRows] = useState<CrewPayrollHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Deferred Pay 구간의 행을 클릭하면 그 항목이 매달 얼마씩 적립되어 최종 Settlement 금액이
+  // 됐는지 월별로 보여준다.
+  const [viewingDeferredPayout, setViewingDeferredPayout] = useState<{ crewName: string; rankCode: string; itemName: string; settlementAmount: number } | null>(null);
+  const [deferredPayoutHistory, setDeferredPayoutHistory] = useState<CrewDeferredPayHistoryRow[]>([]);
+  const [deferredPayoutHistoryLoading, setDeferredPayoutHistoryLoading] = useState(false);
+
+  // 상병급여 구간의 행을 클릭하면 그 케이스가 매달 얼마씩 지급되는지 보여준다.
+  const [viewingSickPayRow, setViewingSickPayRow] = useState<CrewSickPayLedgerRow | null>(null);
+  const [sickPayRowEntries, setSickPayRowEntries] = useState<{ year_month: string; amount: number; confirmed: boolean }[]>([]);
+  const [sickPayRowEntriesLoading, setSickPayRowEntriesLoading] = useState(false);
 
   // 상병(질병/부상) 하선 선원의 급여 — 선원 급여대장 자체에는 들어가지 않지만, 이 선박·이 달에
   // 청구해야 할 상병급여가 있으면 급여대장 말미에 별도 안내로 보여주고 그 자리에서 수정/종결한다.
@@ -323,6 +334,27 @@ export default function CrewPayrollManagementPage() {
       setHistoryRows(await crewPayrollService.getCrewPayrollHistory(p.crew_member_id));
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const openDeferredPayoutHistory = async (payslip: CrewPayslipWithDetails, item: CrewPayslipItem) => {
+    const baseName = item.name.replace(/\s*\(Lump Sum\)\s*$/, '');
+    setViewingDeferredPayout({ crewName: payslip.crew_name, rankCode: payslip.rank_code, itemName: baseName, settlementAmount: item.amount });
+    setDeferredPayoutHistoryLoading(true);
+    try {
+      setDeferredPayoutHistory(await crewPayrollService.getCrewDeferredPayHistory(payslip.crew_member_id, baseName));
+    } finally {
+      setDeferredPayoutHistoryLoading(false);
+    }
+  };
+
+  const openSickPayRowHistory = async (row: CrewSickPayLedgerRow) => {
+    setViewingSickPayRow(row);
+    setSickPayRowEntriesLoading(true);
+    try {
+      setSickPayRowEntries(await sickPayService.getMonthlyEntriesForRecord(row));
+    } finally {
+      setSickPayRowEntriesLoading(false);
     }
   };
 
@@ -637,7 +669,7 @@ export default function CrewPayrollManagementPage() {
                   </thead>
                   <tbody>
                     {deferredPayoutRows.map(({ payslip, item }) => (
-                      <tr key={item.id} className="border-b border-amber-100">
+                      <tr key={item.id} className="border-b border-amber-100 cursor-pointer hover:bg-amber-50" onClick={() => openDeferredPayoutHistory(payslip, item)}>
                         <td className="py-1 px-2 text-gray-600">{payslip.rank_code}</td>
                         <td className="py-1 px-2 font-medium">{payslip.crew_name}</td>
                         <td className="py-1 px-2 text-gray-600">{item.name.replace(/\s*\(Lump Sum\)\s*$/, '')}</td>
@@ -665,6 +697,7 @@ export default function CrewPayrollManagementPage() {
                       <th className="text-center py-1 px-2 font-medium text-red-700">Status</th>
                       <th className="text-right py-1 px-2 font-medium text-red-700">This Month Amount</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700 w-56">Close Case</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700 w-16">Monthly</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -706,6 +739,11 @@ export default function CrewPayrollManagementPage() {
                               </Button>
                             </div>
                           )}
+                        </td>
+                        <td className="py-1 px-2 text-center">
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Monthly breakdown" onClick={() => openSickPayRowHistory(row)}>
+                            <History className="w-3.5 h-3.5 text-muted-foreground" />
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -816,6 +854,96 @@ export default function CrewPayrollManagementPage() {
                   <Printer className="w-3.5 h-3.5" />Print
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingDeferredPayout} onOpenChange={o => !o && setViewingDeferredPayout(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-1.5">
+              <History className="w-4 h-4 text-muted-foreground" />
+              {viewingDeferredPayout?.rankCode} {viewingDeferredPayout?.crewName} — {viewingDeferredPayout?.itemName} Deferred Pay Breakdown
+            </DialogTitle>
+          </DialogHeader>
+          {deferredPayoutHistoryLoading ? (
+            <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+          ) : deferredPayoutHistory.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No accrual history found.</p>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-2 font-medium text-gray-600">Month</th>
+                    <th className="text-left p-2 font-medium text-gray-600">Vessel</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Monthly Accrual</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Cumulative Balance</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Settled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deferredPayoutHistory.map(r => (
+                    <tr key={r.period_id} className={`border-b ${r.payout_this_month > 0 ? 'bg-amber-50' : ''}`}>
+                      <td className="p-2">{r.year_month}</td>
+                      <td className="p-2 text-gray-600">{r.ship_name}</td>
+                      <td className="p-2 text-right font-mono">{fmt(r.monthly_accrual)}</td>
+                      <td className="p-2 text-right font-mono">{r.payout_this_month > 0 ? <span className="text-gray-300">-</span> : fmt(r.accrued_to_date)}</td>
+                      <td className="p-2 text-right font-mono font-semibold text-amber-700">{r.payout_this_month > 0 ? fmt(r.payout_this_month) : '-'}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-2" colSpan={4}>Settlement Amount</td>
+                    <td className="p-2 text-right font-mono text-amber-700">{fmt(viewingDeferredPayout?.settlementAmount ?? 0)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingSickPayRow} onOpenChange={o => !o && setViewingSickPayRow(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-1.5">
+              <History className="w-4 h-4 text-muted-foreground" />
+              {viewingSickPayRow?.rank_code} {viewingSickPayRow?.crew_name} — Sick Pay Monthly Breakdown
+            </DialogTitle>
+          </DialogHeader>
+          {sickPayRowEntriesLoading ? (
+            <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+          ) : sickPayRowEntries.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No monthly entries found.</p>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-2 font-medium text-gray-600">Month</th>
+                    <th className="text-center p-2 font-medium text-gray-600">Status</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sickPayRowEntries.map(e => (
+                    <tr key={e.year_month} className={`border-b ${e.confirmed ? '' : 'text-gray-400'}`}>
+                      <td className="p-2">{e.year_month}</td>
+                      <td className="p-2 text-center">
+                        {e.confirmed
+                          ? <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Confirmed</Badge>
+                          : <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-400 border-gray-200">Unconfirmed (calc.)</Badge>}
+                      </td>
+                      <td className="p-2 text-right font-mono">{fmt(e.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-2" colSpan={2}>Total ({sickPayRowEntries.length} months)</td>
+                    <td className="p-2 text-right font-mono">{fmt(sickPayRowEntries.reduce((s, e) => s + e.amount, 0))}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
         </DialogContent>
