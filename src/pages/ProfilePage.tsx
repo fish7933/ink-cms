@@ -340,7 +340,7 @@ export default function ProfilePage() {
                     <div className="flex items-center justify-between py-1.5">
                       <div>
                         <p className="text-sm">수신/참조 문서 알림</p>
-                        <p className="text-xs text-gray-500">수신 또는 참조로 지정된 문서가 최종 승인됐을 때</p>
+                        <p className="text-xs text-gray-500">나에게 수신 또는 참조 문서가 도착했을 때</p>
                       </div>
                       <Switch
                         checked={prefs.notify_approval_reference}
