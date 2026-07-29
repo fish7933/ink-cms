@@ -66,6 +66,9 @@ export default function CrewPayrollLedgerPrintPage() {
         table.ledger td.amount { text-align: right; font-variant-numeric: tabular-nums; }
         table.ledger td.name { text-align: center; }
         table.ledger tr.total td { font-weight: 600; background: #f7f7f7; border-top: 2px solid #888; }
+        table.ledger th.group-earnings { background: #eaf1fb; color: #1d4ed8; font-weight: 600; }
+        table.ledger th.group-deductions { background: #fdeaea; color: #b91c1c; font-weight: 600; }
+        table.ledger .section-divider { border-left: 1px solid #ccc; }
         .payslip-page { page-break-before: always; padding-top: 16px; max-width: 760px; margin: 0 auto; }
       `}</style>
 
@@ -89,16 +92,20 @@ export default function CrewPayrollLedgerPrintPage() {
       <table className="ledger">
         <thead>
           <tr>
-            <th>Rank</th>
-            <th>Grade</th>
-            <th>Name</th>
-            <th>Pay Period</th>
-            <th>Days</th>
-            {allowance_columns.map(name => <th key={name}>{name}</th>)}
-            <th>Total Earnings</th>
-            {deduction_columns.map(name => <th key={name}>{name}</th>)}
-            <th>Total Deductions</th>
-            <th>Net Pay</th>
+            <th rowSpan={2}>Rank</th>
+            <th rowSpan={2}>Grade</th>
+            <th rowSpan={2}>Name</th>
+            <th rowSpan={2}>Pay Period</th>
+            <th rowSpan={2}>Days</th>
+            <th colSpan={allowance_columns.length + 1} className="group-earnings section-divider">Earnings</th>
+            <th colSpan={deduction_columns.length + 1} className="group-deductions section-divider">Deductions</th>
+            <th rowSpan={2} className="section-divider">Net Pay</th>
+          </tr>
+          <tr>
+            {allowance_columns.map((name, i) => <th key={name} className={i === 0 ? 'section-divider' : ''}>{name}</th>)}
+            <th>GROSS</th>
+            {deduction_columns.map((name, i) => <th key={name} className={i === 0 ? 'section-divider' : ''}>{name}</th>)}
+            <th>DEDUCT</th>
           </tr>
         </thead>
         <tbody>
@@ -109,25 +116,32 @@ export default function CrewPayrollLedgerPrintPage() {
               <td className="name">{r.crew_name}</td>
               <td className="name">{fmtMD(r.period_start_date)}~{fmtMD(r.period_end_date)}</td>
               <td className="name">{r.days_served}/{r.days_in_month}</td>
-              {allowance_columns.map(name => <td key={name} className="amount">{fmt(r.allowance_by_name[name] || 0)}</td>)}
+              {allowance_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`}>{fmt(r.allowance_by_name[name] || 0)}</td>)}
               <td className="amount">{fmt(r.gross_amount)}</td>
-              {deduction_columns.map(name => <td key={name} className="amount" style={{ color: '#a33' }}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
+              {deduction_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`} style={{ color: '#a33' }}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
               <td className="amount" style={{ color: '#a33' }}>{fmt(r.total_deduction)}</td>
-              <td className="amount" style={{ fontWeight: 600 }}>{fmt(r.net_amount)}</td>
+              <td className="amount section-divider" style={{ fontWeight: 600 }}>{fmt(r.net_amount)}</td>
             </tr>
           ))}
           <tr className="total">
             <td colSpan={5} className="name">Total ({rows.length} crew)</td>
-            {allowance_columns.map(name => <td key={name} className="amount">{fmt(totalByAllowance(name))}</td>)}
+            {allowance_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`}>{fmt(totalByAllowance(name))}</td>)}
             <td className="amount">{fmt(totalGross)}</td>
-            {deduction_columns.map(name => <td key={name} className="amount" style={{ color: '#a33' }}>{fmt(totalByDeduction(name))}</td>)}
+            {deduction_columns.map((name, i) => <td key={name} className={`amount ${i === 0 ? 'section-divider' : ''}`} style={{ color: '#a33' }}>{fmt(totalByDeduction(name))}</td>)}
             <td className="amount" style={{ color: '#a33' }}>{fmt(totalDeduction)}</td>
-            <td className="amount">{fmt(totalNet)}</td>
+            <td className="amount section-divider">{fmt(totalNet)}</td>
           </tr>
         </tbody>
       </table>
+      {payslips.map(p => (
+        <div key={p.id} className="payslip-page">
+          <CrewPayslipDetailView payslip={p} shipName={ship_name} />
+        </div>
+      ))}
+
+      {/* 급여 템플릿 참고표는 선원별 급여명세서보다 뒤, 가장 마지막 장에 배치한다. */}
       {template_name && (
-        <div style={{ marginTop: 14 }}>
+        <div className="payslip-page" style={{ maxWidth: 'none' }}>
           <div style={{ fontSize: 10.5, fontWeight: 600, color: '#333', marginBottom: 4 }}>Salary Template Applied: {template_name}</div>
           {ledger.template_matrix && ledger.template_matrix.rows.length > 0 && (
             <table className="ledger">
@@ -153,12 +167,6 @@ export default function CrewPayrollLedgerPrintPage() {
           )}
         </div>
       )}
-
-      {payslips.map(p => (
-        <div key={p.id} className="payslip-page">
-          <CrewPayslipDetailView payslip={p} shipName={ship_name} />
-        </div>
-      ))}
     </div>
   );
 }

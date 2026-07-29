@@ -48,3 +48,16 @@ export interface CrewSickPayLedgerRow extends CrewSickPayRecordWithDetails {
   monthly_entry_id: string | null; // 그 달 항목이 아직 없으면 null(기준 월액을 기본으로 보여줌)
   this_month_amount: number;
 }
+
+// 선원카드 급여이력 탭용 — 선원 1명의 상병급여 이력을 "지급된 급여명세"와 동일하게 월별 행으로
+// 펼친다(케이스가 여러 건이어도 한 리스트로 합쳐서 최신순 표시).
+export interface CrewSickPayHistoryRow {
+  record_id: string;
+  year_month: string;
+  ship_name: string;
+  rank_code: string;
+  status: SickPayStatus;
+  amount: number;
+  currency: string;
+  confirmed: boolean;
+}

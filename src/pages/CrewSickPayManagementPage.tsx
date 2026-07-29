@@ -43,6 +43,10 @@ export default function CrewSickPayManagementPage() {
   const [historyRecord, setHistoryRecord] = useState<CrewSickPayRecordWithDetails | null>(null);
   const [historyEntries, setHistoryEntries] = useState<{ year_month: string; amount: number; confirmed: boolean }[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  // 급여대장(선박별 화면)에서만 되던 월별 금액 확정을, 여기(전용 관리 화면)에서도 할 수 있게
+  // — 어느 쪽에서 먼저 확정하든 결과(crew_sick_pay_monthly_entries)는 같은 곳에 저장된다.
+  const [historyDrafts, setHistoryDrafts] = useState<Record<string, string>>({});
+  const [historySaving, setHistorySaving] = useState<string | null>(null);
 
   const [closingRecord, setClosingRecord] = useState<CrewSickPayRecordWithDetails | null>(null);
   const [closeDate, setCloseDate] = useState('');
@@ -131,11 +135,30 @@ export default function CrewSickPayManagementPage() {
 
   const openHistory = async (record: CrewSickPayRecordWithDetails) => {
     setHistoryRecord(record);
+    setHistoryDrafts({});
     setHistoryLoading(true);
     try {
       setHistoryEntries(await sickPayService.getMonthlyEntriesForRecord(record));
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const handleSaveHistoryAmount = async (yearMonth: string) => {
+    if (!historyRecord) return;
+    const draft = historyDrafts[yearMonth];
+    if (draft === undefined) return;
+    const amount = Number(draft);
+    if (Number.isNaN(amount)) return;
+    setHistorySaving(yearMonth);
+    try {
+      await sickPayService.upsertMonthlyEntry(historyRecord.id, yearMonth, amount);
+      setHistoryDrafts(prev => { const next = { ...prev }; delete next[yearMonth]; return next; });
+      setHistoryEntries(await sickPayService.getMonthlyEntriesForRecord(historyRecord));
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setHistorySaving(null);
     }
   };
 
@@ -174,7 +197,7 @@ export default function CrewSickPayManagementPage() {
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Stethoscope className="w-5 h-5 text-muted-foreground" />상병 수당 관리</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          상병(질병/부상) 하선 선원에게 귀국일 다음날부터 발생하는 상병급여 케이스를 모아 봅니다(귀국일까지는 정상 급여가 지급됩니다). 선원 급여대장과 별개로 관리되며, 매월 청구액은 각 선박의 급여대장 화면 하단에서 수정할 수 있습니다.
+          상병(질병/부상) 하선 선원에게 귀국일 다음날부터 발생하는 상병급여 케이스를 모아 봅니다(귀국일까지는 정상 급여가 지급됩니다). 선원 급여대장과 별개로 관리되며, 매월 청구액은 각 선박의 급여대장 화면 하단이나 여기 "내역"에서 모두 확정(저장)할 수 있습니다.
         </p>
       </div>
 
@@ -347,7 +370,17 @@ export default function CrewSickPayManagementPage() {
                           ? <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">확정</Badge>
                           : <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-400 border-gray-200">미확정(계산값)</Badge>}
                       </td>
-                      <td className="py-1 px-2 text-right font-mono">{fmt(e.amount)}</td>
+                      <td className="py-1 px-2 text-right">
+                        <Input
+                          type="number"
+                          value={historyDrafts[e.year_month] ?? String(e.amount)}
+                          onChange={ev => setHistoryDrafts(prev => ({ ...prev, [e.year_month]: ev.target.value }))}
+                          onBlur={() => handleSaveHistoryAmount(e.year_month)}
+                          onKeyDown={ev => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }}
+                          disabled={historySaving === e.year_month}
+                          className="h-6 text-xs w-24 text-right ml-auto font-mono"
+                        />
+                      </td>
                     </tr>
                   ))}
                   <tr className="bg-gray-50 font-semibold">

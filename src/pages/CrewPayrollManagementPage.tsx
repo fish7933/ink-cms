@@ -22,7 +22,7 @@ import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixT
 import type { Ship } from '@/lib/store';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
-import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow } from '@/types/crew-payroll';
+import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow, CrewPayslipItem, CrewDeferredPayHistoryRow } from '@/types/crew-payroll';
 import type { CrewSickPayLedgerRow } from '@/types/sick-pay';
 
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
@@ -78,6 +78,17 @@ export default function CrewPayrollManagementPage() {
   const [historyCrew, setHistoryCrew] = useState<{ crewMemberId: string; crewName: string } | null>(null);
   const [historyRows, setHistoryRows] = useState<CrewPayrollHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Deferred Pay 구간의 행을 클릭하면 그 항목이 매달 얼마씩 적립되어 최종 Settlement 금액이
+  // 됐는지 월별로 보여준다.
+  const [viewingDeferredPayout, setViewingDeferredPayout] = useState<{ crewName: string; rankCode: string; itemName: string; settlementAmount: number } | null>(null);
+  const [deferredPayoutHistory, setDeferredPayoutHistory] = useState<CrewDeferredPayHistoryRow[]>([]);
+  const [deferredPayoutHistoryLoading, setDeferredPayoutHistoryLoading] = useState(false);
+
+  // 상병급여 구간의 행을 클릭하면 그 케이스가 매달 얼마씩 지급되는지 보여준다.
+  const [viewingSickPayRow, setViewingSickPayRow] = useState<CrewSickPayLedgerRow | null>(null);
+  const [sickPayRowEntries, setSickPayRowEntries] = useState<{ year_month: string; amount: number; confirmed: boolean }[]>([]);
+  const [sickPayRowEntriesLoading, setSickPayRowEntriesLoading] = useState(false);
 
   // 상병(질병/부상) 하선 선원의 급여 — 선원 급여대장 자체에는 들어가지 않지만, 이 선박·이 달에
   // 청구해야 할 상병급여가 있으면 급여대장 말미에 별도 안내로 보여주고 그 자리에서 수정/종결한다.
@@ -326,6 +337,27 @@ export default function CrewPayrollManagementPage() {
     }
   };
 
+  const openDeferredPayoutHistory = async (payslip: CrewPayslipWithDetails, item: CrewPayslipItem) => {
+    const baseName = item.name.replace(/\s*\(Lump Sum\)\s*$/, '');
+    setViewingDeferredPayout({ crewName: payslip.crew_name, rankCode: payslip.rank_code, itemName: baseName, settlementAmount: item.amount });
+    setDeferredPayoutHistoryLoading(true);
+    try {
+      setDeferredPayoutHistory(await crewPayrollService.getCrewDeferredPayHistory(payslip.crew_member_id, baseName));
+    } finally {
+      setDeferredPayoutHistoryLoading(false);
+    }
+  };
+
+  const openSickPayRowHistory = async (row: CrewSickPayLedgerRow) => {
+    setViewingSickPayRow(row);
+    setSickPayRowEntriesLoading(true);
+    try {
+      setSickPayRowEntries(await sickPayService.getMonthlyEntriesForRecord(row));
+    } finally {
+      setSickPayRowEntriesLoading(false);
+    }
+  };
+
   const periodStatus = currentPeriod?.status ?? 'draft';
   const isDraft = periodStatus === 'draft';
   const isPendingApproval = periodStatus === 'pending_approval';
@@ -333,42 +365,90 @@ export default function CrewPayrollManagementPage() {
   // 급여대장은 급여 구성항목(BW/OT/OA/LP 등)과 계약별 수당을 "기본급" 한 칸으로 뭉치지 않고
   // 항목명별 열로 모두 펼친다 — 이번 회차에 실제로 쓰인 급여/공제 항목명의 합집합을 열로 만든다
   // (items는 display_order 순이라 급여 구성항목이 계약 수당보다 항상 앞선 열에 온다).
-  // 후불성 항목도 당월 발생분(item.amount)은 다른 항목과 동일하게 열로 보여준다 — 다만
-  // 누적된 적립액(accrued_to_date)은 급여대장에 표기하지 않고 개인 급여명세서에서만 보여준다.
-  // 하선월 일괄지급(Lump Sum) 항목은 그 자체가 누적 적립액과 같은 값이라 열로 노출하면
+  // 후불성 항목은 부분월(승선 중)에 "정상 어닝"(예: BW) + "공제 X (Deferred)" 쌍으로
+  // 나타나 Total Earnings/Total Deductions 양쪽에 그 관계가 투명하게 보이게 한다(net_amount
+  // 에는 서로 상쇄돼 영향 없음, 기존과 동일). 내부 추적 전용인 "X (Accrued)"(deferred_accrual)
+  // 항목은 이미 위 두 항목이 같은 정보를 보여주므로 급여대장 열에는 중복 노출하지 않는다.
+  // 하선월 일괄지급(Lump Sum) 항목도 그 자체가 누적 적립액과 같은 값이라 열로 노출하면
   // 결국 적립액을 보여주는 셈이 되므로 급여대장에서는 뺀다(net_amount 계산에는 그대로 포함).
   const allowanceOrder: string[] = [];
   const deductionOrder: string[] = [];
   for (const p of payslips) {
     for (const item of p.items) {
-      if (item.payment_type === 'deferred_payout') continue;
+      if (item.payment_type === 'deferred_payout' || item.payment_type === 'deferred_accrual') continue;
       if (item.category === 'earning' && !allowanceOrder.includes(item.name)) allowanceOrder.push(item.name);
       if (item.category === 'deduction' && !deductionOrder.includes(item.name)) deductionOrder.push(item.name);
     }
   }
-  const isDeferredColumn = (name: string) => payslips.some(p => p.items.some(i => i.name === name && i.payment_type === 'deferred_accrual'));
   const findItem = (p: CrewPayslipWithDetails, name: string, deduction: boolean) =>
     p.items.find(i => (deduction ? i.category === 'deduction' : i.category === 'earning') && i.name === name);
-  const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => findItem(p, name, deduction)?.amount ?? 0;
+  // 아직 저장하지 않은 draft 입력값이 있으면 그 값을, 없으면 저장된 금액을 쓴다 — 항목 셀뿐
+  // 아니라 Total Earnings/Deductions/Net Pay, 하단 합계까지 전부 이 값 기준으로 다시 계산해야
+  // 편집 중인 내용이 바로 합계에 반영된다(저장 서버 로직 updatePayslipItemAmount와 동일 기준).
+  const effectiveAmount = (item: CrewPayslipItem) => {
+    const draft = cellDrafts[item.id];
+    return draft !== undefined && draft.trim() !== '' && !Number.isNaN(Number(draft)) ? Number(draft) : item.amount;
+  };
+  const amountByName = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => {
+    const item = findItem(p, name, deduction);
+    return item ? effectiveAmount(item) : 0;
+  };
   const sumColumn = (f: (p: CrewPayslipWithDetails) => number) => payslips.reduce((sum, p) => sum + f(p), 0);
+  const computeRowTotals = (p: CrewPayslipWithDetails) => {
+    const base = p.items.filter(i => i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual' && i.payment_type !== 'deferred_payout').reduce((s, i) => s + effectiveAmount(i), 0);
+    const allowance = p.items.filter(i => i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed').reduce((s, i) => s + effectiveAmount(i), 0);
+    const deduction = p.items.filter(i => i.category === 'deduction').reduce((s, i) => s + effectiveAmount(i), 0);
+    return { gross: base + allowance, deduction, net: base + allowance - deduction };
+  };
 
-  // 인라인 편집 가능한 금액 셀 — draft 상태에서만 클릭해 고칠 수 있고, 저장 전에는 화면에만
-  // 반영된다(합계 열/하단 합계는 저장 후 새로고침되면서 갱신된다).
-  const renderAmountCell = (p: CrewPayslipWithDetails, name: string, deduction: boolean) => {
+  // 항목/합계 셀에 마우스를 올리면 어떻게 그 금액이 나왔는지 보여주는 네이티브 title 툴팁 —
+  // 이 화면 다른 곳(선박명, Pay Period)에서도 이미 title로 호버 설명을 쓰는 관례를 따른다.
+  const buildItemCalcTitle = (p: CrewPayslipWithDetails, item: CrewPayslipItem) => {
+    const calculated = Math.round(item.standard_amount * (p.days_served / (p.days_in_month || 1)));
+    const actual = effectiveAmount(item);
+    let text = `${fmt(item.standard_amount)} × ${p.days_served}/${p.days_in_month} days = ${fmt(calculated)}`;
+    if (actual !== calculated) {
+      text += actual === 0 && calculated > 0 ? ' (waived this partial month)' : ` (manually adjusted to ${fmt(actual)})`;
+    }
+    return text;
+  };
+  const buildGrossTitle = (p: CrewPayslipWithDetails) => {
+    const items = p.items.filter(i =>
+      (i.source === 'template' && i.category === 'earning' && i.payment_type !== 'deferred_accrual' && i.payment_type !== 'deferred_payout') ||
+      (i.category === 'earning' && i.source === 'contract' && i.payment_method !== 'owner_billed')
+    );
+    const lines = items.map(i => `${i.name}: ${fmt(effectiveAmount(i))}`);
+    return [...lines, `= GROSS ${fmt(computeRowTotals(p).gross)}`].join('\n');
+  };
+  const buildDeductTitle = (p: CrewPayslipWithDetails) => {
+    const items = p.items.filter(i => i.category === 'deduction');
+    const lines = items.map(i => `${i.name}: ${fmt(effectiveAmount(i))}`);
+    return [...lines, `= DEDUCT ${fmt(computeRowTotals(p).deduction)}`].join('\n');
+  };
+  const buildNetTitle = (p: CrewPayslipWithDetails) => {
+    const t = computeRowTotals(p);
+    return `${fmt(t.gross)} (GROSS) − ${fmt(t.deduction)} (DEDUCT) = ${fmt(t.net)} (Net Pay)`;
+  };
+
+  // 인라인 편집 가능한 금액 셀 — draft 상태에서만 클릭해 고칠 수 있고, 편집 중에도 Total
+  // Earnings/Deductions/Net Pay와 하단 합계까지 바로 반영된다(computeRowTotals 참고).
+  const renderAmountCell = (p: CrewPayslipWithDetails, name: string, deduction: boolean, isFirst = false) => {
     const item = findItem(p, name, deduction);
     const editable = !!item && isDraft && permissions.canEdit;
+    const dividerClass = isFirst ? 'border-l' : '';
     if (!editable) {
-      return <td key={name} className={`p-2 text-right font-mono ${deduction ? 'text-red-600' : ''}`}>{fmt(amountByName(p, name, deduction))}</td>;
+      return <td key={name} className={`p-2 text-right font-mono ${deduction ? 'text-red-600' : ''} ${dividerClass}`} title={item ? buildItemCalcTitle(p, item) : undefined}>{fmt(amountByName(p, name, deduction))}</td>;
     }
     const draftValue = cellDrafts[item.id];
     if (editingItemId === item.id) {
       return (
-        <td key={name} className="py-1 px-2 text-right" onClick={e => e.stopPropagation()}>
+        <td key={name} className={`py-1 px-2 text-right ${dividerClass}`} onClick={e => e.stopPropagation()}>
           <Input
             type="number" autoFocus
             className="h-6 text-xs w-20 text-right ml-auto px-1"
             value={draftValue ?? String(item.amount)}
             onChange={e => setCellDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+            onFocus={e => e.target.select()}
             onBlur={() => setEditingItemId(null)}
             onKeyDown={e => {
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
@@ -381,21 +461,42 @@ export default function CrewPayrollManagementPage() {
         </td>
       );
     }
-    const displayValue = draftValue !== undefined && !Number.isNaN(Number(draftValue)) ? Number(draftValue) : item.amount;
+    const displayValue = effectiveAmount(item);
     return (
-      <td key={name} className="py-1 px-2 text-right" onClick={e => e.stopPropagation()}>
+      <td key={name} className={`py-1 px-2 text-right ${dividerClass}`} onClick={e => e.stopPropagation()}>
         <span
           className={`font-mono cursor-text px-1 rounded hover:bg-amber-50 ${deduction ? 'text-red-600' : ''} ${draftValue !== undefined ? 'bg-amber-50 ring-1 ring-amber-300' : ''}`}
           onClick={() => startCellEdit(item.id, item.amount)}
+          title={buildItemCalcTitle(p, item)}
         >
           {fmt(displayValue)}
         </span>
       </td>
     );
   };
-  const totalGross = payslips.reduce((sum, p) => sum + p.base_amount + p.total_allowance, 0);
-  const totalDeduction = payslips.reduce((sum, p) => sum + p.total_deduction, 0);
-  const totalNet = payslips.reduce((sum, p) => sum + p.net_amount, 0);
+  const totalGross = payslips.reduce((sum, p) => sum + computeRowTotals(p).gross, 0);
+  const totalDeduction = payslips.reduce((sum, p) => sum + computeRowTotals(p).deduction, 0);
+  const totalNet = payslips.reduce((sum, p) => sum + computeRowTotals(p).net, 0);
+
+  // Payment History는 회차가 쌓일수록 무한정 늘어나던 걸 막기 위해 현재 선택된 달 기준
+  // 앞뒤로 3개월(총 최대 7개)만 보여준다 — 더 먼 과거/미래 달은 상단의 월 선택 입력으로
+  // 바로 이동할 수 있으니(이 목록은 그 주변 빠른 이동용일 뿐) 잘려도 접근성엔 문제없다.
+  const monthDiff = (a: string, b: string) => {
+    const [ay, am] = a.split('-').map(Number);
+    const [by, bm] = b.split('-').map(Number);
+    return (ay - by) * 12 + (am - bm);
+  };
+  const nearbyPeriods = periods
+    .filter(p => Math.abs(monthDiff(p.year_month, yearMonth)) <= 3)
+    .sort((a, b) => a.year_month.localeCompare(b.year_month));
+
+  // 하선월의 후불성 급여 일괄지급(Lump Sum)은 이 급여대장(net_amount)에는 포함되지 않고
+  // 급여와는 별도로 정산된다 — 상병급여와 같은 방식으로, 이번 회차에 하선한 선원의 정산 대상
+  // 금액을 놓치지 않도록 별도 구간에 안내한다. payslips에 이미 포함된 항목이라 별도 조회 없이
+  // 그대로 뽑아 쓴다.
+  const deferredPayoutRows = payslips.flatMap(p =>
+    p.items.filter(i => i.payment_type === 'deferred_payout').map(item => ({ payslip: p, item }))
+  );
 
   // 이력 다이얼로그도 급여대장과 동일하게 항목명별 열을 펼친다 — 월마다 적용 템플릿이
   // 달라질 수 있어 전체 이력에 등장한 항목명의 합집합을 열로 만든다.
@@ -523,32 +624,29 @@ export default function CrewPayrollManagementPage() {
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
-              <tr className="text-[10px] text-gray-400">
-                <th colSpan={4} />
-                <th colSpan={allowanceOrder.length + 1} className="text-center py-1 font-semibold text-blue-700 bg-blue-50/60">Earnings</th>
-                <th colSpan={deductionOrder.length + 1} className="text-center py-1 font-semibold text-red-600 bg-red-50/60">Deductions</th>
-                <th colSpan={2} />
+              <tr>
+                <th rowSpan={2} className="text-left p-2 font-medium text-gray-600">Rank</th>
+                <th rowSpan={2} className="text-left p-2 font-medium text-gray-600">Name</th>
+                <th rowSpan={2} className="text-center p-2 font-medium text-gray-600">Pay Period</th>
+                <th rowSpan={2} className="text-center p-2 font-medium text-gray-600">Days</th>
+                <th colSpan={allowanceOrder.length + 1} className="text-center py-1 text-[10px] font-semibold text-blue-700 bg-blue-50/60 border-l">Earnings</th>
+                <th colSpan={deductionOrder.length + 1} className="text-center py-1 text-[10px] font-semibold text-red-600 bg-red-50/60 border-l">Deductions</th>
+                <th rowSpan={2} className="text-right p-2 font-medium text-gray-600 bg-green-50/60 border-l">Net Pay</th>
+                <th rowSpan={2} className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
               </tr>
               <tr>
-                <th className="text-left p-2 font-medium text-gray-600">Rank</th>
-                <th className="text-left p-2 font-medium text-gray-600">Name</th>
-                <th className="text-center p-2 font-medium text-gray-600">Pay Period</th>
-                <th className="text-center p-2 font-medium text-gray-600">Days</th>
-                {allowanceOrder.map(name => (
-                  <th key={name} className="text-right p-2 font-medium text-gray-600">
-                    {name}
-                    {isDeferredColumn(name) && <span className="block text-[9px] font-normal text-amber-500">Deferred</span>}
-                  </th>
+                {allowanceOrder.map((name, i) => (
+                  <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>
                 ))}
-                <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">Total Earnings</th>
-                {deductionOrder.map(name => <th key={name} className="text-right p-2 font-medium text-red-500">{name}</th>)}
-                <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">Total Deductions</th>
-                <th className="text-right p-2 font-medium text-gray-600 bg-green-50/60">Net Pay</th>
-                <th className="text-right p-2 font-medium text-gray-600 w-36">Actions</th>
+                <th className="text-right p-2 font-medium text-gray-600 bg-blue-50/60">GROSS</th>
+                {deductionOrder.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-500 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
+                <th className="text-right p-2 font-medium text-red-600 bg-red-50/60">DEDUCT</th>
               </tr>
             </thead>
             <tbody>
-              {payslips.map(p => (
+              {payslips.map(p => {
+                const rowTotals = computeRowTotals(p);
+                return (
                 <tr key={p.id} className="border-b hover:bg-gray-50">
                   <td className="py-1 px-2 text-gray-600 cursor-pointer hover:underline hover:text-blue-700" onClick={() => openCrewHistory(p)}>
                     {p.rank_code}{p.rank_grade ? `(${p.rank_grade})` : ''}
@@ -564,11 +662,11 @@ export default function CrewPayrollManagementPage() {
                     {fmtMD(p.period_start_date)}~{fmtMD(p.period_end_date)}
                   </td>
                   <td className="py-1 px-2 text-center text-gray-500">{p.days_served}/{p.days_in_month}</td>
-                  {allowanceOrder.map(name => renderAmountCell(p, name, false))}
-                  <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60">{fmt(p.base_amount + p.total_allowance)}</td>
-                  {deductionOrder.map(name => renderAmountCell(p, name, true))}
-                  <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60">{fmt(p.total_deduction)}</td>
-                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60">{fmt(p.net_amount)}</td>
+                  {allowanceOrder.map((name, i) => renderAmountCell(p, name, false, i === 0))}
+                  <td className="py-1 px-2 text-right font-mono font-semibold bg-blue-50/60" title={buildGrossTitle(p)}>{fmt(rowTotals.gross)}</td>
+                  {deductionOrder.map((name, i) => renderAmountCell(p, name, true, i === 0))}
+                  <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-red-50/60" title={buildDeductTitle(p)}>{fmt(rowTotals.deduction)}</td>
+                  <td className="py-1 px-2 text-right font-mono font-bold bg-green-50/60 border-l" title={buildNetTitle(p)}>{fmt(rowTotals.net)}</td>
                   <td className="py-1 px-2 text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setViewingPayslip(p)}>
@@ -580,20 +678,50 @@ export default function CrewPayrollManagementPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="bg-gray-50 border-t font-semibold">
                 <td className="py-1 px-2" colSpan={4}>Total ({payslips.length} crew)</td>
-                {allowanceOrder.map(name => <td key={name} className="py-1 px-2 text-right font-mono">{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
-                <td className="py-1 px-2 text-right font-mono bg-blue-50/60">{fmt(totalGross)}</td>
-                {deductionOrder.map(name => <td key={name} className="py-1 px-2 text-right font-mono text-red-600">{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
-                <td className="py-1 px-2 text-right font-mono text-red-600 bg-red-50/60">{fmt(totalDeduction)}</td>
-                <td className="py-1 px-2 text-right font-mono bg-green-50/60">{fmt(totalNet)}</td>
+                {allowanceOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, false)))}</td>)}
+                <td className="py-1 px-2 text-right font-mono bg-blue-50/60" title={`Sum of GROSS across ${payslips.length} crew`}>{fmt(totalGross)}</td>
+                {deductionOrder.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l' : ''}`}>{fmt(sumColumn(p => amountByName(p, name, true)))}</td>)}
+                <td className="py-1 px-2 text-right font-mono text-red-600 bg-red-50/60" title={`Sum of DEDUCT across ${payslips.length} crew`}>{fmt(totalDeduction)}</td>
+                <td className="py-1 px-2 text-right font-mono bg-green-50/60 border-l" title={`${fmt(totalGross)} (GROSS) − ${fmt(totalDeduction)} (DEDUCT) = ${fmt(totalNet)} (Net Pay)`}>{fmt(totalNet)}</td>
                 <td className="py-1 px-2" />
               </tr>
             </tfoot>
           </table>
+          {/* 하선월 후불성 급여 일괄지급은 net_amount에서 빠지므로(급여와는 별도 정산), 상병급여와
+              같은 방식으로 이번 회차에 하선한 선원의 정산 대상 금액을 놓치지 않게 안내한다. */}
+          {deferredPayoutRows.length > 0 && (
+            <div className="px-2 py-3 border-t">
+              <p className="text-xs font-semibold text-amber-700 mb-1.5">⚠ Deferred Pay — sign-off crew this month, settled separately (not included in Net Pay)</p>
+              <div className="rounded-md border border-amber-200 overflow-hidden overflow-x-auto">
+                <table className="w-full text-xs whitespace-nowrap">
+                  <thead className="bg-amber-50 border-b border-amber-200">
+                    <tr>
+                      <th className="text-left py-1 px-2 font-medium text-amber-700">Rank</th>
+                      <th className="text-left py-1 px-2 font-medium text-amber-700">Name</th>
+                      <th className="text-left py-1 px-2 font-medium text-amber-700">Item</th>
+                      <th className="text-right py-1 px-2 font-medium text-amber-700">Settlement Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deferredPayoutRows.map(({ payslip, item }) => (
+                      <tr key={item.id} className="border-b border-amber-100 cursor-pointer hover:bg-amber-50" onClick={() => openDeferredPayoutHistory(payslip, item)}>
+                        <td className="py-1 px-2 text-gray-600">{payslip.rank_code}</td>
+                        <td className="py-1 px-2 font-medium">{payslip.crew_name}</td>
+                        <td className="py-1 px-2 text-gray-600">{item.name.replace(/\s*\(Lump Sum\)\s*$/, '')}</td>
+                        <td className="py-1 px-2 text-right font-mono font-semibold">{fmt(item.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {/* 상병급여는 선원 급여대장(crew_payslips)에는 들어가지 않지만, 이 선박·이 달에 청구해야
               할 상병급여가 있으면 놓치지 않도록 대장 바로 아래(적용 템플릿보다 위)에 안내한다. */}
           {sickPayRows.length > 0 && (
@@ -607,8 +735,10 @@ export default function CrewPayrollManagementPage() {
                       <th className="text-left py-1 px-2 font-medium text-red-700">Name</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700">Sign-Off Date</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700">Sick Pay Since</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700">Status</th>
                       <th className="text-right py-1 px-2 font-medium text-red-700">This Month Amount</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700 w-56">Close Case</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700 w-16">Monthly</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -618,6 +748,11 @@ export default function CrewPayrollManagementPage() {
                         <td className="py-1 px-2 font-medium">{row.crew_name}</td>
                         <td className="py-1 px-2 text-center text-gray-500">{row.disembark_date}</td>
                         <td className="py-1 px-2 text-center text-gray-500">{row.start_date}</td>
+                        <td className="py-1 px-2 text-center">
+                          {row.status === 'closed'
+                            ? <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Closed{row.closed_date ? ` ${row.closed_date}` : ''}</Badge>
+                            : <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">Active</Badge>}
+                        </td>
                         <td className="py-1 px-2 text-right">
                           <Input
                             type="number"
@@ -630,17 +765,26 @@ export default function CrewPayrollManagementPage() {
                           />
                         </td>
                         <td className="py-1 px-2">
-                          <div className="flex items-center justify-center gap-1">
-                            <Input
-                              type="date"
-                              value={closeDateDrafts[row.id] ?? new Date().toISOString().slice(0, 10)}
-                              onChange={e => setCloseDateDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
-                              className="h-6 text-xs w-32"
-                            />
-                            <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => handleCloseSickPay(row)} disabled={sickPaySaving === row.id}>
-                              Close
-                            </Button>
-                          </div>
+                          {row.status === 'closed' ? (
+                            <p className="text-center text-[11px] text-gray-400">Already closed</p>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <Input
+                                type="date"
+                                value={closeDateDrafts[row.id] ?? new Date().toISOString().slice(0, 10)}
+                                onChange={e => setCloseDateDrafts(prev => ({ ...prev, [row.id]: e.target.value }))}
+                                className="h-6 text-xs w-32"
+                              />
+                              <Button size="sm" variant="outline" className="h-6 text-[11px] text-red-600 border-red-300" onClick={() => handleCloseSickPay(row)} disabled={sickPaySaving === row.id}>
+                                Close
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-1 px-2 text-center">
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="Monthly breakdown" onClick={() => openSickPayRowHistory(row)}>
+                            <History className="w-3.5 h-3.5 text-muted-foreground" />
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -662,7 +806,7 @@ export default function CrewPayrollManagementPage() {
         <div className="pt-2">
           <p className="text-xs text-gray-500 mb-1.5">Payment History</p>
           <div className="flex flex-wrap gap-1.5">
-            {periods.map(p => (
+            {nearbyPeriods.map(p => (
               <button
                 key={p.id} type="button" onClick={() => setYearMonth(p.year_month)}
                 className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${yearMonth === p.year_month ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
@@ -693,11 +837,11 @@ export default function CrewPayrollManagementPage() {
                     <th className="text-left p-2 font-medium text-gray-600">Status</th>
                     <th className="text-left p-2 font-medium text-gray-600">Pay Period</th>
                     <th className="text-left p-2 font-medium text-gray-600">Days</th>
-                    {historyAllowanceColumns.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
-                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">Total Earnings</th>
-                    {historyDeductionColumns.map(name => <th key={name} className="text-right p-2 font-medium text-red-600">{name}</th>)}
-                    <th className="text-right p-2 font-medium text-red-700 bg-gray-100">Total Deductions</th>
-                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">Net Pay</th>
+                    {historyAllowanceColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
+                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">GROSS</th>
+                    {historyDeductionColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
+                    <th className="text-right p-2 font-medium text-red-700 bg-gray-100">DEDUCT</th>
+                    <th className="text-right p-2 font-medium text-gray-700 bg-gray-100 border-l">Net Pay</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -708,26 +852,26 @@ export default function CrewPayrollManagementPage() {
                       <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
                       <td className="py-1 px-2 text-gray-600">{r.period_start_date}~{r.period_end_date}</td>
                       <td className="py-1 px-2 text-gray-600">{r.days_served}/{r.days_in_month}</td>
-                      {historyAllowanceColumns.map(name => <td key={name} className="py-1 px-2 text-right font-mono">{fmt(r.allowance_by_name[name] || 0)}</td>)}
+                      {historyAllowanceColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>{fmt(r.allowance_by_name[name] || 0)}</td>)}
                       <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50">{fmt(r.gross_amount)}</td>
-                      {historyDeductionColumns.map(name => <td key={name} className="py-1 px-2 text-right font-mono text-red-600">{fmt(r.deduction_by_name[name] || 0)}</td>)}
+                      {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l' : ''}`}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
                       <td className="py-1 px-2 text-right font-mono font-semibold text-red-600 bg-gray-50">{fmt(r.total_deduction)}</td>
-                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50">{fmt(r.net_amount)}</td>
+                      <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50 border-l">{fmt(r.net_amount)}</td>
                     </tr>
                   ))}
                   {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
                       급여대장에는 총적립액을 노출하지 않기로 했으므로 합계 칸은 비워둔다. */}
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                     <td className="py-1 px-2" colSpan={5}>Total ({historyRows.length} months)</td>
-                    {historyAllowanceColumns.map(name => (
-                      <td key={name} className="py-1 px-2 text-right font-mono">
+                    {historyAllowanceColumns.map((name, i) => (
+                      <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>
                         {name.endsWith('(Accrued)') ? <span className="text-gray-300">-</span> : fmt(historyTotals.allowanceByName[name] || 0)}
                       </td>
                     ))}
                     <td className="py-1 px-2 text-right font-mono">{fmt(historyTotals.gross)}</td>
-                    {historyDeductionColumns.map(name => <td key={name} className="py-1 px-2 text-right font-mono text-red-600">{fmt(historyTotals.deductionByName[name] || 0)}</td>)}
+                    {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l' : ''}`}>{fmt(historyTotals.deductionByName[name] || 0)}</td>)}
                     <td className="py-1 px-2 text-right font-mono text-red-600">{fmt(historyTotals.deduction)}</td>
-                    <td className="py-1 px-2 text-right font-mono">{fmt(historyTotals.net)}</td>
+                    <td className="py-1 px-2 text-right font-mono border-l">{fmt(historyTotals.net)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -751,6 +895,96 @@ export default function CrewPayrollManagementPage() {
                   <Printer className="w-3.5 h-3.5" />Print
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingDeferredPayout} onOpenChange={o => !o && setViewingDeferredPayout(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-1.5">
+              <History className="w-4 h-4 text-muted-foreground" />
+              {viewingDeferredPayout?.rankCode} {viewingDeferredPayout?.crewName} — {viewingDeferredPayout?.itemName} Deferred Pay Breakdown
+            </DialogTitle>
+          </DialogHeader>
+          {deferredPayoutHistoryLoading ? (
+            <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+          ) : deferredPayoutHistory.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No accrual history found.</p>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-2 font-medium text-gray-600">Month</th>
+                    <th className="text-left p-2 font-medium text-gray-600">Vessel</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Monthly Accrual</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Cumulative Balance</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Settled</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deferredPayoutHistory.map(r => (
+                    <tr key={r.period_id} className={`border-b ${r.payout_this_month > 0 ? 'bg-amber-50' : ''}`}>
+                      <td className="p-2">{r.year_month}</td>
+                      <td className="p-2 text-gray-600">{r.ship_name}</td>
+                      <td className="p-2 text-right font-mono">{fmt(r.monthly_accrual)}</td>
+                      <td className="p-2 text-right font-mono">{r.payout_this_month > 0 ? <span className="text-gray-300">-</span> : fmt(r.accrued_to_date)}</td>
+                      <td className="p-2 text-right font-mono font-semibold text-amber-700">{r.payout_this_month > 0 ? fmt(r.payout_this_month) : '-'}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-2" colSpan={4}>Settlement Amount</td>
+                    <td className="p-2 text-right font-mono text-amber-700">{fmt(viewingDeferredPayout?.settlementAmount ?? 0)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingSickPayRow} onOpenChange={o => !o && setViewingSickPayRow(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-1.5">
+              <History className="w-4 h-4 text-muted-foreground" />
+              {viewingSickPayRow?.rank_code} {viewingSickPayRow?.crew_name} — Sick Pay Monthly Breakdown
+            </DialogTitle>
+          </DialogHeader>
+          {sickPayRowEntriesLoading ? (
+            <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
+          ) : sickPayRowEntries.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No monthly entries found.</p>
+          ) : (
+            <div className="rounded-md border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="text-left p-2 font-medium text-gray-600">Month</th>
+                    <th className="text-center p-2 font-medium text-gray-600">Status</th>
+                    <th className="text-right p-2 font-medium text-gray-600">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sickPayRowEntries.map(e => (
+                    <tr key={e.year_month} className={`border-b ${e.confirmed ? '' : 'text-gray-400'}`}>
+                      <td className="p-2">{e.year_month}</td>
+                      <td className="p-2 text-center">
+                        {e.confirmed
+                          ? <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Confirmed</Badge>
+                          : <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-400 border-gray-200">Unconfirmed (calc.)</Badge>}
+                      </td>
+                      <td className="p-2 text-right font-mono">{fmt(e.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-2" colSpan={2}>Total ({sickPayRowEntries.length} months)</td>
+                    <td className="p-2 text-right font-mono">{fmt(sickPayRowEntries.reduce((s, e) => s + e.amount, 0))}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
         </DialogContent>

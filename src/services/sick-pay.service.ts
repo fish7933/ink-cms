@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { crewDisplayName } from '@/lib/utils';
-import type { CrewSickPayRecord, CrewSickPayRecordWithDetails, CrewSickPayLedgerRow } from '@/types/sick-pay';
+import type { CrewSickPayRecord, CrewSickPayRecordWithDetails, CrewSickPayLedgerRow, CrewSickPayHistoryRow } from '@/types/sick-pay';
 
 // 로컬 타임존으로 Date를 만들고 toISOString()(UTC)으로 읽으면, UTC보다 앞선 타임존(KST 등)에서
 // 날짜가 하루 밀려버린다(예: KST에서 2026-07-27 + 1일이 다시 2026-07-27로 나옴) — UTC 기준으로만
@@ -202,5 +202,36 @@ export const sickPayService = {
         ? { year_month: ym, amount: confirmedByMonth.get(ym)!, confirmed: true }
         : { year_month: ym, amount: defaultMonthlyAmount(record, ym), confirmed: false })
       .sort((a, b) => b.year_month.localeCompare(a.year_month));
+  },
+
+  // 선원카드 급여이력 탭용 — "지급된 급여명세"와 동일한 로직(월별 행으로 펼쳐서 최신순 반환).
+  // 이 선원이 겪은 상병급여 케이스가 여러 건이어도(재승선 후 재발 등) 전부 한 리스트로 합친다.
+  async getCrewSickPayHistory(crewMemberId: string): Promise<CrewSickPayHistoryRow[]> {
+    const { data: records, error } = await supabase
+      .from('crew_sick_pay_records')
+      .select('*')
+      .eq('crew_member_id', crewMemberId)
+      .order('start_date', { ascending: false });
+    if (error) { console.error('Error fetching crew sick pay history:', error); return []; }
+    if (!records || records.length === 0) return [];
+
+    const withDetails = await attachDetails(records);
+    const rows: CrewSickPayHistoryRow[] = [];
+    for (const rec of withDetails) {
+      const entries = await this.getMonthlyEntriesForRecord(rec);
+      for (const e of entries) {
+        rows.push({
+          record_id: rec.id,
+          year_month: e.year_month,
+          ship_name: rec.ship_name,
+          rank_code: rec.rank_code,
+          status: rec.status,
+          amount: e.amount,
+          currency: rec.currency,
+          confirmed: e.confirmed,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.year_month.localeCompare(a.year_month));
   },
 };
