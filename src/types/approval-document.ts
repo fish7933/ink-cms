@@ -1,4 +1,4 @@
-export type DocumentFormFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'table';
+export type DocumentFormFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'table' | 'line_items';
 
 export interface DocumentFormField {
   key: string;
@@ -6,7 +6,12 @@ export interface DocumentFormField {
   type: DocumentFormFieldType;
   required: boolean;
   options?: string[]; // type === 'select'일 때만 사용
+  columns?: DocumentFormField[]; // type === 'line_items'일 때만 사용 — 항목(행) 하나의 열 구성. 중첩(line_items 안에 line_items)은 지원하지 않는다.
 }
+
+// line_items 필드 한 행의 값 — columns의 각 key에 대응하는 값들.
+export type LineItemRow = Record<string, string | number | null>;
+export type FormFieldValue = string | number | null | LineItemRow[];
 
 export interface ApprovalDocumentType {
   id: string;
@@ -58,7 +63,7 @@ export interface ApprovalDocument {
   title: string;
   content: string | null;
   // 문서유형에 field_schema가 있을 때, 동적 입력폼에서 제출된 값 { [field.key]: value }
-  form_data: Record<string, string | number | null> | null;
+  form_data: Record<string, FormFieldValue> | null;
   attachments: ApprovalDocumentAttachment[];
   reference_type: string | null;
   reference_id: string | null;

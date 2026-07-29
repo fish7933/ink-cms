@@ -24,7 +24,7 @@ import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
 import { msg } from '@/lib/messages';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { OrgUnit, OrgMember } from '@/types/org-chart';
-import type { ApprovalDocumentType, ApprovalDocumentAttachment, ApprovalDocumentWithDetails } from '@/types/approval-document';
+import type { ApprovalDocumentType, ApprovalDocumentAttachment, ApprovalDocumentWithDetails, FormFieldValue } from '@/types/approval-document';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import type { User } from '@/types/models';
@@ -77,7 +77,7 @@ export default function DocumentDraftPage() {
   const [recipientOrgUnitId, setRecipientOrgUnitId] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [formValues, setFormValues] = useState<Record<string, string | number | null>>({});
+  const [formValues, setFormValues] = useState<Record<string, FormFieldValue>>({});
   const [ccOrgUnitIds, setCcOrgUnitIds] = useState<string[]>([]);
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [ccUserIds, setCcUserIds] = useState<string[]>([]);
@@ -511,7 +511,12 @@ export default function DocumentDraftPage() {
       toast({ title: useManualLine ? '선택한 결재선에 단계가 없습니다.' : '결재라인을 구성할 수 없는 부서입니다.', variant: 'destructive' });
       return;
     }
-    const missingField = formFields.find(f => f.required && (formValues[f.key] === undefined || formValues[f.key] === '' || formValues[f.key] === null));
+    const isFieldMissing = (f: (typeof formFields)[number]) => {
+      const v = formValues[f.key];
+      if (f.type === 'line_items') return !Array.isArray(v) || v.length === 0;
+      return v === undefined || v === '' || v === null;
+    };
+    const missingField = formFields.find(f => f.required && isFieldMissing(f));
     if (missingField) { toast({ title: `${missingField.label}을(를) 입력해주세요.`, variant: 'destructive' }); return; }
 
     try {

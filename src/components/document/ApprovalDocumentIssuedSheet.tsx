@@ -2,17 +2,19 @@ import { supabase } from '@/lib/supabase';
 import { sanitizeTableHtml } from '@/utils/table-field';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { LeaveDetail } from '@/services/approval-document.service';
-import type { ApprovalDocumentWithDetails, ApprovalDocumentType, DocumentFormField } from '@/types/approval-document';
+import type { ApprovalDocumentWithDetails, ApprovalDocumentType, DocumentFormField, LineItemRow } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 
-// 표(table) 필드는 다른 필드처럼 "왼쪽 라벨 + 오른쪽 내용" 한 줄에 넣으면 폭이 좁아져 보기 나쁘므로,
-// 연속된 일반 필드는 한 표로 묶고 표 필드는 라벨을 소제목으로 둔 채 전체 폭 블록으로 따로 뺀다.
-type FieldGroup = { kind: 'rows'; fields: DocumentFormField[] } | { kind: 'table'; field: DocumentFormField };
+// 표(table)/항목추가(line_items) 필드는 다른 필드처럼 "왼쪽 라벨 + 오른쪽 내용" 한 줄에 넣으면
+// 폭이 좁아져 보기 나쁘므로, 연속된 일반 필드는 한 표로 묶고 이 둘은 전체 폭 블록으로 따로 뺀다.
+type FieldGroup = { kind: 'rows'; fields: DocumentFormField[] } | { kind: 'table'; field: DocumentFormField } | { kind: 'line_items'; field: DocumentFormField };
 function groupFields(fields: DocumentFormField[]): FieldGroup[] {
   const groups: FieldGroup[] = [];
   for (const f of fields) {
     if (f.type === 'table') {
       groups.push({ kind: 'table', field: f });
+    } else if (f.type === 'line_items') {
+      groups.push({ kind: 'line_items', field: f });
     } else {
       const last = groups[groups.length - 1];
       if (last && last.kind === 'rows') last.fields.push(f);
@@ -65,6 +67,10 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.issued-fields { border-collapse: collapse; width: 100%; box-sizing: border-box; }
         table.issued-fields th, table.issued-fields td { border: 1px solid #999; padding: 8px 10px; font-size: 13px; text-align: left; box-sizing: border-box; }
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
+        table.issued-line-items { border-collapse: collapse; width: 100%; box-sizing: border-box; }
+        table.issued-line-items th, table.issued-line-items td { border: 1px solid #999; padding: 6px 8px; font-size: 12px; text-align: left; box-sizing: border-box; }
+        table.issued-line-items th { background: #f5f5f5; font-weight: 600; white-space: nowrap; }
+        table.issued-line-items tfoot td { background: #fafafa; font-weight: 600; }
         /* table-layout: fixed는 "첫 번째 행의 열 구조"만 보고 나머지 모든 행에 그대로 적용하는데,
            엑셀에서 여러 섹션(예: 계좌별 표)을 colspan으로 한 표에 이어붙여 붙여넣은 경우 섹션마다
            실제 열 구성이 달라 아래쪽 섹션들의 열 너비가 어긋나 버린다(직접 저장된 문서 데이터로
@@ -239,6 +245,48 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                 return isEmpty ? null : (
                   <tr key={gi}><td>
                     <div className="issued-table-block" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(String(raw)) }} />
+                  </td></tr>
+                );
+              }
+              if (g.kind === 'line_items') {
+                const rows = (doc.form_data?.[g.field.key] as LineItemRow[] | undefined) || [];
+                const columns = g.field.columns || [];
+                if (rows.length === 0) return null;
+                const numberColumns = columns.filter(c => c.type === 'number');
+                const totalByColumn = new Map(numberColumns.map(c => [c.key, rows.reduce((sum, r) => sum + (Number(r[c.key]) || 0), 0)]));
+                return (
+                  <tr key={gi}><td>
+                    <table className="issued-line-items">
+                      <thead>
+                        <tr>{columns.map(c => <th key={c.key}>{c.label}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row, ri) => (
+                          <tr key={ri}>
+                            {columns.map(c => {
+                              const raw = row[c.key];
+                              const isEmpty = raw === null || raw === undefined || raw === '';
+                              const display = isEmpty ? '-' : c.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
+                              return <td key={c.key} style={c.type === 'number' ? { textAlign: 'right' } : undefined}>{display}</td>;
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                      {numberColumns.length > 0 && (() => {
+                        const labelColIdx = columns.findIndex(c => c.type !== 'number');
+                        return (
+                          <tfoot>
+                            <tr>
+                              {columns.map((c, ci) => (
+                                <td key={c.key} style={totalByColumn.has(c.key) ? { textAlign: 'right' } : undefined}>
+                                  {totalByColumn.has(c.key) ? `${totalByColumn.get(c.key)!.toLocaleString('ko-KR')}원` : ci === labelColIdx ? '합계' : ''}
+                                </td>
+                              ))}
+                            </tr>
+                          </tfoot>
+                        );
+                      })()}
+                    </table>
                   </td></tr>
                 );
               }
