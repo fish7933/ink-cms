@@ -663,7 +663,7 @@ export default function CrewPayrollManagementPage() {
                     <span className="inline-flex items-center gap-1">
                       {p.crew_name}
                       {embarkedThisMonth(p) && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-4 bg-blue-50 text-blue-700 border-blue-200">Sign On</Badge>}
-                      {disembarkedThisMonth(p) && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-4 bg-orange-50 text-orange-700 border-orange-200">Signed Off</Badge>}
+                      {disembarkedThisMonth(p) && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-4 bg-orange-50 text-orange-700 border-orange-200">Sign Off</Badge>}
                     </span>
                   </td>
                   <td className="py-1 px-2 text-center text-gray-500" title={`${p.period_start_date} ~ ${p.period_end_date}`}>
