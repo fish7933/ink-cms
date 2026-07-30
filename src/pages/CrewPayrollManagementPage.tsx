@@ -486,15 +486,6 @@ export default function CrewPayrollManagementPage() {
   const totalDeduction = payslips.reduce((sum, p) => sum + computeRowTotals(p).deduction, 0);
   const totalNet = payslips.reduce((sum, p) => sum + computeRowTotals(p).net, 0);
 
-  // 목록 표시 순서는 직급관리 화면과 같은 순서(부서→display_order)를 따른다 — ranks는 이미
-  // getRanks()에서 sortRanksByDisplayOrder로 정렬되어 오므로, 그 배열 안 위치를 그대로 순위로 쓴다.
-  const rankOrderIndex = new Map(ranks.map((r, i) => [r.id, i]));
-  const sortedPayslips = [...payslips].sort((a, b) => {
-    const ai = a.rank_id ? rankOrderIndex.get(a.rank_id) ?? ranks.length : ranks.length;
-    const bi = b.rank_id ? rankOrderIndex.get(b.rank_id) ?? ranks.length : ranks.length;
-    return ai - bi || a.crew_name.localeCompare(b.crew_name);
-  });
-
   // Payment History는 회차가 쌓일수록 무한정 늘어나던 걸 막기 위해 현재 선택된 달 기준
   // 앞뒤로 3개월(총 최대 7개)만 보여준다 — 더 먼 과거/미래 달은 상단의 월 선택 입력으로
   // 바로 이동할 수 있으니(이 목록은 그 주변 빠른 이동용일 뿐) 잘려도 접근성엔 문제없다.
@@ -661,7 +652,7 @@ export default function CrewPayrollManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedPayslips.map(p => {
+              {payslips.map(p => {
                 const rowTotals = computeRowTotals(p);
                 return (
                 <tr key={p.id} className="border-b hover:bg-gray-50">

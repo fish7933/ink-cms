@@ -847,7 +847,7 @@ export const crewPayrollService = {
     }
     const embarkRecordById = new Map((embarkRecords || []).map(r => [r.id, r]));
 
-    return data.map(p => {
+    const result = data.map(p => {
       const crew = p.crew_members as { name?: string; name_english?: string; nationality?: string } | null;
       const rank = p.ranks as { name?: string; rank_code?: string } | null;
       const embarkRecord = p.embarkation_record_id ? embarkRecordById.get(p.embarkation_record_id) : undefined;
@@ -861,6 +861,16 @@ export const crewPayrollService = {
         actual_embark_date: embarkRecord?.embark_date,
         actual_disembark_date: embarkRecord?.disembark_date,
       } as CrewPayslipWithDetails;
+    });
+
+    // 급여대장 화면/프린트/엑셀이 전부 이 함수 결과를 그대로 나열하므로, 여기서 한 번만
+    // 직급관리 순서(부서→display_order, 동일 직급이면 이름순)로 정렬해두면 어디서든 일치한다.
+    const ranks = await getRanks();
+    const rankOrderIndex = new Map(ranks.map((r, i) => [r.id, i]));
+    return result.sort((a, b) => {
+      const ai = a.rank_id ? rankOrderIndex.get(a.rank_id) ?? ranks.length : ranks.length;
+      const bi = b.rank_id ? rankOrderIndex.get(b.rank_id) ?? ranks.length : ranks.length;
+      return ai - bi || a.crew_name.localeCompare(b.crew_name);
     });
   },
 
