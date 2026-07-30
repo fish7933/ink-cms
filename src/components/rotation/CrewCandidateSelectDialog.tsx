@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -126,6 +127,15 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
     }
   }, [open, mode, scoringContext, candidates]);
 
+  // 적합도 모달은 Radix Dialog가 아니라 직접 만든 오버레이라, Escape도 직접 처리해야 한다
+  // (Radix Dialog로 겹쳐 쓰면 바깥쪽 후보 선택 모달까지 같이 닫혀버리는 문제가 있었음).
+  useEffect(() => {
+    if (!fitnessModalCrewId) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setFitnessModalCrewId(null); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [fitnessModalCrewId]);
+
   const filtered = useMemo(() => {
     let list = candidates;
     if (search) {
@@ -179,15 +189,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={next => {
-        // 적합도 모달(안쪽 Dialog)이 열려 있는 동안의 Escape/바깥 클릭이 바깥쪽 후보 선택
-        // 모달까지 닫아버리는 것을 막는다 — 적합도 모달만 닫히게.
-        if (!next && fitnessModalCrewId !== null) return;
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-base">{mode === 'boarding' ? '승선 후보 선택' : '하선 후보 선택'}</DialogTitle>
@@ -333,19 +335,34 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
         </DialogFooter>
       </DialogContent>
 
-      <Dialog open={fitnessModalCrewId !== null} onOpenChange={open => { if (!open) setFitnessModalCrewId(null); }}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="sr-only">승선 적합도 분석</DialogTitle></DialogHeader>
-          {fitnessModalCrewId && scoringContext && (
+      {fitnessModalCrewId && scoringContext && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setFitnessModalCrewId(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 absolute right-3 top-3"
+              onClick={() => setFitnessModalCrewId(null)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
             <CrewBoardingFitDetail
               crewId={fitnessModalCrewId}
               shipId={scoringContext.targetShipId}
               embarkDate={scoringContext.targetEmbarkDate}
               rankId={scoringContext.targetRankId}
             />
-          )}
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>,
+        document.body
+      )}
     </Dialog>
   );
 }
