@@ -837,6 +837,7 @@ export default function CrewPayrollManagementPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-2 font-medium text-gray-600">Month</th>
+                    <th className="text-left p-2 font-medium text-gray-600">Crew</th>
                     <th className="text-left p-2 font-medium text-gray-600">Vessel</th>
                     <th className="text-left p-2 font-medium text-gray-600">Status</th>
                     <th className="text-left p-2 font-medium text-gray-600">Pay Period</th>
@@ -853,9 +854,10 @@ export default function CrewPayrollManagementPage() {
                     <tr key={r.period_id} className="border-b">
                       <td className="py-1 px-2">{r.year_month}</td>
                       <td className="py-1 px-2 text-gray-600">
-                        <div>{r.rank_code}{r.rank_grade ? `(${r.rank_grade})` : ''} {r.ship_name}</div>
+                        <div>{r.rank_code}{r.rank_grade ? `(${r.rank_grade})` : ''} {historyCrew?.crewName}</div>
                         <div className="text-[10px] text-gray-400">{r.actual_embark_date || '-'} ~ {r.actual_disembark_date || 'present'}</div>
                       </td>
+                      <td className="py-1 px-2 text-gray-600">{r.ship_name}</td>
                       <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
                       <td className="py-1 px-2 text-gray-600">{r.period_start_date}~{r.period_end_date}</td>
                       <td className="py-1 px-2 text-gray-600">{r.days_served}/{r.days_in_month}</td>
@@ -869,7 +871,7 @@ export default function CrewPayrollManagementPage() {
                   {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
                       급여대장에는 총적립액을 노출하지 않기로 했으므로 합계 칸은 비워둔다. */}
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                    <td className="py-1 px-2" colSpan={5}>Total ({historyRows.length} months)</td>
+                    <td className="py-1 px-2" colSpan={6}>Total ({historyRows.length} months)</td>
                     {historyAllowanceColumns.map((name, i) => (
                       <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>
                         {name.endsWith('(Accrued)') ? <span className="text-gray-300">-</span> : fmt(historyTotals.allowanceByName[name] || 0)}
