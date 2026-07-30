@@ -13,6 +13,7 @@ const FIELDS: { key: keyof BoardingScoreWeights; label: string; hint: string }[]
   { key: 'route', label: '항로 경험', hint: '과거 승선했던 선박의 항로와 대상 선박 항로 일치 여부' },
   { key: 'evaluation', label: '기존 고과', hint: '확정된 승선평가 점수 평균' },
   { key: 'workYears', label: '근무년수', hint: '누적 승선 기간(연 단위, 체감 반영)' },
+  { key: 'sameRank', label: '동직급 경력', hint: '지금 그 직급인지가 아니라, 실제 그 직급으로 승선해본 연차(체감 반영)' },
   { key: 'rest', label: '휴식 기간', hint: '마지막 하선일로부터 90일 지났을 때 최고점' },
   { key: 'desiredDate', label: '승선 희망일', hint: '선원이 등록한 희망일과 목표 승선일의 근접도' },
   { key: 'familiarity', label: '선박/플릿/선주사 친숙도', hint: '같은 선박 승선 경험이 최고점, 없으면 같은 플릿, 그것도 없으면 같은 선주사' },
@@ -58,6 +59,8 @@ export default function CrewBoardingScoreSettingsPage() {
   };
 
   const total = FIELDS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0);
+  // 중요도(현재 가중치)가 높은 항목이 항상 위로 오도록 매 렌더마다 재정렬한다.
+  const sortedFields = [...FIELDS].sort((a, b) => (Number(weights[b.key]) || 0) - (Number(weights[a.key]) || 0));
 
   return (
     <Card>
@@ -77,7 +80,7 @@ export default function CrewBoardingScoreSettingsPage() {
           <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
         ) : (
           <div className="space-y-3 max-w-xl">
-            {FIELDS.map(f => {
+            {sortedFields.map(f => {
               const raw = Number(weights[f.key]) || 0;
               const normalized = total > 0 ? Math.round((raw / total) * 1000) / 10 : 0;
               return (

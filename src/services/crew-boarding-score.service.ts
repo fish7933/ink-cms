@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 export interface RecommendationContext {
   targetShipId: string;
   targetEmbarkDate?: string; // YYYY-MM-DD
+  targetRankId?: string;
 }
 
 export interface CrewBoardingScore {
@@ -21,6 +22,7 @@ export interface BoardingScoreWeights {
   route: number;
   evaluation: number;
   workYears: number;
+  sameRank: number; // 대상 직급으로 실제 승선해본 경력(연차) — 단순 현재 직급 보유 여부가 아님
   rest: number;
   desiredDate: number;
   familiarity: number; // 같은 선박/플릿/선주사 승선 경험
@@ -33,6 +35,7 @@ export const DEFAULT_BOARDING_SCORE_WEIGHTS: BoardingScoreWeights = {
   route: 10,
   evaluation: 25,
   workYears: 15,
+  sameRank: 20,
   rest: 15,
   desiredDate: 10,
   familiarity: 15,
@@ -47,6 +50,7 @@ export const BOARDING_SCORE_FACTOR_LABELS: Record<WeightKey, string> = {
   route: '항로 경험',
   evaluation: '기존 고과',
   workYears: '근무년수',
+  sameRank: '동직급 경력',
   rest: '휴식 기간',
   desiredDate: '승선 희망일',
   familiarity: '선박/플릿/선주사 친숙도',
@@ -72,7 +76,7 @@ export interface CrewBoardingScoreDetail {
 export async function getBoardingScoreWeights(): Promise<BoardingScoreWeights> {
   const { data, error } = await supabase
     .from('crew_boarding_score_weights')
-    .select('ship_type, size, route, evaluation, work_years, rest, desired_date, familiarity, age')
+    .select('ship_type, size, route, evaluation, work_years, same_rank, rest, desired_date, familiarity, age')
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -84,6 +88,7 @@ export async function getBoardingScoreWeights(): Promise<BoardingScoreWeights> {
     route: data.route,
     evaluation: data.evaluation,
     workYears: data.work_years,
+    sameRank: data.same_rank,
     rest: data.rest,
     desiredDate: data.desired_date,
     familiarity: data.familiarity,
@@ -99,6 +104,7 @@ export async function updateBoardingScoreWeights(weights: BoardingScoreWeights):
     route: weights.route,
     evaluation: weights.evaluation,
     work_years: weights.workYears,
+    same_rank: weights.sameRank,
     rest: weights.rest,
     desired_date: weights.desiredDate,
     familiarity: weights.familiarity,
@@ -119,6 +125,7 @@ interface SeaRecordLite {
   ship_id: string | null;
   ship_type: string | null;
   gross_tonnage: number | null;
+  rank: string | null;
   sign_on_date: string;
   sign_off_date: string | null;
 }
@@ -135,6 +142,7 @@ interface TargetShipLite {
 interface BulkData {
   weights: BoardingScoreWeights;
   targetShip: TargetShipLite | null;
+  targetRankNames: string[];
   recordsByCrew: Map<string, SeaRecordLite[]>;
   evalsByCrew: Map<string, number[]>;
   memberById: Map<string, { id: string; desired_embark_date: string | null; date_of_birth: string | null }>;
@@ -145,16 +153,24 @@ interface BulkData {
 
 // 후보 목록에 필요한 모든 참조 데이터를 한 번의 벌크 조회로 가져온다(후보마다 따로 쿼리하지 않음).
 async function fetchBulkData(candidateIds: string[], ctx: RecommendationContext): Promise<BulkData> {
-  const [weights, { data: targetShip }, { data: seaRecords }, { data: evals }, { data: members }] = await Promise.all([
+  const [weights, { data: targetShip }, { data: seaRecords }, { data: evals }, { data: members }, { data: targetRank }] = await Promise.all([
     getBoardingScoreWeights(),
     supabase.from('ships').select('id, ship_type, gross_tonnage, route, fleet_id, owner_id').eq('id', ctx.targetShipId).maybeSingle(),
     supabase
       .from('sea_service_records')
-      .select('crew_member_id, ship_id, ship_type, gross_tonnage, sign_on_date, sign_off_date')
+      .select('crew_member_id, ship_id, ship_type, gross_tonnage, rank, sign_on_date, sign_off_date')
       .in('crew_member_id', candidateIds),
     supabase.from('crew_evaluations').select('crew_member_id, overall_rating, status').in('crew_member_id', candidateIds),
     supabase.from('crew_members').select('id, desired_embark_date, date_of_birth').in('id', candidateIds),
+    ctx.targetRankId
+      ? supabase.from('ranks').select('rank_code, name').eq('id', ctx.targetRankId).maybeSingle()
+      : Promise.resolve({ data: null as { rank_code: string | null; name: string | null } | null }),
   ]);
+
+  // sea_service_records.rank는 자유 텍스트라 ranks 테이블의 rank_code/name 둘 다와 비교한다.
+  const targetRankNames = [targetRank?.rank_code, targetRank?.name]
+    .filter((v): v is string => !!v && v.trim().length > 0)
+    .map(v => v.trim());
 
   // sea_service_records에는 항로(route)가 없다 — 과거 승선했던 배의 ship_id로 ships를 한 번 더
   // 조회해 "그 배가 지금 다니는 항로"를 그때도 다녔을 것으로 근사한다. 회사 입사 전 경력
@@ -179,6 +195,7 @@ async function fetchBulkData(candidateIds: string[], ctx: RecommendationContext)
   return {
     weights,
     targetShip: targetShip || null,
+    targetRankNames,
     recordsByCrew,
     evalsByCrew,
     memberById: new Map((members || []).map(m => [m.id, m])),
@@ -191,7 +208,7 @@ async function fetchBulkData(candidateIds: string[], ctx: RecommendationContext)
 // 후보 한 명의 적합도를 계산한다 — 요소별 세부 내역(factors)까지 전부 담아 반환하고, 목록용
 // 짧은 근거(reasons)는 그 세부 내역에서 뽑아 만든다.
 function scoreCandidate(crewId: string, ctx: RecommendationContext, bulk: BulkData, today: string): CrewBoardingScoreDetail {
-  const { weights, targetShip, recordsByCrew, evalsByCrew, memberById, routeByShipId, fleetByShipId, ownerByShipId } = bulk;
+  const { weights, targetShip, targetRankNames, recordsByCrew, evalsByCrew, memberById, routeByShipId, fleetByShipId, ownerByShipId } = bulk;
   const records = recordsByCrew.get(crewId) || [];
   const member = memberById.get(crewId);
   const factors: BoardingScoreFactorDetail[] = [];
@@ -246,6 +263,21 @@ function scoreCandidate(crewId: string, ctx: RecommendationContext, bulk: BulkDa
     push('workYears', years / (years + 5), `누적 승선 기간 약 ${years.toFixed(1)}년`);
   } else {
     push('workYears', null, '승선 이력이 없습니다.');
+  }
+
+  // 동직급 경력 — 지금 그 직급을 갖고 있는지가 아니라, 실제로 그 직급으로 승선해본 연차가
+  // 얼마나 되는지를 본다(막 진급해 그 직급 경력이 전혀 없는 사람과 오래 근무한 사람을 구분).
+  if (targetRankNames.length > 0) {
+    const sameRankRecords = records.filter(r => r.rank && targetRankNames.includes(r.rank.trim()));
+    if (sameRankRecords.length > 0) {
+      const sameRankDays = sameRankRecords.reduce((s, r) => s + daysBetween(r.sign_on_date, r.sign_off_date || today), 0);
+      const sameRankYears = sameRankDays / 365.25;
+      push('sameRank', sameRankYears / (sameRankYears + 2), `해당 직급으로 승선한 경력 약 ${sameRankYears.toFixed(1)}년`);
+    } else {
+      push('sameRank', 0, '해당 직급으로 승선한 경력이 없습니다.');
+    }
+  } else {
+    push('sameRank', null, '대상 직급 정보가 없습니다.');
   }
 
   // 휴식

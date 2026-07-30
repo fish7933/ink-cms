@@ -1233,7 +1233,7 @@ export default function RotationPlanFormPage() {
         defaultRankId={rowPickerDefaultRankId()}
         scoringContext={
           rowPicker?.side !== 'disembark' && shipId
-            ? { targetShipId: shipId, targetEmbarkDate: rows.find(r => r.id === rowPicker?.rowId)?.boardingDate || undefined }
+            ? { targetShipId: shipId, targetEmbarkDate: rows.find(r => r.id === rowPicker?.rowId)?.boardingDate || undefined, targetRankId: rowPickerDefaultRankId() }
             : undefined
         }
       />

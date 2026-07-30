@@ -18,6 +18,7 @@ import { crewDisplayName } from '@/lib/utils';
 import { useTabContext } from '@/contexts/TabContext';
 import { getNationalities } from '@/services/nationality.service';
 import { getBoardingScores, type RecommendationContext, type CrewBoardingScore } from '@/services/crew-boarding-score.service';
+import CrewBoardingFitDetail from '@/components/rotation/CrewBoardingFitDetail';
 import type { CrewWithDetails } from '@/services/crew.service';
 import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
 import type { Nationality } from '@/types/nationality';
@@ -58,6 +59,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [scores, setScores] = useState<Map<string, CrewBoardingScore>>(new Map());
+  const [fitnessModalCrewId, setFitnessModalCrewId] = useState<string | null>(null);
 
   const [owners, setOwners] = useState<Company[]>([]);
   const [manningAgencies, setManningAgencies] = useState<Company[]>([]);
@@ -177,7 +179,15 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        // 적합도 모달(안쪽 Dialog)이 열려 있는 동안의 Escape/바깥 클릭이 바깥쪽 후보 선택
+        // 모달까지 닫아버리는 것을 막는다 — 적합도 모달만 닫히게.
+        if (!next && fitnessModalCrewId !== null) return;
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-base">{mode === 'boarding' ? '승선 후보 선택' : '하선 후보 선택'}</DialogTitle>
@@ -243,23 +253,25 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">이름</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">상태</th>
                 {scores.size > 0 && <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">적합도</th>}
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">선택</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(c => {
                 const reservationNote = getReservationNote?.(c);
                 const boardingScore = scores.get(c.id);
+                const selected = selectedIds.includes(c.id);
                 return (
-                  <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => handleRowClick(c.id)}>
+                  <tr key={c.id} className="border-b hover:bg-gray-50">
                     {!isSingle && (
-                      <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
-                        <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
+                      <td className="px-3 py-2">
+                        <Checkbox checked={selected} onCheckedChange={() => toggleSelect(c.id)} />
                       </td>
                     )}
-                    <td className="px-3 py-2 text-gray-700" onClick={e => { e.stopPropagation(); openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보'); }}>
+                    <td className="px-3 py-2 text-gray-700" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보')}>
                       <button type="button" className="hover:underline hover:text-blue-600">{c.rank_code || '-'}</button>
                     </td>
-                    <td className="px-3 py-2 font-medium" onClick={e => { e.stopPropagation(); openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보'); }}>
+                    <td className="px-3 py-2 font-medium" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보')}>
                       <button type="button" className="hover:underline hover:text-blue-600">{crewDisplayName(c)}</button>
                       {reservationNote && (
                         <div className="text-[10px] text-amber-600 font-normal mt-0.5">⚠ {reservationNote}</div>
@@ -274,14 +286,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                     {scores.size > 0 && (
                       <td className="px-3 py-2">
                         {boardingScore ? (
-                          <div
-                            onClick={e => {
-                              e.stopPropagation();
-                              if (!scoringContext) return;
-                              const params = new URLSearchParams({ shipId: scoringContext.targetShipId, ...(scoringContext.targetEmbarkDate ? { embarkDate: scoringContext.targetEmbarkDate } : {}) });
-                              openNewTab(`/crew-boarding-fit/${c.id}?${params.toString()}`, `${crewDisplayName(c)} 적합도 분석`);
-                            }}
-                          >
+                          <div onClick={() => setFitnessModalCrewId(c.id)}>
                             <button type="button" className="font-semibold text-emerald-700 hover:underline">{boardingScore.score}점</button>
                             {boardingScore.reasons.length > 0 && (
                               <div className="text-[10px] text-gray-400 mt-0.5">{boardingScore.reasons.slice(0, 2).join(' · ')}</div>
@@ -290,11 +295,22 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                         ) : <span className="text-gray-300">-</span>}
                       </td>
                     )}
+                    <td className="px-3 py-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isSingle || !selected ? 'outline' : 'default'}
+                        className="h-7 text-xs"
+                        onClick={() => handleRowClick(c.id)}
+                      >
+                        {isSingle ? '선택' : (selected ? '선택됨' : '선택')}
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={(isSingle ? 3 : 4) + (scores.size > 0 ? 1 : 0)} className="text-center py-8 text-xs text-gray-400">후보가 없습니다</td></tr>
+                <tr><td colSpan={(isSingle ? 4 : 5) + (scores.size > 0 ? 1 : 0)} className="text-center py-8 text-xs text-gray-400">후보가 없습니다</td></tr>
               )}
             </tbody>
           </table>
@@ -316,6 +332,20 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
           )}
         </DialogFooter>
       </DialogContent>
+
+      <Dialog open={fitnessModalCrewId !== null} onOpenChange={open => { if (!open) setFitnessModalCrewId(null); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="sr-only">승선 적합도 분석</DialogTitle></DialogHeader>
+          {fitnessModalCrewId && scoringContext && (
+            <CrewBoardingFitDetail
+              crewId={fitnessModalCrewId}
+              shipId={scoringContext.targetShipId}
+              embarkDate={scoringContext.targetEmbarkDate}
+              rankId={scoringContext.targetRankId}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
