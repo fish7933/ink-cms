@@ -19,8 +19,20 @@ const FIELDS: { key: keyof BoardingScoreWeights; label: string; hint: string }[]
   { key: 'age', label: '나이', hint: '30대(30~39세)가 최고점, 멀어질수록 감점' },
 ];
 
+// 어느 한 항목 값을 바꾸는 순간, 그 값을 포함한 전체 합이 100이 되도록 모든 항목을 같은
+// 비율로 다시 계산한다 — "항목들의 상대적 비중"이라는 의미를 유지한 채 합계는 항상 100.
+function normalizeWeights(weights: BoardingScoreWeights, changedKey: keyof BoardingScoreWeights, rawValue: number): BoardingScoreWeights {
+  const next = { ...weights, [changedKey]: rawValue };
+  const sum = FIELDS.reduce((s, f) => s + (Number(next[f.key]) || 0), 0);
+  if (sum <= 0) return next; // 전부 0이면 비율을 정할 수 없으니 그대로 둔다.
+  const scale = 100 / sum;
+  const rescaled = { ...next };
+  for (const f of FIELDS) rescaled[f.key] = Math.round((Number(next[f.key]) || 0) * scale * 10) / 10;
+  return rescaled;
+}
+
 // 로테이션 승선 후보 추천 점수(crew-boarding-score.service.ts)의 요소별 가중치를 관리자가
-// 조정하는 화면. 값은 상대적 가중치라 합이 100일 필요는 없다(존재하는 요소끼리 정규화됨).
+// 조정하는 화면. 항목 하나를 바꾸면 나머지가 자동으로 재조정돼 합계가 항상 100이 된다.
 export default function CrewBoardingScoreSettingsPage() {
   const { toast } = useToast();
   const [weights, setWeights] = useState<BoardingScoreWeights>(DEFAULT_BOARDING_SCORE_WEIGHTS);
@@ -66,7 +78,7 @@ export default function CrewBoardingScoreSettingsPage() {
           </Button>
         </div>
         <p className="text-xs text-gray-500 pt-1">
-          로테이션 승선 후보를 추천할 때 각 요소를 얼마나 중요하게 볼지 정합니다. 상대적인 비중이라 합이 꼭 100일 필요는 없습니다.
+          로테이션 승선 후보를 추천할 때 각 요소를 얼마나 중요하게 볼지 정합니다. 하나를 바꾸면 나머지가 자동으로 재조정되어 합계는 항상 100입니다.
         </p>
       </CardHeader>
       <CardContent>
@@ -85,7 +97,7 @@ export default function CrewBoardingScoreSettingsPage() {
                   min={0}
                   className="h-8 text-sm"
                   value={weights[f.key]}
-                  onChange={e => setWeights(w => ({ ...w, [f.key]: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                  onChange={e => setWeights(w => normalizeWeights(w, f.key, e.target.value === '' ? 0 : Number(e.target.value)))}
                 />
               </div>
             ))}
