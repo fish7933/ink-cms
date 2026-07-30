@@ -674,6 +674,13 @@ export const rotationService = {
       console.error('발령 실행 실패: 계획/배정 조회 오류', fetchErr);
       return false;
     }
+    // 버튼 더블클릭 등으로 같은 계획이 짧은 시간 안에 두 번 실행되면 승선기록/계약/승선경력이
+    // 전부 중복 생성된다 — 맨 끝에서야 status를 'executed'로 바꾸므로 그 전에는 막을 방법이
+    // 없었다. 이미 실행된 계획은 여기서 바로 막는다.
+    if (plan.status === 'executed') {
+      console.error('발령 실행 실패: 이미 실행된 계획입니다.', planId);
+      return false;
+    }
 
     const now = new Date().toISOString();
 
