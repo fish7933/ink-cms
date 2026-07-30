@@ -12,8 +12,7 @@ export interface CrewBoardingScore {
 }
 
 // 각 요소를 0~1로 정규화한 뒤 이 가중치로 가중평균한다(합이 100일 필요는 없음 — 존재하는
-// 요소끼리 정규화됨). 나이는 선호 방향(젊을수록/많을수록)이 정해지지 않아 점수화하지 않고
-// 정보로만 보여준다 — 방향이 정해지면 여기 한 줄만 추가하면 된다.
+// 요소끼리 정규화됨).
 // "선원 관리 설정 > 승선 적합도 설정" 화면에서 관리자가 조정 가능 — crew_boarding_score_weights
 // 싱글턴 테이블에 저장되며, 아래 DEFAULT는 그 테이블 행을 못 읽어올 때만 쓰는 대체값이다.
 export interface BoardingScoreWeights {
@@ -24,6 +23,8 @@ export interface BoardingScoreWeights {
   workYears: number;
   rest: number;
   desiredDate: number;
+  familiarity: number; // 같은 선박/플릿/선주사 승선 경험
+  age: number; // 30대 최고점, 멀어질수록 감점
 }
 
 export const DEFAULT_BOARDING_SCORE_WEIGHTS: BoardingScoreWeights = {
@@ -34,6 +35,8 @@ export const DEFAULT_BOARDING_SCORE_WEIGHTS: BoardingScoreWeights = {
   workYears: 15,
   rest: 15,
   desiredDate: 10,
+  familiarity: 15,
+  age: 10,
 };
 
 type WeightKey = keyof BoardingScoreWeights;
@@ -41,7 +44,7 @@ type WeightKey = keyof BoardingScoreWeights;
 export async function getBoardingScoreWeights(): Promise<BoardingScoreWeights> {
   const { data, error } = await supabase
     .from('crew_boarding_score_weights')
-    .select('ship_type, size, route, evaluation, work_years, rest, desired_date')
+    .select('ship_type, size, route, evaluation, work_years, rest, desired_date, familiarity, age')
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -55,6 +58,8 @@ export async function getBoardingScoreWeights(): Promise<BoardingScoreWeights> {
     workYears: data.work_years,
     rest: data.rest,
     desiredDate: data.desired_date,
+    familiarity: data.familiarity,
+    age: data.age,
   };
 }
 
@@ -68,6 +73,8 @@ export async function updateBoardingScoreWeights(weights: BoardingScoreWeights):
     work_years: weights.workYears,
     rest: weights.rest,
     desired_date: weights.desiredDate,
+    familiarity: weights.familiarity,
+    age: weights.age,
     updated_at: new Date().toISOString(),
   };
   const { error } = existing
@@ -98,7 +105,7 @@ export async function getBoardingScores(
 
   const [weights, { data: targetShip }, { data: seaRecords }, { data: evals }, { data: members }] = await Promise.all([
     getBoardingScoreWeights(),
-    supabase.from('ships').select('id, ship_type, gross_tonnage, route').eq('id', ctx.targetShipId).maybeSingle(),
+    supabase.from('ships').select('id, ship_type, gross_tonnage, route, fleet_id, owner_id').eq('id', ctx.targetShipId).maybeSingle(),
     supabase
       .from('sea_service_records')
       .select('crew_member_id, ship_id, ship_type, gross_tonnage, sign_on_date, sign_off_date')
@@ -117,9 +124,11 @@ export async function getBoardingScores(
   // (ship_id가 없는 pre_company 기록)은 이 방식으로 항로를 알 수 없어 항로 매칭에서 제외된다.
   const historicalShipIds = [...new Set((seaRecords || []).map(r => r.ship_id).filter((id): id is string => !!id))];
   const { data: historicalShips } = historicalShipIds.length > 0
-    ? await supabase.from('ships').select('id, route').in('id', historicalShipIds)
-    : { data: [] as { id: string; route: string | null }[] };
+    ? await supabase.from('ships').select('id, route, fleet_id, owner_id').in('id', historicalShipIds)
+    : { data: [] as { id: string; route: string | null; fleet_id: string | null; owner_id: string | null }[] };
   const routeByShipId = new Map((historicalShips || []).map(s => [s.id, s.route]));
+  const fleetByShipId = new Map((historicalShips || []).map(s => [s.id, s.fleet_id]));
+  const ownerByShipId = new Map((historicalShips || []).map(s => [s.id, s.owner_id]));
 
   const recordsByCrew = new Map<string, SeaRecordLite[]>();
   for (const r of (seaRecords || []) as SeaRecordLite[]) {
@@ -201,9 +210,26 @@ export async function getBoardingScores(
       reasons.push(`희망일과 ${diff}일 차이`);
     }
 
-    // 나이는 점수화하지 않고 표시 정보로만 남긴다.
+    // 친숙도 — 같은 선박에 승선했던 적 있으면 최고점, 없으면 같은 플릿, 그것도 없으면 같은
+    // 선주사까지만 확인(계층적 — 같은 선박이면 당연히 같은 플릿/선주사이므로 가장 구체적인
+    // 매칭 하나만 인정한다).
+    const recordsWithShip = records.filter(r => r.ship_id);
+    if (recordsWithShip.length > 0) {
+      const sameShip = recordsWithShip.some(r => r.ship_id === ctx.targetShipId);
+      const sameFleet = !sameShip && targetShip.fleet_id && recordsWithShip.some(r => fleetByShipId.get(r.ship_id!) === targetShip.fleet_id);
+      const sameOwner = !sameShip && !sameFleet && targetShip.owner_id && recordsWithShip.some(r => ownerByShipId.get(r.ship_id!) === targetShip.owner_id);
+      let v = 0;
+      if (sameShip) { v = 1; reasons.push('동일 선박 승선 경험'); }
+      else if (sameFleet) { v = 0.6; reasons.push('동일 플릿 승선 경험'); }
+      else if (sameOwner) { v = 0.3; reasons.push('동일 선주사 승선 경험'); }
+      parts.push({ key: 'familiarity', value: v });
+    }
+
+    // 나이 — 30대(30~39세)가 최고점, 그 범위에서 멀어질수록(양방향) 감점
     if (member?.date_of_birth) {
       const age = Math.floor((Date.now() - new Date(member.date_of_birth).getTime()) / (365.25 * 86400000));
+      const distFromThirties = age < 30 ? 30 - age : age > 39 ? age - 39 : 0;
+      parts.push({ key: 'age', value: clamp01(1 - distFromThirties / 20) });
       reasons.push(`만 ${age}세`);
     }
 

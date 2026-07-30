@@ -15,6 +15,8 @@ const FIELDS: { key: keyof BoardingScoreWeights; label: string; hint: string }[]
   { key: 'workYears', label: '근무년수', hint: '누적 승선 기간(연 단위, 체감 반영)' },
   { key: 'rest', label: '휴식 기간', hint: '마지막 하선일로부터 90일 지났을 때 최고점' },
   { key: 'desiredDate', label: '승선 희망일', hint: '선원이 등록한 희망일과 목표 승선일의 근접도' },
+  { key: 'familiarity', label: '선박/플릿/선주사 친숙도', hint: '같은 선박 승선 경험이 최고점, 없으면 같은 플릿, 그것도 없으면 같은 선주사' },
+  { key: 'age', label: '나이', hint: '30대(30~39세)가 최고점, 멀어질수록 감점' },
 ];
 
 // 로테이션 승선 후보 추천 점수(crew-boarding-score.service.ts)의 요소별 가중치를 관리자가
@@ -88,7 +90,6 @@ export default function CrewBoardingScoreSettingsPage() {
               </div>
             ))}
             <p className="text-xs text-gray-400 pt-1">합계: {total}</p>
-            <p className="text-xs text-gray-400">나이는 선호 방향(젊을수록/많을수록)이 정해지지 않아 점수화하지 않고, 후보 목록에는 참고 정보로만 표시됩니다.</p>
           </div>
         )}
       </CardContent>
