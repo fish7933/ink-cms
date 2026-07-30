@@ -147,6 +147,8 @@ export interface CrewPayrollHistoryRow {
   year_month: string;
   ship_name: string;
   status: CrewPayrollPeriodStatus;
+  rank_code: string;
+  rank_grade: string | null;
   period_start_date: string;
   period_end_date: string;
   days_served: number;
@@ -157,6 +159,10 @@ export interface CrewPayrollHistoryRow {
   total_deduction: number;
   total_owner_billed: number;
   net_amount: number;
+  // 승선기록의 실제(잘리지 않은) 승선일/하선일 — actual_embark_date/actual_disembark_date와
+  // 동일한 이유로 CrewPayslipWithDetails에도 있음(월초/월말 배지 판정용).
+  actual_embark_date?: string | null;
+  actual_disembark_date?: string | null;
 }
 
 // 후불성(deferred) 급여 항목 현황 한 행 — 선원+선박+항목 단위로, 그 달 적립액/누적 잔액/

@@ -425,23 +425,32 @@ export const crewPayrollService = {
   async getCrewPayrollHistory(crewMemberId: string): Promise<CrewPayrollHistoryRow[]> {
     const { data, error } = await supabase
       .from('crew_payslips')
-      .select('*, crew_payroll_periods!period_id(year_month, status, ships!ship_id(name))')
+      .select('*, crew_payroll_periods!period_id(year_month, status, ships!ship_id(name)), ranks:rank_id(rank_code)')
       .eq('crew_member_id', crewMemberId)
       .order('created_at', { ascending: false });
     if (error) { console.error('Error fetching crew payroll history:', error); return []; }
     if (!data || data.length === 0) return [];
 
     const payslipIds = data.map(p => p.id);
-    const { data: items } = await supabase.from('crew_payslip_items').select('*').in('payslip_id', payslipIds);
+    const embarkationRecordIds = [...new Set(data.map(p => p.embarkation_record_id).filter((v): v is string => !!v))];
+    const [{ data: items }, { data: embarkRecords }] = await Promise.all([
+      supabase.from('crew_payslip_items').select('*').in('payslip_id', payslipIds),
+      embarkationRecordIds.length > 0
+        ? supabase.from('crew_embarkation_records').select('id, embark_date, disembark_date').in('id', embarkationRecordIds)
+        : Promise.resolve({ data: [] as { id: string; embark_date: string; disembark_date: string | null }[] }),
+    ]);
     const itemsByPayslip = new Map<string, { category: string; name: string; amount: number; payment_type: string }[]>();
     for (const it of items || []) {
       const arr = itemsByPayslip.get(it.payslip_id) || [];
       arr.push(it);
       itemsByPayslip.set(it.payslip_id, arr);
     }
+    const embarkRecordById = new Map((embarkRecords || []).map(r => [r.id, r]));
 
     return data.map(p => {
       const period = p.crew_payroll_periods as { year_month?: string; status?: string; ships?: { name?: string } } | null;
+      const rank = p.ranks as { rank_code?: string } | null;
+      const embarkRecord = p.embarkation_record_id ? embarkRecordById.get(p.embarkation_record_id) : undefined;
       const pItems = itemsByPayslip.get(p.id) || [];
       const allowanceByName: Record<string, number> = {};
       const deductionByName: Record<string, number> = {};
@@ -458,6 +467,8 @@ export const crewPayrollService = {
         year_month: period?.year_month || '',
         ship_name: period?.ships?.name || '',
         status: (period?.status as CrewPayrollPeriodStatus) || 'draft',
+        rank_code: rank?.rank_code || '',
+        rank_grade: p.rank_grade,
         period_start_date: p.period_start_date,
         period_end_date: p.period_end_date,
         days_served: p.days_served,
@@ -468,6 +479,8 @@ export const crewPayrollService = {
         total_deduction: Number(p.total_deduction),
         total_owner_billed: Number(p.total_owner_billed),
         net_amount: Number(p.net_amount),
+        actual_embark_date: embarkRecord?.embark_date,
+        actual_disembark_date: embarkRecord?.disembark_date,
       };
     }).sort((a, b) => b.year_month.localeCompare(a.year_month));
   },
