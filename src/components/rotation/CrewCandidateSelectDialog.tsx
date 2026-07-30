@@ -15,6 +15,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewDisplayName } from '@/lib/utils';
+import { useTabContext } from '@/contexts/TabContext';
 import { getNationalities } from '@/services/nationality.service';
 import { getBoardingScores, type RecommendationContext, type CrewBoardingScore } from '@/services/crew-boarding-score.service';
 import type { CrewWithDetails } from '@/services/crew.service';
@@ -33,6 +34,9 @@ interface CrewCandidateSelectDialogProps {
   getReservationNote?: (crew: CrewWithDetails) => string | null;
   /** 이미 선택돼 있는 선원을 바꾸려고 다시 여는 경우 — 그 선원의 소속/직급 등으로 필터를 미리 채워준다. */
   initialCrew?: CrewWithDetails | null;
+  /** 같은 행의 반대편(승선자/하선자)이 먼저 정해져 있을 때 그 직급을 기본 필터로 — 동직급
+   *  로테이션이 기본이므로. initialCrew가 있으면 그쪽이 우선한다(실제 선택값이라 더 정확함). */
+  defaultRankId?: string;
   /** 대상 선박(+승선예정일)이 정해져 있으면 적합도 점수를 매겨 추천순으로 정렬해 보여준다 (승선 후보에만 해당). */
   scoringContext?: RecommendationContext;
 }
@@ -47,8 +51,9 @@ const STATUS_LABELS: Record<string, string> = {
 // 실제 최신 상태는 status 컬럼 (CrewManagementPage / RotationPlanFormPage와 동일한 우회 패턴).
 const getCrewStatus = (c: CrewWithDetails) => (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
 
-export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote, initialCrew, scoringContext }: CrewCandidateSelectDialogProps) {
+export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote, initialCrew, defaultRankId, scoringContext }: CrewCandidateSelectDialogProps) {
   const isSingle = selectionMode === 'single';
+  const { openNewTab } = useTabContext();
 
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -104,11 +109,11 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
       setFilterOwner(initialCrew?.owner_id || 'all');
       setFilterFleet(initialCrew?.fleet_id || 'all');
       setFilterShip(initialCrew?.current_ship_id || 'all');
-      setFilterRank(initialCrew?.rank_id || 'all');
+      setFilterRank(initialCrew?.rank_id || defaultRankId || 'all');
       setFilterManning(initialCrew?.manning_agency_id || 'all');
       setFilterNationality(initialCrew?.nationality || 'all');
     }
-  }, [open, initialCrew]);
+  }, [open, initialCrew, defaultRankId]);
 
   // 승선 후보이고 대상 선박이 정해져 있을 때만 적합도 점수를 매긴다(하선 후보에는 적용 안 함).
   useEffect(() => {
@@ -251,9 +256,11 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                         <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
                       </td>
                     )}
-                    <td className="px-3 py-2 text-gray-700">{c.rank_code || '-'}</td>
-                    <td className="px-3 py-2 font-medium">
-                      {crewDisplayName(c)}
+                    <td className="px-3 py-2 text-gray-700" onClick={e => { e.stopPropagation(); openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보'); }}>
+                      <button type="button" className="hover:underline hover:text-blue-600">{c.rank_code || '-'}</button>
+                    </td>
+                    <td className="px-3 py-2 font-medium" onClick={e => { e.stopPropagation(); openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보'); }}>
+                      <button type="button" className="hover:underline hover:text-blue-600">{crewDisplayName(c)}</button>
                       {reservationNote && (
                         <div className="text-[10px] text-amber-600 font-normal mt-0.5">⚠ {reservationNote}</div>
                       )}
@@ -267,8 +274,15 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                     {scores.size > 0 && (
                       <td className="px-3 py-2">
                         {boardingScore ? (
-                          <div>
-                            <span className="font-semibold text-emerald-700">{boardingScore.score}점</span>
+                          <div
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (!scoringContext) return;
+                              const params = new URLSearchParams({ shipId: scoringContext.targetShipId, ...(scoringContext.targetEmbarkDate ? { embarkDate: scoringContext.targetEmbarkDate } : {}) });
+                              openNewTab(`/crew-boarding-fit/${c.id}?${params.toString()}`, `${crewDisplayName(c)} 적합도 분석`);
+                            }}
+                          >
+                            <button type="button" className="font-semibold text-emerald-700 hover:underline">{boardingScore.score}점</button>
                             {boardingScore.reasons.length > 0 && (
                               <div className="text-[10px] text-gray-400 mt-0.5">{boardingScore.reasons.slice(0, 2).join(' · ')}</div>
                             )}

@@ -251,8 +251,15 @@ export default function RotationPlanFormPage() {
         if (port) { setCountryName(port.country_name); setCityName(port.city_name); setPortLabel(`${port.country_name} ${port.city_name}`); }
       }
 
+      // 승선자가 아직 정해지지 않은(직급도 안 고른) 채로 저장된 행은, 하선자 직급이 있으면
+      // 그 직급을 승선자 직급 기본값으로 채운다 — 동직급 로테이션이 기본이라는 가정과 동일.
+      const fillBoardingRankFromDisembark = (row: AssignmentRow): AssignmentRow =>
+        !row.boardingCrewId && !row.boardingRankId && row.disembarkRankId
+          ? { ...row, boardingRankId: row.disembarkRankId }
+          : row;
+
       const loadedRows: AssignmentRow[] = existing.assignments.length > 0
-        ? existing.assignments.map(a => makeRow({
+        ? existing.assignments.map(a => fillBoardingRankFromDisembark(makeRow({
             assignmentId: a.id,
             boardingCrewId: a.on_crew_id,
             boardingCrewName: a.on_crew_name || null,
@@ -270,7 +277,7 @@ export default function RotationPlanFormPage() {
             sickPayMonthlyAmount: a.off_sick_pay_monthly_amount != null ? String(a.off_sick_pay_monthly_amount) : '',
             contractMonths: a.contract_months != null ? String(a.contract_months) : '',
             notes: a.notes || '',
-          }))
+          })))
         : [makeRow()];
       setRows(loadedRows);
       setLoading(false);
@@ -300,6 +307,9 @@ export default function RotationPlanFormPage() {
     };
 
     // 행 초기화 (직급/등급 포함)
+    // 하선 사유는 90% 이상이 계약만료라, 새 행은 기본으로 그 값을 미리 선택해둔다(state인
+    // signOffReasons는 이 함수 실행 시점엔 아직 반영 전이라 방금 받아온 reasons를 직접 쓴다).
+    const defaultReasonId = reasons.find(r => r.name === '계약만료')?.id || '';
     const maxPre = Math.max(preBoarding.length, preDisembark.length);
     const initRows: AssignmentRow[] = [];
     for (let i = 0; i < Math.max(maxPre, 1); i++) {
@@ -310,6 +320,7 @@ export default function RotationPlanFormPage() {
         ...(bId ? initBoardingFields(bId) : {}),
         disembarkCrewId: dId,
         ...(dId ? initDisembarkFields(dId) : {}),
+        disembarkReasonId: defaultReasonId,
       }));
     }
 
@@ -415,7 +426,7 @@ export default function RotationPlanFormPage() {
 
   const updateRow = (id: string, updates: Partial<AssignmentRow>) =>
     setRows(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
-  const addRow = () => setRows(prev => [...prev, makeRow(cascadeDatesFromBase(baseDepartureDate))]);
+  const addRow = () => setRows(prev => [...prev, makeRow({ ...cascadeDatesFromBase(baseDepartureDate), disembarkReasonId: defaultDisembarkReasonId() })]);
   const removeRow = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
 
   // 급여 템플릿에서 특정 직급에 정의된 등급 목록
@@ -529,6 +540,16 @@ export default function RotationPlanFormPage() {
     return currentId ? getCrew(currentId) : null;
   };
 
+  // 같은 행의 반대편(승선자/하선자)이 먼저 정해져 있으면 그 직급을 후보 목록의 기본 필터로 쓴다.
+  // 동직급 로테이션이 아주 특별한 경우를 빼고는 기본이라, 반대편이 이미 있는데 직급을 매번
+  // 다시 고르게 하지 않기 위함 — 반대편 직급이 아직 없으면(둘 다 빈 새 행) 필터 없이 전체를 보여준다.
+  const rowPickerDefaultRankId = (): string | undefined => {
+    if (!rowPicker) return undefined;
+    const row = rows.find(r => r.id === rowPicker.rowId);
+    if (!row) return undefined;
+    return (rowPicker.side === 'boarding' ? row.disembarkRankId : row.boardingRankId) || undefined;
+  };
+
   const handleRowPickerConfirm = (ids: string[]) => {
     if (!rowPicker) return;
     const id = ids[0] || null;
@@ -546,7 +567,16 @@ export default function RotationPlanFormPage() {
       const crew = onboardCrew.find(c => c.id === id);
       const auto = crew ? computeDisembarkAutoFields(crew) : { rankId: '', grade: null };
       const existingRow = rows.find(r => r.id === rowPicker.rowId);
-      updateRow(rowPicker.rowId, { disembarkCrewId: id, disembarkRankId: auto.rankId, disembarkGrade: auto.grade, disembarkReasonId: existingRow?.disembarkReasonId || defaultDisembarkReasonId() });
+      // 승선자가 아직 정해지지 않은(직급도 안 고른) 행이면, 동직급 로테이션이 기본이므로
+      // 하선자 직급을 승선자 직급 기본값으로 바로 채워준다 — 사용자가 또 골라야 하는 수고를 던다.
+      const shouldFillBoardingRank = auto.rankId && !existingRow?.boardingCrewId && !existingRow?.boardingRankId;
+      updateRow(rowPicker.rowId, {
+        disembarkCrewId: id,
+        disembarkRankId: auto.rankId,
+        disembarkGrade: auto.grade,
+        disembarkReasonId: existingRow?.disembarkReasonId || defaultDisembarkReasonId(),
+        ...(shouldFillBoardingRank ? { boardingRankId: auto.rankId } : {}),
+      });
     }
   };
 
@@ -1200,6 +1230,7 @@ export default function RotationPlanFormPage() {
         selectionMode="single"
         getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
         initialCrew={rowPickerInitialCrew()}
+        defaultRankId={rowPickerDefaultRankId()}
         scoringContext={
           rowPicker?.side !== 'disembark' && shipId
             ? { targetShipId: shipId, targetEmbarkDate: rows.find(r => r.id === rowPicker?.rowId)?.boardingDate || undefined }
