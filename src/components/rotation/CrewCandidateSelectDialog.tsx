@@ -337,7 +337,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
 
       {fitnessModalCrewId && scoringContext && createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 pointer-events-auto"
           onClick={() => setFitnessModalCrewId(null)}
         >
           <div
