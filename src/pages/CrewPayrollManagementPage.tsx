@@ -79,7 +79,7 @@ export default function CrewPayrollManagementPage() {
   const [savingCells, setSavingCells] = useState(false);
 
   // 직급/이름을 클릭하면 그 선원의 선박 이력 전체를 급여대장 형태(월별 행 + 상태)로 보여준다.
-  const [historyCrew, setHistoryCrew] = useState<{ crewMemberId: string; crewName: string } | null>(null);
+  const [historyCrew, setHistoryCrew] = useState<{ crewMemberId: string; crewName: string; rankCode: string; rankGrade: string | null; embarkDate?: string | null; disembarkDate?: string | null } | null>(null);
   const [historyRows, setHistoryRows] = useState<CrewPayrollHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
@@ -332,7 +332,11 @@ export default function CrewPayrollManagementPage() {
   };
 
   const openCrewHistory = async (p: CrewPayslipWithDetails) => {
-    setHistoryCrew({ crewMemberId: p.crew_member_id, crewName: p.crew_name });
+    setHistoryCrew({
+      crewMemberId: p.crew_member_id, crewName: p.crew_name,
+      rankCode: p.rank_code, rankGrade: p.rank_grade,
+      embarkDate: p.actual_embark_date, disembarkDate: p.actual_disembark_date,
+    });
     setHistoryLoading(true);
     try {
       setHistoryRows(await crewPayrollService.getCrewPayrollHistory(p.crew_member_id));
@@ -825,7 +829,13 @@ export default function CrewPayrollManagementPage() {
       <Dialog open={!!historyCrew} onOpenChange={o => !o && setHistoryCrew(null)}>
         <DialogContent className="max-w-6xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base flex items-center gap-1.5"><History className="w-4 h-4 text-muted-foreground" />{historyCrew?.crewName} — Payroll History</DialogTitle>
+            <DialogTitle className="text-base flex items-center gap-1.5">
+              <History className="w-4 h-4 text-muted-foreground" />
+              {historyCrew?.rankCode}{historyCrew?.rankGrade ? `(${historyCrew.rankGrade})` : ''} {historyCrew?.crewName} — Payroll History
+            </DialogTitle>
+            <p className="text-xs text-gray-500 pl-6">
+              Sign on: {historyCrew?.embarkDate || '-'} · Sign off: {historyCrew?.disembarkDate || 'present'}
+            </p>
           </DialogHeader>
           {historyLoading ? (
             <div className="flex items-center justify-center py-10"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" /></div>
@@ -837,7 +847,6 @@ export default function CrewPayrollManagementPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-2 font-medium text-gray-600">Month</th>
-                    <th className="text-left p-2 font-medium text-gray-600">Crew</th>
                     <th className="text-left p-2 font-medium text-gray-600">Vessel</th>
                     <th className="text-left p-2 font-medium text-gray-600">Status</th>
                     <th className="text-left p-2 font-medium text-gray-600">Pay Period</th>
@@ -853,10 +862,6 @@ export default function CrewPayrollManagementPage() {
                   {historyRows.map(r => (
                     <tr key={r.period_id} className="border-b">
                       <td className="py-1 px-2">{r.year_month}</td>
-                      <td className="py-1 px-2 text-gray-600">
-                        <div>{r.rank_code}{r.rank_grade ? `(${r.rank_grade})` : ''} {historyCrew?.crewName}</div>
-                        <div className="text-[10px] text-gray-400">{r.actual_embark_date || '-'} ~ {r.actual_disembark_date || 'present'}</div>
-                      </td>
                       <td className="py-1 px-2 text-gray-600">{r.ship_name}</td>
                       <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
                       <td className="py-1 px-2 text-gray-600">{r.period_start_date}~{r.period_end_date}</td>
@@ -871,7 +876,7 @@ export default function CrewPayrollManagementPage() {
                   {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
                       급여대장에는 총적립액을 노출하지 않기로 했으므로 합계 칸은 비워둔다. */}
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                    <td className="py-1 px-2" colSpan={6}>Total ({historyRows.length} months)</td>
+                    <td className="py-1 px-2" colSpan={5}>Total ({historyRows.length} months)</td>
                     {historyAllowanceColumns.map((name, i) => (
                       <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>
                         {name.endsWith('(Accrued)') ? <span className="text-gray-300">-</span> : fmt(historyTotals.allowanceByName[name] || 0)}
