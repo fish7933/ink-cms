@@ -19,20 +19,11 @@ const FIELDS: { key: keyof BoardingScoreWeights; label: string; hint: string }[]
   { key: 'age', label: '나이', hint: '30대(30~39세)가 최고점, 멀어질수록 감점' },
 ];
 
-// 어느 한 항목 값을 바꾸는 순간, 그 값을 포함한 전체 합이 100이 되도록 모든 항목을 같은
-// 비율로 다시 계산한다 — "항목들의 상대적 비중"이라는 의미를 유지한 채 합계는 항상 100.
-function normalizeWeights(weights: BoardingScoreWeights, changedKey: keyof BoardingScoreWeights, rawValue: number): BoardingScoreWeights {
-  const next = { ...weights, [changedKey]: rawValue };
-  const sum = FIELDS.reduce((s, f) => s + (Number(next[f.key]) || 0), 0);
-  if (sum <= 0) return next; // 전부 0이면 비율을 정할 수 없으니 그대로 둔다.
-  const scale = 100 / sum;
-  const rescaled = { ...next };
-  for (const f of FIELDS) rescaled[f.key] = Math.round((Number(next[f.key]) || 0) * scale * 10) / 10;
-  return rescaled;
-}
-
 // 로테이션 승선 후보 추천 점수(crew-boarding-score.service.ts)의 요소별 가중치를 관리자가
-// 조정하는 화면. 항목 하나를 바꾸면 나머지가 자동으로 재조정돼 합계가 항상 100이 된다.
+// 조정하는 화면. 입력값 자체는 건드리지 않고(타이핑 도중 숫자가 튀는 문제 방지), 옆에
+// "100 기준" 환산값만 실시간으로 보여준다 — 실제 채점(getBoardingScores)도 가중치의 절대값이
+// 아니라 상대 비율로 나누기 때문에(weighted/weightSum), 저장된 합계가 100이든 125든 점수는
+// 항상 0~100 기준으로 나온다.
 export default function CrewBoardingScoreSettingsPage() {
   const { toast } = useToast();
   const [weights, setWeights] = useState<BoardingScoreWeights>(DEFAULT_BOARDING_SCORE_WEIGHTS);
@@ -78,29 +69,34 @@ export default function CrewBoardingScoreSettingsPage() {
           </Button>
         </div>
         <p className="text-xs text-gray-500 pt-1">
-          로테이션 승선 후보를 추천할 때 각 요소를 얼마나 중요하게 볼지 정합니다. 하나를 바꾸면 나머지가 자동으로 재조정되어 합계는 항상 100입니다.
+          로테이션 승선 후보를 추천할 때 각 요소를 얼마나 중요하게 볼지 정합니다. 상대적인 비중이라 합이 꼭 100일 필요는 없고, 옆의 "100 기준" 값은 현재 입력값들을 100 기준으로 환산해 참고용으로 보여줍니다. 실제 적합도 점수는 합계와 무관하게 항상 0~100으로 계산됩니다.
         </p>
       </CardHeader>
       <CardContent>
         {loading ? (
           <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
         ) : (
-          <div className="space-y-3 max-w-lg">
-            {FIELDS.map(f => (
-              <div key={f.key} className="grid grid-cols-[1fr_100px] items-center gap-3">
-                <div>
-                  <Label className="text-xs">{f.label}</Label>
-                  <p className="text-[11px] text-gray-400">{f.hint}</p>
+          <div className="space-y-3 max-w-xl">
+            {FIELDS.map(f => {
+              const raw = Number(weights[f.key]) || 0;
+              const normalized = total > 0 ? Math.round((raw / total) * 1000) / 10 : 0;
+              return (
+                <div key={f.key} className="grid grid-cols-[1fr_90px_90px] items-center gap-3">
+                  <div>
+                    <Label className="text-xs">{f.label}</Label>
+                    <p className="text-[11px] text-gray-400">{f.hint}</p>
+                  </div>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-8 text-sm"
+                    value={weights[f.key]}
+                    onChange={e => setWeights(w => ({ ...w, [f.key]: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                  />
+                  <p className="text-xs text-gray-500 text-right">100 기준 {normalized}</p>
                 </div>
-                <Input
-                  type="number"
-                  min={0}
-                  className="h-8 text-sm"
-                  value={weights[f.key]}
-                  onChange={e => setWeights(w => normalizeWeights(w, f.key, e.target.value === '' ? 0 : Number(e.target.value)))}
-                />
-              </div>
-            ))}
+              );
+            })}
             <p className="text-xs text-gray-400 pt-1">합계: {total}</p>
           </div>
         )}
