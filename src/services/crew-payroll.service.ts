@@ -817,17 +817,27 @@ export const crewPayrollService = {
     if (!data || data.length === 0) return [];
 
     const payslipIds = data.map(p => p.id);
-    const { data: items } = await supabase.from('crew_payslip_items').select('*').in('payslip_id', payslipIds).order('display_order');
+    const [{ data: items }, { data: embarkRecords }] = await Promise.all([
+      supabase.from('crew_payslip_items').select('*').in('payslip_id', payslipIds).order('display_order'),
+      (() => {
+        const embarkationRecordIds = [...new Set(data.map(p => p.embarkation_record_id).filter((v): v is string => !!v))];
+        return embarkationRecordIds.length > 0
+          ? supabase.from('crew_embarkation_records').select('id, embark_date, disembark_date').in('id', embarkationRecordIds)
+          : Promise.resolve({ data: [] as { id: string; embark_date: string; disembark_date: string | null }[] });
+      })(),
+    ]);
     const itemsByPayslip = new Map<string, CrewPayslipItem[]>();
     for (const it of (items || [])) {
       const arr = itemsByPayslip.get(it.payslip_id) || [];
       arr.push(it);
       itemsByPayslip.set(it.payslip_id, arr);
     }
+    const embarkRecordById = new Map((embarkRecords || []).map(r => [r.id, r]));
 
     return data.map(p => {
       const crew = p.crew_members as { name?: string; name_english?: string; nationality?: string } | null;
       const rank = p.ranks as { name?: string; rank_code?: string } | null;
+      const embarkRecord = p.embarkation_record_id ? embarkRecordById.get(p.embarkation_record_id) : undefined;
       return {
         ...p,
         crew_name: crew ? crewDisplayName(crew) : '',
@@ -835,6 +845,8 @@ export const crewPayrollService = {
         rank_name: rank?.name || '',
         rank_code: rank?.rank_code || '',
         items: itemsByPayslip.get(p.id) || [],
+        actual_embark_date: embarkRecord?.embark_date,
+        actual_disembark_date: embarkRecord?.disembark_date,
       } as CrewPayslipWithDetails;
     });
   },

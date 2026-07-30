@@ -82,6 +82,12 @@ export interface CrewPayslipWithDetails extends CrewPayslip {
   items: CrewPayslipItem[];
   period_year_month?: string;
   period_status?: CrewPayrollPeriodStatus;
+  // 승선기록의 실제(잘리지 않은) 승선일/하선일 — period_start_date/period_end_date는 달의
+  // 시작/끝으로 잘려 있어서, 1일에 승선했거나 말일에 하선한 경우 "이번 달에 승선/하선했는지"를
+  // 그것만으로는 구분할 수 없다(계속 승선 중인 선원과 값이 똑같아짐). 급여대장의 Joined/Signed
+  // Off 배지는 이 실제 날짜를 달력상 월 범위와 비교해서 판정한다.
+  actual_embark_date?: string | null;
+  actual_disembark_date?: string | null;
 }
 
 // 급여대장(선박에 승선한 선원 전원을 한 표로) 출력/엑셀용 — 급여 구성항목(BW/OT/OA/LP 등)과

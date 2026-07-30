@@ -33,10 +33,14 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const fmt = (n: number) => n.toLocaleString('en-US');
 const fmtMD = (d: string) => d?.slice(5).replace('-', '/') || '';
-// period_start_date/end_date는 승선일~월초, 하선일~월말 중 늦은/이른 날로 이미 잘려 있으므로
-// 월초(1일)가 아니거나 월말(days_in_month)이 아니면 그 달에 실제로 승선/하선한 것이다.
-const embarkedThisMonth = (p: { period_start_date: string }) => Number(p.period_start_date.slice(8, 10)) !== 1;
-const disembarkedThisMonth = (p: { period_end_date: string; days_in_month: number }) => Number(p.period_end_date.slice(8, 10)) !== p.days_in_month;
+// period_start_date/end_date는 승선일~월초, 하선일~월말 중 늦은/이른 날로 이미 잘려 있어서,
+// 1일에 승선했거나 말일에 하선한 경우엔 그것만으로 "이번 달에 승선/하선했는지"를 계속
+// 승선/재직 중인 선원과 구분할 수 없다 — actual_embark_date/actual_disembark_date(승선기록의
+// 잘리지 않은 실제 날짜)가 이 페이로드의 달과 같은 달인지로 판정한다.
+const embarkedThisMonth = (p: { period_start_date: string; actual_embark_date?: string | null }) =>
+  p.actual_embark_date ? p.actual_embark_date.slice(0, 7) === p.period_start_date.slice(0, 7) : Number(p.period_start_date.slice(8, 10)) !== 1;
+const disembarkedThisMonth = (p: { period_end_date: string; actual_disembark_date?: string | null }) =>
+  !!p.actual_disembark_date && p.actual_disembark_date.slice(0, 7) === p.period_end_date.slice(0, 7);
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
 // 선박별 선원 급여명세 — 담당 선박의 급여 템플릿(직급+등급)과 선원 계약별 수당/공제를
