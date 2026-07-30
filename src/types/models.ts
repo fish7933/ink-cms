@@ -209,6 +209,7 @@ export interface CrewMember {
   name_english?: string;
   name_chinese?: string;
   date_of_birth: string;
+  desired_embark_date?: string | null; // 선원 본인이 등록하는 승선 희망일 (로테이션 승선 추천 점수 계산에 사용)
   nationality?: string;
   rank_id?: string;
   rank?: string;

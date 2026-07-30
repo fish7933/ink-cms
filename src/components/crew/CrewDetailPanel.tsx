@@ -99,7 +99,7 @@ const ENGLISH_LEVELS = [
 
 const EMPTY_FORM = {
   name: '', name_english: '', name_chinese: '',
-  rank_id: '', nationality: '', date_of_birth: '',
+  rank_id: '', nationality: '', date_of_birth: '', desired_embark_date: '',
   contact_phone: '', contact_email: '', photo_url: '',
   height: '', weight: '', blood_type: 'none',
   shoe_size: '', coverall_size: '', clothing_size: '',
@@ -254,6 +254,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         rank_id: data.rank_id || '',
         nationality: data.nationality || '',
         date_of_birth: data.date_of_birth || '',
+        desired_embark_date: data.desired_embark_date || '',
         contact_phone: data.phone || '',
         contact_email: data.email || '',
         photo_url: data.photo_url || '',
@@ -450,6 +451,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         rank: rankName,
         nationality: formData.nationality || null,
         date_of_birth: formData.date_of_birth || null,
+        desired_embark_date: formData.desired_embark_date || null,
         phone: formData.contact_phone || null,
         email: formData.contact_email || null,
         photo_url: photoUrl || null,
@@ -719,6 +721,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </div>
             <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
             <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
+            <div>
+              <Label className="text-xs">승선 희망일</Label>
+              <Input type="date" value={formData.desired_embark_date} onChange={e => f('desired_embark_date', e.target.value)} className="mt-1 h-9" />
+            </div>
           </div>
 
           <div className="border-t pt-3">

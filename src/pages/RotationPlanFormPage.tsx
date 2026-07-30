@@ -1181,6 +1181,7 @@ export default function RotationPlanFormPage() {
         candidates={boardingCandidates}
         onConfirm={addBoardingCrewIdsAsRows}
         getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
+        scoringContext={shipId ? { targetShipId: shipId } : undefined}
       />
       <CrewCandidateSelectDialog
         open={disembarkDialogOpen}
@@ -1199,6 +1200,11 @@ export default function RotationPlanFormPage() {
         selectionMode="single"
         getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
         initialCrew={rowPickerInitialCrew()}
+        scoringContext={
+          rowPicker?.side !== 'disembark' && shipId
+            ? { targetShipId: shipId, targetEmbarkDate: rows.find(r => r.id === rowPicker?.rowId)?.boardingDate || undefined }
+            : undefined
+        }
       />
     </div>
   );

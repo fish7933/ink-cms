@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewDisplayName } from '@/lib/utils';
 import { getNationalities } from '@/services/nationality.service';
+import { getBoardingScores, type RecommendationContext, type CrewBoardingScore } from '@/services/crew-boarding-score.service';
 import type { CrewWithDetails } from '@/services/crew.service';
 import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
 import type { Nationality } from '@/types/nationality';
@@ -32,6 +33,8 @@ interface CrewCandidateSelectDialogProps {
   getReservationNote?: (crew: CrewWithDetails) => string | null;
   /** 이미 선택돼 있는 선원을 바꾸려고 다시 여는 경우 — 그 선원의 소속/직급 등으로 필터를 미리 채워준다. */
   initialCrew?: CrewWithDetails | null;
+  /** 대상 선박(+승선예정일)이 정해져 있으면 적합도 점수를 매겨 추천순으로 정렬해 보여준다 (승선 후보에만 해당). */
+  scoringContext?: RecommendationContext;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -44,11 +47,12 @@ const STATUS_LABELS: Record<string, string> = {
 // 실제 최신 상태는 status 컬럼 (CrewManagementPage / RotationPlanFormPage와 동일한 우회 패턴).
 const getCrewStatus = (c: CrewWithDetails) => (c as CrewWithDetails & { status?: string }).status || c.current_status || '';
 
-export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote, initialCrew }: CrewCandidateSelectDialogProps) {
+export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote, initialCrew, scoringContext }: CrewCandidateSelectDialogProps) {
   const isSingle = selectionMode === 'single';
 
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [scores, setScores] = useState<Map<string, CrewBoardingScore>>(new Map());
 
   const [owners, setOwners] = useState<Company[]>([]);
   const [manningAgencies, setManningAgencies] = useState<Company[]>([]);
@@ -106,6 +110,15 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
     }
   }, [open, initialCrew]);
 
+  // 승선 후보이고 대상 선박이 정해져 있을 때만 적합도 점수를 매긴다(하선 후보에는 적용 안 함).
+  useEffect(() => {
+    if (open && mode === 'boarding' && scoringContext && candidates.length > 0) {
+      getBoardingScores(candidates.map(c => c.id), scoringContext).then(setScores).catch(() => setScores(new Map()));
+    } else {
+      setScores(new Map());
+    }
+  }, [open, mode, scoringContext, candidates]);
+
   const filtered = useMemo(() => {
     let list = candidates;
     if (search) {
@@ -124,8 +137,12 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
     if (filterRank !== 'all') list = list.filter(c => c.rank_id === filterRank);
     if (filterManning !== 'all') list = list.filter(c => c.manning_agency_id === filterManning);
     if (filterNationality !== 'all') list = list.filter(c => c.nationality === filterNationality);
+    // 적합도 점수가 있으면 추천순(내림차순)으로 정렬 — 점수가 없는 사람은 뒤로 보낸다.
+    if (scores.size > 0) {
+      list = [...list].sort((a, b) => (scores.get(b.id)?.score ?? -1) - (scores.get(a.id)?.score ?? -1));
+    }
     return list;
-  }, [candidates, search, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterNationality]);
+  }, [candidates, search, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterNationality, scores]);
 
   const isFiltered = filterOwner !== 'all' || filterFleet !== 'all' || filterShip !== 'all' || filterRank !== 'all' || filterManning !== 'all' || filterNationality !== 'all';
   const clearFilters = () => { setFilterOwner('all'); setFilterFleet('all'); setFilterShip('all'); setFilterRank('all'); setFilterManning('all'); setFilterNationality('all'); };
@@ -220,11 +237,13 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">직급</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">이름</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">상태</th>
+                {scores.size > 0 && <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">적합도</th>}
               </tr>
             </thead>
             <tbody>
               {filtered.map(c => {
                 const reservationNote = getReservationNote?.(c);
+                const boardingScore = scores.get(c.id);
                 return (
                   <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => handleRowClick(c.id)}>
                     {!isSingle && (
@@ -245,11 +264,23 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                       {STATUS_LABELS[getCrewStatus(c)] || getCrewStatus(c) || '-'}
                       {reservationNote && <span className="text-amber-600"> (배정예정)</span>}
                     </td>
+                    {scores.size > 0 && (
+                      <td className="px-3 py-2">
+                        {boardingScore ? (
+                          <div>
+                            <span className="font-semibold text-emerald-700">{boardingScore.score}점</span>
+                            {boardingScore.reasons.length > 0 && (
+                              <div className="text-[10px] text-gray-400 mt-0.5">{boardingScore.reasons.slice(0, 2).join(' · ')}</div>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-300">-</span>}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={isSingle ? 3 : 4} className="text-center py-8 text-xs text-gray-400">후보가 없습니다</td></tr>
+                <tr><td colSpan={(isSingle ? 3 : 4) + (scores.size > 0 ? 1 : 0)} className="text-center py-8 text-xs text-gray-400">후보가 없습니다</td></tr>
               )}
             </tbody>
           </table>
