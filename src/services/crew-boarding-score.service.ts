@@ -11,19 +11,70 @@ export interface CrewBoardingScore {
   reasons: string[]; // 표시용 짧은 근거 2~3개
 }
 
-// 각 요소를 0~1로 정규화한 뒤 이 가중치로 가중평균한다. 나이는 선호 방향(젊을수록/많을수록)이
-// 정해지지 않아 점수화하지 않고 정보로만 보여준다 — 방향이 정해지면 여기 한 줄만 추가하면 된다.
-export const BOARDING_SCORE_WEIGHTS = {
-  shipType: 0.15,
-  size: 0.10,
-  route: 0.10,
-  evaluation: 0.25,
-  workYears: 0.15,
-  rest: 0.15,
-  desiredDate: 0.10,
-} as const;
+// 각 요소를 0~1로 정규화한 뒤 이 가중치로 가중평균한다(합이 100일 필요는 없음 — 존재하는
+// 요소끼리 정규화됨). 나이는 선호 방향(젊을수록/많을수록)이 정해지지 않아 점수화하지 않고
+// 정보로만 보여준다 — 방향이 정해지면 여기 한 줄만 추가하면 된다.
+// "선원 관리 설정 > 승선 적합도 설정" 화면에서 관리자가 조정 가능 — crew_boarding_score_weights
+// 싱글턴 테이블에 저장되며, 아래 DEFAULT는 그 테이블 행을 못 읽어올 때만 쓰는 대체값이다.
+export interface BoardingScoreWeights {
+  shipType: number;
+  size: number;
+  route: number;
+  evaluation: number;
+  workYears: number;
+  rest: number;
+  desiredDate: number;
+}
 
-type WeightKey = keyof typeof BOARDING_SCORE_WEIGHTS;
+export const DEFAULT_BOARDING_SCORE_WEIGHTS: BoardingScoreWeights = {
+  shipType: 15,
+  size: 10,
+  route: 10,
+  evaluation: 25,
+  workYears: 15,
+  rest: 15,
+  desiredDate: 10,
+};
+
+type WeightKey = keyof BoardingScoreWeights;
+
+export async function getBoardingScoreWeights(): Promise<BoardingScoreWeights> {
+  const { data, error } = await supabase
+    .from('crew_boarding_score_weights')
+    .select('ship_type, size, route, evaluation, work_years, rest, desired_date')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return DEFAULT_BOARDING_SCORE_WEIGHTS;
+  return {
+    shipType: data.ship_type,
+    size: data.size,
+    route: data.route,
+    evaluation: data.evaluation,
+    workYears: data.work_years,
+    rest: data.rest,
+    desiredDate: data.desired_date,
+  };
+}
+
+export async function updateBoardingScoreWeights(weights: BoardingScoreWeights): Promise<void> {
+  const { data: existing } = await supabase.from('crew_boarding_score_weights').select('id').limit(1).maybeSingle();
+  const payload = {
+    ship_type: weights.shipType,
+    size: weights.size,
+    route: weights.route,
+    evaluation: weights.evaluation,
+    work_years: weights.workYears,
+    rest: weights.rest,
+    desired_date: weights.desiredDate,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = existing
+    ? await supabase.from('crew_boarding_score_weights').update(payload).eq('id', existing.id)
+    : await supabase.from('crew_boarding_score_weights').insert([payload]);
+  if (error) throw error;
+}
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const daysBetween = (a: string, b: string) => Math.abs((new Date(a).getTime() - new Date(b).getTime()) / 86400000);
@@ -45,7 +96,8 @@ export async function getBoardingScores(
   const result = new Map<string, CrewBoardingScore>();
   if (candidateIds.length === 0) return result;
 
-  const [{ data: targetShip }, { data: seaRecords }, { data: evals }, { data: members }] = await Promise.all([
+  const [weights, { data: targetShip }, { data: seaRecords }, { data: evals }, { data: members }] = await Promise.all([
+    getBoardingScoreWeights(),
     supabase.from('ships').select('id, ship_type, gross_tonnage, route').eq('id', ctx.targetShipId).maybeSingle(),
     supabase
       .from('sea_service_records')
@@ -155,8 +207,8 @@ export async function getBoardingScores(
       reasons.push(`만 ${age}세`);
     }
 
-    const weightSum = parts.reduce((s, p) => s + BOARDING_SCORE_WEIGHTS[p.key], 0);
-    const weighted = parts.reduce((s, p) => s + BOARDING_SCORE_WEIGHTS[p.key] * p.value, 0);
+    const weightSum = parts.reduce((s, p) => s + weights[p.key], 0);
+    const weighted = parts.reduce((s, p) => s + weights[p.key] * p.value, 0);
     const score = weightSum > 0 ? Math.round((weighted / weightSum) * 100) : 0;
 
     result.set(crewId, { crewMemberId: crewId, score, reasons: reasons.slice(0, 3) });
