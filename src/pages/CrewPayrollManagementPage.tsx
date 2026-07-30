@@ -838,11 +838,9 @@ export default function CrewPayrollManagementPage() {
                   <tr>
                     <th className="text-left p-2 font-medium text-gray-600">Month</th>
                     <th className="text-left p-2 font-medium text-gray-600">Vessel</th>
-                    <th className="text-left p-2 font-medium text-gray-600">Rank</th>
                     <th className="text-left p-2 font-medium text-gray-600">Status</th>
                     <th className="text-left p-2 font-medium text-gray-600">Pay Period</th>
                     <th className="text-left p-2 font-medium text-gray-600">Days</th>
-                    <th className="text-left p-2 font-medium text-gray-600">Embark / Disembark</th>
                     {historyAllowanceColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-gray-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
                     <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">GROSS</th>
                     {historyDeductionColumns.map((name, i) => <th key={name} className={`text-right p-2 font-medium text-red-600 ${i === 0 ? 'border-l' : ''}`}>{name}</th>)}
@@ -854,12 +852,13 @@ export default function CrewPayrollManagementPage() {
                   {historyRows.map(r => (
                     <tr key={r.period_id} className="border-b">
                       <td className="py-1 px-2">{r.year_month}</td>
-                      <td className="py-1 px-2 text-gray-600">{r.ship_name}</td>
-                      <td className="py-1 px-2 text-gray-600">{r.rank_code}{r.rank_grade ? `(${r.rank_grade})` : ''}</td>
+                      <td className="py-1 px-2 text-gray-600">
+                        <div>{r.rank_code}{r.rank_grade ? `(${r.rank_grade})` : ''} {r.ship_name}</div>
+                        <div className="text-[10px] text-gray-400">{r.actual_embark_date || '-'} ~ {r.actual_disembark_date || 'present'}</div>
+                      </td>
                       <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
                       <td className="py-1 px-2 text-gray-600">{r.period_start_date}~{r.period_end_date}</td>
                       <td className="py-1 px-2 text-gray-600">{r.days_served}/{r.days_in_month}</td>
-                      <td className="py-1 px-2 text-gray-600">{r.actual_embark_date || '-'} ~ {r.actual_disembark_date || 'present'}</td>
                       {historyAllowanceColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>{fmt(r.allowance_by_name[name] || 0)}</td>)}
                       <td className="py-1 px-2 text-right font-mono font-semibold bg-gray-50">{fmt(r.gross_amount)}</td>
                       {historyDeductionColumns.map((name, i) => <td key={name} className={`py-1 px-2 text-right font-mono text-red-600 ${i === 0 ? 'border-l' : ''}`}>{fmt(r.deduction_by_name[name] || 0)}</td>)}
@@ -870,7 +869,7 @@ export default function CrewPayrollManagementPage() {
                   {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
                       급여대장에는 총적립액을 노출하지 않기로 했으므로 합계 칸은 비워둔다. */}
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                    <td className="py-1 px-2" colSpan={7}>Total ({historyRows.length} months)</td>
+                    <td className="py-1 px-2" colSpan={5}>Total ({historyRows.length} months)</td>
                     {historyAllowanceColumns.map((name, i) => (
                       <td key={name} className={`py-1 px-2 text-right font-mono ${i === 0 ? 'border-l' : ''}`}>
                         {name.endsWith('(Accrued)') ? <span className="text-gray-300">-</span> : fmt(historyTotals.allowanceByName[name] || 0)}
