@@ -936,13 +936,13 @@ export default function DispatchApprovalInboxPage() {
                       <span>{a.on_crew_name || ''}{a.on_rank_grade ? <span className="text-blue-700 font-medium ml-1">({a.on_rank_grade})</span> : ''}</span>
                     ) : <span className="text-gray-300">-</span>}
                   </td>
-                  <td className="p-2 text-gray-600">{a.embark_date || '-'}</td>
+                  <td className="p-2 text-gray-600">{a.on_crew_id ? (a.embark_date || '-') : '-'}</td>
                   <td className="p-2">
                     {a.off_crew_id ? (
                       <span>{a.off_crew_name || ''}{a.off_rank_grade ? <span className="text-amber-700 font-medium ml-1">({a.off_rank_grade})</span> : ''}</span>
                     ) : <span className="text-gray-300">-</span>}
                   </td>
-                  <td className="p-2 text-gray-600">{a.off_disembark_date || '-'}</td>
+                  <td className="p-2 text-gray-600">{a.off_crew_id ? (a.off_disembark_date || '-') : '-'}</td>
                   <td className="p-2 text-gray-600">{a.off_sign_off_reason_name || '-'}</td>
                 </tr>
               ))}

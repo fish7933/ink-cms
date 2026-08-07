@@ -1188,9 +1188,9 @@ export default function RotationPlanFormPage() {
                               </span>
                               <span className="font-medium text-emerald-800">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</span>
                             </span>
-                          ) : <span className="text-gray-300 italic">미정</span>}
+                          ) : <span className="text-gray-300 italic">{isReadOnly ? '없음' : '미정'}</span>}
                         </td>
-                        <td className="py-1 px-2 text-gray-400">{r.boardingDate || '-'}</td>
+                        <td className="py-1 px-2 text-gray-400">{r.boardingCrewId ? (r.boardingDate || '-') : '-'}</td>
                         <td className="py-1 px-2 text-gray-400">{r.contractMonths ? `${r.contractMonths}개월` : '-'}</td>
                         <td className="py-1 pl-6 pr-2 border-l">
                           {r.disembarkCrewId ? (
@@ -1201,9 +1201,9 @@ export default function RotationPlanFormPage() {
                               </span>
                               <span className="font-medium text-orange-800">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
                             </span>
-                          ) : <span className="text-gray-300 italic">미정</span>}
+                          ) : <span className="text-gray-300 italic">{isReadOnly ? '없음' : '미정'}</span>}
                         </td>
-                        <td className="py-1 px-2 text-gray-400">{r.disembarkDate || '-'}</td>
+                        <td className="py-1 px-2 text-gray-400">{r.disembarkCrewId ? (r.disembarkDate || '-') : '-'}</td>
                         <td className="py-1 px-2 text-gray-400">{disembarkReasonName || '-'}</td>
                         {hasSickPayInSummary && (
                           <td className="py-1 px-2 text-red-600 font-mono">{disembarkReasonName === '상병하선' && r.sickPayMonthlyAmount ? r.sickPayMonthlyAmount : '-'}</td>
