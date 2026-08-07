@@ -538,6 +538,7 @@ export const crewService = {
 
     const { data, error } = await supabase.from('crew_members').insert([{
       name: crewMember.name,
+      name_english: crewMember.name_english || crewMember.name,
       rank: rankData?.name || '',
       rank_id: crewMember.rank_id,
       nationality: crewMember.nationality || '',
