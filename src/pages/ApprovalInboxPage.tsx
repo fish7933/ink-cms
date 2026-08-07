@@ -383,19 +383,26 @@ export default function ApprovalInboxPage() {
                 <td className="p-2">
                   <div className="flex items-center gap-1 text-xs whitespace-nowrap">
                     <span className="text-gray-500">{doc.creator_name}<span className="text-[10px] text-gray-400 ml-0.5">(기안자)</span></span>
-                    {doc.steps.map((s, i) => (
-                      <span key={s.id} className="flex items-center gap-1">
-                        <span className="text-gray-300">→</span>
-                        <span className={
-                          s.status === 'approved' ? 'text-green-600'
-                          : s.status === 'rejected' ? 'text-red-600 font-medium'
-                          : s.step_order === doc.current_step && doc.status === 'pending' ? 'text-blue-600 font-semibold'
-                          : 'text-gray-400'
-                        }>
-                          {s.approver_name}
+                    {/* 기안자 본인이 중간결재자로도 걸려있으면(자기 자신에게 다시 결재받는 셈이라
+                        의미 없음) 그 단계는 화면에서 생략한다 — 단, 최종결재자는 기안자와 같은
+                        사람이어도 실제로 거쳐야 하는 단계이므로 그대로 보여준다. */}
+                    {doc.steps.filter(s => s.step_order === doc.steps[doc.steps.length - 1].step_order || s.approver_id !== doc.created_by).map(s => {
+                      const isFinal = s.step_order === doc.steps[doc.steps.length - 1].step_order;
+                      return (
+                        <span key={s.id} className="flex items-center gap-1">
+                          <span className="text-gray-300">→</span>
+                          <span className={
+                            s.status === 'approved' ? 'text-green-600'
+                            : s.status === 'rejected' ? 'text-red-600 font-medium'
+                            : s.step_order === doc.current_step && doc.status === 'pending' ? 'text-blue-600 font-semibold'
+                            : 'text-gray-400'
+                          }>
+                            {s.approver_name}
+                            {isFinal && <span className="text-[10px] text-gray-400 ml-0.5">(최종)</span>}
+                          </span>
                         </span>
-                      </span>
-                    ))}
+                      );
+                    })}
                   </div>
                 </td>
                 <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
