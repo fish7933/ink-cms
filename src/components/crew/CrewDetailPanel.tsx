@@ -705,7 +705,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               <Label className="text-xs">직급 *</Label>
               <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={identityFieldsLocked}>
                 <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
-                <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.rank_code})</SelectItem>)}</SelectContent>
+                <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
