@@ -105,7 +105,7 @@ export default function CrewRecommendationPage() {
             n.country_code === country || n.country_name_en === country ||
             n.country_name_ko === country || n.country_name_en.toLowerCase().includes(country.toLowerCase())
           );
-          if (match) setFormData(prev => ({ ...prev, nationality_id: match.country_name_ko }));
+          if (match) setFormData(prev => ({ ...prev, nationality_id: match.country_code }));
         }
       }
     })();
@@ -234,7 +234,7 @@ export default function CrewRecommendationPage() {
                   <Label className="text-xs">국적 *</Label>
                   <Select value={formData.nationality_id} onValueChange={v => setFormData(p => ({ ...p, nationality_id: v }))} disabled={uploading}>
                     <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
-                    <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_name_ko}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
+                    <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
