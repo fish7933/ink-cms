@@ -196,7 +196,10 @@ async function enrichDocuments(docs: ApprovalDocument[]): Promise<ApprovalDocume
   if (docs.length === 0) return [];
   const docIds = docs.map(d => d.id);
   const typeIds = [...new Set(docs.map(d => d.document_type_id))];
-  const creatorIds = [...new Set(docs.map(d => d.created_by))];
+  // created_by가 NULL인 문서가 하나라도 섞여 있으면 .in()에 null이 그대로 들어가
+  // "invalid input syntax for type uuid" 에러로 쿼리 전체가 실패해서(data가 통째로 비어버림)
+  // 같은 목록의 다른 모든 문서의 기안자까지 "알 수 없음"으로 나오는 문제가 있었다.
+  const creatorIds = [...new Set(docs.map(d => d.created_by).filter((v): v is string => !!v))];
   const unitIds = [...new Set([
     ...docs.map(d => d.org_unit_id),
     ...docs.map(d => d.recipient_org_unit_id),
