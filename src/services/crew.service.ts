@@ -125,6 +125,7 @@ interface CrewMemberRow {
   owner_id?: string;
   fleet_id?: string;
   current_ship_id?: string;
+  desired_embark_date?: string | null;
   experience?: CrewExperience[];
   created_at: string;
   updated_at: string;
@@ -433,6 +434,7 @@ export const crewService = {
         rank_id: item.rank_id || rank?.id || '',
         nationality: item.nationality,
         date_of_birth: item.date_of_birth,
+        desired_embark_date: item.desired_embark_date,
         passport_number: item.passport_no,
         seaman_book_number: item.seaman_book_no,
         contact_phone: item.phone,
