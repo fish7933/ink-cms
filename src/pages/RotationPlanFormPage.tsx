@@ -627,6 +627,12 @@ export default function RotationPlanFormPage() {
       toast({ title: '승선 등급 필수', description: `${names} — 이 직급은 급여템플릿에 등급이 구분돼 있어 등급을 선택해야 합니다`, variant: 'destructive' });
       return;
     }
+    const missingReason = validRows.filter(r => r.disembarkCrewId && !r.disembarkReasonId);
+    if (missingReason.length > 0) {
+      const names = missingReason.map(r => { const c = getCrew(r.disembarkCrewId); return c ? crewDisplayName(c) : '?'; }).join(', ');
+      toast({ title: '하선사유 필수', description: `${names} — 하선사유를 선택하세요`, variant: 'destructive' });
+      return;
+    }
 
     setSubmitting(true);
     try {
