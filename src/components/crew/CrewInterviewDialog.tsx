@@ -84,13 +84,22 @@ export default function CrewInterviewDialog({
       });
     } else {
       (async () => {
-        const user = await getCurrentUser();
+        // 새 면담 등록 시 승선 희망 선주/플릿/선박은 마지막으로 승선했던 선박을 기본값으로
+        // 넣어둔다(현재 승선 중이면 그 선박) — 이후 자유롭게 수정 가능. ships state는 별도
+        // effect에서 비동기로 채워지므로 경합을 피하기 위해 선박 정보를 직접 조회한다.
+        const [user, { data: lastEmbark }] = await Promise.all([
+          getCurrentUser(),
+          supabase.from('crew_embarkation_records').select('ship_id').eq('crew_member_id', crewId).order('embark_date', { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        const { data: lastShip } = lastEmbark?.ship_id
+          ? await supabase.from('ships').select('id, owner_id, fleet_id').eq('id', lastEmbark.ship_id).single()
+          : { data: null as { id: string; owner_id: string | null; fleet_id: string | null } | null };
         setFormData({
           interview_date: new Date().toISOString().slice(0, 10),
           interviewer_name: user?.name || '',
-          desired_owner_id: '',
-          desired_fleet_id: '',
-          desired_ship_id: '',
+          desired_owner_id: lastShip?.owner_id || '',
+          desired_fleet_id: lastShip?.fleet_id || '',
+          desired_ship_id: lastShip?.id || '',
           desired_embark_date: '',
           notes: '',
         });
