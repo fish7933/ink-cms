@@ -787,6 +787,10 @@ export default function DispatchApprovalInboxPage() {
       {approval.approval_line.steps.map((step, i) => {
         const action = approval.actions.find(a => a.step_order === step.step_order);
         const isCurrent = approval.status === 'pending' && approval.current_step === step.step_order;
+        // 상위 결재권자가 중간 단계에서 바로 최종승인(위임/강제승인)하면 그 뒤 단계는
+        // action이 아예 안 생긴다 — 전체 상태는 이미 '승인'인데 이 단계만 계속 "대기중"처럼
+        // 회색으로 남아 마치 멈춘 것처럼 보이던 문제를 막기 위해 별도로 "생략"을 표시한다.
+        const isBypassed = approval.status === 'approved' && !action;
         const isFinal = i === approval.approval_line.steps.length - 1;
         return (
           <span key={step.id} className="flex items-center gap-1">
@@ -798,7 +802,7 @@ export default function DispatchApprovalInboxPage() {
               : 'text-gray-400'
             }>
               {step.approver_name}
-              <span className="text-[10px] ml-0.5">({isFinal ? '최종' : '중간'}{isCurrent ? '·결재중' : ''})</span>
+              <span className="text-[10px] ml-0.5">({isFinal ? '최종' : '중간'}{isCurrent ? '·결재중' : isBypassed ? '·생략' : ''})</span>
             </span>
           </span>
         );
@@ -862,6 +866,9 @@ export default function DispatchApprovalInboxPage() {
         {approval.approval_line.steps.map((step, index) => {
           const action = approval.actions.find(a => a.step_order === step.step_order);
           const isCurrent = approval.current_step === step.step_order && approval.status === 'pending';
+          // 상위 결재권자의 위임/강제승인으로 이 단계까지 오지 않고 바로 최종승인된 경우 —
+          // 전체 상태는 '승인'인데 이 단계는 action이 없어 계속 대기중처럼 보이므로 구분 표시.
+          const isBypassed = approval.status === 'approved' && !action;
           const isFinal = index === approval.approval_line.steps.length - 1;
           return (
             <div key={step.id} className="flex items-center gap-2">
@@ -878,6 +885,7 @@ export default function DispatchApprovalInboxPage() {
                   {action?.action === 'approved' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
                   {action?.action === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
                   {isCurrent && <Badge variant="outline" className="text-xs">대기중</Badge>}
+                  {isBypassed && <Badge variant="outline" className="text-xs text-gray-500">상위 결재권자 승인으로 생략</Badge>}
                 </div>
                 {action?.comment && <p className="text-sm text-gray-600 mt-1">{action.comment}</p>}
                 {action?.created_at && <p className="text-xs text-gray-400 mt-1">{format(new Date(action.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</p>}
