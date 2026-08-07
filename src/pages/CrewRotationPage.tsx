@@ -771,25 +771,25 @@ export function CrewRotationPage() {
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
                         </TableCell>
-                        <TableCell className="text-xs text-gray-500">{format(new Date(plan.rotation_date), 'yyyy-MM', { locale: ko })}</TableCell>
-                        <TableCell className="font-medium text-xs max-w-[140px] truncate" title={plan.plan_name}>{plan.plan_name}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{plan.owner_name}</TableCell>
-                        <TableCell className="text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <Ship className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            {plan.ship_name}
+                        <TableCell className="text-[11px] text-gray-500 whitespace-nowrap">{format(new Date(plan.rotation_date), 'yyyy-MM', { locale: ko })}</TableCell>
+                        <TableCell className="font-medium text-[11px] max-w-[110px] truncate" title={plan.plan_name}>{plan.plan_name}</TableCell>
+                        <TableCell className="text-[11px] text-muted-foreground max-w-[80px] truncate" title={plan.owner_name}>{plan.owner_name}</TableCell>
+                        <TableCell className="text-[11px] max-w-[100px]">
+                          <div className="flex items-center gap-1 truncate" title={plan.ship_name}>
+                            <Ship className="h-3 w-3 text-muted-foreground shrink-0" />
+                            <span className="truncate">{plan.ship_name}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</TableCell>
-                        <TableCell className="text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <TableCell className="text-[11px] whitespace-nowrap">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</TableCell>
+                        <TableCell className="text-[11px] whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3 text-muted-foreground shrink-0" />
                             {plan.assignments.length}명
                           </div>
                         </TableCell>
-                        <TableCell>{getStatusBadge(plan.status)}</TableCell>
-                        <TableCell><ApprovalChainCell approval={planApprovalMap.get(plan.id)} /></TableCell>
-                        <TableCell className="text-xs">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
+                        <TableCell className="whitespace-nowrap">{getStatusBadge(plan.status)}</TableCell>
+                        <TableCell className="max-w-[220px] truncate"><ApprovalChainCell approval={planApprovalMap.get(plan.id)} /></TableCell>
+                        <TableCell className="text-[11px] whitespace-nowrap">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex flex-nowrap justify-end gap-1">
                             {plan.status === 'draft' && (

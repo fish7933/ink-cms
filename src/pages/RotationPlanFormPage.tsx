@@ -983,74 +983,80 @@ export default function RotationPlanFormPage() {
                     <LogIn className="w-3.5 h-3.5 text-emerald-600" />
                     <span className="text-[11px] font-semibold text-emerald-700">On-Signer</span>
                   </div>
-                  <div className="flex gap-1">
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] text-emerald-600 shrink-0">직급</span>
-                      <Select value={row.boardingRankId || '_none'} onValueChange={v => updateRow(row.id, { boardingRankId: v === '_none' ? '' : v, boardingGrade: null })} disabled={isReadOnly}>
-                        <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급 *" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">직급 *</SelectItem>
-                          {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code || r.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] text-emerald-600 shrink-0">등급</span>
-                      {(() => {
-                        const opts = gradesForRankId(row.boardingRankId);
-                        return opts.length > 0 ? (
-                          <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })} disabled={isReadOnly}>
-                            <SelectTrigger className={`h-7 text-[12px] md:text-[12px] w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
-                              <SelectValue placeholder="등급 *" />
-                            </SelectTrigger>
+                  {isReadOnly && !row.boardingCrewId ? (
+                    <p className="text-xs text-gray-400 italic py-1">없음 (승선 없이 하선만 진행)</p>
+                  ) : (
+                    <>
+                      <div className="flex gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-emerald-600 shrink-0">직급</span>
+                          <Select value={row.boardingRankId || '_none'} onValueChange={v => updateRow(row.id, { boardingRankId: v === '_none' ? '' : v, boardingGrade: null })} disabled={isReadOnly}>
+                            <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급 *" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="_none" className="text-[12px]">선택 *</SelectItem>
-                              {opts.map(g => <SelectItem key={g} value={g} className="text-[12px]">{g}</SelectItem>)}
+                              <SelectItem value="_none">직급 *</SelectItem>
+                              {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code || r.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                        ) : (
-                          <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
-                            placeholder="등급" className="h-7 text-[12px] md:text-[12px] w-16 shrink-0" disabled={isReadOnly} />
-                        );
-                      })()}
-                    </div>
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="text-[9px] text-emerald-600 shrink-0">이름</span>
-                      <Button
-                        type="button" variant="outline" disabled={isReadOnly}
-                        className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-emerald-200"
-                        onClick={() => setRowPicker({ rowId: row.id, side: 'boarding' })}
-                      >
-                        <span className="truncate text-emerald-800">{getCrewLabel(row.boardingCrewId, row.boardingCrewName)}</span>
-                      </Button>
-                    </div>
-                  </div>
-                  {draftReservationFor(row.boardingCrewId) && (
-                    <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                      ⚠ 임시저장 계획 "{draftReservationFor(row.boardingCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
-                    </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-emerald-600 shrink-0">등급</span>
+                          {(() => {
+                            const opts = gradesForRankId(row.boardingRankId);
+                            return opts.length > 0 ? (
+                              <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })} disabled={isReadOnly}>
+                                <SelectTrigger className={`h-7 text-[12px] md:text-[12px] w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
+                                  <SelectValue placeholder="등급 *" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="_none" className="text-[12px]">선택 *</SelectItem>
+                                  {opts.map(g => <SelectItem key={g} value={g} className="text-[12px]">{g}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
+                                placeholder="등급" className="h-7 text-[12px] md:text-[12px] w-16 shrink-0" disabled={isReadOnly} />
+                            );
+                          })()}
+                        </div>
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="text-[9px] text-emerald-600 shrink-0">이름</span>
+                          <Button
+                            type="button" variant="outline" disabled={isReadOnly}
+                            className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-emerald-200"
+                            onClick={() => setRowPicker({ rowId: row.id, side: 'boarding' })}
+                          >
+                            <span className="truncate text-emerald-800">{getCrewLabel(row.boardingCrewId, row.boardingCrewName)}</span>
+                          </Button>
+                        </div>
+                      </div>
+                      {draftReservationFor(row.boardingCrewId) && (
+                        <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                          ⚠ 임시저장 계획 "{draftReservationFor(row.boardingCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
+                        </p>
+                      )}
+                      <div className="flex gap-1">
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="text-[9px] text-emerald-600 shrink-0">출국일</span>
+                          <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
+                        </div>
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="text-[9px] text-emerald-600 shrink-0">승선일</span>
+                          <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
+                        </div>
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="text-[9px] text-emerald-600 shrink-0 whitespace-nowrap">계약개월</span>
+                          <Input
+                            type="number"
+                            value={row.contractMonths}
+                            onChange={e => updateRow(row.id, { contractMonths: e.target.value })}
+                            className="h-7 text-xs px-1 min-w-0"
+                            placeholder={row.boardingCrewId && !row.contractMonths ? '미설정' : ''}
+                            disabled={isReadOnly}
+                          />
+                        </div>
+                      </div>
+                    </>
                   )}
-                  <div className="flex gap-1">
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="text-[9px] text-emerald-600 shrink-0">출국일</span>
-                      <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
-                    </div>
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="text-[9px] text-emerald-600 shrink-0">승선일</span>
-                      <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
-                    </div>
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="text-[9px] text-emerald-600 shrink-0 whitespace-nowrap">계약개월</span>
-                      <Input
-                        type="number"
-                        value={row.contractMonths}
-                        onChange={e => updateRow(row.id, { contractMonths: e.target.value })}
-                        className="h-7 text-xs px-1 min-w-0"
-                        placeholder={row.boardingCrewId && !row.contractMonths ? '미설정' : ''}
-                        disabled={isReadOnly}
-                      />
-                    </div>
-                  </div>
                 </div>
 
                 {/* ────────── Off-Signer ────────── */}
@@ -1059,75 +1065,81 @@ export default function RotationPlanFormPage() {
                     <LogOut className="w-3.5 h-3.5 text-orange-600" />
                     <span className="text-[11px] font-semibold text-orange-700">Off-Signer</span>
                   </div>
-                  {/* 하선자는 이미 승선 중인 선원이라 직급/등급이 배정 시점의 사실(현재 배정 선박
-                      기준)일 뿐 여기서 새로 고르는 값이 아니므로, 둘 다 고정 표시만 하고 수정은 막는다. */}
-                  <div className="flex gap-1">
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] text-orange-600 shrink-0">직급</span>
-                      <div
-                        className="h-7 text-xs w-16 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
-                        title="현재 승선 중 직급 (고정)"
-                      >
-                        {ranks.find(r => r.id === row.disembarkRankId)?.rank_code || '-'}
+                  {isReadOnly && !row.disembarkCrewId ? (
+                    <p className="text-xs text-gray-400 italic py-1">없음 (하선 없이 승선만 진행)</p>
+                  ) : (
+                    <>
+                      {/* 하선자는 이미 승선 중인 선원이라 직급/등급이 배정 시점의 사실(현재 배정 선박
+                          기준)일 뿐 여기서 새로 고르는 값이 아니므로, 둘 다 고정 표시만 하고 수정은 막는다. */}
+                      <div className="flex gap-1">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-orange-600 shrink-0">직급</span>
+                          <div
+                            className="h-7 text-xs w-16 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
+                            title="현재 승선 중 직급 (고정)"
+                          >
+                            {ranks.find(r => r.id === row.disembarkRankId)?.rank_code || '-'}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-orange-600 shrink-0">등급</span>
+                          <div
+                            className="h-7 text-xs w-14 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
+                            title="현재 승선 중 등급 (고정)"
+                          >
+                            {row.disembarkGrade || '-'}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="text-[9px] text-orange-600 shrink-0">이름</span>
+                          <Button
+                            type="button" variant="outline" disabled={isReadOnly}
+                            className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-orange-200"
+                            onClick={() => setRowPicker({ rowId: row.id, side: 'disembark' })}
+                          >
+                            <span className="truncate text-orange-800">{getCrewLabel(row.disembarkCrewId, row.disembarkCrewName)}</span>
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[9px] text-orange-600 shrink-0">등급</span>
-                      <div
-                        className="h-7 text-xs w-14 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
-                        title="현재 승선 중 등급 (고정)"
-                      >
-                        {row.disembarkGrade || '-'}
+                      {draftReservationFor(row.disembarkCrewId) && (
+                        <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                          ⚠ 임시저장 계획 "{draftReservationFor(row.disembarkCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
+                        </p>
+                      )}
+                      <div className="flex gap-1">
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="text-[9px] text-orange-600 shrink-0">하선일</span>
+                          <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
+                        </div>
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                          <span className="text-[9px] text-orange-600 shrink-0">귀국일</span>
+                          <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
+                        </div>
+                        {row.disembarkCrewId && (
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <span className="text-[9px] text-orange-600 shrink-0 whitespace-nowrap">하선사유</span>
+                            <Select value={row.disembarkReasonId || '_none'} onValueChange={v => updateRow(row.id, { disembarkReasonId: v === '_none' ? '' : v, sickPayMonthlyAmount: '' })} disabled={isReadOnly}>
+                              <SelectTrigger className="h-7 text-xs min-w-0"><SelectValue placeholder="선택" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="_none">하선사유 선택</SelectItem>
+                                {signOffReasons.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {signOffReasons.find(r => r.id === row.disembarkReasonId)?.name === '상병하선' && (
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <span className="text-[9px] text-red-500 shrink-0 whitespace-nowrap">상병급여</span>
+                            <Input
+                              type="number" value={row.sickPayMonthlyAmount}
+                              onChange={e => updateRow(row.id, { sickPayMonthlyAmount: e.target.value })}
+                              className="h-7 text-xs px-1 min-w-0" disabled={isReadOnly}
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="text-[9px] text-orange-600 shrink-0">이름</span>
-                      <Button
-                        type="button" variant="outline" disabled={isReadOnly}
-                        className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-orange-200"
-                        onClick={() => setRowPicker({ rowId: row.id, side: 'disembark' })}
-                      >
-                        <span className="truncate text-orange-800">{getCrewLabel(row.disembarkCrewId, row.disembarkCrewName)}</span>
-                      </Button>
-                    </div>
-                  </div>
-                  {draftReservationFor(row.disembarkCrewId) && (
-                    <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                      ⚠ 임시저장 계획 "{draftReservationFor(row.disembarkCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
-                    </p>
+                    </>
                   )}
-                  <div className="flex gap-1">
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="text-[9px] text-orange-600 shrink-0">하선일</span>
-                      <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
-                    </div>
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <span className="text-[9px] text-orange-600 shrink-0">귀국일</span>
-                      <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
-                    </div>
-                    {row.disembarkCrewId && (
-                      <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <span className="text-[9px] text-orange-600 shrink-0 whitespace-nowrap">하선사유</span>
-                        <Select value={row.disembarkReasonId || '_none'} onValueChange={v => updateRow(row.id, { disembarkReasonId: v === '_none' ? '' : v, sickPayMonthlyAmount: '' })} disabled={isReadOnly}>
-                          <SelectTrigger className="h-7 text-xs min-w-0"><SelectValue placeholder="선택" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="_none">하선사유 선택</SelectItem>
-                            {signOffReasons.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                    {signOffReasons.find(r => r.id === row.disembarkReasonId)?.name === '상병하선' && (
-                      <div className="flex items-center gap-1 flex-1 min-w-0">
-                        <span className="text-[9px] text-red-500 shrink-0 whitespace-nowrap">상병급여</span>
-                        <Input
-                          type="number" value={row.sickPayMonthlyAmount}
-                          onChange={e => updateRow(row.id, { sickPayMonthlyAmount: e.target.value })}
-                          className="h-7 text-xs px-1 min-w-0" disabled={isReadOnly}
-                        />
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
 
