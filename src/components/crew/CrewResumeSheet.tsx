@@ -194,26 +194,24 @@ export default function CrewResumeSheet({ crewId }: Props) {
       `}</style>
 
       {/* 레터헤드 — 결재문서 시행문(ApprovalDocumentIssuedSheet)과 동일한 회사정보 헤더 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        {company && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 40 }} />}
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{company.name}</div>
-              <div style={{ fontSize: 10.5, color: '#666', marginTop: 2 }}>
-                {[company.address, company.phone && `Tel. ${company.phone}`, company.fax && `Fax. ${company.fax}`].filter(Boolean).join('  ·  ')}
-              </div>
-              {(company.email || company.website) && (
-                <div style={{ fontSize: 10.5, color: '#666' }}>
-                  {[company.email, company.website].filter(Boolean).join('  ·  ')}
-                </div>
-              )}
+      {company && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 40 }} />}
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{company.name}</div>
+            <div style={{ fontSize: 10.5, color: '#666', marginTop: 2 }}>
+              {[company.address, company.phone && `Tel. ${company.phone}`, company.fax && `Fax. ${company.fax}`].filter(Boolean).join('  ·  ')}
             </div>
+            {(company.email || company.website) && (
+              <div style={{ fontSize: 10.5, color: '#666' }}>
+                {[company.email, company.website].filter(Boolean).join('  ·  ')}
+              </div>
+            )}
           </div>
-        )}
-        <div style={{ fontSize: '16pt', fontWeight: 800, letterSpacing: 2, color: '#1d4ed8' }}>CREW RESUME</div>
-      </div>
+        </div>
+      )}
       <div style={{ borderBottom: '3px solid #1a1a1a', marginBottom: 12 }} />
+      <div style={{ fontSize: '16pt', fontWeight: 800, letterSpacing: 2, color: '#1d4ed8', textAlign: 'center', marginBottom: 12 }}>CREW RESUME</div>
 
       {/* 프로필 + 기본정보 */}
       <div className="resume-section">
