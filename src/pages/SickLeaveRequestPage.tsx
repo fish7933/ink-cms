@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Stethoscope, Send, X, Paperclip, Upload, Trash2, FileText } from 'lucide-react';
+import { Stethoscope, Send, X, Paperclip, Upload, Trash2, FileText, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,7 @@ import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import {
   getMySickLeaveRequests, addSickLeaveRequest, cancelSickLeaveRequest,
-  deleteSickLeaveRequest, linkSickLeaveRequestDocument, getUsedSickLeaveHours, updateSickLeaveAttachments,
+  deleteSickLeaveRequest, linkSickLeaveRequestDocument, linkSickLeaveCancellationDocument, getUsedSickLeaveHours, updateSickLeaveAttachments,
 } from '@/services/sick-leave.service';
 import { formatLeaveHours, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { rangesOverlap } from '@/lib/leave-duration';
@@ -40,6 +40,11 @@ function countDays(startDate: string, endDate: string): number {
   return Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1;
 }
 
+function getTodayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 export default function SickLeaveRequestPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -58,6 +63,11 @@ export default function SickLeaveRequestPage() {
   const [evidenceAttachments, setEvidenceAttachments] = useState<SickLeaveAttachment[]>([]);
   const [evidenceNewFiles, setEvidenceNewFiles] = useState<File[]>([]);
   const [evidenceSaving, setEvidenceSaving] = useState(false);
+
+  const [cancellationDocStatuses, setCancellationDocStatuses] = useState<Map<string, string>>(new Map());
+  const [cancelTarget, setCancelTarget] = useState<SickLeaveRequest | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -81,6 +91,8 @@ export default function SickLeaveRequestPage() {
       setOrgUnits(units);
       setMyRequests(requests);
       setUsedHours(used);
+      const cancellationDocIds = requests.map(r => r.cancellation_document_id).filter((id): id is string => !!id);
+      setCancellationDocStatuses(await approvalDocumentService.getDocumentStatuses(cancellationDocIds));
       const me = members.find(m => m.id === user.id);
       setMyOrgUnitId(me?.org_unit_ids[0] || null);
     } catch (e) {
@@ -219,6 +231,53 @@ export default function SickLeaveRequestPage() {
     }
   };
 
+  // 이미 승인된 질병휴가도 휴가 당일 하루 전까지만 취소 신청을 할 수 있다.
+  const canRequestCancellation = (r: SickLeaveRequest) => r.status === 'approved' && getTodayIso() < r.start_date;
+  const isCancellationPending = (r: SickLeaveRequest) =>
+    !!r.cancellation_document_id && cancellationDocStatuses.get(r.cancellation_document_id) === 'pending';
+
+  const openCancelDialog = (r: SickLeaveRequest) => {
+    setCancelTarget(r);
+    setCancelReason('');
+  };
+
+  const submitCancellation = async () => {
+    if (!cancelTarget || !currentUser || !myOrgUnitId) return;
+    if (!cancelReason.trim()) { toast({ title: '취소 사유를 입력하세요.', variant: 'destructive' }); return; }
+    try {
+      setCancelSubmitting(true);
+      const documentTypes = await approvalDocumentService.getDocumentTypes();
+      const cancelType = documentTypes.find(t => t.code === 'SICK_LEAVE_CANCELLATION');
+      if (!cancelType) throw new Error('질병휴가 취소 신청 문서유형이 등록되어 있지 않습니다.');
+
+      const cancelContent = [
+        `취소 대상 질병휴가: ${cancelTarget.start_date} ~ ${cancelTarget.end_date} (${formatLeaveHours(cancelTarget.hours)})`,
+        `원래 사유: ${cancelTarget.reason || '-'}`,
+        `취소 사유: ${cancelReason}`,
+      ].join('\n');
+
+      const doc = await approvalDocumentService.createDocument({
+        document_type_id: cancelType.id,
+        title: `${currentUser.name} 질병휴가 취소 신청 (${cancelTarget.start_date} ~ ${cancelTarget.end_date})`,
+        content: cancelContent,
+        org_unit_id: myOrgUnitId,
+        created_by: currentUser.id,
+        reference_type: 'sick_leave_cancellation',
+        reference_id: cancelTarget.id,
+      });
+
+      await linkSickLeaveCancellationDocument(cancelTarget.id, doc.id, cancelReason);
+
+      toast({ title: '질병휴가 취소 신청이 제출되었습니다.', description: '결재가 승인되면 질병휴가가 최종 취소됩니다.' });
+      setCancelTarget(null);
+      await loadData();
+    } catch (e) {
+      toast({ title: '취소 신청 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
   return (
@@ -299,7 +358,7 @@ export default function SickLeaveRequestPage() {
             <div className="border rounded-md overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
-                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="text-center p-2">증빙</th><th className="p-2 w-16"></th></tr>
+                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="text-center p-2">증빙</th><th className="p-2 w-28"></th></tr>
                 </thead>
                 <tbody>
                   {myRequests.map(r => (
@@ -316,6 +375,14 @@ export default function SickLeaveRequestPage() {
                       <td className="p-2 text-center">
                         {r.status === 'pending' && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleCancel(r.id, r.approval_document_id)}><X className="h-3 w-3" /></Button>
+                        )}
+                        {r.status === 'approved' && isCancellationPending(r) && (
+                          <Badge className="text-[10px] bg-orange-100 text-orange-700">취소 결재중</Badge>
+                        )}
+                        {r.status === 'approved' && !isCancellationPending(r) && canRequestCancellation(r) && (
+                          <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => openCancelDialog(r)}>
+                            <Ban className="h-3 w-3" />취소 신청
+                          </Button>
                         )}
                       </td>
                     </tr>
@@ -369,6 +436,33 @@ export default function SickLeaveRequestPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEvidenceRequest(null)} disabled={evidenceSaving}>취소</Button>
             <Button onClick={saveEvidence} disabled={evidenceSaving}>{evidenceSaving ? '저장 중...' : '저장'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!cancelTarget} onOpenChange={open => !open && !cancelSubmitting && setCancelTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>질병휴가 취소 신청</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">
+              이미 승인된 질병휴가는 취소도 신청과 동일하게 결재를 거쳐야 최종 취소됩니다. 결재가 승인될 때까지는 질병휴가가 그대로 유효합니다.
+            </p>
+            {cancelTarget && (
+              <div className="p-2.5 bg-gray-50 rounded-md text-sm">
+                <p className="font-medium">{cancelTarget.start_date} ~ {cancelTarget.end_date}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{formatLeaveHours(cancelTarget.hours)}</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">취소 사유 *</Label>
+              <Textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={2} className="text-sm resize-none" disabled={cancelSubmitting} placeholder="취소 사유를 입력하세요" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelSubmitting}>닫기</Button>
+            <Button variant="destructive" onClick={submitCancellation} disabled={cancelSubmitting}>{cancelSubmitting ? '제출 중...' : '취소 신청 제출'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

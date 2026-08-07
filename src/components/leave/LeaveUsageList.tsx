@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ShoreLeaveRequestWithDetails } from '@/types/shore-leave';
 
 interface LeaveUsageListProps {
-  requests: ShoreLeaveRequestWithDetails[]; // status === 'approved' 인 것만 넘겨받는다고 가정
+  requests: ShoreLeaveRequestWithDetails[]; // status가 'approved' 또는 'pending'인 것만 넘겨받는다고 가정
   positionByUser: Map<string, string | null>;
+  // 지정하면 아직 시작되지 않은(=사용되지 않은) 승인 건에 "강제취소" 버튼을 보여준다 (관리자 전용).
+  onForceCancel?: (request: ShoreLeaveRequestWithDetails) => void;
 }
 
 const PAGE_SIZE = 15;
@@ -30,7 +32,7 @@ function periodLabel(r: ShoreLeaveRequestWithDetails): string {
 
 // 월별 캘린더 밑에 두는 목록 뷰 — 캘린더는 "이번 달"만 보여주는 반면, 이건 연도/월/직원으로
 // 걸러가며 사용한/예정된 연차를 최근 발생순으로 계속 스크롤해서 볼 수 있게 한다.
-export default function LeaveUsageList({ requests, positionByUser }: LeaveUsageListProps) {
+export default function LeaveUsageList({ requests, positionByUser, onForceCancel }: LeaveUsageListProps) {
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const years = useMemo(() => {
@@ -106,26 +108,36 @@ export default function LeaveUsageList({ requests, positionByUser }: LeaveUsageL
               <th className="text-center p-2 text-xs font-medium text-gray-600">구분</th>
               <th className="text-center p-2 text-xs font-medium text-gray-600">상태</th>
               <th className="text-left p-2 text-xs font-medium text-gray-600">사유</th>
+              {onForceCancel && <th className="text-center p-2 text-xs font-medium text-gray-600 w-24">관리</th>}
             </tr>
           </thead>
           <tbody>
             {paged.length === 0 ? (
-              <tr><td colSpan={5} className="p-6 text-center text-gray-400 text-sm">내역이 없습니다.</td></tr>
+              <tr><td colSpan={onForceCancel ? 6 : 5} className="p-6 text-center text-gray-400 text-sm">내역이 없습니다.</td></tr>
             ) : paged.map(r => {
               const position = positionByUser.get(r.user_id);
               const label = `${position ? `${position} ` : ''}${r.user_name}`;
               const isUpcoming = r.start_date > todayIso;
+              const statusLabel = r.status === 'pending' ? '상신중' : isUpcoming ? '예정' : '사용';
+              const statusClass = r.status === 'pending' ? 'bg-yellow-50 text-yellow-700' : isUpcoming ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500';
               return (
                 <tr key={r.id} className="border-b last:border-0">
                   <td className="p-2 font-medium whitespace-nowrap">{label}</td>
                   <td className="p-2 whitespace-nowrap">{periodLabel(r)}</td>
                   <td className="p-2 text-center whitespace-nowrap">{typeLabelFor(r)}</td>
                   <td className="p-2 text-center">
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${isUpcoming ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                      {isUpcoming ? '예정' : '사용'}
-                    </span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${statusClass}`}>{statusLabel}</span>
                   </td>
                   <td className="p-2 text-gray-500">{r.reason || '-'}</td>
+                  {onForceCancel && (
+                    <td className="p-2 text-center">
+                      {r.status === 'approved' && isUpcoming && (
+                        <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => onForceCancel(r)}>
+                          <Ban className="h-3 w-3" />강제취소
+                        </Button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}

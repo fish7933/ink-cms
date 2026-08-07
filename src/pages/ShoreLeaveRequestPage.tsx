@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Send, X } from 'lucide-react';
+import { CalendarDays, Send, X, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import LeaveRangeCalendar from '@/components/leave/LeaveRangeCalendar';
 import { getCurrentUser } from '@/lib/store';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
-import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, getLeaveBalance } from '@/services/shore-leave.service';
+import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, linkLeaveCancellationDocument, getLeaveBalance } from '@/services/shore-leave.service';
 import { formatLeaveHours, type LeaveBalance } from '@/lib/leave-calc';
 import { calculateLeaveHours, isWorkingDay, rangesOverlap } from '@/lib/leave-duration';
 import { getHolidays, type Holiday } from '@/services/holiday.service';
@@ -41,6 +42,11 @@ const LEAVE_TYPE_TIMES: Record<LeaveType, { start_time: string; end_time: string
   pm: { start_time: '14:00', end_time: '18:00' },
 };
 
+function getTodayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 export default function ShoreLeaveRequestPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -55,6 +61,10 @@ export default function ShoreLeaveRequestPage() {
   const [approvalChain, setApprovalChain] = useState<ApprovalChainStep[]>([]);
   const [chainLoading, setChainLoading] = useState(true);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [cancellationDocStatuses, setCancellationDocStatuses] = useState<Map<string, string>>(new Map());
+  const [cancelTarget, setCancelTarget] = useState<ShoreLeaveRequest | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   const [form, setForm] = useState({ start_date: '', end_date: '', leaveType: 'full' as LeaveType, reason: '', ccOrgUnitIds: [] as string[] });
 
@@ -82,6 +92,8 @@ export default function ShoreLeaveRequestPage() {
       setMyRequests(requests);
       setBalance(bal);
       setHolidays(holidayList);
+      const cancellationDocIds = requests.map(r => r.cancellation_document_id).filter((id): id is string => !!id);
+      setCancellationDocStatuses(await approvalDocumentService.getDocumentStatuses(cancellationDocIds));
       const me = members.find(m => m.id === user.id);
       const orgUnitId = me?.org_unit_ids[0] || null;
       setMyOrgUnitId(orgUnitId);
@@ -123,11 +135,7 @@ export default function ShoreLeaveRequestPage() {
     ? Math.round((new Date(form.end_date).getTime() - new Date(form.start_date).getTime()) / 86400000) + 1
     : 0;
   const isMultiDay = dayCount >= 2;
-  const isToday = (() => {
-    const now = new Date();
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    return form.start_date === todayIso;
-  })();
+  const isToday = form.start_date === getTodayIso();
   // 당일 신청은 원칙적으로 오전 9시 전까지만 가능하지만, 오후반차는 오후(14시)에 시작하므로
   // 당일 오전 중에는(14시 전까지) 신청할 수 있게 예외를 둔다.
   const isSameDayRequestBlocked = isToday && (
@@ -229,6 +237,53 @@ export default function ShoreLeaveRequestPage() {
       await loadData();
     } catch {
       toast({ title: '취소 실패', variant: 'destructive' });
+    }
+  };
+
+  // 이미 승인된 연차는 휴가 당일 하루 전까지만 취소 신청을 할 수 있다 (당일이 되면 더 이상 취소 불가).
+  const canRequestCancellation = (r: ShoreLeaveRequest) => r.status === 'approved' && getTodayIso() < r.start_date;
+  const isCancellationPending = (r: ShoreLeaveRequest) =>
+    !!r.cancellation_document_id && cancellationDocStatuses.get(r.cancellation_document_id) === 'pending';
+
+  const openCancelDialog = (r: ShoreLeaveRequest) => {
+    setCancelTarget(r);
+    setCancelReason('');
+  };
+
+  const submitCancellation = async () => {
+    if (!cancelTarget || !currentUser || !myOrgUnitId) return;
+    if (!cancelReason.trim()) { toast({ title: '취소 사유를 입력하세요.', variant: 'destructive' }); return; }
+    try {
+      setCancelSubmitting(true);
+      const documentTypes = await approvalDocumentService.getDocumentTypes();
+      const cancelType = documentTypes.find(t => t.code === 'LEAVE_CANCELLATION');
+      if (!cancelType) throw new Error('연차 취소 신청 문서유형이 등록되어 있지 않습니다.');
+
+      const cancelContent = [
+        `취소 대상 연차: ${cancelTarget.start_date} ${cancelTarget.start_time} ~ ${cancelTarget.end_date} ${cancelTarget.end_time} (${formatLeaveHours(cancelTarget.hours)})`,
+        `원래 사유: ${cancelTarget.reason || '-'}`,
+        `취소 사유: ${cancelReason}`,
+      ].join('\n');
+
+      const doc = await approvalDocumentService.createDocument({
+        document_type_id: cancelType.id,
+        title: `${currentUser.name} 연차 취소 신청 (${cancelTarget.start_date} ~ ${cancelTarget.end_date})`,
+        content: cancelContent,
+        org_unit_id: myOrgUnitId,
+        created_by: currentUser.id,
+        reference_type: 'shore_leave_cancellation',
+        reference_id: cancelTarget.id,
+      });
+
+      await linkLeaveCancellationDocument(cancelTarget.id, doc.id, cancelReason);
+
+      toast({ title: '연차 취소 신청이 제출되었습니다.', description: '결재가 승인되면 연차가 최종 취소됩니다.' });
+      setCancelTarget(null);
+      await loadData();
+    } catch (e) {
+      toast({ title: '취소 신청 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setCancelSubmitting(false);
     }
   };
 
@@ -388,7 +443,7 @@ export default function ShoreLeaveRequestPage() {
             <div className="border rounded-md overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
-                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수/시간</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="p-2 w-16"></th></tr>
+                  <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수/시간</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="p-2 w-28"></th></tr>
                 </thead>
                 <tbody>
                   {myRequests.map(r => (
@@ -401,6 +456,14 @@ export default function ShoreLeaveRequestPage() {
                         {r.status === 'pending' && (
                           <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleCancel(r.id, r.approval_document_id)}><X className="h-3 w-3" /></Button>
                         )}
+                        {r.status === 'approved' && isCancellationPending(r) && (
+                          <Badge className="text-[10px] bg-orange-100 text-orange-700">취소 결재중</Badge>
+                        )}
+                        {r.status === 'approved' && !isCancellationPending(r) && canRequestCancellation(r) && (
+                          <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => openCancelDialog(r)}>
+                            <Ban className="h-3 w-3" />취소 신청
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -410,6 +473,33 @@ export default function ShoreLeaveRequestPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!cancelTarget} onOpenChange={open => !open && !cancelSubmitting && setCancelTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>연차 취소 신청</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">
+              이미 승인된 연차는 취소도 신청과 동일하게 결재를 거쳐야 최종 취소됩니다. 결재가 승인될 때까지는 연차가 그대로 유효합니다.
+            </p>
+            {cancelTarget && (
+              <div className="p-2.5 bg-gray-50 rounded-md text-sm">
+                <p className="font-medium">{cancelTarget.start_date} {cancelTarget.start_time} ~ {cancelTarget.end_date} {cancelTarget.end_time}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{formatLeaveHours(cancelTarget.hours)}</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">취소 사유 *</Label>
+              <Textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)} rows={2} className="text-sm resize-none" disabled={cancelSubmitting} placeholder="취소 사유를 입력하세요" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelSubmitting}>닫기</Button>
+            <Button variant="destructive" onClick={submitCancellation} disabled={cancelSubmitting}>{cancelSubmitting ? '제출 중...' : '취소 신청 제출'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

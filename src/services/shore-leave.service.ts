@@ -2,11 +2,12 @@ import { supabase } from '@/lib/supabase';
 import { calculateAccruedLeaveHours, getCurrentLeaveYearStart, type LeaveBalance } from '@/lib/leave-calc';
 import type { ShoreLeaveRequest, ShoreLeaveRequestWithDetails, ShoreLeaveAdjustment, ShoreLeaveReset, ShoreLeaveAdminLogWithNames } from '@/types/shore-leave';
 
-// 관리자 전용 메뉴(육상 직원 연차 관리)에서 발생하는 부여/차감/초기화/제외 지정-해제를 감사 로그로 남긴다.
-// UI에서 삭제 기능을 제공하지 않는 append-only 로그다.
-async function logAdminAction(input: {
+// 관리자 전용 메뉴(육상 직원 휴가 관리)에서 발생하는 부여/차감/초기화/제외 지정-해제/강제취소를 감사
+// 로그로 남긴다. UI에서 삭제 기능을 제공하지 않는 append-only 로그다. 질병휴가 강제취소도 같은
+// 테이블을 함께 쓰므로 sick-leave.service.ts에서도 이 함수를 그대로 가져다 쓴다.
+export async function logAdminAction(input: {
   user_id: string;
-  action_type: 'grant' | 'manual_use' | 'reset' | 'exempt_on' | 'exempt_off';
+  action_type: 'grant' | 'manual_use' | 'reset' | 'exempt_on' | 'exempt_off' | 'cancel_annual' | 'cancel_sick';
   hours?: number | null;
   reason?: string | null;
   performed_by: string;
@@ -310,6 +311,17 @@ export async function cancelLeaveRequest(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// 관리자가 아직 시작되지 않은(=사용되지 않은) 승인 연차를 결재 없이 즉시 강제 취소한다.
+// 본인 신청 취소(결재 필요)와 달리 관리자 권한으로 바로 확정되며, 작업 로그에 남는다.
+export async function forceCancelLeaveRequest(input: { id: string; user_id: string; hours: number; reason: string; performed_by: string }): Promise<void> {
+  const { error } = await supabase
+    .from('shore_leave_requests')
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('id', input.id);
+  if (error) throw error;
+  await logAdminAction({ user_id: input.user_id, action_type: 'cancel_annual', hours: input.hours, reason: input.reason, performed_by: input.performed_by });
+}
+
 export async function deleteLeaveRequest(id: string): Promise<void> {
   const { error } = await supabase.from('shore_leave_requests').delete().eq('id', id);
   if (error) throw error;
@@ -319,6 +331,17 @@ export async function linkLeaveRequestDocument(leaveRequestId: string, documentI
   const { error } = await supabase
     .from('shore_leave_requests')
     .update({ approval_document_id: documentId, updated_at: new Date().toISOString() })
+    .eq('id', leaveRequestId);
+  if (error) throw error;
+}
+
+// 이미 승인된 연차의 취소 신청 — 취소 결재문서를 만든 뒤 여기로 연결해둔다. 원본의 status는
+// 그대로 'approved'로 남아있다가, 취소 결재가 실제로 승인되는 순간에만 'cancelled'로 바뀐다
+// (applyReferenceSideEffect의 'shore_leave_cancellation' 케이스에서 처리).
+export async function linkLeaveCancellationDocument(leaveRequestId: string, documentId: string, reason: string): Promise<void> {
+  const { error } = await supabase
+    .from('shore_leave_requests')
+    .update({ cancellation_document_id: documentId, cancellation_reason: reason, updated_at: new Date().toISOString() })
     .eq('id', leaveRequestId);
   if (error) throw error;
 }

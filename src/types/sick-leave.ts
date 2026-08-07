@@ -16,6 +16,8 @@ export interface SickLeaveRequest {
   reason: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   approval_document_id: string | null;
+  cancellation_document_id: string | null;
+  cancellation_reason: string | null;
   attachments: SickLeaveAttachment[];
   created_at: string;
   updated_at: string;

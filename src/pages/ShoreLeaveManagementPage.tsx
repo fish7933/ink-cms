@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText, Trash2, CalendarOff } from 'lucide-react';
+import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText, Trash2, CalendarOff, Ban } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,9 +16,9 @@ import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments, getAdminActionLog, deleteAdminActionLog,
+  getLeaveBalance, addLeaveAdjustment, resetLeaveUsage, setLeaveExempt, getAllLeaveRequests, getLeaveAdjustments, getAdminActionLog, deleteAdminActionLog, forceCancelLeaveRequest,
 } from '@/services/shore-leave.service';
-import { getAllSickLeaveRequests } from '@/services/sick-leave.service';
+import { getAllSickLeaveRequests, forceCancelSickLeaveRequest } from '@/services/sick-leave.service';
 import { getHolidays, addHoliday, deleteHoliday, type Holiday } from '@/services/holiday.service';
 import { formatLeaveHours, formatLeaveDays, getCurrentLeaveYearStart, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +35,8 @@ const ACTION_LABELS: Record<ShoreLeaveAdminLogWithNames['action_type'], { label:
   reset: { label: '초기화', color: 'bg-red-100 text-red-700' },
   exempt_on: { label: '제외 지정', color: 'bg-gray-200 text-gray-700' },
   exempt_off: { label: '제외 해제', color: 'bg-gray-100 text-gray-600' },
+  cancel_annual: { label: '연차 강제취소', color: 'bg-red-100 text-red-700' },
+  cancel_sick: { label: '질병휴가 강제취소', color: 'bg-red-100 text-red-700' },
 };
 
 const SHORE_ROLES = ['ship_manager', 'admin', 'system_admin'];
@@ -64,7 +66,6 @@ export default function ShoreLeaveManagementPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [exemptRows, setExemptRows] = useState<Row[]>([]);
   const [adminLog, setAdminLog] = useState<ShoreLeaveAdminLogWithNames[]>([]);
-  const [approvedLeaveRequests, setApprovedLeaveRequests] = useState<ShoreLeaveRequestWithDetails[]>([]);
   const [allLeaveRequests, setAllLeaveRequests] = useState<ShoreLeaveRequestWithDetails[]>([]);
   const [exemptUserIds, setExemptUserIds] = useState<Set<string>>(new Set());
   const [sickRequests, setSickRequests] = useState<SickLeaveRequestWithDetails[]>([]);
@@ -89,6 +90,10 @@ export default function ShoreLeaveManagementPage() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [holidayForm, setHolidayForm] = useState({ date: '', name: '' });
   const [holidaySubmitting, setHolidaySubmitting] = useState(false);
+
+  const [forceCancelTarget, setForceCancelTarget] = useState<{ kind: 'annual' | 'sick'; id: string; user_id: string; hours: number; period: string; user_name: string } | null>(null);
+  const [forceCancelReason, setForceCancelReason] = useState('');
+  const [forceCancelSubmitting, setForceCancelSubmitting] = useState(false);
 
   const permissions = usePermissions('shore_leave_management');
 
@@ -128,7 +133,6 @@ export default function ShoreLeaveManagementPage() {
       const exemptIds = new Set(allUsers.filter(u => u.is_leave_exempt).map(u => u.id));
       setExemptUserIds(exemptIds);
       setAllLeaveRequests(leaveRequests);
-      setApprovedLeaveRequests(leaveRequests.filter(r => r.status === 'approved' && !exemptIds.has(r.user_id)));
 
       const shoreUsers = allUsers.filter(u => SHORE_ROLES.includes(u.role));
       const computed = await Promise.all(shoreUsers.map(async u => {
@@ -285,6 +289,33 @@ export default function ShoreLeaveManagementPage() {
     }
   };
 
+  const openForceCancel = (kind: 'annual' | 'sick', r: { id: string; user_id: string; user_name: string; hours: number; start_date: string; end_date: string }) => {
+    setForceCancelTarget({
+      kind, id: r.id, user_id: r.user_id, hours: r.hours, user_name: r.user_name,
+      period: r.start_date === r.end_date ? r.start_date : `${r.start_date} ~ ${r.end_date}`,
+    });
+    setForceCancelReason('');
+  };
+
+  const submitForceCancel = async () => {
+    if (!forceCancelTarget || !currentUser) return;
+    if (!forceCancelReason.trim()) { toast({ title: '사유를 입력하세요.', variant: 'destructive' }); return; }
+    try {
+      setForceCancelSubmitting(true);
+      const input = { id: forceCancelTarget.id, user_id: forceCancelTarget.user_id, hours: forceCancelTarget.hours, reason: forceCancelReason, performed_by: currentUser.id };
+      if (forceCancelTarget.kind === 'annual') await forceCancelLeaveRequest(input);
+      else await forceCancelSickLeaveRequest(input);
+      toast({ title: '강제 취소되었습니다.' });
+      setForceCancelTarget(null);
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      toast({ title: '강제 취소 실패', variant: 'destructive' });
+    } finally {
+      setForceCancelSubmitting(false);
+    }
+  };
+
   const sickTotalsByUser = new Map<string, number>();
   for (const r of sickRequests) {
     if (r.status !== 'approved') continue;
@@ -299,6 +330,12 @@ export default function ShoreLeaveManagementPage() {
       .filter(r => r.status === 'approved' || r.status === 'pending')
       .map(r => ({ id: r.id, user_id: r.user_id, user_name: r.user_name, kind: 'sick' as const, status: r.status, start_date: r.start_date, end_date: r.end_date, start_time: r.start_time, end_time: r.end_time })),
   ], [allLeaveRequests, sickRequests, exemptUserIds]);
+
+  // 연차 신청 내역 목록 — 승인된 것뿐 아니라 상신 후 결재중인 것도 함께 보여준다(반려/취소된 것은 제외).
+  const leaveRequestsForList = useMemo(
+    () => allLeaveRequests.filter(r => (r.status === 'approved' || r.status === 'pending') && !exemptUserIds.has(r.user_id)),
+    [allLeaveRequests, exemptUserIds]
+  );
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
@@ -494,11 +531,15 @@ export default function ShoreLeaveManagementPage() {
               <LeaveUsageOverview rows={rows} />
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">연차 사용/예정 내역</CardTitle>
-                  <p className="text-xs text-gray-500">사용한 연차와 앞으로 사용 예정인 승인 건을 최근 발생순으로 나열합니다.</p>
+                  <CardTitle className="text-base">연차 신청 내역</CardTitle>
+                  <p className="text-xs text-gray-500">사용한 연차, 앞으로 사용 예정인 승인 건, 상신 후 결재중인 건을 최근 발생순으로 나열합니다.</p>
                 </CardHeader>
                 <CardContent>
-                  <LeaveUsageList requests={approvedLeaveRequests} positionByUser={positionByUser} />
+                  <LeaveUsageList
+                    requests={leaveRequestsForList}
+                    positionByUser={positionByUser}
+                    onForceCancel={currentUser && RESET_ROLES.includes(currentUser.role) ? r => openForceCancel('annual', r) : undefined}
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -543,12 +584,15 @@ export default function ShoreLeaveManagementPage() {
                           <th className="text-left p-2">사유</th>
                           <th className="text-center p-2">상태</th>
                           <th className="text-center p-2">증빙</th>
+                          {currentUser && RESET_ROLES.includes(currentUser.role) && <th className="text-center p-2 w-24">관리</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {sickRequests.length === 0 ? (
-                          <tr><td colSpan={6} className="text-center py-8 text-gray-400">신청 내역이 없습니다</td></tr>
-                        ) : sickRequests.map(r => (
+                          <tr><td colSpan={7} className="text-center py-8 text-gray-400">신청 내역이 없습니다</td></tr>
+                        ) : sickRequests.map(r => {
+                          const isUpcoming = r.start_date > new Date().toISOString().slice(0, 10);
+                          return (
                           <tr key={r.id} className="border-b">
                             <td className="p-2 font-medium">{positionByUser.get(r.user_id) ? `${positionByUser.get(r.user_id)} ` : ''}{r.user_name}</td>
                             <td className="p-2">{r.start_date} ~ {r.end_date}</td>
@@ -567,8 +611,18 @@ export default function ShoreLeaveManagementPage() {
                                 </details>
                               ) : <span className="text-gray-300">-</span>}
                             </td>
+                            {currentUser && RESET_ROLES.includes(currentUser.role) && (
+                              <td className="p-2 text-center">
+                                {r.status === 'approved' && isUpcoming && (
+                                  <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => openForceCancel('sick', r)}>
+                                    <Ban className="h-3 w-3" />강제취소
+                                  </Button>
+                                )}
+                              </td>
+                            )}
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -765,6 +819,34 @@ export default function ShoreLeaveManagementPage() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 관리자 강제취소 (결재 없이 즉시 확정) */}
+      <Dialog open={!!forceCancelTarget} onOpenChange={open => !open && !forceCancelSubmitting && setForceCancelTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{forceCancelTarget?.user_name}님 {forceCancelTarget?.kind === 'sick' ? '질병휴가' : '연차'} 강제 취소</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              결재 절차 없이 관리자 권한으로 즉시 취소됩니다. 아직 사용하지 않은(시작일이 지나지 않은) 건만 대상입니다.
+            </p>
+            {forceCancelTarget && (
+              <div className="p-2.5 bg-gray-50 rounded-md text-sm">
+                <p className="font-medium">{forceCancelTarget.period}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{formatLeaveHours(forceCancelTarget.hours)}</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">사유 *</Label>
+              <Textarea value={forceCancelReason} onChange={e => setForceCancelReason(e.target.value)} rows={2} className="text-sm resize-none" disabled={forceCancelSubmitting} placeholder="강제 취소 사유를 입력하세요" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setForceCancelTarget(null)} disabled={forceCancelSubmitting}>닫기</Button>
+            <Button variant="destructive" onClick={submitForceCancel} disabled={forceCancelSubmitting}>{forceCancelSubmitting ? '처리 중...' : '강제 취소'}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

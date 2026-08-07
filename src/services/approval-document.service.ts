@@ -60,10 +60,14 @@ export interface LeaveDetail {
 const LEAVE_REFERENCE_TABLE: Record<string, string> = {
   shore_leave_request: 'shore_leave_requests',
   sick_leave_request: 'sick_leave_requests',
+  shore_leave_cancellation: 'shore_leave_requests',
+  sick_leave_cancellation: 'sick_leave_requests',
 };
 const LEAVE_REFERENCE_LABEL: Record<string, string> = {
   shore_leave_request: '연차',
   sick_leave_request: '질병휴가',
+  shore_leave_cancellation: '연차 취소',
+  sick_leave_cancellation: '질병휴가 취소',
 };
 
 export async function getLeaveDetail(referenceType: string | null, referenceId: string | null): Promise<LeaveDetail | null> {
@@ -142,6 +146,25 @@ async function applyReferenceSideEffect(
       .from('sick_leave_requests')
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', referenceId);
+  }
+  if (referenceType === 'shore_leave_cancellation') {
+    // 취소 신청 결재가 승인되면 그때 비로소 원본 연차를 'cancelled'로 바꾼다 — 취소가
+    // 결재중인 동안에는 원본이 계속 'approved'로 남아 잔여 연차 계산에 그대로 반영된다
+    // (반려되면 원본은 그대로 유효하므로 별도 처리가 필요 없다).
+    if (newStatus === 'approved') {
+      await supabase
+        .from('shore_leave_requests')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+    }
+  }
+  if (referenceType === 'sick_leave_cancellation') {
+    if (newStatus === 'approved') {
+      await supabase
+        .from('sick_leave_requests')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+    }
   }
   if (referenceType === 'employee_payroll_period') {
     if (newStatus === 'approved') {
@@ -614,6 +637,15 @@ export const approvalDocumentService = {
     const { data, error } = await supabase.from('approval_documents').select('*').in('id', documentIds);
     if (error) throw error;
     return enrichDocuments(data || []);
+  },
+
+  // 문서 상세 전체를 조인해서 가져올 필요 없이 상태만 가볍게 확인할 때 (예: 연차/질병휴가
+  // 취소 신청이 이미 결재중인지 확인하는 버튼 상태 판단).
+  async getDocumentStatuses(documentIds: string[]): Promise<Map<string, ApprovalDocument['status']>> {
+    if (documentIds.length === 0) return new Map();
+    const { data, error } = await supabase.from('approval_documents').select('id, status').in('id', documentIds);
+    if (error) throw error;
+    return new Map((data || []).map(d => [d.id, d.status]));
   },
 
   // 결재함 "삭제"는 문서를 지우는 게 아니라 이 사용자의 결재함 목록에서만 숨기는 것 —

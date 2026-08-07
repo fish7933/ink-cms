@@ -9,6 +9,8 @@ export interface ShoreLeaveRequest {
   reason: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   approval_document_id: string | null;
+  cancellation_document_id: string | null;
+  cancellation_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,7 +43,7 @@ export interface ShoreLeaveReset {
 export interface ShoreLeaveAdminLog {
   id: string;
   user_id: string;
-  action_type: 'grant' | 'manual_use' | 'reset' | 'exempt_on' | 'exempt_off';
+  action_type: 'grant' | 'manual_use' | 'reset' | 'exempt_on' | 'exempt_off' | 'cancel_annual' | 'cancel_sick';
   hours: number | null;
   reason: string | null;
   performed_by: string;

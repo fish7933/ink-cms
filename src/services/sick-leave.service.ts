@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logAdminAction } from '@/services/shore-leave.service';
 import type { SickLeaveRequest, SickLeaveRequestWithDetails, SickLeaveAttachment } from '@/types/sick-leave';
 
 export async function getMySickLeaveRequests(userId: string): Promise<SickLeaveRequest[]> {
@@ -74,6 +75,17 @@ export async function cancelSickLeaveRequest(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// 관리자가 아직 시작되지 않은(=사용되지 않은) 승인 질병휴가를 결재 없이 즉시 강제 취소한다.
+// shore-leave.service.ts의 forceCancelLeaveRequest와 동일한 패턴, 작업 로그도 같은 테이블에 남긴다.
+export async function forceCancelSickLeaveRequest(input: { id: string; user_id: string; hours: number; reason: string; performed_by: string }): Promise<void> {
+  const { error } = await supabase
+    .from('sick_leave_requests')
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+    .eq('id', input.id);
+  if (error) throw error;
+  await logAdminAction({ user_id: input.user_id, action_type: 'cancel_sick', hours: input.hours, reason: input.reason, performed_by: input.performed_by });
+}
+
 export async function deleteSickLeaveRequest(id: string): Promise<void> {
   const { error } = await supabase.from('sick_leave_requests').delete().eq('id', id);
   if (error) throw error;
@@ -83,6 +95,15 @@ export async function linkSickLeaveRequestDocument(sickLeaveRequestId: string, d
   const { error } = await supabase
     .from('sick_leave_requests')
     .update({ approval_document_id: documentId, updated_at: new Date().toISOString() })
+    .eq('id', sickLeaveRequestId);
+  if (error) throw error;
+}
+
+// 이미 승인된 질병휴가의 취소 신청 — shore-leave.service.ts의 linkLeaveCancellationDocument와 동일한 패턴.
+export async function linkSickLeaveCancellationDocument(sickLeaveRequestId: string, documentId: string, reason: string): Promise<void> {
+  const { error } = await supabase
+    .from('sick_leave_requests')
+    .update({ cancellation_document_id: documentId, cancellation_reason: reason, updated_at: new Date().toISOString() })
     .eq('id', sickLeaveRequestId);
   if (error) throw error;
 }
