@@ -261,7 +261,7 @@ export default function CrewRotationDetailPage() {
                     {a.on_crew_id ? (
                       <>
                         <div className="font-medium">
-                          {a.on_rank_code} {a.on_crew_name}
+                          {a.on_crew_name}
                           {a.on_rank_grade && <span className="text-blue-600 text-xs ml-1">({a.on_rank_grade})</span>}
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5">출국 {a.on_departure_date || '-'} · 승선 {a.embark_date}</div>
@@ -273,7 +273,7 @@ export default function CrewRotationDetailPage() {
                     {a.off_crew_id ? (
                       <>
                         <div className="font-medium">
-                          {a.off_rank_code} {a.off_crew_name}
+                          {a.off_crew_name}
                           {a.off_rank_grade && <span className="text-blue-600 text-xs ml-1">({a.off_rank_grade})</span>}
                         </div>
                         <div className="text-xs text-gray-500 mt-0.5">하선 {a.off_disembark_date || '-'} · 귀국 {a.off_return_date || '-'}</div>
