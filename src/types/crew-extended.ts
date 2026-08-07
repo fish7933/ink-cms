@@ -177,6 +177,29 @@ export interface CrewSalaryRecord {
   updated_at: string;
 }
 
+// 선원 면담 일지 — 매닝회사가 직접 면담할 때 기록. 승선하고 싶은 선주/플릿/선박은
+// 선주까지만, 또는 선주+플릿까지만 입력해도 되고(선박은 아직 안 정해졌을 수 있음),
+// 승선 희망일은 가장 최근 면담(interview_date 기준) 것이 crew_members.desired_embark_date에도 반영된다.
+export interface CrewInterviewLog {
+  id: string;
+  crew_member_id: string;
+  interview_date: string;
+  interviewer_name: string;
+  desired_owner_id?: string | null;
+  desired_fleet_id?: string | null;
+  desired_ship_id?: string | null;
+  desired_embark_date?: string | null;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CrewInterviewLogWithDetails extends CrewInterviewLog {
+  desired_owner_name?: string;
+  desired_fleet_name?: string;
+  desired_ship_name?: string;
+}
+
 export interface CrewAssignment {
   id: string;
   crew_member_id: string;

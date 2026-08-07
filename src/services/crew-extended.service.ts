@@ -7,7 +7,9 @@ import type {
   MedicalRecordLog,
   CrewSalaryRecord,
   CrewAssignment,
-  CrewBioData
+  CrewBioData,
+  CrewInterviewLog,
+  CrewInterviewLogWithDetails,
 } from '@/types/crew-extended';
 
 // Bio-data
@@ -473,4 +475,92 @@ export async function deleteCrewAssignment(id: string): Promise<void> {
     console.error('Error deleting crew assignment:', error);
     throw error;
   }
+}
+
+// 선원 면담 일지
+export async function getCrewInterviewLogs(crewMemberId: string): Promise<CrewInterviewLogWithDetails[]> {
+  const { data, error } = await supabase
+    .from('crew_interview_logs')
+    .select('*, owner:companies!desired_owner_id(name), fleet:fleets!desired_fleet_id(name), ship:ships!desired_ship_id(name)')
+    .eq('crew_member_id', crewMemberId)
+    .order('interview_date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching crew interview logs:', error);
+    throw error;
+  }
+
+  return (data || []).map(d => {
+    const { owner, fleet, ship, ...rest } = d as typeof d & {
+      owner: { name?: string } | null;
+      fleet: { name?: string } | null;
+      ship: { name?: string } | null;
+    };
+    return {
+      ...rest,
+      desired_owner_name: owner?.name,
+      desired_fleet_name: fleet?.name,
+      desired_ship_name: ship?.name,
+    } as CrewInterviewLogWithDetails;
+  });
+}
+
+// 이 면담이(추가/수정/삭제 후) 그 선원의 가장 최근 면담이면, 그 승선 희망일을
+// crew_members.desired_embark_date에도 반영한다 — 없으면(면담이 아예 없어졌으면) null로 비운다.
+async function syncDesiredEmbarkDateFromLatestInterview(crewMemberId: string): Promise<void> {
+  const logs = await getCrewInterviewLogs(crewMemberId);
+  const latest = logs[0];
+  await supabase
+    .from('crew_members')
+    .update({ desired_embark_date: latest?.desired_embark_date || null, updated_at: new Date().toISOString() })
+    .eq('id', crewMemberId);
+}
+
+export async function addCrewInterviewLog(log: Omit<CrewInterviewLog, 'id' | 'created_at' | 'updated_at'>): Promise<CrewInterviewLog> {
+  const { data, error } = await supabase
+    .from('crew_interview_logs')
+    .insert(log)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding crew interview log:', error);
+    throw error;
+  }
+
+  await syncDesiredEmbarkDateFromLatestInterview(log.crew_member_id);
+  return data;
+}
+
+export async function updateCrewInterviewLog(id: string, updates: Partial<CrewInterviewLog>): Promise<CrewInterviewLog> {
+  const { data, error } = await supabase
+    .from('crew_interview_logs')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating crew interview log:', error);
+    throw error;
+  }
+
+  await syncDesiredEmbarkDateFromLatestInterview(data.crew_member_id);
+  return data;
+}
+
+export async function deleteCrewInterviewLog(id: string): Promise<void> {
+  const { data: existing } = await supabase.from('crew_interview_logs').select('crew_member_id').eq('id', id).single();
+
+  const { error } = await supabase
+    .from('crew_interview_logs')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting crew interview log:', error);
+    throw error;
+  }
+
+  if (existing?.crew_member_id) await syncDesiredEmbarkDateFromLatestInterview(existing.crew_member_id);
 }

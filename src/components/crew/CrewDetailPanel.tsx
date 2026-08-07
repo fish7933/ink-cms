@@ -32,13 +32,15 @@ import type { CrewEvaluationWithDetails } from '@/types/evaluation';
 import TrainingRecordDialog from '@/components/crew/TrainingRecordDialog';
 import MedicalRecordDialog from '@/components/crew/MedicalRecordDialog';
 import SalaryRecordDialog from '@/components/crew/SalaryRecordDialog';
+import CrewInterviewDialog from '@/components/crew/CrewInterviewDialog';
 import {
   getSeaServiceRecords, deleteSeaServiceRecord,
   getTrainingRecords, deleteTrainingRecord,
   getMedicalRecords, deleteMedicalRecord,
   getCrewSalaryRecords, deleteCrewSalaryRecord,
+  getCrewInterviewLogs, deleteCrewInterviewLog,
 } from '@/services/crew-extended.service';
-import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord } from '@/types/crew-extended';
+import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord, CrewInterviewLog, CrewInterviewLogWithDetails } from '@/types/crew-extended';
 import { crewPayrollService } from '@/services/crew-payroll.service';
 import type { CrewPayrollHistoryRow, CrewPayslipWithDetails } from '@/types/crew-payroll';
 import CrewPayslipDetailView from '@/components/crew-payroll/CrewPayslipDetailView';
@@ -214,6 +216,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [editingTraining, setEditingTraining] = useState<TrainingRecord | undefined>();
   const [editingMedical, setEditingMedical] = useState<MedicalRecord | undefined>();
   const [editingSalary, setEditingSalary] = useState<CrewSalaryRecord | undefined>();
+  const [interviewLogs, setInterviewLogs] = useState<CrewInterviewLogWithDetails[]>([]);
+  const [interviewDialogOpen, setInterviewDialogOpen] = useState(false);
+  const [editingInterview, setEditingInterview] = useState<CrewInterviewLog | undefined>();
 
   useEffect(() => {
     supabase.from('ranks').select('*').then(({ data }) => { if (data) setRanks(sortRanksByDisplayOrder(data)); });
@@ -314,7 +319,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   const loadExtendedRecords = async (crewId: string) => {
     try {
-      const [sea, train, med, sal, evals, payroll, sickPay] = await Promise.all([
+      const [sea, train, med, sal, evals, payroll, sickPay, interviews] = await Promise.all([
         getSeaServiceRecords(crewId),
         getTrainingRecords(crewId),
         getMedicalRecords(crewId),
@@ -322,6 +327,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         getEvaluations(crewId),
         crewPayrollService.getCrewPayrollHistory(crewId),
         sickPayService.getCrewSickPayHistory(crewId),
+        getCrewInterviewLogs(crewId),
       ]);
       setSeaServiceRecords(sea);
       setTrainingRecords(train);
@@ -330,6 +336,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setEvaluations(evals);
       setPayrollHistory(payroll);
       setSickPayHistory(sickPay);
+      setInterviewLogs(interviews);
       const counts: Record<string, number> = {};
       evals.forEach(e => { if (e.sea_service_record_id) counts[e.sea_service_record_id] = (counts[e.sea_service_record_id] || 0) + 1; });
       setEvaluationCounts(counts);
@@ -356,6 +363,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const handleDeleteEvaluation = async (recordId: string) => {
     if (!confirm('이 고과 기록을 삭제하시겠습니까?')) return;
     try { await deleteEvaluation(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+  };
+  const handleDeleteInterview = async (recordId: string) => {
+    if (!confirm('이 면담 일지를 삭제하시겠습니까?')) return;
+    try { await deleteCrewInterviewLog(recordId); loadExtendedRecords(id!); loadCrew(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
   };
   const handleDeleteSalary = async (recordId: string) => {
     if (!confirm('이 급여 기록을 삭제하시겠습니까?')) return;
@@ -658,7 +669,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             <TabsTrigger value="emergency" className="text-xs">비상연락망</TabsTrigger>
           </TabsList>
           {!isNew && (
-            <TabsList className="grid w-full grid-cols-5 h-8">
+            <TabsList className="grid w-full grid-cols-6 h-8">
               <TabsTrigger value="sea_service" className="text-xs">
                 승선경력{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
               </TabsTrigger>
@@ -673,6 +684,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </TabsTrigger>
               <TabsTrigger value="salary_records" className="text-xs">
                 급여이력{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="interviews" className="text-xs">
+                면담일지{interviewLogs.length > 0 && <span className="ml-1 bg-teal-100 text-teal-700 rounded-full px-1.5">{interviewLogs.length}</span>}
               </TabsTrigger>
             </TabsList>
           )}
@@ -1405,6 +1419,51 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 </div>
               </TabsContent>
             </Tabs>
+          </TabsContent>
+        )}
+
+        {!isNew && (
+          <TabsContent value="interviews" className="mt-3 data-[state=inactive]:hidden">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">면담 일지 ({interviewLogs.length}건) <span className="text-xs text-gray-400 font-normal">— 가장 최근 면담의 승선 희망일이 기본정보에 반영됩니다</span></span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingInterview(undefined); setInterviewDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+              </div>
+              {interviewLogs.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">등록된 면담 일지가 없습니다.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b bg-gray-50">
+                      <th className="text-left p-2">면담일</th><th className="text-left p-2">면담자</th><th className="text-left p-2">승선 희망 선주/플릿/선박</th><th className="text-left p-2">승선 희망일</th><th className="text-center p-2">작업</th>
+                    </tr></thead>
+                    <tbody>
+                      {interviewLogs.map(log => (
+                        <tr key={log.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingInterview(log); setInterviewDialogOpen(true); }}>
+                          <td className="p-2">{log.interview_date}</td>
+                          <td className="p-2">{log.interviewer_name}</td>
+                          <td className="p-2 text-gray-500">
+                            {[log.desired_owner_name, log.desired_fleet_name, log.desired_ship_name].filter(Boolean).join(' > ') || '-'}
+                          </td>
+                          <td className="p-2">{log.desired_embark_date || '-'}</td>
+                          <td className="p-2 text-center" onClick={ev => ev.stopPropagation()}>
+                            <div className="flex justify-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingInterview(log); setInterviewDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteInterview(log.id)}><Trash2 className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <CrewInterviewDialog
+              open={interviewDialogOpen} onOpenChange={setInterviewDialogOpen} record={editingInterview}
+              crewId={id!}
+              onSuccess={() => { loadExtendedRecords(id!); loadCrew(id!); }}
+            />
           </TabsContent>
         )}
       </Tabs>
