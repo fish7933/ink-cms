@@ -353,7 +353,6 @@ export default function ApprovalInboxPage() {
             <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">유형</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">결재 현황</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">시행일시</th>
@@ -381,12 +380,12 @@ export default function ApprovalInboxPage() {
                 </td>
                 <td className="p-2 font-medium">{doc.title}</td>
                 <td className="p-2 text-gray-500">{doc.document_type_name}</td>
-                <td className="p-2 text-gray-500">{doc.creator_name}</td>
                 <td className="p-2">
                   <div className="flex items-center gap-1 text-xs whitespace-nowrap">
+                    <span className="text-gray-500">{doc.creator_name}<span className="text-[10px] text-gray-400 ml-0.5">(기안자)</span></span>
                     {doc.steps.map((s, i) => (
                       <span key={s.id} className="flex items-center gap-1">
-                        {i > 0 && <span className="text-gray-300">→</span>}
+                        <span className="text-gray-300">→</span>
                         <span className={
                           s.status === 'approved' ? 'text-green-600'
                           : s.status === 'rejected' ? 'text-red-600 font-medium'
