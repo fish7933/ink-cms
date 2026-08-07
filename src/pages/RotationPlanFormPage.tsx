@@ -526,11 +526,7 @@ export default function RotationPlanFormPage() {
   // getCrew가 못 찾는다 — 그럴 땐 계획 로드 시 서버 조인으로 저장해둔 이름(fallbackName)을 쓴다.
   const getCrewLabel = (id: string | null, fallbackName?: string | null) => {
     const c = getCrew(id);
-    if (c) {
-      const code = c.rank_code || '';
-      const name = crewDisplayName(c);
-      return code ? `[${code}] ${name}` : name;
-    }
+    if (c) return crewDisplayName(c);
     if (id) return fallbackName || '이름 확인 불가';
     return '선원 선택';
   };
