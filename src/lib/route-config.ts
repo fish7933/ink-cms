@@ -68,6 +68,7 @@ const ShoreLeaveRequestPage = lazy(() => import('@/pages/ShoreLeaveRequestPage')
 const ShoreLeaveManagementPage = lazy(() => import('@/pages/ShoreLeaveManagementPage'));
 const ShoreLeaveDetailPage = lazy(() => import('@/pages/ShoreLeaveDetailPage'));
 const SickLeaveRequestPage = lazy(() => import('@/pages/SickLeaveRequestPage'));
+const EmployeeLeaveCalendarPage = lazy(() => import('@/pages/EmployeeLeaveCalendarPage'));
 const HomepagePostsPage = lazy(() => import('@/pages/HomepagePostsPage'));
 
 export interface RouteEntry {
@@ -157,6 +158,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/shore-leave-management/:userId', component: ShoreLeaveDetailPage },
   { path: '/shore-leave-management', component: ShoreLeaveManagementPage },
   { path: '/sick-leave-request', component: SickLeaveRequestPage },
+  { path: '/shore-leave-calendar', component: EmployeeLeaveCalendarPage },
   { path: '/referenced-documents', component: ApprovalInboxPage },
   { path: '/homepage-posts', component: HomepagePostsPage },
 ];

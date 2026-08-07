@@ -208,12 +208,21 @@ export const defaultMenuStructure: MenuCategory[] = [
         is_active: true,
       },
       {
+        id: 'shore-leave-calendar',
+        label: '직원 휴가 현황',
+        path: '/shore-leave-calendar',
+        icon: 'CalendarDays',
+        roles: ['ship_manager', 'admin', 'system_admin'],
+        order: 5,
+        is_active: true,
+      },
+      {
         id: 'shore-leave-management',
-        label: '육상 직원 연차 관리',
+        label: '육상 직원 휴가 관리',
         path: '/shore-leave-management',
         icon: 'CalendarDays',
         roles: ['ship_manager'],
-        order: 5,
+        order: 6,
         is_active: true,
       },
       {
@@ -222,7 +231,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/employee-salary',
         icon: 'Wallet',
         roles: ['ship_manager'],
-        order: 6,
+        order: 7,
         is_active: true,
       },
       {
@@ -231,7 +240,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/my-payslips',
         icon: 'Wallet',
         roles: ['ship_manager', 'admin', 'system_admin'],
-        order: 7,
+        order: 8,
         is_active: true,
       },
       {
@@ -240,7 +249,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/groupware-settings',
         icon: 'Settings',
         roles: ['ship_manager'],
-        order: 8,
+        order: 9,
         is_active: true,
       },
       {

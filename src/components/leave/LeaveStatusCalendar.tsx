@@ -2,10 +2,21 @@ import { useMemo, useState } from 'react';
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, isToday, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { ShoreLeaveRequestWithDetails } from '@/types/shore-leave';
 
-interface LeaveUsageCalendarProps {
-  requests: ShoreLeaveRequestWithDetails[]; // status === 'approved' 인 것만 넘겨받는다고 가정
+export interface LeaveCalendarEntry {
+  id: string;
+  user_id: string;
+  user_name: string;
+  kind: 'annual' | 'sick';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  start_date: string;
+  end_date: string;
+  start_time: string;
+  end_time: string;
+}
+
+interface LeaveStatusCalendarProps {
+  entries: LeaveCalendarEntry[]; // status가 'approved' 또는 'pending'인 것만 넘겨받는다고 가정
   positionByUser: Map<string, string | null>;
 }
 
@@ -13,6 +24,8 @@ interface DayEntry {
   id: string;
   label: string; // "이승혁 차장"
   typeLabel: string; // "종일" | "오전반차" | "오후반차"
+  kind: 'annual' | 'sick';
+  pending: boolean;
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -21,16 +34,19 @@ function normalizeTime(t: string): string {
   return t.slice(0, 5); // "09:00:00" -> "09:00"
 }
 
-function typeLabelFor(r: ShoreLeaveRequestWithDetails): string {
-  if (r.start_date !== r.end_date) return '종일';
-  const start = normalizeTime(r.start_time);
-  const end = normalizeTime(r.end_time);
+function typeLabelFor(e: { start_date: string; end_date: string; start_time: string; end_time: string }): string {
+  if (e.start_date !== e.end_date) return '종일';
+  const start = normalizeTime(e.start_time);
+  const end = normalizeTime(e.end_time);
   if (start === '09:00' && end === '14:00') return '오전반차';
   if (start === '14:00' && end === '18:00') return '오후반차';
   return '종일';
 }
 
-export default function LeaveUsageCalendar({ requests, positionByUser }: LeaveUsageCalendarProps) {
+// 연차/질병휴가 현황을 함께 보여주는 월별 캘린더 — 승인된 건은 진한 색, 상신 후 결재중인 건은
+// 옅은 색 + "(상신중)" 표기로 구분한다. 육상 직원 연차 관리(관리자용)와 전 직원 공유 캘린더
+// (직원 휴가 현황) 양쪽에서 재사용된다.
+export default function LeaveStatusCalendar({ entries, positionByUser }: LeaveStatusCalendarProps) {
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
 
   const days = useMemo(() => {
@@ -42,21 +58,27 @@ export default function LeaveUsageCalendar({ requests, positionByUser }: LeaveUs
   // 날짜별 항목 맵 — 시작일~종료일 범위의 모든 날짜에 항목을 펼쳐 넣는다.
   const entriesByDate = useMemo(() => {
     const map = new Map<string, DayEntry[]>();
-    for (const r of requests) {
-      const type = typeLabelFor(r);
-      const position = positionByUser.get(r.user_id);
-      const label = `${position ? `${position} ` : ''}${r.user_name}`;
-      const rangeDays = eachDayOfInterval({ start: new Date(r.start_date), end: new Date(r.end_date) });
+    for (const e of entries) {
+      const type = typeLabelFor(e);
+      const position = positionByUser.get(e.user_id);
+      const label = `${position ? `${position} ` : ''}${e.user_name}`;
+      const rangeDays = eachDayOfInterval({ start: new Date(e.start_date), end: new Date(e.end_date) });
       for (const d of rangeDays) {
         const iso = format(d, 'yyyy-MM-dd');
         if (!map.has(iso)) map.set(iso, []);
-        map.get(iso)!.push({ id: `${r.id}-${iso}`, label, typeLabel: type });
+        map.get(iso)!.push({ id: `${e.id}-${iso}`, label, typeLabel: type, kind: e.kind, pending: e.status === 'pending' });
       }
     }
     return map;
-  }, [requests, positionByUser]);
+  }, [entries, positionByUser]);
 
   const todayIso = format(new Date(), 'yyyy-MM-dd');
+
+  const colorClass = (e: DayEntry) => {
+    if (e.pending) return 'bg-amber-50 text-amber-700';
+    return e.kind === 'sick' ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700';
+  };
+  const dotClass = (e: DayEntry) => (e.pending ? 'text-amber-400' : e.kind === 'sick' ? 'text-rose-400' : 'text-blue-400');
 
   return (
     <div className="border rounded-md overflow-hidden">
@@ -64,7 +86,14 @@ export default function LeaveUsageCalendar({ requests, positionByUser }: LeaveUs
         <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewMonth(m => subMonths(m, 1))}>
           <ChevronLeft className="w-4 h-4" />
         </Button>
-        <span className="text-sm font-semibold">{format(viewMonth, 'yyyy년 M월')}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold">{format(viewMonth, 'yyyy년 M월')}</span>
+          <span className="flex items-center gap-2.5 text-[11px] text-gray-500">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" />연차</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-400" />질병휴가</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />상신중</span>
+          </span>
+        </div>
         <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewMonth(m => addMonths(m, 1))}>
           <ChevronRight className="w-4 h-4" />
         </Button>
@@ -78,7 +107,7 @@ export default function LeaveUsageCalendar({ requests, positionByUser }: LeaveUs
         {days.map(day => {
           const iso = format(day, 'yyyy-MM-dd');
           const inMonth = isSameMonth(day, viewMonth);
-          const entries = entriesByDate.get(iso) || [];
+          const dayEntries = entriesByDate.get(iso) || [];
           const dow = day.getDay();
           return (
             <div
@@ -89,9 +118,9 @@ export default function LeaveUsageCalendar({ requests, positionByUser }: LeaveUs
                 {format(day, 'd')}
               </p>
               <div className="space-y-0.5">
-                {entries.map(e => (
-                  <div key={e.id} className="text-[11px] leading-tight px-1 py-0.5 rounded bg-blue-50 text-blue-700 truncate" title={`${e.label} · ${e.typeLabel}`}>
-                    {e.label} <span className="text-blue-400">· {e.typeLabel}</span>
+                {dayEntries.map(e => (
+                  <div key={e.id} className={`text-[11px] leading-tight px-1 py-0.5 rounded truncate ${colorClass(e)}`} title={`${e.label} · ${e.typeLabel}${e.pending ? ' (상신중)' : ''}`}>
+                    {e.label} <span className={dotClass(e)}>· {e.typeLabel}{e.pending ? ' (상신중)' : ''}</span>
                   </div>
                 ))}
               </div>

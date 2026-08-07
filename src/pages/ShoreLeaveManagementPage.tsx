@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Minus, History, Paperclip, RotateCcw, UserX, Undo2, BarChart3, ScrollText, Trash2, CalendarOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +23,7 @@ import { getHolidays, addHoliday, deleteHoliday, type Holiday } from '@/services
 import { formatLeaveHours, formatLeaveDays, getCurrentLeaveYearStart, explainAccruedLeaveDays, HOURS_PER_DAY } from '@/lib/leave-calc';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
-import LeaveUsageCalendar from '@/components/leave/LeaveUsageCalendar';
+import LeaveStatusCalendar, { type LeaveCalendarEntry } from '@/components/leave/LeaveStatusCalendar';
 import LeaveUsageList from '@/components/leave/LeaveUsageList';
 import type { User } from '@/types/models';
 import type { SickLeaveRequestWithDetails } from '@/types/sick-leave';
@@ -65,6 +65,8 @@ export default function ShoreLeaveManagementPage() {
   const [exemptRows, setExemptRows] = useState<Row[]>([]);
   const [adminLog, setAdminLog] = useState<ShoreLeaveAdminLogWithNames[]>([]);
   const [approvedLeaveRequests, setApprovedLeaveRequests] = useState<ShoreLeaveRequestWithDetails[]>([]);
+  const [allLeaveRequests, setAllLeaveRequests] = useState<ShoreLeaveRequestWithDetails[]>([]);
+  const [exemptUserIds, setExemptUserIds] = useState<Set<string>>(new Set());
   const [sickRequests, setSickRequests] = useState<SickLeaveRequestWithDetails[]>([]);
   const [positionByUser, setPositionByUser] = useState<Map<string, string | null>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -123,8 +125,10 @@ export default function ShoreLeaveManagementPage() {
       setSickRequests(sick);
       setAdminLog(log);
       setHolidays(holidayList);
-      const exemptUserIds = new Set(allUsers.filter(u => u.is_leave_exempt).map(u => u.id));
-      setApprovedLeaveRequests(leaveRequests.filter(r => r.status === 'approved' && !exemptUserIds.has(r.user_id)));
+      const exemptIds = new Set(allUsers.filter(u => u.is_leave_exempt).map(u => u.id));
+      setExemptUserIds(exemptIds);
+      setAllLeaveRequests(leaveRequests);
+      setApprovedLeaveRequests(leaveRequests.filter(r => r.status === 'approved' && !exemptIds.has(r.user_id)));
 
       const shoreUsers = allUsers.filter(u => SHORE_ROLES.includes(u.role));
       const computed = await Promise.all(shoreUsers.map(async u => {
@@ -287,6 +291,15 @@ export default function ShoreLeaveManagementPage() {
     sickTotalsByUser.set(r.user_id, (sickTotalsByUser.get(r.user_id) || 0) + Number(r.hours));
   }
 
+  const calendarEntries: LeaveCalendarEntry[] = useMemo(() => [
+    ...allLeaveRequests
+      .filter(r => (r.status === 'approved' || r.status === 'pending') && !exemptUserIds.has(r.user_id))
+      .map(r => ({ id: r.id, user_id: r.user_id, user_name: r.user_name, kind: 'annual' as const, status: r.status, start_date: r.start_date, end_date: r.end_date, start_time: r.start_time, end_time: r.end_time })),
+    ...sickRequests
+      .filter(r => r.status === 'approved' || r.status === 'pending')
+      .map(r => ({ id: r.id, user_id: r.user_id, user_name: r.user_name, kind: 'sick' as const, status: r.status, start_date: r.start_date, end_date: r.end_date, start_time: r.start_time, end_time: r.end_time })),
+  ], [allLeaveRequests, sickRequests, exemptUserIds]);
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 
   return (
@@ -294,7 +307,7 @@ export default function ShoreLeaveManagementPage() {
       <div className="flex items-center gap-2">
         <Users className="w-6 h-6" />
         <div>
-          <h1 className="text-xl font-bold text-gray-900">육상 직원 연차 관리</h1>
+          <h1 className="text-xl font-bold text-gray-900">육상 직원 휴가 관리</h1>
           <p className="text-sm text-gray-500">근로기준법에 따라 자동 발생하는 법정 연차와 회사가 재량으로 부여한 연차를 구분해서 관리하며, 승인된 신청 내역/수동 사용 입력을 반영해 잔여 연차를 계산합니다. 사용/부여 내역은 각자의 다음 연차 발생일이 지나면 자동으로 새로 초기화됩니다(이월 없음). 연차 적용 제외자(임원 등)는 현황·관리 대상에서 제외됩니다.</p>
         </div>
       </div>
@@ -302,8 +315,7 @@ export default function ShoreLeaveManagementPage() {
       <Tabs defaultValue="annual">
         <TabsList>
           <TabsTrigger value="annual">연차 관리</TabsTrigger>
-          <TabsTrigger value="usage" className="gap-1"><BarChart3 className="w-3.5 h-3.5" />연차 사용 현황</TabsTrigger>
-          <TabsTrigger value="sick">질병휴가 현황</TabsTrigger>
+          <TabsTrigger value="leave-status" className="gap-1"><BarChart3 className="w-3.5 h-3.5" />휴가 사용 현황</TabsTrigger>
           <TabsTrigger value="holidays" className="gap-1"><CalendarOff className="w-3.5 h-3.5" />공휴일 관리</TabsTrigger>
         </TabsList>
 
@@ -461,100 +473,109 @@ export default function ShoreLeaveManagementPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="usage" className="space-y-4 mt-3">
-          <LeaveUsageOverview rows={rows} />
+        <TabsContent value="leave-status" className="space-y-4 mt-3">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">월별 연차 사용 캘린더</CardTitle>
-              <p className="text-xs text-gray-500">승인된 연차만 표시됩니다 (이미 사용한 연차 + 앞으로 사용 예정인 승인 건 모두 포함).</p>
+              <CardTitle className="text-base">휴가 현황 캘린더</CardTitle>
+              <p className="text-xs text-gray-500">승인된 연차/질병휴가와 상신 후 결재중인 건을 함께 표시합니다.</p>
             </CardHeader>
             <CardContent>
-              <LeaveUsageCalendar requests={approvedLeaveRequests} positionByUser={positionByUser} />
+              <LeaveStatusCalendar entries={calendarEntries} positionByUser={positionByUser} />
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">연차 사용/예정 내역</CardTitle>
-              <p className="text-xs text-gray-500">사용한 연차와 앞으로 사용 예정인 승인 건을 최근 발생순으로 나열합니다.</p>
-            </CardHeader>
-            <CardContent>
-              <LeaveUsageList requests={approvedLeaveRequests} positionByUser={positionByUser} />
-            </CardContent>
-          </Card>
-        </TabsContent>
+          <Tabs defaultValue="annual-usage">
+            <TabsList>
+              <TabsTrigger value="annual-usage">직원별 연차 사용</TabsTrigger>
+              <TabsTrigger value="sick-usage">질병 휴가 현황</TabsTrigger>
+            </TabsList>
 
-        <TabsContent value="sick" className="space-y-4 mt-3">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">직원별 누적 질병휴가(승인 기준)</CardTitle></CardHeader>
-            <CardContent>
-              <div className="border rounded-md overflow-hidden overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="text-left p-2 text-xs font-medium text-gray-600">이름</th>
-                      <th className="text-center p-2 text-xs font-medium text-gray-600">누적 사용</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.length === 0 ? (
-                      <tr><td colSpan={2} className="text-center py-8 text-gray-400">데이터가 없습니다</td></tr>
-                    ) : rows.map(r => (
-                      <tr key={r.user.id} className="border-b hover:bg-gray-50">
-                        <td className="p-2 font-medium">{r.positionName ? `${r.positionName} ` : ''}{r.user.name}</td>
-                        <td className="p-2 text-center">{formatLeaveHours(sickTotalsByUser.get(r.user.id) || 0)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+            <TabsContent value="annual-usage" className="space-y-4 mt-3">
+              <LeaveUsageOverview rows={rows} />
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">연차 사용/예정 내역</CardTitle>
+                  <p className="text-xs text-gray-500">사용한 연차와 앞으로 사용 예정인 승인 건을 최근 발생순으로 나열합니다.</p>
+                </CardHeader>
+                <CardContent>
+                  <LeaveUsageList requests={approvedLeaveRequests} positionByUser={positionByUser} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">질병휴가 신청 내역 (전체)</CardTitle></CardHeader>
-            <CardContent>
-              <div className="border rounded-md overflow-hidden overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="text-left p-2">이름</th>
-                      <th className="text-left p-2">기간</th>
-                      <th className="text-center p-2">일수/시간</th>
-                      <th className="text-left p-2">사유</th>
-                      <th className="text-center p-2">상태</th>
-                      <th className="text-center p-2">증빙</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sickRequests.length === 0 ? (
-                      <tr><td colSpan={6} className="text-center py-8 text-gray-400">신청 내역이 없습니다</td></tr>
-                    ) : sickRequests.map(r => (
-                      <tr key={r.id} className="border-b">
-                        <td className="p-2 font-medium">{positionByUser.get(r.user_id) ? `${positionByUser.get(r.user_id)} ` : ''}{r.user_name}</td>
-                        <td className="p-2">{r.start_date} ~ {r.end_date}</td>
-                        <td className="p-2 text-center">{formatLeaveHours(r.hours)}</td>
-                        <td className="p-2 text-gray-500">{r.reason || '-'}</td>
-                        <td className="p-2 text-center"><Badge className={`text-xs ${STATUS_LABELS[r.status]?.color}`}>{STATUS_LABELS[r.status]?.label}</Badge></td>
-                        <td className="p-2 text-center">
-                          {r.attachments && r.attachments.length > 0 ? (
-                            <details className="inline-block text-left">
-                              <summary className="cursor-pointer text-blue-600 inline-flex items-center gap-1 list-none"><Paperclip className="w-3 h-3" />{r.attachments.length}</summary>
-                              <div className="mt-1 space-y-0.5">
-                                {r.attachments.map(a => (
-                                  <a key={a.path} href={supabase.storage.from('documents').getPublicUrl(a.path).data.publicUrl} target="_blank" rel="noreferrer" className="block text-blue-600 hover:underline truncate max-w-[160px]">{a.name}</a>
-                                ))}
-                              </div>
-                            </details>
-                          ) : <span className="text-gray-300">-</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+            <TabsContent value="sick-usage" className="space-y-4 mt-3">
+              <Card>
+                <CardHeader className="pb-3"><CardTitle className="text-base">직원별 누적 질병휴가(승인 기준)</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="border rounded-md overflow-hidden overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="text-left p-2 text-xs font-medium text-gray-600">이름</th>
+                          <th className="text-center p-2 text-xs font-medium text-gray-600">누적 사용</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.length === 0 ? (
+                          <tr><td colSpan={2} className="text-center py-8 text-gray-400">데이터가 없습니다</td></tr>
+                        ) : rows.map(r => (
+                          <tr key={r.user.id} className="border-b hover:bg-gray-50">
+                            <td className="p-2 font-medium">{r.positionName ? `${r.positionName} ` : ''}{r.user.name}</td>
+                            <td className="p-2 text-center">{formatLeaveHours(sickTotalsByUser.get(r.user.id) || 0)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3"><CardTitle className="text-base">질병휴가 신청 내역 (전체)</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="border rounded-md overflow-hidden overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="text-left p-2">이름</th>
+                          <th className="text-left p-2">기간</th>
+                          <th className="text-center p-2">일수/시간</th>
+                          <th className="text-left p-2">사유</th>
+                          <th className="text-center p-2">상태</th>
+                          <th className="text-center p-2">증빙</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sickRequests.length === 0 ? (
+                          <tr><td colSpan={6} className="text-center py-8 text-gray-400">신청 내역이 없습니다</td></tr>
+                        ) : sickRequests.map(r => (
+                          <tr key={r.id} className="border-b">
+                            <td className="p-2 font-medium">{positionByUser.get(r.user_id) ? `${positionByUser.get(r.user_id)} ` : ''}{r.user_name}</td>
+                            <td className="p-2">{r.start_date} ~ {r.end_date}</td>
+                            <td className="p-2 text-center">{formatLeaveHours(r.hours)}</td>
+                            <td className="p-2 text-gray-500">{r.reason || '-'}</td>
+                            <td className="p-2 text-center"><Badge className={`text-xs ${STATUS_LABELS[r.status]?.color}`}>{STATUS_LABELS[r.status]?.label}</Badge></td>
+                            <td className="p-2 text-center">
+                              {r.attachments && r.attachments.length > 0 ? (
+                                <details className="inline-block text-left">
+                                  <summary className="cursor-pointer text-blue-600 inline-flex items-center gap-1 list-none"><Paperclip className="w-3 h-3" />{r.attachments.length}</summary>
+                                  <div className="mt-1 space-y-0.5">
+                                    {r.attachments.map(a => (
+                                      <a key={a.path} href={supabase.storage.from('documents').getPublicUrl(a.path).data.publicUrl} target="_blank" rel="noreferrer" className="block text-blue-600 hover:underline truncate max-w-[160px]">{a.name}</a>
+                                    ))}
+                                  </div>
+                                </details>
+                              ) : <span className="text-gray-300">-</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
 
         <TabsContent value="holidays" className="space-y-4 mt-3">
