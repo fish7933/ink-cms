@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Save, Upload, User, X, Plus, Trash2, FileText, Edit2, Star, Stethoscope } from 'lucide-react';
+import { Save, Upload, User, X, Plus, Trash2, FileText, FileSpreadsheet, Edit2, Star, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,7 @@ import MedicalRecordDialog from '@/components/crew/MedicalRecordDialog';
 import SalaryRecordDialog from '@/components/crew/SalaryRecordDialog';
 import CrewInterviewDialog from '@/components/crew/CrewInterviewDialog';
 import CrewResumeDialog from '@/components/crew/CrewResumeDialog';
+import { exportCrewResumeToExcel } from '@/utils/crew-resume-export';
 import {
   getSeaServiceRecords, deleteSeaServiceRecord,
   getTrainingRecords, deleteTrainingRecord,
@@ -159,6 +160,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [previewUrl, setPreviewUrl] = useState('');
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
   const [nationalityValidityOverrides, setNationalityValidityOverrides] = useState<CertificateNationalityValidity[]>([]);
@@ -1575,6 +1577,28 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 >
                   <FileText className="w-4 h-4" />
                   이력서 출력
+                </Button>
+              )}
+              {!isNew && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 h-8 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                  disabled={exportingExcel}
+                  onClick={async () => {
+                    setExportingExcel(true);
+                    try {
+                      await exportCrewResumeToExcel(id!);
+                    } catch (e) {
+                      console.error(e);
+                      toast({ title: '엑셀 저장 실패', description: '선원 정보를 엑셀로 저장하는 중 오류가 발생했습니다.', variant: 'destructive' });
+                    } finally {
+                      setExportingExcel(false);
+                    }
+                  }}
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  {exportingExcel ? '저장 중...' : '엑셀로 저장'}
                 </Button>
               )}
               <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
