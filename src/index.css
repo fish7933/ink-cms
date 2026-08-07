@@ -110,4 +110,9 @@
   body.ship-roster-print-open #root {
     display: none !important;
   }
+
+  /* 선원 이력서 인쇄 모달이 열려있는 동안은 뒤에 있는 앱 화면을 인쇄에서 제외한다 */
+  body.crew-resume-print-dialog-open #root {
+    display: none !important;
+  }
 }

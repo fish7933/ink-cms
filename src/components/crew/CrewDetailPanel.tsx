@@ -33,6 +33,7 @@ import TrainingRecordDialog from '@/components/crew/TrainingRecordDialog';
 import MedicalRecordDialog from '@/components/crew/MedicalRecordDialog';
 import SalaryRecordDialog from '@/components/crew/SalaryRecordDialog';
 import CrewInterviewDialog from '@/components/crew/CrewInterviewDialog';
+import CrewResumeDialog from '@/components/crew/CrewResumeDialog';
 import {
   getSeaServiceRecords, deleteSeaServiceRecord,
   getTrainingRecords, deleteTrainingRecord,
@@ -157,6 +158,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
   const [nationalityValidityOverrides, setNationalityValidityOverrides] = useState<CertificateNationalityValidity[]>([]);
@@ -657,6 +659,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <img src={previewUrl} alt="" className="w-full h-auto rounded-lg" />
         </DialogContent>
       </Dialog>
+
+      {!isNew && <CrewResumeDialog open={resumeDialogOpen} onOpenChange={setResumeDialogOpen} crewId={id!} />}
 
       {/* 탭 */}
       <Tabs defaultValue="basic" onValueChange={scrollToTop}>
@@ -1567,7 +1571,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                   variant="outline"
                   size="sm"
                   className="gap-1.5 h-8 text-blue-700 border-blue-300 hover:bg-blue-50"
-                  onClick={() => window.open(`/print/crew/${id}/resume`, '_blank')}
+                  onClick={() => setResumeDialogOpen(true)}
                 >
                   <FileText className="w-4 h-4" />
                   이력서 출력

@@ -17,7 +17,6 @@ interface CrewBoardingFitDetailProps {
 export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rankId }: CrewBoardingFitDetailProps) {
   const [loading, setLoading] = useState(true);
   const [crewName, setCrewName] = useState('');
-  const [rankLabel, setRankLabel] = useState('');
   const [shipName, setShipName] = useState('');
   const [detail, setDetail] = useState<CrewBoardingScoreDetail | null>(null);
 
@@ -32,10 +31,6 @@ export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rank
       ]);
       if (crew) {
         setCrewName(crewDisplayName(crew));
-        if (crew.rank_id) {
-          const { data: rank } = await supabase.from('ranks').select('rank_code, name').eq('id', crew.rank_id).maybeSingle();
-          setRankLabel(rank?.rank_code || rank?.name || '');
-        }
       }
       setShipName(ship.data?.name || '');
       setDetail(scoreDetail);
@@ -56,7 +51,6 @@ export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rank
       <CardHeader className="pb-3 px-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">
-            {rankLabel && <span className="text-gray-500 font-normal mr-1">[{rankLabel}]</span>}
             {crewName} — 승선 적합도 분석
           </CardTitle>
           <span className="text-2xl font-bold text-emerald-700">{detail.score}점</span>
