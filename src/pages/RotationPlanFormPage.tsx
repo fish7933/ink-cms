@@ -499,6 +499,18 @@ export default function RotationPlanFormPage() {
   // 하선사유 기본값 — 대부분의 하선은 계약만료이므로, 매번 고르지 않아도 되게 기본 선택해둔다.
   const defaultDisembarkReasonId = () => signOffReasons.find(r => r.name === '계약만료')?.id || '';
 
+  // 위 각 생성 경로에서 개별적으로 기본값을 채워주긴 하지만, 놓치는 경로가 있어도 항상
+  // 보정되도록 안전망을 하나 더 둔다 — 하선자는 있는데 사유가 비어있는 행을 발견하면
+  // (예: signOffReasons 로딩이 늦어 기본값이 못 채워졌던 경우) 계약만료로 채운다.
+  useEffect(() => {
+    const reasonId = defaultDisembarkReasonId();
+    if (!reasonId) return;
+    setRows(prev => {
+      if (!prev.some(r => r.disembarkCrewId && !r.disembarkReasonId)) return prev;
+      return prev.map(r => (r.disembarkCrewId && !r.disembarkReasonId) ? { ...r, disembarkReasonId: reasonId } : r);
+    });
+  }, [rows, signOffReasons]);
+
   const addDisembarkCrewIdsAsRows = (ids: string[]) => {
     const seed = cascadeDatesFromBase(baseDepartureDate);
     const newRows = ids.map(id => {
