@@ -15,6 +15,39 @@ import type {
   DocumentFormField,
 } from '@/types/approval-document';
 
+// 참조(user_id 직접 지정 또는 org_unit_id 부서 지정) 대상 문서 id 목록을 가져온다.
+// org_unit_id 참조는 "그 부서의 현재 소속 인원"을 매번 동적으로 계산하므로, 오늘 막
+// 입사해 부서에 배정된 신입 직원이 자신의 입사일보다 훨씬 전에 기안·완료된 문서까지
+// 참조 문서로 보게 되는 논리 오류가 생긴다 — 입사일 이전에 기안된 문서는 그 사람과
+// 무관하므로 제외한다. user_id로 콕 집어 지정한 참조는 애초에 그 시점에 실존하는
+// 사람을 지정한 것이라 이 필터가 필요 없다.
+export async function getReferenceDocumentIds(userId: string, myOrgUnitIds: string[], hireDate?: string | null): Promise<string[]> {
+  const orFilter = myOrgUnitIds.length > 0
+    ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
+    : `user_id.eq.${userId}`;
+  const { data: refs, error } = await supabase
+    .from('approval_document_references')
+    .select('document_id, org_unit_id')
+    .or(orFilter);
+  if (error) throw error;
+  if (!refs || refs.length === 0) return [];
+
+  const directDocIds = refs.filter(r => !r.org_unit_id).map(r => r.document_id);
+  const orgDocIds = [...new Set(refs.filter(r => r.org_unit_id).map(r => r.document_id))];
+  if (!hireDate || orgDocIds.length === 0) {
+    return [...new Set(refs.map(r => r.document_id))];
+  }
+
+  const { data: docs, error: docsError } = await supabase
+    .from('approval_documents')
+    .select('id, created_at')
+    .in('id', orgDocIds);
+  if (docsError) throw docsError;
+  const validOrgDocIds = (docs || []).filter(d => d.created_at >= hireDate).map(d => d.id);
+
+  return [...new Set([...directDocIds, ...validOrgDocIds])];
+}
+
 // 문서유형의 전결규정(조직도 기반 자동계산)과 별개로, 결재선 관리에서 고른 결재라인을
 // 그대로 기안서 결재 단계로 쓰고 싶을 때 ApprovalChainStep[] 형태로 변환해준다.
 export async function approvalLineToChainSteps(line: ApprovalLineWithSteps): Promise<ApprovalChainStep[]> {
@@ -583,18 +616,14 @@ export const approvalDocumentService = {
   // 참조 대상에게 노출되지 않는다 — 상급 결재자가 검토하기도 전에 참조자가 먼저 내용을 알게
   // 되거나, 반려돼 무효가 된 내용이 참조자에게 그대로 남는 것을 막기 위함.
   // "결재함"의 기본 노출 범위 — 관리자도 예외 없이 동일하게 적용된다.
-  async getMyRelatedDocuments(userId: string, myOrgUnitIds: string[] = []): Promise<ApprovalDocumentWithDetails[]> {
-    const orFilter = myOrgUnitIds.length > 0
-      ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
-      : `user_id.eq.${userId}`;
-    const [draftedRes, stepsRes, refsRes] = await Promise.all([
+  async getMyRelatedDocuments(userId: string, myOrgUnitIds: string[] = [], hireDate?: string | null): Promise<ApprovalDocumentWithDetails[]> {
+    const [draftedRes, stepsRes, refDocIds] = await Promise.all([
       supabase.from('approval_documents').select('id').eq('created_by', userId).neq('status', 'draft'),
       supabase.from('approval_document_steps').select('document_id, step_order, status').eq('approver_id', userId),
-      supabase.from('approval_document_references').select('document_id').or(orFilter),
+      getReferenceDocumentIds(userId, myOrgUnitIds, hireDate),
     ]);
     if (draftedRes.error) throw draftedRes.error;
     if (stepsRes.error) throw stepsRes.error;
-    if (refsRes.error) throw refsRes.error;
 
     const myStepDocIds = [...new Set((stepsRes.data || []).map(s => s.document_id))];
     let reachedStepDocIds: string[] = [];
@@ -608,7 +637,6 @@ export const approvalDocumentService = {
         .map(s => s.document_id);
     }
 
-    const refDocIds = [...new Set((refsRes.data || []).map(r => r.document_id))];
     let approvedRefDocIds: string[] = [];
     if (refDocIds.length > 0) {
       const { data: refDocs, error: refDocsError } = await supabase
@@ -996,16 +1024,8 @@ export const approvalDocumentService = {
   // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 제외한다 — 참조는 결재와 무관한 사람에게만
   // 의미가 있고, 그렇지 않으면 같은 문서가 참조함과 결재함에 중복으로 나타난다. 참조는 결재가
   // 완료(승인)된 문서에 대해서만 유효하다 — 결재 중이거나 반려된 문서는 참조 대상에게 아직 보이지 않는다.
-  async getReferencedDocuments(userId: string, myOrgUnitIds: string[]): Promise<ApprovalDocumentWithDetails[]> {
-    const orFilter = myOrgUnitIds.length > 0
-      ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
-      : `user_id.eq.${userId}`;
-    const { data: refs, error: refError } = await supabase
-      .from('approval_document_references')
-      .select('document_id')
-      .or(orFilter);
-    if (refError) throw refError;
-    const docIds = [...new Set((refs || []).map(r => r.document_id))];
+  async getReferencedDocuments(userId: string, myOrgUnitIds: string[], hireDate?: string | null): Promise<ApprovalDocumentWithDetails[]> {
+    const docIds = await getReferenceDocumentIds(userId, myOrgUnitIds, hireDate);
     if (docIds.length === 0) return [];
 
     const { data: steps, error: stepsError } = await supabase
@@ -1028,8 +1048,8 @@ export const approvalDocumentService = {
   },
 
   // 대시보드 위젯용 — 참조 대상 문서 중 아직 상세를 열어보지 않은 것만 실제 문서 정보와 함께 반환.
-  async getUnreadReferencedDocuments(userId: string, myOrgUnitIds: string[]): Promise<ApprovalDocumentWithDetails[]> {
-    const referenced = await this.getReferencedDocuments(userId, myOrgUnitIds);
+  async getUnreadReferencedDocuments(userId: string, myOrgUnitIds: string[], hireDate?: string | null): Promise<ApprovalDocumentWithDetails[]> {
+    const referenced = await this.getReferencedDocuments(userId, myOrgUnitIds, hireDate);
     if (referenced.length === 0) return [];
     const { data: reads, error } = await supabase
       .from('approval_document_reference_reads')
@@ -1045,16 +1065,8 @@ export const approvalDocumentService = {
   // 결재선에 포함된 문서는 참조로도 지정돼 있더라도 무시하고(같은 문서가 "결재 대기"와
   // "참조 미열람" 배지 양쪽에 중복으로 잡히는 것을 방지), 결재가 완료(승인)된 문서만 센다 —
   // 결재 중이거나 반려된 문서는 아직 참조 대상에게 노출되지 않는다.
-  async getUnreadReferenceCount(userId: string, myOrgUnitIds: string[]): Promise<number> {
-    const orFilter = myOrgUnitIds.length > 0
-      ? `user_id.eq.${userId},org_unit_id.in.(${myOrgUnitIds.join(',')})`
-      : `user_id.eq.${userId}`;
-    const { data: refs, error: refError } = await supabase
-      .from('approval_document_references')
-      .select('document_id')
-      .or(orFilter);
-    if (refError) throw refError;
-    const refDocIds = [...new Set((refs || []).map(r => r.document_id))];
+  async getUnreadReferenceCount(userId: string, myOrgUnitIds: string[], hireDate?: string | null): Promise<number> {
+    const refDocIds = await getReferenceDocumentIds(userId, myOrgUnitIds, hireDate);
     if (refDocIds.length === 0) return 0;
 
     const [{ data: docs, error: docsError }, { data: steps, error: stepsError }] = await Promise.all([

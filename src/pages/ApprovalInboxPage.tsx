@@ -18,7 +18,7 @@ import { getCurrentUser } from '@/lib/store';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
-import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
+import { approvalDocumentService, getLeaveDetail, getReferenceDocumentIds, type LeaveDetail } from '@/services/approval-document.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
@@ -42,6 +42,7 @@ export default function ApprovalInboxPage() {
   const [currentUserRole, setCurrentUserRole] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [myOrgUnitIds, setMyOrgUnitIds] = useState<string[]>([]);
+  const [hireDate, setHireDate] = useState<string | null>(null);
 
   const [documents, setDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
   const [hiddenDocuments, setHiddenDocuments] = useState<ApprovalDocumentWithDetails[]>([]);
@@ -79,10 +80,10 @@ export default function ApprovalInboxPage() {
 
   // 문서 상세를 별도 탭에서 열어서 처리(승인/반려/취소/삭제)했을 때, 결재함 목록도 동기화되도록 새로고침한다.
   useEffect(() => {
-    const handler = () => loadDocuments(currentUserId, isAdmin, myOrgUnitIds);
+    const handler = () => loadDocuments(currentUserId, isAdmin, myOrgUnitIds, hireDate);
     window.addEventListener('approval-inbox-data-changed', handler);
     return () => window.removeEventListener('approval-inbox-data-changed', handler);
-  }, [currentUserId, isAdmin, myOrgUnitIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUserId, isAdmin, myOrgUnitIds, hireDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const init = async () => {
     try {
@@ -98,27 +99,29 @@ export default function ApprovalInboxPage() {
       const members = await orgChartService.getOrgMembers();
       const orgUnitIds = members.find(m => m.id === currentUser.id)?.org_unit_ids || [];
       setMyOrgUnitIds(orgUnitIds);
+      setHireDate(currentUser.hire_date ?? null);
       setMemberPositionByUserId(new Map(members.map(m => [m.id, m.position_name])));
 
       approvalDocumentService.getDocumentTypes(true).then(setDocTypes).catch(console.error);
       getCompanyInfo().then(setCompany).catch(() => setCompany(null));
       getShorePositions().then(setPositions).catch(() => setPositions([]));
-      await loadDocuments(currentUser.id, admin, orgUnitIds);
+      await loadDocuments(currentUser.id, admin, orgUnitIds, currentUser.hire_date ?? null);
     } finally {
       setInitializing(false);
     }
   };
 
-  const loadDocuments = async (userId: string, _admin: boolean, orgUnitIds: string[]) => {
+  const loadDocuments = async (userId: string, _admin: boolean, orgUnitIds: string[], hireDate: string | null) => {
     try {
       // 시스템관리자/슈퍼관리자라도 그룹웨어 결재함에서는 본인이 기안했거나, 결재선에 포함돼
       // 있거나, 참조로 지정된 문서만 보인다 — 관리자 권한으로 전체 문서를 열람하지 않는다.
-      const [allDocs, refs, hiddenIds, hidden] = await Promise.all([
-        approvalDocumentService.getMyRelatedDocuments(userId, orgUnitIds),
-        loadMyReferenceDocIds(userId, orgUnitIds),
+      const [allDocs, refDocIds, hiddenIds, hidden] = await Promise.all([
+        approvalDocumentService.getMyRelatedDocuments(userId, orgUnitIds, hireDate),
+        getReferenceDocumentIds(userId, orgUnitIds, hireDate),
         approvalDocumentService.getHiddenDocumentIds(userId),
         approvalDocumentService.getMyHiddenDocuments(userId),
       ]);
+      const refs = new Set(refDocIds);
       // "삭제"는 이 사용자의 결재함에서만 숨기는 것이므로, 목록에서는 제외하고 별도 삭제된
       // 문서함 탭에서만 보여준다.
       setDocuments(allDocs.filter(d => !hiddenIds.has(d.id)));
@@ -153,15 +156,6 @@ export default function ApprovalInboxPage() {
       console.error(e);
       toast({ title: '오류', description: '문서 결재 요청을 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
     }
-  };
-
-  const loadMyReferenceDocIds = async (userId: string, orgUnitIds: string[]): Promise<Set<string>> => {
-    const orFilter = orgUnitIds.length > 0
-      ? `user_id.eq.${userId},org_unit_id.in.(${orgUnitIds.join(',')})`
-      : `user_id.eq.${userId}`;
-    const { data, error } = await supabase.from('approval_document_references').select('document_id').or(orFilter);
-    if (error) throw error;
-    return new Set((data || []).map((r: { document_id: string }) => r.document_id));
   };
 
   // 관리자 계정이라도 결재선상 실제 현재 단계 담당자가 아니면 "내 차례"가 아니다 — 별도의
@@ -315,7 +309,7 @@ export default function ApprovalInboxPage() {
       }
       toast({ title: '성공', description: docActionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.' });
       docGoBackToList();
-      await loadDocuments(currentUserId, isAdmin, myOrgUnitIds);
+      await loadDocuments(currentUserId, isAdmin, myOrgUnitIds, hireDate);
       window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);

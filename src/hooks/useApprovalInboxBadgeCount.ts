@@ -22,7 +22,7 @@ export function useApprovalInboxBadgeCount() {
 
       const [pendingTurn, unreadReferences] = await Promise.all([
         approvalDocumentService.getMyPendingTurnCount(user.id, isAdmin),
-        approvalDocumentService.getUnreadReferenceCount(user.id, myOrgUnitIds),
+        approvalDocumentService.getUnreadReferenceCount(user.id, myOrgUnitIds, user.hire_date),
       ]);
       setCount(pendingTurn + unreadReferences);
     } catch (e) {

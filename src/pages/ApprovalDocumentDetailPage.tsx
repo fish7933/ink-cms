@@ -12,7 +12,7 @@ import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
-import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
+import { approvalDocumentService, getLeaveDetail, getReferenceDocumentIds, type LeaveDetail } from '@/services/approval-document.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
@@ -86,11 +86,8 @@ export default function ApprovalDocumentDetailPage() {
       if (found && found.status === 'approved') {
         const { data: myUnits } = await supabase.from('org_unit_members').select('org_unit_id').eq('user_id', user.id);
         const myOrgUnitIds = (myUnits || []).map(u => u.org_unit_id);
-        const orFilter = myOrgUnitIds.length > 0
-          ? `user_id.eq.${user.id},org_unit_id.in.(${myOrgUnitIds.join(',')})`
-          : `user_id.eq.${user.id}`;
-        const { data: refs } = await supabase.from('approval_document_references').select('id').eq('document_id', id).or(orFilter);
-        if (refs && refs.length > 0) {
+        const refDocIds = await getReferenceDocumentIds(user.id, myOrgUnitIds, user.hire_date);
+        if (refDocIds.includes(id!)) {
           await approvalDocumentService.markReferenceRead(id, user.id);
           window.dispatchEvent(new CustomEvent('approval-inbox-data-changed'));
         }

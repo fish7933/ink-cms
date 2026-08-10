@@ -118,8 +118,8 @@ export default function DashboardPage() {
       rotationApprovalService.getMyRelatedApprovals(user.id),
       contractApprovalService.getMyRelatedApprovals(user.id),
       dispatchOrderApprovalService.getMyRelatedApprovals(user.id),
-      approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds),
-      approvalDocumentService.getUnreadReferencedDocuments(user.id, myOrgUnitIds),
+      approvalDocumentService.getMyRelatedDocuments(user.id, myOrgUnitIds, user.hire_date),
+      approvalDocumentService.getUnreadReferencedDocuments(user.id, myOrgUnitIds, user.hire_date),
     ]);
 
     // 채용/배승/계약/승진강등 — 4개 도메인 모두 발령 결재함(/dispatch-approval-inbox)으로 모인다.
