@@ -241,11 +241,14 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
             </td></tr>
           ) : dailyCashReport ? (() => {
             const sections = dailyCashReport.snapshot || [];
-            const totalClosing = sections.reduce((s, sec) => s + sec.closing_balance, 0);
+            // 통화가 다르면(원화/달러 등) 그냥 더하는 게 의미가 없으므로 통화별로 따로 합산한다.
+            const totalsByCurrency = new Map<string, number>();
+            for (const s of sections) totalsByCurrency.set(s.currency, (totalsByCurrency.get(s.currency) || 0) + s.closing_balance);
             return (
               <>
                 <tr><td>
-                  <table className="issued-line-items">
+                  <table className="issued-line-items" style={{ tableLayout: 'fixed' }}>
+                    <colgroup><col style={{ width: '15%' }} /><col style={{ width: '55%' }} /><col style={{ width: '30%' }} /></colgroup>
                     <thead><tr><th>구분</th><th>계좌명</th><th>금일잔액</th></tr></thead>
                     <tbody>
                       {sections.map(s => (
@@ -257,7 +260,9 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr><td colSpan={2}>합계</td><td style={{ textAlign: 'right' }}>{totalClosing.toLocaleString()}</td></tr>
+                      {[...totalsByCurrency.entries()].map(([currency, total]) => (
+                        <tr key={currency}><td colSpan={2}>합계 ({currency})</td><td style={{ textAlign: 'right' }}>{total.toLocaleString()} {currency}</td></tr>
+                      ))}
                     </tfoot>
                   </table>
                 </td></tr>

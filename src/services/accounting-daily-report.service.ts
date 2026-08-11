@@ -135,8 +135,10 @@ export async function submitDailyReportForApproval(date: string, userId: string)
 
   const sections = report.snapshot || [];
   const lines = [`기준일: ${date}`, ...sections.map(s => `${s.name}: ${s.closing_balance.toLocaleString()} ${s.currency}`)];
-  const totalClosing = sections.reduce((s, sec) => s + sec.closing_balance, 0);
-  lines.push(`금일 잔액 합계: ${totalClosing.toLocaleString()}`);
+  // 통화가 다르면 그냥 더하는 게 의미가 없으므로 통화별로 따로 합산한다.
+  const totalsByCurrency = new Map<string, number>();
+  for (const s of sections) totalsByCurrency.set(s.currency, (totalsByCurrency.get(s.currency) || 0) + s.closing_balance);
+  for (const [currency, total] of totalsByCurrency) lines.push(`금일 잔액 합계(${currency}): ${total.toLocaleString()}`);
   const content = lines.join('\n');
 
   const doc = await approvalDocumentService.createDocument({

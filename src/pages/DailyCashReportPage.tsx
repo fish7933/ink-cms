@@ -108,7 +108,9 @@ export default function DailyCashReportPage() {
   }
 
   const sections = report?.snapshot || [];
-  const totalClosing = sections.reduce((s, sec) => s + sec.closing_balance, 0);
+  // 통화가 다르면(원화/달러 등) 그냥 더하는 게 의미가 없으므로 통화별로 따로 합산한다.
+  const totalsByCurrency = new Map<string, number>();
+  for (const s of sections) totalsByCurrency.set(s.currency, (totalsByCurrency.get(s.currency) || 0) + s.closing_balance);
   const isDraft = report?.status === 'draft';
 
   return (
@@ -153,7 +155,12 @@ export default function DailyCashReportPage() {
         </CardHeader>
         <CardContent className="pt-0 space-y-5">
           <div className="border rounded-md overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '55%' }} />
+                <col style={{ width: '30%' }} />
+              </colgroup>
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left p-2 text-xs font-medium text-gray-600">구분</th>
@@ -166,18 +173,20 @@ export default function DailyCashReportPage() {
                   <tr><td colSpan={3} className="text-center py-8 text-gray-400 text-sm">등록된 통장/현금 시재가 없습니다.</td></tr>
                 ) : sections.map(s => (
                   <tr key={s.id} className="border-b last:border-0">
-                    <td className="p-2 text-gray-500">{KIND_LABEL[s.kind]}</td>
-                    <td className="p-2 font-medium">{s.name}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{s.closing_balance.toLocaleString()} {s.currency}</td>
+                    <td className="p-2 text-gray-500 truncate">{KIND_LABEL[s.kind]}</td>
+                    <td className="p-2 font-medium truncate">{s.name}</td>
+                    <td className="p-2 text-right font-mono font-semibold truncate">{s.closing_balance.toLocaleString()} {s.currency}</td>
                   </tr>
                 ))}
               </tbody>
               {sections.length > 0 && (
                 <tfoot className="bg-gray-50 border-t">
-                  <tr>
-                    <td colSpan={2} className="p-2 font-semibold text-sm">합계</td>
-                    <td className="p-2 text-right font-mono font-semibold">{totalClosing.toLocaleString()}</td>
-                  </tr>
+                  {[...totalsByCurrency.entries()].map(([currency, total]) => (
+                    <tr key={currency}>
+                      <td colSpan={2} className="p-2 font-semibold text-sm">합계 ({currency})</td>
+                      <td className="p-2 text-right font-mono font-semibold truncate">{total.toLocaleString()} {currency}</td>
+                    </tr>
+                  ))}
                 </tfoot>
               )}
             </table>
