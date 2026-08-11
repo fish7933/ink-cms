@@ -266,16 +266,18 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                     <div style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{DAILY_REPORT_KIND_LABEL[s.kind]} — {s.name}</div>
                     <table className="issued-line-items">
                       <thead>
-                        <tr><th>일자</th><th>출금</th><th>입금</th><th>잔액</th><th>상대거래처</th><th>적요</th></tr>
+                        <tr><th>No.</th><th>일자</th><th>출금</th><th>입금</th><th>잔액</th><th>상대거래처</th><th>적요</th></tr>
                       </thead>
                       <tbody>
                         <tr>
+                          <td style={{ textAlign: 'center' }}>0</td>
                           <td>전일이월</td><td></td><td></td>
                           <td style={{ textAlign: 'right' }}>{s.opening_balance.toLocaleString()}</td>
                           <td></td><td></td>
                         </tr>
                         {s.transactions.map((t, i) => (
                           <tr key={i}>
+                            <td style={{ textAlign: 'center' }}>{i + 1}</td>
                             <td>{t.date}</td>
                             <td style={{ textAlign: 'right' }}>{t.expense ? t.expense.toLocaleString() : ''}</td>
                             <td style={{ textAlign: 'right' }}>{t.income ? t.income.toLocaleString() : ''}</td>
@@ -287,7 +289,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                       </tbody>
                       <tfoot>
                         <tr>
-                          <td>합계</td>
+                          <td colSpan={2}>합계</td>
                           <td style={{ textAlign: 'right' }}>{s.total_expense.toLocaleString()}</td>
                           <td style={{ textAlign: 'right' }}>{s.total_income.toLocaleString()}</td>
                           <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>

@@ -190,6 +190,7 @@ export default function DailyCashReportPage() {
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b">
                     <tr>
+                      <th className="text-center p-2 font-medium text-gray-600 w-10">No.</th>
                       <th className="text-left p-2 font-medium text-gray-600">일자</th>
                       <th className="text-right p-2 font-medium text-gray-600">출금</th>
                       <th className="text-right p-2 font-medium text-gray-600">입금</th>
@@ -200,6 +201,7 @@ export default function DailyCashReportPage() {
                   </thead>
                   <tbody>
                     <tr className="border-b bg-gray-50/50">
+                      <td className="p-2 text-center text-gray-500">0</td>
                       <td className="p-2 text-gray-500">전일이월</td>
                       <td className="p-2"></td>
                       <td className="p-2"></td>
@@ -208,9 +210,10 @@ export default function DailyCashReportPage() {
                       <td className="p-2"></td>
                     </tr>
                     {s.transactions.length === 0 ? (
-                      <tr><td colSpan={6} className="text-center py-4 text-gray-400">이날 거래 내역이 없습니다.</td></tr>
+                      <tr><td colSpan={7} className="text-center py-4 text-gray-400">이날 거래 내역이 없습니다.</td></tr>
                     ) : s.transactions.map((t, i) => (
                       <tr key={i} className="border-b last:border-0">
+                        <td className="p-2 text-center text-gray-500">{i + 1}</td>
                         <td className="p-2">{t.date}</td>
                         <td className="p-2 text-right font-mono text-red-600">{t.expense ? t.expense.toLocaleString() : ''}</td>
                         <td className="p-2 text-right font-mono text-blue-700">{t.income ? t.income.toLocaleString() : ''}</td>
@@ -222,7 +225,7 @@ export default function DailyCashReportPage() {
                   </tbody>
                   <tfoot className="bg-gray-50 border-t">
                     <tr>
-                      <td className="p-2 font-semibold">합계</td>
+                      <td colSpan={2} className="p-2 font-semibold">합계</td>
                       <td className="p-2 text-right font-mono font-semibold text-red-600">{s.total_expense.toLocaleString()}</td>
                       <td className="p-2 text-right font-mono font-semibold text-blue-700">{s.total_income.toLocaleString()}</td>
                       <td className="p-2 text-right font-mono font-semibold">{s.closing_balance.toLocaleString()}</td>
