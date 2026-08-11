@@ -160,10 +160,18 @@ export default function CashbookManagementPage() {
         counterparty: form.counterparty.trim() || null, description: form.description.trim() || null,
         amount, currency: form.currency, created_by: currentUser?.id || null,
       };
-      if (formView?.id) await updateCashTransaction(formView.id, data);
-      else await addCashTransaction(data);
-      await loadData();
-      closeForm();
+      if (formView?.id) {
+        await updateCashTransaction(formView.id, data);
+        await loadData();
+        closeForm();
+      } else {
+        await addCashTransaction(data);
+        await loadData();
+        // 같은 통장/카드/시재에 계속 거래를 입력하는 경우가 많아, 날짜·결제수단·계좌 선택은
+        // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액)만 비워 바로 이어서 입력할 수 있게 한다.
+        setForm(prev => ({ ...prev, category_id: '', counterparty: '', description: '', amount: '' }));
+        toast({ title: '저장되었습니다.', description: '이어서 같은 계좌에 거래를 추가할 수 있습니다.' });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 중 오류가 발생했습니다.');
     } finally {
