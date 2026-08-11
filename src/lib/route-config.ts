@@ -70,6 +70,9 @@ const ShoreLeaveDetailPage = lazy(() => import('@/pages/ShoreLeaveDetailPage'));
 const SickLeaveRequestPage = lazy(() => import('@/pages/SickLeaveRequestPage'));
 const EmployeeLeaveCalendarPage = lazy(() => import('@/pages/EmployeeLeaveCalendarPage'));
 const HomepagePostsPage = lazy(() => import('@/pages/HomepagePostsPage'));
+const BankAccountManagementPage = lazy(() => import('@/pages/BankAccountManagementPage'));
+const CardManagementPage = lazy(() => import('@/pages/CardManagementPage'));
+const CashbookManagementPage = lazy(() => import('@/pages/CashbookManagementPage'));
 
 export interface RouteEntry {
   path: string;
@@ -161,4 +164,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/shore-leave-calendar', component: EmployeeLeaveCalendarPage },
   { path: '/referenced-documents', component: ApprovalInboxPage },
   { path: '/homepage-posts', component: HomepagePostsPage },
+  { path: '/accounting/bank-accounts', component: BankAccountManagementPage },
+  { path: '/accounting/cards', component: CardManagementPage },
+  { path: '/accounting/cashbook', component: CashbookManagementPage },
 ];

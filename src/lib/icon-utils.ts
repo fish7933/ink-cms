@@ -43,6 +43,9 @@ import {
   IdCard,
   Wallet,
   PiggyBank,
+  Landmark,
+  CreditCard,
+  Receipt,
   LucideIcon,
 } from 'lucide-react';
 
@@ -91,6 +94,9 @@ const iconMap: Record<string, LucideIcon> = {
   IdCard,
   Wallet,
   PiggyBank,
+  Landmark,
+  CreditCard,
+  Receipt,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {
