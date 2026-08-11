@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getCards, addCard, updateCard, deleteCard } from '@/services/accounting-card.service';
@@ -18,6 +19,8 @@ import type { CardWithDetails, BankAccountWithBalance } from '@/types/accounting
 import type { User } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 const NONE = '_none';
 const STAFF_ROLES = ['ship_manager', 'admin', 'system_admin'];
@@ -39,6 +42,11 @@ export default function CardManagementPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => { loadData(); }, []);
 
@@ -81,8 +89,12 @@ export default function CardManagementPage() {
         holder_user_id: form.holder_user_id || null, credit_limit: form.credit_limit ? parseFloat(form.credit_limit) : null,
         expiry_date: form.expiry_date.trim() || null, memo: form.memo.trim() || null, is_active: form.is_active,
       };
-      if (formView?.id) await updateCard(formView.id, data);
-      else await addCard(data);
+      if (formView?.id) {
+        await updateCard(formView.id, data);
+      } else {
+        const maxOrder = cards.length > 0 ? Math.max(...cards.map(c => c.display_order)) : 0;
+        await addCard({ ...data, display_order: maxOrder + 1 });
+      }
       await loadData();
       closeForm();
     } catch (e) {
@@ -96,6 +108,23 @@ export default function CardManagementPage() {
     if (!confirm(`'${c.card_name}' 카드를 삭제하시겠습니까?`)) return;
     try { await deleteCard(c.id); await loadData(); }
     catch (e) { toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = cards.findIndex(c => c.id === active.id);
+    const newIndex = cards.findIndex(c => c.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(cards, oldIndex, newIndex).map((c, i) => ({ ...c, display_order: i + 1 }));
+    setCards(reordered);
+    try {
+      await Promise.all(reordered.map(c => updateCard(c.id, { display_order: c.display_order })));
+    } catch {
+      toast({ title: '순서 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      await loadData();
+    }
   };
 
   if (loading) {
@@ -187,6 +216,7 @@ export default function CardManagementPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10 text-xs"></TableHead>
                   <TableHead className="text-xs">카드명/카드사</TableHead>
                   <TableHead className="text-xs">번호</TableHead>
                   <TableHead className="text-xs">결제계좌</TableHead>
@@ -197,29 +227,33 @@ export default function CardManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cards.map(c => (
-                  <TableRow key={c.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openForm(c)}>
-                    <TableCell className="text-sm">
-                      <p className="font-medium">{c.card_name}</p>
-                      <p className="text-xs text-gray-500">{c.issuer}</p>
-                    </TableCell>
-                    <TableCell className="text-sm font-mono">{c.card_number_last4 ? `**** ${c.card_number_last4}` : '-'}</TableCell>
-                    <TableCell className="text-sm">{c.linked_bank_account_name || '-'}</TableCell>
-                    <TableCell className="text-sm">{c.holder_user_name || '-'}</TableCell>
-                    <TableCell className="text-right text-sm font-mono">{c.total_used.toLocaleString()}</TableCell>
-                    <TableCell>
-                      {c.is_active
-                        ? <Badge className="bg-green-100 text-green-700 text-xs">사용중</Badge>
-                        : <Badge variant="outline" className="text-xs text-gray-500">중지</Badge>}
-                    </TableCell>
-                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        {permissions.canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(c)}><Edit2 className="h-3.5 w-3.5" /></Button>}
-                        {permissions.canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(c)}><Trash2 className="h-3.5 w-3.5" /></Button>}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={cards.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                    {cards.map(c => (
+                      <SortableTableRow key={c.id} id={c.id} onClick={() => openForm(c)}>
+                        <TableCell className="text-sm">
+                          <p className="font-medium">{c.card_name}</p>
+                          <p className="text-xs text-gray-500">{c.issuer}</p>
+                        </TableCell>
+                        <TableCell className="text-sm font-mono">{c.card_number_last4 ? `**** ${c.card_number_last4}` : '-'}</TableCell>
+                        <TableCell className="text-sm">{c.linked_bank_account_name || '-'}</TableCell>
+                        <TableCell className="text-sm">{c.holder_user_name || '-'}</TableCell>
+                        <TableCell className="text-right text-sm font-mono">{c.total_used.toLocaleString()}</TableCell>
+                        <TableCell>
+                          {c.is_active
+                            ? <Badge className="bg-green-100 text-green-700 text-xs">사용중</Badge>
+                            : <Badge variant="outline" className="text-xs text-gray-500">중지</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            {permissions.canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(c)}><Edit2 className="h-3.5 w-3.5" /></Button>}
+                            {permissions.canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(c)}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                          </div>
+                        </TableCell>
+                      </SortableTableRow>
+                    ))}
+                  </SortableContext>
+                </DndContext>
               </TableBody>
             </Table>
           )}

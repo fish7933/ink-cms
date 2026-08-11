@@ -8,6 +8,7 @@ export interface BankAccount {
   currency: string;
   opening_balance: number;
   opening_date: string | null;
+  display_order: number;
   is_active: boolean;
   memo: string | null;
   created_at: string;
@@ -28,6 +29,7 @@ export interface Card {
   holder_user_id: string | null;
   credit_limit: number | null;
   expiry_date: string | null;
+  display_order: number;
   is_active: boolean;
   memo: string | null;
   created_at: string;
@@ -47,6 +49,7 @@ export interface CashRegister {
   location: string | null;
   opening_balance: number;
   opening_date: string | null;
+  display_order: number;
   is_active: boolean;
   memo: string | null;
   created_at: string;
@@ -70,6 +73,13 @@ export interface AccountingCategory {
   created_at: string;
 }
 
+export interface CashTransactionAttachment {
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+}
+
 export interface CashTransaction {
   id: string;
   transaction_date: string;
@@ -83,6 +93,7 @@ export interface CashTransaction {
   description: string | null;
   amount: number;
   currency: string;
+  attachments: CashTransactionAttachment[];
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -94,4 +105,29 @@ export interface CashTransactionWithDetails extends CashTransaction {
   cash_register_name: string | null;
   category_name: string | null;
   created_by_name: string | null;
+}
+
+export type AccountingDailyReportStatus = 'draft' | 'pending_approval' | 'confirmed';
+
+export interface DailyCashReportSnapshotRow {
+  kind: 'bank_account' | 'card' | 'cash_register';
+  id: string;
+  name: string;
+  opening_balance: number;
+  income: number;
+  expense: number;
+  closing_balance: number;
+}
+
+export interface DailyCashReport {
+  id: string;
+  report_date: string;
+  status: AccountingDailyReportStatus;
+  snapshot: DailyCashReportSnapshotRow[] | null;
+  approval_document_id: string | null;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }

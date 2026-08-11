@@ -7,7 +7,7 @@ export async function getCashRegisters(): Promise<CashRegisterWithBalance[]> {
   const { data: registers, error } = await supabase
     .from('accounting_cash_registers')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('display_order');
   if (error) { console.error(error); return []; }
   if (!registers || registers.length === 0) return [];
 

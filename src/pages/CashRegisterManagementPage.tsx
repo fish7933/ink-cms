@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getCashRegisters, addCashRegister, updateCashRegister, deleteCashRegister } from '@/services/accounting-cash-register.service';
@@ -17,6 +18,8 @@ import type { CashRegisterWithBalance } from '@/types/accounting';
 import type { User } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 const NONE = '_none';
 const STAFF_ROLES = ['ship_manager', 'admin', 'system_admin'];
@@ -36,6 +39,11 @@ export default function CashRegisterManagementPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => { loadData(); }, []);
 
@@ -75,8 +83,12 @@ export default function CashRegisterManagementPage() {
         opening_balance: parseFloat(form.opening_balance) || 0, opening_date: form.opening_date || null,
         memo: form.memo.trim() || null, is_active: form.is_active,
       };
-      if (formView?.id) await updateCashRegister(formView.id, data);
-      else await addCashRegister(data);
+      if (formView?.id) {
+        await updateCashRegister(formView.id, data);
+      } else {
+        const maxOrder = registers.length > 0 ? Math.max(...registers.map(r => r.display_order)) : 0;
+        await addCashRegister({ ...data, display_order: maxOrder + 1 });
+      }
       await loadData();
       closeForm();
     } catch (e) {
@@ -90,6 +102,23 @@ export default function CashRegisterManagementPage() {
     if (!confirm(`'${r.name}' 시재를 삭제하시겠습니까? 연결된 거래 내역은 삭제되지 않고 시재 연결만 해제됩니다.`)) return;
     try { await deleteCashRegister(r.id); await loadData(); }
     catch (e) { toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = registers.findIndex(r => r.id === active.id);
+    const newIndex = registers.findIndex(r => r.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(registers, oldIndex, newIndex).map((r, i) => ({ ...r, display_order: i + 1 }));
+    setRegisters(reordered);
+    try {
+      await Promise.all(reordered.map(r => updateCashRegister(r.id, { display_order: r.display_order })));
+    } catch {
+      toast({ title: '순서 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      await loadData();
+    }
   };
 
   if (loading) {
@@ -165,6 +194,7 @@ export default function CashRegisterManagementPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10 text-xs"></TableHead>
                   <TableHead className="text-xs">시재명</TableHead>
                   <TableHead className="text-xs">보관 위치</TableHead>
                   <TableHead className="text-xs">담당자</TableHead>
@@ -174,25 +204,29 @@ export default function CashRegisterManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {registers.map(r => (
-                  <TableRow key={r.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openForm(r)}>
-                    <TableCell className="text-sm font-medium">{r.name}</TableCell>
-                    <TableCell className="text-sm">{r.location || '-'}</TableCell>
-                    <TableCell className="text-sm">{r.holder_user_name || '-'}</TableCell>
-                    <TableCell className="text-right text-sm font-mono font-semibold">{r.current_balance.toLocaleString()}</TableCell>
-                    <TableCell>
-                      {r.is_active
-                        ? <Badge className="bg-green-100 text-green-700 text-xs">사용중</Badge>
-                        : <Badge variant="outline" className="text-xs text-gray-500">중지</Badge>}
-                    </TableCell>
-                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        {permissions.canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(r)}><Edit2 className="h-3.5 w-3.5" /></Button>}
-                        {permissions.canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(r)}><Trash2 className="h-3.5 w-3.5" /></Button>}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={registers.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                    {registers.map(r => (
+                      <SortableTableRow key={r.id} id={r.id} onClick={() => openForm(r)}>
+                        <TableCell className="text-sm font-medium">{r.name}</TableCell>
+                        <TableCell className="text-sm">{r.location || '-'}</TableCell>
+                        <TableCell className="text-sm">{r.holder_user_name || '-'}</TableCell>
+                        <TableCell className="text-right text-sm font-mono font-semibold">{r.current_balance.toLocaleString()}</TableCell>
+                        <TableCell>
+                          {r.is_active
+                            ? <Badge className="bg-green-100 text-green-700 text-xs">사용중</Badge>
+                            : <Badge variant="outline" className="text-xs text-gray-500">중지</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            {permissions.canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(r)}><Edit2 className="h-3.5 w-3.5" /></Button>}
+                            {permissions.canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(r)}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                          </div>
+                        </TableCell>
+                      </SortableTableRow>
+                    ))}
+                  </SortableContext>
+                </DndContext>
               </TableBody>
             </Table>
           )}

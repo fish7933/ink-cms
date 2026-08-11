@@ -7,7 +7,7 @@ export async function getBankAccounts(): Promise<BankAccountWithBalance[]> {
   const { data: accounts, error } = await supabase
     .from('accounting_bank_accounts')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('display_order');
   if (error) { console.error(error); return []; }
   if (!accounts || accounts.length === 0) return [];
 

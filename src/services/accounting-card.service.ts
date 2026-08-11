@@ -5,7 +5,7 @@ export async function getCards(): Promise<CardWithDetails[]> {
   const { data: cards, error } = await supabase
     .from('accounting_cards')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('display_order');
   if (error) { console.error(error); return []; }
   if (!cards || cards.length === 0) return [];
 

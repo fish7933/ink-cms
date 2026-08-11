@@ -9,12 +9,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getBankAccounts, addBankAccount, updateBankAccount, deleteBankAccount } from '@/services/accounting-bank-account.service';
 import type { BankAccountWithBalance } from '@/types/accounting';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
 
@@ -33,6 +36,11 @@ export default function BankAccountManagementPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => { loadData(); }, []);
 
@@ -74,8 +82,12 @@ export default function BankAccountManagementPage() {
         opening_balance: parseFloat(form.opening_balance) || 0, opening_date: form.opening_date || null,
         memo: form.memo.trim() || null, is_active: form.is_active,
       };
-      if (formView?.id) await updateBankAccount(formView.id, data);
-      else await addBankAccount(data);
+      if (formView?.id) {
+        await updateBankAccount(formView.id, data);
+      } else {
+        const maxOrder = accounts.length > 0 ? Math.max(...accounts.map(a => a.display_order)) : 0;
+        await addBankAccount({ ...data, display_order: maxOrder + 1 });
+      }
       await loadData();
       closeForm();
     } catch (e) {
@@ -89,6 +101,23 @@ export default function BankAccountManagementPage() {
     if (!confirm(`'${a.account_name}' 계좌를 삭제하시겠습니까? 연결된 거래 내역은 삭제되지 않고 계좌 연결만 해제됩니다.`)) return;
     try { await deleteBankAccount(a.id); await loadData(); }
     catch (e) { toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = accounts.findIndex(a => a.id === active.id);
+    const newIndex = accounts.findIndex(a => a.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(accounts, oldIndex, newIndex).map((a, i) => ({ ...a, display_order: i + 1 }));
+    setAccounts(reordered);
+    try {
+      await Promise.all(reordered.map(a => updateBankAccount(a.id, { display_order: a.display_order })));
+    } catch {
+      toast({ title: '순서 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      await loadData();
+    }
   };
 
   if (loading) {
@@ -168,6 +197,7 @@ export default function BankAccountManagementPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10 text-xs"></TableHead>
                   <TableHead className="text-xs">은행/계좌명</TableHead>
                   <TableHead className="text-xs">계좌번호</TableHead>
                   <TableHead className="text-xs">예금주</TableHead>
@@ -178,29 +208,33 @@ export default function BankAccountManagementPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.map(a => (
-                  <TableRow key={a.id} className="cursor-pointer hover:bg-gray-50" onClick={() => openForm(a)}>
-                    <TableCell className="text-sm">
-                      <p className="font-medium">{a.bank_name}</p>
-                      <p className="text-xs text-gray-500">{a.account_name}</p>
-                    </TableCell>
-                    <TableCell className="text-sm font-mono">{a.account_number}</TableCell>
-                    <TableCell className="text-sm">{a.account_holder}</TableCell>
-                    <TableCell className="text-sm">{a.currency}</TableCell>
-                    <TableCell className="text-right text-sm font-mono font-semibold">{a.current_balance.toLocaleString()}</TableCell>
-                    <TableCell>
-                      {a.is_active
-                        ? <Badge className="bg-green-100 text-green-700 text-xs">사용중</Badge>
-                        : <Badge variant="outline" className="text-xs text-gray-500">중지</Badge>}
-                    </TableCell>
-                    <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        {permissions.canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(a)}><Edit2 className="h-3.5 w-3.5" /></Button>}
-                        {permissions.canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(a)}><Trash2 className="h-3.5 w-3.5" /></Button>}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={accounts.map(a => a.id)} strategy={verticalListSortingStrategy}>
+                    {accounts.map(a => (
+                      <SortableTableRow key={a.id} id={a.id} onClick={() => openForm(a)}>
+                        <TableCell className="text-sm">
+                          <p className="font-medium">{a.bank_name}</p>
+                          <p className="text-xs text-gray-500">{a.account_name}</p>
+                        </TableCell>
+                        <TableCell className="text-sm font-mono">{a.account_number}</TableCell>
+                        <TableCell className="text-sm">{a.account_holder}</TableCell>
+                        <TableCell className="text-sm">{a.currency}</TableCell>
+                        <TableCell className="text-right text-sm font-mono font-semibold">{a.current_balance.toLocaleString()}</TableCell>
+                        <TableCell>
+                          {a.is_active
+                            ? <Badge className="bg-green-100 text-green-700 text-xs">사용중</Badge>
+                            : <Badge variant="outline" className="text-xs text-gray-500">중지</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right" onClick={e => e.stopPropagation()}>
+                          <div className="flex justify-end gap-1">
+                            {permissions.canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openForm(a)}><Edit2 className="h-3.5 w-3.5" /></Button>}
+                            {permissions.canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(a)}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                          </div>
+                        </TableCell>
+                      </SortableTableRow>
+                    ))}
+                  </SortableContext>
+                </DndContext>
               </TableBody>
             </Table>
           )}

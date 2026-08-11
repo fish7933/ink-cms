@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Trash2, Save, Edit2, ArrowLeft, Receipt, Settings2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Save, Edit2, ArrowLeft, Receipt, Settings2, ChevronLeft, ChevronRight, Upload, FileText, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,9 +17,10 @@ import { getCards } from '@/services/accounting-card.service';
 import { getCashRegisters } from '@/services/accounting-cash-register.service';
 import { getCategories, addCategory, deleteCategory } from '@/services/accounting-category.service';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import type {
   CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory,
-  AccountingTransactionType, AccountingPaymentMethod,
+  AccountingTransactionType, AccountingPaymentMethod, CashTransactionAttachment,
 } from '@/types/accounting';
 import type { User } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
@@ -40,7 +41,7 @@ const emptyForm = {
   payment_method: 'bank_account' as AccountingPaymentMethod,
   bank_account_id: '', card_id: '', cash_register_id: '',
   transaction_type: 'expense' as AccountingTransactionType,
-  category_id: '', counterparty: '', description: '', amount: '', currency: 'KRW',
+  category_name: '', counterparty: '', description: '', amount: '', currency: 'KRW',
 };
 
 export default function CashbookManagementPage() {
@@ -66,6 +67,8 @@ export default function CashbookManagementPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [attachments, setAttachments] = useState<CashTransactionAttachment[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
 
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryFormType, setCategoryFormType] = useState<AccountingTransactionType>('expense');
@@ -117,6 +120,7 @@ export default function CashbookManagementPage() {
   const totalExpense = filtered.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
 
   const categoriesForType = categories.filter(c => c.transaction_type === form.transaction_type);
+  const categoryOptions = categoriesForType.map(c => c.name);
 
   // 한 번 입력된 거래처는 다음부터 드롭다운으로 골라 쓸 수 있게 하되(datalist), 목록에 없는
   // 이름도 자유롭게 새로 입력할 수 있다.
@@ -135,22 +139,50 @@ export default function CashbookManagementPage() {
       setForm({
         transaction_date: t.transaction_date, payment_method: t.payment_method,
         bank_account_id: t.bank_account_id || '', card_id: t.card_id || '', cash_register_id: t.cash_register_id || '',
-        transaction_type: t.transaction_type, category_id: t.category_id || '',
+        transaction_type: t.transaction_type, category_name: t.category_name || '',
         counterparty: t.counterparty || '', description: t.description || '',
         amount: String(t.amount), currency: t.currency,
       });
+      setAttachments(t.attachments || []);
     } else {
       setForm(emptyForm);
+      setAttachments([]);
     }
+    setNewFiles([]);
     setFormView({ id: t?.id });
   };
   const closeForm = () => { setFormView(null); setError(''); };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files).filter(f => {
+      if (f.size > 10 * 1024 * 1024) { toast({ title: `${f.name}은 10MB를 초과합니다.`, variant: 'destructive' }); return false; }
+      return true;
+    });
+    setNewFiles(prev => [...prev, ...files]);
+    e.target.value = '';
+  };
+  const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
+  const removeExistingAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
+  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
 
   const handlePaymentMethodChange = (v: AccountingPaymentMethod) => {
     setForm(prev => ({ ...prev, payment_method: v, bank_account_id: '', card_id: '', cash_register_id: '' }));
   };
   const handleTypeChange = (v: AccountingTransactionType) => {
-    setForm(prev => ({ ...prev, transaction_type: v, category_id: '' }));
+    setForm(prev => ({ ...prev, transaction_type: v, category_name: '' }));
+  };
+
+  // 분류도 거래처/적요처럼 한 번 입력하면 저장돼 드롭다운으로 나오게 한다 — 이미 있는 이름이면
+  // 그 분류를 쓰고, 없는 이름이면 새 분류로 즉시 등록해서 앞으로도 재사용할 수 있게 한다.
+  const resolveCategoryId = async (): Promise<string | null> => {
+    const name = form.category_name.trim();
+    if (!name) return null;
+    const existing = categories.find(c => c.transaction_type === form.transaction_type && c.name.toLowerCase() === name.toLowerCase());
+    if (existing) return existing.id;
+    const created = await addCategory({ name, transaction_type: form.transaction_type, display_order: categoriesForType.length + 1 });
+    setCategories(prev => [...prev, created]);
+    return created.id;
   };
 
   const handleSave = async () => {
@@ -162,14 +194,26 @@ export default function CashbookManagementPage() {
     if (!amount || amount <= 0) { setError('금액을 확인하세요.'); return; }
     try {
       setSaving(true);
+      const categoryId = await resolveCategoryId();
+
+      const uploaded: CashTransactionAttachment[] = [];
+      for (const file of newFiles) {
+        const ext = file.name.split('.').pop();
+        const path = `accounting-receipts/${formView?.id || Date.now()}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('documents').upload(path, file);
+        if (upErr) throw new Error(`${file.name} 업로드 실패`);
+        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+      }
+      const mergedAttachments = [...attachments, ...uploaded];
+
       const data = {
         transaction_date: form.transaction_date, payment_method: form.payment_method,
         bank_account_id: form.payment_method === 'bank_account' ? form.bank_account_id : null,
         card_id: form.payment_method === 'card' ? form.card_id : null,
         cash_register_id: form.payment_method === 'cash' ? form.cash_register_id : null,
-        transaction_type: form.transaction_type, category_id: form.category_id || null,
+        transaction_type: form.transaction_type, category_id: categoryId,
         counterparty: form.counterparty.trim() || null, description: form.description.trim() || null,
-        amount, currency: form.currency, created_by: currentUser?.id || null,
+        amount, currency: form.currency, attachments: mergedAttachments, created_by: currentUser?.id || null,
       };
       if (formView?.id) {
         await updateCashTransaction(formView.id, data);
@@ -179,8 +223,10 @@ export default function CashbookManagementPage() {
         await addCashTransaction(data);
         await loadData();
         // 같은 통장/카드/시재에 계속 거래를 입력하는 경우가 많아, 날짜·결제수단·계좌 선택은
-        // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액)만 비워 바로 이어서 입력할 수 있게 한다.
-        setForm(prev => ({ ...prev, category_id: '', counterparty: '', description: '', amount: '' }));
+        // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액/영수증)만 비워 바로 이어서 입력할 수 있게 한다.
+        setForm(prev => ({ ...prev, category_name: '', counterparty: '', description: '', amount: '' }));
+        setAttachments([]);
+        setNewFiles([]);
         toast({ title: '저장되었습니다.', description: '이어서 같은 계좌에 거래를 추가할 수 있습니다.' });
       }
     } catch (e) {
@@ -315,13 +361,10 @@ export default function CashbookManagementPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">분류</Label>
-                <Select value={form.category_id || NONE} onValueChange={v => setForm({ ...form, category_id: v === NONE ? '' : v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="분류 선택" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>선택 안 함</SelectItem>
-                    {categoriesForType.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input value={form.category_name} onChange={e => setForm({ ...form, category_name: e.target.value })} list="category-options" className="h-9 text-sm" placeholder="분류 입력 또는 선택" />
+                <datalist id="category-options">
+                  {categoryOptions.map(name => <option key={name} value={name} />)}
+                </datalist>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">거래처</Label>
@@ -347,6 +390,38 @@ export default function CashbookManagementPage() {
                   <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">영수증</Label>
+              {(attachments.length > 0 || newFiles.length > 0) && (
+                <div className="space-y-1.5">
+                  {attachments.map((a, idx) => (
+                    <div key={a.path} className="flex items-center justify-between p-2 bg-gray-50 rounded-md text-sm">
+                      <a href={getAttachmentUrl(a.path)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                        <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{a.name}</span>
+                      </a>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeExistingAttachment(idx)} disabled={saving}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  {newFiles.map((f, idx) => (
+                    <div key={`${f.name}-${idx}`} className="flex items-center justify-between p-2 bg-blue-50 rounded-md text-sm">
+                      <span className="flex items-center gap-2 text-blue-700 truncate">
+                        <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
+                        <span className="text-xs text-blue-400 shrink-0">(신규)</span>
+                      </span>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeNewFile(idx)} disabled={saving}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="flex items-center justify-center gap-1.5 h-9 border border-dashed rounded-md text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
+                <Upload className="w-3.5 h-3.5" />영수증 파일 추가 (최대 10MB)
+                <input type="file" multiple className="hidden" onChange={handleFileChange} disabled={saving} />
+              </label>
             </div>
             {error && <Alert variant="destructive"><AlertDescription className="text-xs">{error}</AlertDescription></Alert>}
           </CardContent>
@@ -435,7 +510,16 @@ export default function CashbookManagementPage() {
                       <tr><td colSpan={9} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
                     ) : paged.map(t => (
                       <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(t)}>
-                        <td className="p-2 whitespace-nowrap">{t.transaction_date}</td>
+                        <td className="p-2 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1">
+                            {t.transaction_date}
+                            {t.attachments && t.attachments.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-gray-400" title={`영수증 ${t.attachments.length}개`}>
+                                <Paperclip className="w-3 h-3" />{t.attachments.length}
+                              </span>
+                            )}
+                          </span>
+                        </td>
                         <td className="p-2 text-center">
                           <Badge className={`text-[10px] ${t.transaction_type === 'income' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>{t.transaction_type === 'income' ? '수입' : '지출'}</Badge>
                         </td>
