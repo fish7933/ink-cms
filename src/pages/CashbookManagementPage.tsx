@@ -118,6 +118,17 @@ export default function CashbookManagementPage() {
 
   const categoriesForType = categories.filter(c => c.transaction_type === form.transaction_type);
 
+  // 한 번 입력된 거래처는 다음부터 드롭다운으로 골라 쓸 수 있게 하되(datalist), 목록에 없는
+  // 이름도 자유롭게 새로 입력할 수 있다.
+  const counterpartyOptions = useMemo(
+    () => [...new Set(transactions.map(t => t.counterparty).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, 'ko')),
+    [transactions]
+  );
+  const descriptionOptions = useMemo(
+    () => [...new Set(transactions.map(t => t.description).filter((d): d is string => !!d))].sort((a, b) => a.localeCompare(b, 'ko')),
+    [transactions]
+  );
+
   const openForm = (t?: CashTransactionWithDetails) => {
     setError('');
     if (t) {
@@ -312,9 +323,21 @@ export default function CashbookManagementPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5"><Label className="text-xs">거래처</Label><Input value={form.counterparty} onChange={e => setForm({ ...form, counterparty: e.target.value })} className="h-9 text-sm" /></div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">거래처</Label>
+                <Input value={form.counterparty} onChange={e => setForm({ ...form, counterparty: e.target.value })} list="counterparty-options" className="h-9 text-sm" placeholder="거래처 입력 또는 선택" />
+                <datalist id="counterparty-options">
+                  {counterpartyOptions.map(name => <option key={name} value={name} />)}
+                </datalist>
+              </div>
             </div>
-            <div className="space-y-1.5"><Label className="text-xs">적요</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="h-9 text-sm" /></div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">적요</Label>
+              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} list="description-options" className="h-9 text-sm" placeholder="적요 입력 또는 선택" />
+              <datalist id="description-options">
+                {descriptionOptions.map(name => <option key={name} value={name} />)}
+              </datalist>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">금액 *</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="h-9 text-sm" /></div>
               <div className="space-y-1.5">
