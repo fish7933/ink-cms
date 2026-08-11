@@ -40,6 +40,24 @@ export interface CardWithDetails extends Card {
   total_used: number;
 }
 
+export interface CashRegister {
+  id: string;
+  name: string;
+  holder_user_id: string | null;
+  location: string | null;
+  opening_balance: number;
+  opening_date: string | null;
+  is_active: boolean;
+  memo: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashRegisterWithBalance extends CashRegister {
+  holder_user_name: string | null;
+  current_balance: number;
+}
+
 export type AccountingTransactionType = 'income' | 'expense';
 export type AccountingPaymentMethod = 'bank_account' | 'card' | 'cash';
 
@@ -58,6 +76,7 @@ export interface CashTransaction {
   payment_method: AccountingPaymentMethod;
   bank_account_id: string | null;
   card_id: string | null;
+  cash_register_id: string | null;
   transaction_type: AccountingTransactionType;
   category_id: string | null;
   counterparty: string | null;
@@ -72,6 +91,7 @@ export interface CashTransaction {
 export interface CashTransactionWithDetails extends CashTransaction {
   bank_account_name: string | null;
   card_name: string | null;
+  cash_register_name: string | null;
   category_name: string | null;
   created_by_name: string | null;
 }

@@ -14,10 +14,11 @@ import {
 } from '@/services/accounting-cash-transaction.service';
 import { getBankAccounts } from '@/services/accounting-bank-account.service';
 import { getCards } from '@/services/accounting-card.service';
+import { getCashRegisters } from '@/services/accounting-cash-register.service';
 import { getCategories, addCategory, deleteCategory } from '@/services/accounting-category.service';
 import { getCurrentUser } from '@/lib/store';
 import type {
-  CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, AccountingCategory,
+  CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory,
   AccountingTransactionType, AccountingPaymentMethod,
 } from '@/types/accounting';
 import type { User } from '@/types/models';
@@ -37,7 +38,7 @@ function currentMonth(): string {
 const emptyForm = {
   transaction_date: new Date().toISOString().slice(0, 10),
   payment_method: 'bank_account' as AccountingPaymentMethod,
-  bank_account_id: '', card_id: '',
+  bank_account_id: '', card_id: '', cash_register_id: '',
   transaction_type: 'expense' as AccountingTransactionType,
   category_id: '', counterparty: '', description: '', amount: '', currency: 'KRW',
 };
@@ -50,6 +51,7 @@ export default function CashbookManagementPage() {
   const [transactions, setTransactions] = useState<CashTransactionWithDetails[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccountWithBalance[]>([]);
   const [cards, setCards] = useState<CardWithDetails[]>([]);
+  const [cashRegisters, setCashRegisters] = useState<CashRegisterWithBalance[]>([]);
   const [categories, setCategories] = useState<AccountingCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -79,13 +81,14 @@ export default function CashbookManagementPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [me, txns, accounts, cardList, cats] = await Promise.all([
-        getCurrentUser(), getCashTransactions(), getBankAccounts(), getCards(), getCategories(),
+      const [me, txns, accounts, cardList, registers, cats] = await Promise.all([
+        getCurrentUser(), getCashTransactions(), getBankAccounts(), getCards(), getCashRegisters(), getCategories(),
       ]);
       setCurrentUser(me);
       setTransactions(txns);
       setBankAccounts(accounts);
       setCards(cardList);
+      setCashRegisters(registers);
       setCategories(cats);
     } finally {
       setLoading(false);
@@ -112,9 +115,6 @@ export default function CashbookManagementPage() {
 
   const totalIncome = filtered.filter(t => t.transaction_type === 'income').reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = filtered.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-  const cashBalance = useMemo(() => transactions
-    .filter(t => t.payment_method === 'cash')
-    .reduce((s, t) => s + (t.transaction_type === 'income' ? Number(t.amount) : -Number(t.amount)), 0), [transactions]);
 
   const categoriesForType = categories.filter(c => c.transaction_type === form.transaction_type);
 
@@ -123,7 +123,7 @@ export default function CashbookManagementPage() {
     if (t) {
       setForm({
         transaction_date: t.transaction_date, payment_method: t.payment_method,
-        bank_account_id: t.bank_account_id || '', card_id: t.card_id || '',
+        bank_account_id: t.bank_account_id || '', card_id: t.card_id || '', cash_register_id: t.cash_register_id || '',
         transaction_type: t.transaction_type, category_id: t.category_id || '',
         counterparty: t.counterparty || '', description: t.description || '',
         amount: String(t.amount), currency: t.currency,
@@ -136,7 +136,7 @@ export default function CashbookManagementPage() {
   const closeForm = () => { setFormView(null); setError(''); };
 
   const handlePaymentMethodChange = (v: AccountingPaymentMethod) => {
-    setForm(prev => ({ ...prev, payment_method: v, bank_account_id: '', card_id: '' }));
+    setForm(prev => ({ ...prev, payment_method: v, bank_account_id: '', card_id: '', cash_register_id: '' }));
   };
   const handleTypeChange = (v: AccountingTransactionType) => {
     setForm(prev => ({ ...prev, transaction_type: v, category_id: '' }));
@@ -146,6 +146,7 @@ export default function CashbookManagementPage() {
     if (!form.transaction_date) { setError('날짜를 입력하세요.'); return; }
     if (form.payment_method === 'bank_account' && !form.bank_account_id) { setError('계좌를 선택하세요.'); return; }
     if (form.payment_method === 'card' && !form.card_id) { setError('카드를 선택하세요.'); return; }
+    if (form.payment_method === 'cash' && !form.cash_register_id) { setError('시재를 선택하세요.'); return; }
     const amount = parseFloat(form.amount);
     if (!amount || amount <= 0) { setError('금액을 확인하세요.'); return; }
     try {
@@ -154,6 +155,7 @@ export default function CashbookManagementPage() {
         transaction_date: form.transaction_date, payment_method: form.payment_method,
         bank_account_id: form.payment_method === 'bank_account' ? form.bank_account_id : null,
         card_id: form.payment_method === 'card' ? form.card_id : null,
+        cash_register_id: form.payment_method === 'cash' ? form.cash_register_id : null,
         transaction_type: form.transaction_type, category_id: form.category_id || null,
         counterparty: form.counterparty.trim() || null, description: form.description.trim() || null,
         amount, currency: form.currency, created_by: currentUser?.id || null,
@@ -278,6 +280,18 @@ export default function CashbookManagementPage() {
                   </Select>
                 </div>
               )}
+              {form.payment_method === 'cash' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">시재 *</Label>
+                  <Select value={form.cash_register_id || NONE} onValueChange={v => setForm({ ...form, cash_register_id: v === NONE ? '' : v })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="시재 선택" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>시재 선택</SelectItem>
+                      {cashRegisters.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -329,9 +343,11 @@ export default function CashbookManagementPage() {
                 <span className="text-gray-500">{a.account_name}</span> <span className="font-semibold font-mono">{a.current_balance.toLocaleString()} {a.currency}</span>
               </div>
             ))}
-            <div className="px-2.5 py-1 bg-gray-50 border rounded-full text-xs">
-              <span className="text-gray-500">현금</span> <span className="font-semibold font-mono">{cashBalance.toLocaleString()}</span>
-            </div>
+            {cashRegisters.map(r => (
+              <div key={r.id} className="px-2.5 py-1 bg-gray-50 border rounded-full text-xs">
+                <span className="text-gray-500">{r.name}</span> <span className="font-semibold font-mono">{r.current_balance.toLocaleString()}</span>
+              </div>
+            ))}
           </div>
 
           <Card>
@@ -392,7 +408,7 @@ export default function CashbookManagementPage() {
                         <td className="p-2 text-center">
                           <Badge className={`text-[10px] ${t.transaction_type === 'income' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>{t.transaction_type === 'income' ? '수입' : '지출'}</Badge>
                         </td>
-                        <td className="p-2 whitespace-nowrap">{PAYMENT_METHOD_LABELS[t.payment_method]}{t.bank_account_name ? ` · ${t.bank_account_name}` : ''}{t.card_name ? ` · ${t.card_name}` : ''}</td>
+                        <td className="p-2 whitespace-nowrap">{PAYMENT_METHOD_LABELS[t.payment_method]}{t.bank_account_name ? ` · ${t.bank_account_name}` : ''}{t.card_name ? ` · ${t.card_name}` : ''}{t.cash_register_name ? ` · ${t.cash_register_name}` : ''}</td>
                         <td className="p-2">{t.category_name || '-'}</td>
                         <td className="p-2">{t.counterparty || '-'}</td>
                         <td className="p-2 text-gray-500">{t.description || '-'}</td>

@@ -72,6 +72,7 @@ const EmployeeLeaveCalendarPage = lazy(() => import('@/pages/EmployeeLeaveCalend
 const HomepagePostsPage = lazy(() => import('@/pages/HomepagePostsPage'));
 const BankAccountManagementPage = lazy(() => import('@/pages/BankAccountManagementPage'));
 const CardManagementPage = lazy(() => import('@/pages/CardManagementPage'));
+const CashRegisterManagementPage = lazy(() => import('@/pages/CashRegisterManagementPage'));
 const CashbookManagementPage = lazy(() => import('@/pages/CashbookManagementPage'));
 
 export interface RouteEntry {
@@ -166,5 +167,6 @@ export const routeConfig: RouteEntry[] = [
   { path: '/homepage-posts', component: HomepagePostsPage },
   { path: '/accounting/bank-accounts', component: BankAccountManagementPage },
   { path: '/accounting/cards', component: CardManagementPage },
+  { path: '/accounting/cash-registers', component: CashRegisterManagementPage },
   { path: '/accounting/cashbook', component: CashbookManagementPage },
 ];
