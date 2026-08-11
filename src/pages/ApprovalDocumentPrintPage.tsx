@@ -6,9 +6,11 @@ import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/ser
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
+import { getDailyReportById } from '@/services/accounting-daily-report.service';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
+import type { DailyCashReport } from '@/types/accounting';
 
 // 사이드바/헤더/탭바 없이 순수 문서만 렌더링되는 독립 인쇄 페이지 (App.tsx 최상위 라우트, Layout 우회).
 // 별도 브라우저 탭에서 열려서, 인쇄하거나 닫아도 원래 작업 중이던 탭/화면에는 전혀 영향을 주지 않는다.
@@ -22,6 +24,7 @@ export default function ApprovalDocumentPrintPage() {
   const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
   const [leaveDetail, setLeaveDetail] = useState<LeaveDetail | null>(null);
+  const [dailyCashReport, setDailyCashReport] = useState<DailyCashReport | null>(null);
   const [referenceLabels, setReferenceLabels] = useState<string[]>([]);
   const [includeAttachments, setIncludeAttachments] = useState(false);
 
@@ -44,6 +47,7 @@ export default function ApprovalDocumentPrintPage() {
       setPositions(shorePositions);
       setCreatorPositionName(found ? members.find(m => m.id === found.created_by)?.position_name || null : null);
       setLeaveDetail(await getLeaveDetail(found?.reference_type ?? null, found?.reference_id ?? null).catch(() => null));
+      setDailyCashReport(found?.reference_type === 'daily_cash_report' && found.reference_id ? await getDailyReportById(found.reference_id).catch(() => null) : null);
       setReferenceLabels(found ? await approvalDocumentService.getReferenceLabels(found.id).catch(() => []) : []);
       setLoading(false);
     };
@@ -103,7 +107,7 @@ export default function ApprovalDocumentPrintPage() {
           </div>
         )}
       </div>
-      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} leaveDetail={leaveDetail} referenceLabels={referenceLabels} />
+      <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} leaveDetail={leaveDetail} dailyCashReport={dailyCashReport} referenceLabels={referenceLabels} />
     </div>
   );
 }

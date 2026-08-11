@@ -4,6 +4,9 @@ import type { CompanyInfo } from '@/services/company-info.service';
 import type { LeaveDetail } from '@/services/approval-document.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType, DocumentFormField, LineItemRow } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
+import type { DailyCashReport } from '@/types/accounting';
+
+const DAILY_REPORT_KIND_LABEL: Record<string, string> = { bank_account: '통장', card: '카드', cash_register: '현금' };
 
 // 표(table)/항목추가(line_items) 필드는 다른 필드처럼 "왼쪽 라벨 + 오른쪽 내용" 한 줄에 넣으면
 // 폭이 좁아져 보기 나쁘므로, 연속된 일반 필드는 한 표로 묶고 이 둘은 전체 폭 블록으로 따로 뺀다.
@@ -32,12 +35,13 @@ interface Props {
   creatorPositionName?: string | null;
   includeAttachments?: boolean;
   leaveDetail?: LeaveDetail | null;
+  dailyCashReport?: DailyCashReport | null;
   referenceLabels?: string[];
 }
 
 // 결재 완료된 문서(특히 지출결의서 등 구조화 양식)를 총무팀 보관용 "시행문" 형식으로 출력하는 문서 본문.
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
-export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false, leaveDetail, referenceLabels = [] }: Props) {
+export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false, leaveDetail, dailyCashReport, referenceLabels = [] }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
   // 기안일(작성/상신일)과 시행일(결재 완료일)은 서로 다른 날짜다 — 기안일은 항상 created_at,
   // 시행일은 결재가 실제로 끝난 completed_at만 쓰고(완료 전이면 created_at으로 대체해 보여주지
@@ -235,7 +239,57 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                 </tbody>
               </table>
             </td></tr>
-          ) : fields.length > 0 ? (
+          ) : dailyCashReport ? (() => {
+            const rows = dailyCashReport.snapshot || [];
+            const cashRows = rows.filter(r => r.kind !== 'card');
+            const cardRows = rows.filter(r => r.kind === 'card');
+            const totalOf = (list: typeof rows, key: 'opening_balance' | 'income' | 'expense' | 'closing_balance') => list.reduce((s, r) => s + r[key], 0);
+            return (
+              <tr><td>
+                <table className="issued-line-items">
+                  <thead>
+                    <tr><th>구분</th><th>계좌/카드명</th><th>전일잔액</th><th>입금</th><th>출금</th><th>금일잔액</th></tr>
+                  </thead>
+                  <tbody>
+                    {cashRows.map(r => (
+                      <tr key={r.id}>
+                        <td>{DAILY_REPORT_KIND_LABEL[r.kind]}</td>
+                        <td>{r.name}</td>
+                        <td style={{ textAlign: 'right' }}>{r.opening_balance.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}>{r.income.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}>{r.expense.toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}>{r.closing_balance.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={2}>현금성자산 합계</td>
+                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'opening_balance').toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'income').toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'expense').toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'closing_balance').toLocaleString()}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+                {cardRows.length > 0 && (
+                  <table className="issued-line-items" style={{ marginTop: 10 }}>
+                    <thead>
+                      <tr><th>카드</th><th>금일 사용액</th></tr>
+                    </thead>
+                    <tbody>
+                      {cardRows.map(r => (
+                        <tr key={r.id}><td>{r.name}</td><td style={{ textAlign: 'right' }}>{r.closing_balance.toLocaleString()}</td></tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr><td>카드 사용 합계</td><td style={{ textAlign: 'right' }}>{totalOf(cardRows, 'closing_balance').toLocaleString()}</td></tr>
+                    </tfoot>
+                  </table>
+                )}
+              </td></tr>
+            );
+          })() : fields.length > 0 ? (
             groupFields(fields).map((g, gi) => {
               if (g.kind === 'table') {
                 const raw = doc.form_data?.[g.field.key];

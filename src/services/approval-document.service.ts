@@ -230,6 +230,20 @@ async function applyReferenceSideEffect(
         .eq('id', referenceId);
     }
   }
+  if (referenceType === 'daily_cash_report') {
+    if (newStatus === 'approved') {
+      await supabase
+        .from('accounting_daily_reports')
+        .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+    } else if (newStatus === 'rejected') {
+      // 반려되면 담당자가 다시 계산/수정 후 재상신할 수 있도록 작성중 상태로 되돌린다.
+      await supabase
+        .from('accounting_daily_reports')
+        .update({ status: 'draft', approval_document_id: null, updated_at: new Date().toISOString() })
+        .eq('id', referenceId);
+    }
+  }
 }
 
 // 전결규정에 지정된 직급의 position_order(선임도 기준값)를 조회

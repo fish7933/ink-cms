@@ -459,6 +459,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 4,
         is_active: true,
       },
+      {
+        id: 'accounting-daily-report',
+        label: '자금일보',
+        path: '/accounting/daily-report',
+        icon: 'FileText',
+        roles: ['ship_manager'],
+        order: 5,
+        is_active: true,
+      },
     ],
   },
 ];

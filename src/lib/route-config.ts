@@ -74,6 +74,7 @@ const BankAccountManagementPage = lazy(() => import('@/pages/BankAccountManageme
 const CardManagementPage = lazy(() => import('@/pages/CardManagementPage'));
 const CashRegisterManagementPage = lazy(() => import('@/pages/CashRegisterManagementPage'));
 const CashbookManagementPage = lazy(() => import('@/pages/CashbookManagementPage'));
+const DailyCashReportPage = lazy(() => import('@/pages/DailyCashReportPage'));
 
 export interface RouteEntry {
   path: string;
@@ -169,4 +170,5 @@ export const routeConfig: RouteEntry[] = [
   { path: '/accounting/cards', component: CardManagementPage },
   { path: '/accounting/cash-registers', component: CashRegisterManagementPage },
   { path: '/accounting/cashbook', component: CashbookManagementPage },
+  { path: '/accounting/daily-report', component: DailyCashReportPage },
 ];

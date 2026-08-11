@@ -16,10 +16,12 @@ import { approvalDocumentService, getLeaveDetail, getReferenceDocumentIds, type 
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
+import { getDailyReportById } from '@/services/accounting-daily-report.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType, ApprovalDocumentRejectionHistoryEntry } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
+import type { DailyCashReport } from '@/types/accounting';
 
 const STATUS_BADGE: Record<string, { label: string; className: string; icon: typeof CheckCircle2 }> = {
   pending: { label: '결재중', className: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: FileText },
@@ -45,6 +47,7 @@ export default function ApprovalDocumentDetailPage() {
   const [comment, setComment] = useState('');
   const [processing, setProcessing] = useState(false);
   const [leaveDetail, setLeaveDetail] = useState<LeaveDetail | null>(null);
+  const [dailyCashReport, setDailyCashReport] = useState<DailyCashReport | null>(null);
   const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
@@ -77,6 +80,7 @@ export default function ApprovalDocumentDetailPage() {
       setPositions(shorePositions);
       setCreatorPositionName(found ? members.find(m => m.id === found.created_by)?.position_name || null : null);
       setLeaveDetail(await getLeaveDetail(found?.reference_type ?? null, found?.reference_id ?? null).catch(() => null));
+      setDailyCashReport(found?.reference_type === 'daily_cash_report' && found.reference_id ? await getDailyReportById(found.reference_id).catch(() => null) : null);
       setRejectionHistory(found ? await approvalDocumentService.getRejectionHistory(found.id).catch(() => []) : []);
       setReferenceLabels(found ? await approvalDocumentService.getReferenceLabels(found.id).catch(() => []) : []);
 
@@ -244,6 +248,7 @@ export default function ApprovalDocumentDetailPage() {
           positions={positions}
           creatorPositionName={creatorPositionName}
           leaveDetail={leaveDetail}
+          dailyCashReport={dailyCashReport}
           referenceLabels={referenceLabels}
         />
       </div>

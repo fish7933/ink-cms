@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { assertDateEditable } from '@/services/accounting-daily-report.service';
 import type { CashTransaction, CashTransactionWithDetails, AccountingTransactionType, AccountingPaymentMethod } from '@/types/accounting';
 
 export interface CashTransactionFilters {
@@ -56,6 +57,7 @@ export async function getCashTransactions(filters: CashTransactionFilters = {}):
 }
 
 export async function addCashTransaction(data: Omit<CashTransaction, 'id' | 'created_at' | 'updated_at'>): Promise<CashTransaction> {
+  await assertDateEditable(data.transaction_date);
   const { data: result, error } = await supabase
     .from('accounting_cash_transactions')
     .insert({ ...data, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -66,6 +68,10 @@ export async function addCashTransaction(data: Omit<CashTransaction, 'id' | 'cre
 }
 
 export async function updateCashTransaction(id: string, data: Partial<CashTransaction>): Promise<void> {
+  const { data: existing } = await supabase.from('accounting_cash_transactions').select('transaction_date').eq('id', id).single();
+  if (existing) await assertDateEditable(existing.transaction_date);
+  if (data.transaction_date && data.transaction_date !== existing?.transaction_date) await assertDateEditable(data.transaction_date);
+
   const { error } = await supabase
     .from('accounting_cash_transactions')
     .update({ ...data, updated_at: new Date().toISOString() })
@@ -74,6 +80,9 @@ export async function updateCashTransaction(id: string, data: Partial<CashTransa
 }
 
 export async function deleteCashTransaction(id: string): Promise<void> {
+  const { data: existing } = await supabase.from('accounting_cash_transactions').select('transaction_date').eq('id', id).single();
+  if (existing) await assertDateEditable(existing.transaction_date);
+
   const { error } = await supabase.from('accounting_cash_transactions').delete().eq('id', id);
   if (error) throw error;
 }
