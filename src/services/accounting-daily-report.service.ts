@@ -64,13 +64,23 @@ async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSecti
 
   const sections: DailyCashReportSnapshotSection[] = [];
   for (const a of accounts || []) {
-    sections.push(buildSection('bank_account', a.id, `${a.bank_name} ${a.account_name}`, a.currency, Number(a.opening_balance), allTxns.filter(t => t.bank_account_id === a.id), date));
+    sections.push(buildSection('bank_account', a.id, a.account_name, a.currency, Number(a.opening_balance), allTxns.filter(t => t.bank_account_id === a.id), date));
   }
   for (const r of registers || []) {
     // 시재금(현금)은 통화 구분 없이 원화(KRW)만 다룬다.
     sections.push(buildSection('cash_register', r.id, r.name, 'KRW', Number(r.opening_balance), allTxns.filter(t => t.cash_register_id === r.id), date));
   }
   return sections;
+}
+
+// 자금일보 커버 페이지(달력 + 목록)용 — 무거운 snapshot은 빼고 날짜별 결재 현황만 가져온다.
+export async function getDailyReports(): Promise<DailyCashReport[]> {
+  const { data, error } = await supabase
+    .from('accounting_daily_reports')
+    .select('id, report_date, status, approval_document_id, confirmed_at, confirmed_by, last_cancelled_at, last_cancelled_by, last_cancel_reason, created_by, created_at, updated_at')
+    .order('report_date', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(r => ({ ...r, snapshot: null }));
 }
 
 export async function getDailyReportByDate(date: string): Promise<DailyCashReport | null> {
@@ -121,7 +131,38 @@ export async function assertDateEditable(date: string): Promise<void> {
   }
 }
 
-export async function submitDailyReportForApproval(date: string, userId: string): Promise<void> {
+// 관리자가 이미 확정된 자금일보를 결재 절차 없이 즉시 취소하고 작성중 상태로 되돌린다 —
+// 확정 당시 결재문서(approval_documents)는 지나간 기록으로 그대로 남겨두고 건드리지 않는다.
+// 다시 상신하면 prepareDailyReportDraft가 이 문서가 draft 상태가 아님을 확인하고 새 초안을
+// 만들므로, 이전 확정 이력과 이번 상신이 섞이지 않는다.
+export async function forceCancelConfirmedReport(input: { reportId: string; reason: string; performedBy: string }): Promise<void> {
+  const { data: report, error: fetchError } = await supabase
+    .from('accounting_daily_reports')
+    .select('status')
+    .eq('id', input.reportId)
+    .single();
+  if (fetchError) throw fetchError;
+  if (report.status !== 'confirmed') throw new Error('확정된 자금일보만 취소할 수 있습니다.');
+
+  const { error } = await supabase
+    .from('accounting_daily_reports')
+    .update({
+      status: 'draft',
+      confirmed_at: null,
+      confirmed_by: null,
+      last_cancelled_at: new Date().toISOString(),
+      last_cancelled_by: input.performedBy,
+      last_cancel_reason: input.reason,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.reportId);
+  if (error) throw error;
+}
+
+// 바로 결재를 넣지 않고, 기안문 작성 페이지에서 최종 검토 후 상신하도록 임시저장 초안만
+// 만들어 그 초안 id를 돌려준다 — 실제 상신(및 리포트 잠금)은 그 페이지에서 정식 제출할 때
+// approval-document.service.ts의 createDocument가 처리한다(daily_cash_report 케이스 참고).
+export async function prepareDailyReportDraft(date: string, userId: string): Promise<{ draftId: string }> {
   const report = await regenerateDraftReport(date, userId);
 
   const documentTypes = await approvalDocumentService.getDocumentTypes();
@@ -141,7 +182,15 @@ export async function submitDailyReportForApproval(date: string, userId: string)
   for (const [currency, total] of totalsByCurrency) lines.push(`금일 잔액 합계(${currency}): ${total.toLocaleString()}`);
   const content = lines.join('\n');
 
-  const doc = await approvalDocumentService.createDocument({
+  // 이미 만들어둔 초안이 작성중 상태 그대로 남아있으면 새로 만들지 않고 그 초안을 최신 표로 갱신한다.
+  let existingDraftId: string | undefined;
+  if (report.approval_document_id) {
+    const [existingDoc] = await approvalDocumentService.getDocumentDetails([report.approval_document_id]);
+    if (existingDoc && existingDoc.status === 'draft') existingDraftId = existingDoc.id;
+  }
+
+  const draft = await approvalDocumentService.saveDraft({
+    draftId: existingDraftId,
     document_type_id: docType.id,
     title: `${date} 자금일보`,
     content,
@@ -151,9 +200,13 @@ export async function submitDailyReportForApproval(date: string, userId: string)
     reference_id: report.id,
   });
 
-  const { error } = await supabase
-    .from('accounting_daily_reports')
-    .update({ status: 'pending_approval', approval_document_id: doc.id, updated_at: new Date().toISOString() })
-    .eq('id', report.id);
-  if (error) throw error;
+  if (report.approval_document_id !== draft.id) {
+    const { error } = await supabase
+      .from('accounting_daily_reports')
+      .update({ approval_document_id: draft.id, updated_at: new Date().toISOString() })
+      .eq('id', report.id);
+    if (error) throw error;
+  }
+
+  return { draftId: draft.id };
 }

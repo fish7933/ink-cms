@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AutocompleteInput } from '@/components/ui/autocomplete-input';
 import {
   getCashTransactions, addCashTransaction, updateCashTransaction, deleteCashTransaction,
 } from '@/services/accounting-cash-transaction.service';
@@ -36,6 +37,12 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+type DateFilterMode = 'day' | 'month' | 'all';
+
 const emptyForm = {
   transaction_date: new Date().toISOString().slice(0, 10),
   payment_method: 'bank_account' as AccountingPaymentMethod,
@@ -56,8 +63,9 @@ export default function CashbookManagementPage() {
   const [categories, setCategories] = useState<AccountingCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month');
   const [monthFilter, setMonthFilter] = useState(currentMonth());
-  const [showAllMonths, setShowAllMonths] = useState(false);
+  const [dayFilter, setDayFilter] = useState(today());
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | AccountingPaymentMethod>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | AccountingTransactionType>('all');
   const [search, setSearch] = useState('');
@@ -100,7 +108,11 @@ export default function CashbookManagementPage() {
 
   const filtered = useMemo(() => {
     return transactions
-      .filter(t => showAllMonths || t.transaction_date.slice(0, 7) === monthFilter)
+      .filter(t => {
+        if (dateFilterMode === 'all') return true;
+        if (dateFilterMode === 'day') return t.transaction_date === dayFilter;
+        return t.transaction_date.slice(0, 7) === monthFilter;
+      })
       .filter(t => paymentMethodFilter === 'all' || t.payment_method === paymentMethodFilter)
       .filter(t => typeFilter === 'all' || t.transaction_type === typeFilter)
       .filter(t => {
@@ -108,7 +120,7 @@ export default function CashbookManagementPage() {
         const q = search.trim().toLowerCase();
         return (t.counterparty || '').toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q);
       });
-  }, [transactions, showAllMonths, monthFilter, paymentMethodFilter, typeFilter, search]);
+  }, [transactions, dateFilterMode, monthFilter, dayFilter, paymentMethodFilter, typeFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -116,8 +128,17 @@ export default function CashbookManagementPage() {
 
   const changeFilter = (fn: () => void) => { fn(); setPage(1); };
 
-  const totalIncome = filtered.filter(t => t.transaction_type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-  const totalExpense = filtered.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+  // 통화가 다르면 그냥 더하는 게 의미가 없으므로(원화/달러) 통화별로 따로 합산한다.
+  const currencyTotals = useMemo(() => {
+    const map = new Map<string, { income: number; expense: number }>();
+    for (const t of filtered) {
+      const cur = map.get(t.currency) || { income: 0, expense: 0 };
+      if (t.transaction_type === 'income') cur.income += Number(t.amount);
+      else cur.expense += Number(t.amount);
+      map.set(t.currency, cur);
+    }
+    return [...map.entries()].sort(([a], [b]) => (a === 'KRW' ? -1 : b === 'KRW' ? 1 : a.localeCompare(b)));
+  }, [filtered]);
 
   const categoriesForType = categories.filter(c => c.transaction_type === form.transaction_type);
   const categoryOptions = categoriesForType.map(c => c.name);
@@ -361,25 +382,16 @@ export default function CashbookManagementPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">분류</Label>
-                <Input value={form.category_name} onChange={e => setForm({ ...form, category_name: e.target.value })} list="category-options" className="h-9 text-sm" placeholder="분류 입력 또는 선택" />
-                <datalist id="category-options">
-                  {categoryOptions.map(name => <option key={name} value={name} />)}
-                </datalist>
+                <AutocompleteInput value={form.category_name} onChange={v => setForm({ ...form, category_name: v })} options={categoryOptions} className="h-9 text-sm" placeholder="분류 입력 또는 검색" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">거래처</Label>
-                <Input value={form.counterparty} onChange={e => setForm({ ...form, counterparty: e.target.value })} list="counterparty-options" className="h-9 text-sm" placeholder="거래처 입력 또는 선택" />
-                <datalist id="counterparty-options">
-                  {counterpartyOptions.map(name => <option key={name} value={name} />)}
-                </datalist>
+                <AutocompleteInput value={form.counterparty} onChange={v => setForm({ ...form, counterparty: v })} options={counterpartyOptions} className="h-9 text-sm" placeholder="거래처 입력 또는 검색" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">적요</Label>
-              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} list="description-options" className="h-9 text-sm" placeholder="적요 입력 또는 선택" />
-              <datalist id="description-options">
-                {descriptionOptions.map(name => <option key={name} value={name} />)}
-              </datalist>
+              <AutocompleteInput value={form.description} onChange={v => setForm({ ...form, description: v })} options={descriptionOptions} className="h-9 text-sm" placeholder="적요 입력 또는 검색" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">금액 *</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="h-9 text-sm" /></div>
@@ -428,19 +440,32 @@ export default function CashbookManagementPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <Card><CardContent className="pt-4 pb-3 text-center">
-              <p className="text-xs text-gray-500">기간 내 수입</p>
-              <p className="text-lg font-bold text-blue-700">{totalIncome.toLocaleString()}</p>
-            </CardContent></Card>
-            <Card><CardContent className="pt-4 pb-3 text-center">
-              <p className="text-xs text-gray-500">기간 내 지출</p>
-              <p className="text-lg font-bold text-red-600">{totalExpense.toLocaleString()}</p>
-            </CardContent></Card>
-            <Card><CardContent className="pt-4 pb-3 text-center">
-              <p className="text-xs text-gray-500">차액</p>
-              <p className="text-lg font-bold">{(totalIncome - totalExpense).toLocaleString()}</p>
-            </CardContent></Card>
+          <div className="space-y-2">
+            {currencyTotals.length === 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-xs text-gray-500">기간 내 수입</p><p className="text-lg font-bold text-blue-700">0</p></CardContent></Card>
+                <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-xs text-gray-500">기간 내 지출</p><p className="text-lg font-bold text-red-600">0</p></CardContent></Card>
+                <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-xs text-gray-500">차액</p><p className="text-lg font-bold">0</p></CardContent></Card>
+              </div>
+            ) : currencyTotals.map(([currency, { income, expense }]) => (
+              <div key={currency}>
+                {currencyTotals.length > 1 && <p className="text-xs font-semibold text-gray-500 mb-1">{currency}</p>}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <Card><CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-xs text-gray-500">기간 내 수입</p>
+                    <p className="text-lg font-bold text-blue-700">{income.toLocaleString()} <span className="text-xs font-normal text-gray-400">{currency}</span></p>
+                  </CardContent></Card>
+                  <Card><CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-xs text-gray-500">기간 내 지출</p>
+                    <p className="text-lg font-bold text-red-600">{expense.toLocaleString()} <span className="text-xs font-normal text-gray-400">{currency}</span></p>
+                  </CardContent></Card>
+                  <Card><CardContent className="pt-4 pb-3 text-center">
+                    <p className="text-xs text-gray-500">차액</p>
+                    <p className="text-lg font-bold">{(income - expense).toLocaleString()} <span className="text-xs font-normal text-gray-400">{currency}</span></p>
+                  </CardContent></Card>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -467,8 +492,24 @@ export default function CashbookManagementPage() {
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Input type="month" value={monthFilter} onChange={e => changeFilter(() => { setMonthFilter(e.target.value); setShowAllMonths(false); })} className="h-8 w-[150px] text-xs" disabled={showAllMonths} />
-                <Button type="button" size="sm" variant={showAllMonths ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => changeFilter(() => setShowAllMonths(v => !v))}>전체 기간</Button>
+                <div className="flex rounded-md border overflow-hidden">
+                  {(['day', 'month', 'all'] as DateFilterMode[]).map(mode => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => changeFilter(() => setDateFilterMode(mode))}
+                      className={`h-8 px-2.5 text-xs transition-colors ${dateFilterMode === mode ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {mode === 'day' ? '일별' : mode === 'month' ? '월별' : '전체 기간'}
+                    </button>
+                  ))}
+                </div>
+                {dateFilterMode === 'day' && (
+                  <Input type="date" value={dayFilter} onChange={e => changeFilter(() => setDayFilter(e.target.value))} className="h-8 w-[150px] text-xs" />
+                )}
+                {dateFilterMode === 'month' && (
+                  <Input type="month" value={monthFilter} onChange={e => changeFilter(() => setMonthFilter(e.target.value))} className="h-8 w-[150px] text-xs" />
+                )}
                 <Select value={paymentMethodFilter} onValueChange={v => changeFilter(() => setPaymentMethodFilter(v as typeof paymentMethodFilter))}>
                   <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -500,14 +541,15 @@ export default function CashbookManagementPage() {
                       <th className="text-left p-2">분류</th>
                       <th className="text-left p-2">거래처</th>
                       <th className="text-left p-2">적요</th>
-                      <th className="text-right p-2">금액</th>
+                      <th className="text-right p-2">수입</th>
+                      <th className="text-right p-2">지출</th>
                       <th className="text-left p-2">작성자</th>
                       <th className="p-2 w-16"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {paged.length === 0 ? (
-                      <tr><td colSpan={9} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
+                      <tr><td colSpan={10} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
                     ) : paged.map(t => (
                       <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(t)}>
                         <td className="p-2 whitespace-nowrap">
@@ -527,8 +569,11 @@ export default function CashbookManagementPage() {
                         <td className="p-2">{t.category_name || '-'}</td>
                         <td className="p-2">{t.counterparty || '-'}</td>
                         <td className="p-2 text-gray-500">{t.description || '-'}</td>
-                        <td className={`p-2 text-right font-mono font-semibold ${t.transaction_type === 'income' ? 'text-blue-700' : 'text-red-600'}`}>
-                          {t.transaction_type === 'income' ? '+' : '-'}{Number(t.amount).toLocaleString()}
+                        <td className="p-2 text-right font-mono font-semibold text-blue-700">
+                          {t.transaction_type === 'income' ? Number(t.amount).toLocaleString() : ''}
+                        </td>
+                        <td className="p-2 text-right font-mono font-semibold text-red-600">
+                          {t.transaction_type === 'expense' ? Number(t.amount).toLocaleString() : ''}
                         </td>
                         <td className="p-2 text-gray-500">{t.created_by_name || '-'}</td>
                         <td className="p-2 text-center" onClick={e => e.stopPropagation()}>

@@ -141,6 +141,9 @@ export interface DailyCashReport {
   approval_document_id: string | null;
   confirmed_at: string | null;
   confirmed_by: string | null;
+  last_cancelled_at: string | null;
+  last_cancelled_by: string | null;
+  last_cancel_reason: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

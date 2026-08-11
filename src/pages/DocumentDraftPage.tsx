@@ -23,11 +23,16 @@ import { useTabContext } from '@/contexts/TabContext';
 import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
 import { msg } from '@/lib/messages';
 import { Checkbox } from '@/components/ui/checkbox';
+import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
+import { getDailyReportById } from '@/services/accounting-daily-report.service';
+import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
+import { getShorePositions } from '@/services/shore-position.service';
 import type { OrgUnit, OrgMember } from '@/types/org-chart';
-import type { ApprovalDocumentType, ApprovalDocumentAttachment, ApprovalDocumentWithDetails, FormFieldValue } from '@/types/approval-document';
+import type { ApprovalDocumentType, ApprovalDocumentAttachment, ApprovalDocumentWithDetails, ApprovalDocumentStep, FormFieldValue } from '@/types/approval-document';
 import type { ApprovalChainStep } from '@/types/org-chart';
 import type { ApprovalLineWithSteps } from '@/types/approval';
-import type { User } from '@/types/models';
+import type { User, ShorePosition } from '@/types/models';
+import type { DailyCashReport } from '@/types/accounting';
 
 type StatusFilter = 'all' | 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled';
 
@@ -72,6 +77,13 @@ export default function DocumentDraftPage() {
   // 반려된 문서를 내용을 고쳐 재상신하는 중이면 그 문서 id — draftId(임시저장 이어쓰기)와
   // 달리 "임시저장"이 불가능하고, 제출 시 새 문서가 아니라 이 문서를 그대로 갱신한다.
   const [resubmitId, setResubmitId] = useState<string | null>(null);
+  // 자금일보처럼 임시저장 시점부터 이미 원본 레코드와 연결된 초안을 불러왔을 때, 정식 제출
+  // (createDocument) 시에도 그 연결이 끊기지 않도록 함께 들고 있다가 그대로 넘긴다.
+  const [loadedReferenceType, setLoadedReferenceType] = useState<string | null>(null);
+  const [loadedReferenceId, setLoadedReferenceId] = useState<string | null>(null);
+  const [dailyCashReportPreview, setDailyCashReportPreview] = useState<DailyCashReport | null>(null);
+  const [previewCompany, setPreviewCompany] = useState<CompanyInfo | null>(null);
+  const [previewPositions, setPreviewPositions] = useState<ShorePosition[]>([]);
   const [documentTypeId, setDocumentTypeId] = useState('');
   const [orgUnitId, setOrgUnitId] = useState('');
   const [recipientOrgUnitId, setRecipientOrgUnitId] = useState('');
@@ -120,13 +132,17 @@ export default function DocumentDraftPage() {
       if (!user || !['ship_manager', 'admin', 'system_admin'].includes(user.role ?? '')) { navigate('/dashboard'); return; }
       setCurrentUser(user);
       try {
-        const [t, u, members] = await Promise.all([
+        const [t, u, members, companyInfo, shorePositions] = await Promise.all([
           approvalDocumentService.getDocumentTypes(),
           orgChartService.getOrgUnits(),
           orgChartService.getOrgMembers(),
+          getCompanyInfo().catch(() => null),
+          getShorePositions().catch(() => []),
         ]);
         setTypes(t);
         setUnits(u);
+        setPreviewCompany(companyInfo);
+        setPreviewPositions(shorePositions);
         // 참조인 선택 목록은 직급(선임순) 우선, 같은 직급 내에서는 입사일이 빠른 순으로 정렬
         setMembers([...members].sort((a, b) => {
           const posA = a.position_order ?? Infinity;
@@ -160,6 +176,21 @@ export default function DocumentDraftPage() {
           }
         }
 
+        // 자금일보처럼 계산된 화면에서 미리 임시저장해둔 초안을 이어서 최종 검토/상신하도록
+        // 넘어온 경우 — draftId를 이어쓰기하되, 아직 결재선 검토가 안 끝났으므로 그대로 두면
+        // 실수로 다른 초안으로 착각하지 않도록 작성중 상태인지, 본인 소유인지 확인한다.
+        const draftParam = searchParams.get('draft');
+        if (draftParam) {
+          const [target] = await approvalDocumentService.getDocumentDetails([draftParam]);
+          if (!target || target.status !== 'draft') {
+            toast({ title: '불러올 수 없습니다.', description: '임시저장 문서가 아니거나 이미 처리되었습니다.', variant: 'destructive' });
+          } else if (target.created_by !== user.id && !isAdminRole) {
+            toast({ title: '본인이 작성한 임시저장 문서만 불러올 수 있습니다.', variant: 'destructive' });
+          } else {
+            loadDraftIntoForm(target);
+          }
+        }
+
         await loadDocuments(user.id);
       } catch (e) {
         console.error(e);
@@ -178,6 +209,15 @@ export default function DocumentDraftPage() {
   }, [currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { setBoxPage(1); setBoxSelectedIds([]); }, [boxFilter, boxSearch]);
+
+  // 자금일보 초안은 본문을 텍스트로 요약해서 보여주는 대신, 실제 결재문서에 그대로 나갈 표를
+  // 미리보기로 보여준다 — DailyCashReportPage/ApprovalDocumentIssuedSheet과 같은 데이터.
+  useEffect(() => {
+    if (loadedReferenceType !== 'daily_cash_report' || !loadedReferenceId) { setDailyCashReportPreview(null); return; }
+    let cancelled = false;
+    getDailyReportById(loadedReferenceId).then(r => { if (!cancelled) setDailyCashReportPreview(r); });
+    return () => { cancelled = true; };
+  }, [loadedReferenceType, loadedReferenceId]);
 
   const loadDocuments = async (userId: string) => {
     setBoxLoading(true);
@@ -208,6 +248,10 @@ export default function DocumentDraftPage() {
   const draftableTypes = types.filter(t => t.is_free_form !== false);
   const selectedType = types.find(t => t.id === documentTypeId) || null;
   const formFields = selectedType?.field_schema || [];
+  // 자금일보처럼 시스템 화면에서 미리 만들어둔 임시저장(loadedReferenceType 있음)은 그 화면
+  // 전용 문서유형으로 고정되어야 한다 — draftableTypes 목록에는 없는 유형이라 그대로 두면
+  // Select가 빈 값처럼 보이고, 실수로 다른 유형으로 바꿔버릴 수도 있다.
+  const isSystemLinkedDraft = !!draftId && !!loadedReferenceType;
 
   useEffect(() => {
     if (skipFormResetRef.current) { skipFormResetRef.current = false; return; }
@@ -261,6 +305,53 @@ export default function DocumentDraftPage() {
   // 본인보다 하위직급만 있는 결재선을 고른 정상적인 경우에도 제출 버튼이 영구히 잠겨버린다.
   const manualLineFullyExcluded = useManualLine && !!manualLineId && manualChainExcluded.length > 0;
 
+  // 자금일보 등 시스템 연동 초안은 "본문"에 텍스트 요약이 아니라, 상신되면 실제로 그렇게 보일
+  // 결재문서(시행문 양식) 자체를 그대로 미리보여준다 — 아직 제출 전이라 진짜 문서 id/결재단계는
+  // 없으므로, 현재 폼 입력값과 결재선 미리보기(effectiveChain)로 같은 모양의 임시 문서를 만든다.
+  const previewDoc: ApprovalDocumentWithDetails | null = useMemo(() => {
+    if (!isSystemLinkedDraft || !currentUser) return null;
+    const nowIso = new Date().toISOString();
+    const steps: ApprovalDocumentStep[] = effectiveChain.map((c, i) => ({
+      id: `preview-${i}`,
+      document_id: 'preview',
+      step_order: i + 1,
+      approver_id: c.approver_id,
+      approver_name: c.approver_name,
+      approver_label: c.org_unit_name ? `${c.org_unit_name} · ${c.approver_role}` : c.approver_role,
+      status: 'pending',
+      comment: null,
+      acted_at: null,
+      created_at: nowIso,
+    }));
+    return {
+      id: draftId || 'preview',
+      document_type_id: documentTypeId,
+      title: title || '(제목 없음)',
+      content: content || null,
+      form_data: null,
+      attachments: existingAttachments,
+      reference_type: loadedReferenceType,
+      reference_id: loadedReferenceId,
+      org_unit_id: orgUnitId || null,
+      status: 'pending',
+      current_step: steps.length > 0 ? 1 : 0,
+      created_by: currentUser.id,
+      requester_comment: requesterComment || null,
+      final_comment: null,
+      resubmit_count: 0,
+      manual_line_id: null,
+      recipient_org_unit_id: recipientOrgUnitId || null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      completed_at: null,
+      document_type_name: types.find(t => t.id === documentTypeId)?.name || '',
+      creator_name: currentUser.name,
+      org_unit_name: units.find(u => u.id === orgUnitId)?.name || null,
+      recipient_org_unit_name: units.find(u => u.id === recipientOrgUnitId)?.name || null,
+      steps,
+    };
+  }, [isSystemLinkedDraft, currentUser, effectiveChain, draftId, documentTypeId, title, content, existingAttachments, loadedReferenceType, loadedReferenceId, orgUnitId, requesterComment, recipientOrgUnitId, types, units]);
+
   const selfStepIndexes = useMemo(
     () => effectiveChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
     [effectiveChain, currentUser],
@@ -310,6 +401,8 @@ export default function DocumentDraftPage() {
   const resetForm = () => {
     setDraftId(null);
     setResubmitId(null);
+    setLoadedReferenceType(null);
+    setLoadedReferenceId(null);
     setResubmitOriginalChain([]);
     setResubmitOriginalOrgUnitId('');
     setResubmitOriginalDocTypeId('');
@@ -332,6 +425,8 @@ export default function DocumentDraftPage() {
 
   const applyTemplate = (doc: ApprovalDocumentWithDetails) => {
     if (doc.document_type_id !== documentTypeId) skipFormResetRef.current = true;
+    setLoadedReferenceType(null);
+    setLoadedReferenceId(null);
     setDocumentTypeId(doc.document_type_id);
     setTitle(doc.title);
     setContent(doc.content || '');
@@ -343,6 +438,8 @@ export default function DocumentDraftPage() {
     if (doc.document_type_id !== documentTypeId) skipFormResetRef.current = true;
     setDraftId(doc.id);
     setResubmitId(null);
+    setLoadedReferenceType(doc.reference_type);
+    setLoadedReferenceId(doc.reference_id);
     setDocumentTypeId(doc.document_type_id);
     setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
     setRecipientOrgUnitId(doc.recipient_org_unit_id || '');
@@ -363,6 +460,8 @@ export default function DocumentDraftPage() {
     if (doc.document_type_id !== documentTypeId) skipFormResetRef.current = true;
     setDraftId(null);
     setResubmitId(doc.id);
+    setLoadedReferenceType(null);
+    setLoadedReferenceId(null);
     setDocumentTypeId(doc.document_type_id);
     setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
     setRecipientOrgUnitId(doc.recipient_org_unit_id || '');
@@ -447,6 +546,8 @@ export default function DocumentDraftPage() {
         created_by: currentUser.id,
         requester_comment: requesterComment.trim() || undefined,
         recipientOrgUnitId: recipientOrgUnitId || undefined,
+        reference_type: loadedReferenceType || undefined,
+        reference_id: loadedReferenceId || undefined,
       });
       setDraftId(saved.id);
       setExistingAttachments(attachments);
@@ -553,6 +654,8 @@ export default function DocumentDraftPage() {
           ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
           ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
           draftId: draftId || undefined,
+          reference_type: loadedReferenceType || undefined,
+          reference_id: loadedReferenceId || undefined,
           manualChain: useManualLine ? manualChain : undefined,
           manualLineId: useManualLine ? manualLineId : undefined,
         });
@@ -628,7 +731,11 @@ export default function DocumentDraftPage() {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-600" />
-                  <CardTitle className="text-base">{resubmitId ? '기안서 작성 (반려 문서 다시 상신)' : draftId ? '기안서 작성 (임시저장 이어쓰기)' : '기안서 작성'}</CardTitle>
+                  <CardTitle className="text-base">
+                    {isSystemLinkedDraft
+                      ? `${selectedType?.name || '자금일보'} 결재 상신`
+                      : resubmitId ? '기안서 작성 (반려 문서 다시 상신)' : draftId ? '기안서 작성 (임시저장 이어쓰기)' : '기안서 작성'}
+                  </CardTitle>
                 </div>
                 {(draftId || resubmitId || title || documentTypeId) && (
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetForm} disabled={submitting || savingDraft}>새로 작성</Button>
@@ -640,6 +747,11 @@ export default function DocumentDraftPage() {
               {resubmitId && (
                 <div className="rounded-md border border-blue-200 bg-blue-50 text-blue-800 text-xs p-2.5">
                   반려된 문서를 다시 상신하는 중입니다. 내용을 수정한 뒤 제출하면 새 문서가 아니라 이 문서가 그대로 갱신되며, 결재는 1단계부터 다시 진행됩니다. 이전 반려 기록은 문서 상세에 계속 남습니다.
+                </div>
+              )}
+              {isSystemLinkedDraft && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 text-blue-800 text-xs p-2.5">
+                  {selectedType?.name || '시스템 연동 문서'} 화면에서 계산된 표를 그대로 불러왔습니다. 내용을 확인하고 결재선을 지정한 뒤 제출하면 상신됩니다. 문서유형은 변경할 수 없습니다.
                 </div>
               )}
               {frequentDocs.length > 0 && (
@@ -672,10 +784,13 @@ export default function DocumentDraftPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">문서유형 *</Label>
-                  <Select value={documentTypeId} onValueChange={setDocumentTypeId} disabled={submitting}>
+                  <Select value={documentTypeId} onValueChange={setDocumentTypeId} disabled={submitting || isSystemLinkedDraft}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="문서유형 선택" /></SelectTrigger>
                     <SelectContent>
-                      {draftableTypes.length === 0
+                      {isSystemLinkedDraft && selectedType && !draftableTypes.some(t => t.id === selectedType.id) && (
+                        <SelectItem value={selectedType.id} className="text-sm">{selectedType.name}</SelectItem>
+                      )}
+                      {draftableTypes.length === 0 && !isSystemLinkedDraft
                         ? <div className="px-2 py-1.5 text-sm text-gray-500">등록된 문서유형이 없습니다</div>
                         : draftableTypes.map(t => <SelectItem key={t.id} value={t.id} className="text-sm">{t.name}</SelectItem>)}
                     </SelectContent>
@@ -716,6 +831,24 @@ export default function DocumentDraftPage() {
                   onChange={(key, value) => setFormValues(prev => ({ ...prev, [key]: value }))}
                   disabled={submitting}
                 />
+              ) : isSystemLinkedDraft && loadedReferenceType === 'daily_cash_report' ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">본문 — 상신되면 실제로 나가는 결재문서 그대로입니다</Label>
+                  {dailyCashReportPreview && previewDoc ? (
+                    <div className="border rounded-md bg-gray-50 p-4 overflow-x-auto">
+                      <ApprovalDocumentIssuedSheet
+                        doc={previewDoc}
+                        documentType={selectedType}
+                        company={previewCompany}
+                        positions={previewPositions}
+                        creatorPositionName={myPositionName}
+                        dailyCashReport={dailyCashReportPreview}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 py-4 text-center">문서를 불러오는 중...</div>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-1.5">
                   <Label className="text-xs">본문</Label>

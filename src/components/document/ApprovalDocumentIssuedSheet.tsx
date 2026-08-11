@@ -73,7 +73,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         table.issued-fields th { background: #f5f5f5; font-weight: 600; width: 30%; white-space: nowrap; }
         table.issued-line-items { border-collapse: collapse; width: 100%; box-sizing: border-box; }
         table.issued-line-items th, table.issued-line-items td { border: 1px solid #999; padding: 6px 8px; font-size: 12px; text-align: left; box-sizing: border-box; }
-        table.issued-line-items th { background: #f5f5f5; font-weight: 600; white-space: nowrap; }
+        table.issued-line-items th { background: #f5f5f5; font-weight: 600; white-space: nowrap; text-align: center; }
         table.issued-line-items tfoot td { background: #fafafa; font-weight: 600; }
         /* table-layout: fixed는 "첫 번째 행의 열 구조"만 보고 나머지 모든 행에 그대로 적용하는데,
            엑셀에서 여러 섹션(예: 계좌별 표)을 colspan으로 한 표에 이어붙여 붙여넣은 경우 섹션마다
@@ -254,21 +254,21 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                       {sections.map(s => (
                         <tr key={s.id}>
                           <td>{DAILY_REPORT_KIND_LABEL[s.kind]}</td>
-                          <td>{s.name}</td>
-                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()} {s.currency}</td>
+                          <td>{s.name} ({s.currency})</td>
+                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       {[...totalsByCurrency.entries()].map(([currency, total]) => (
-                        <tr key={currency}><td colSpan={2}>합계 ({currency})</td><td style={{ textAlign: 'right' }}>{total.toLocaleString()} {currency}</td></tr>
+                        <tr key={currency}><td colSpan={2}>합계 ({currency})</td><td style={{ textAlign: 'right' }}>{total.toLocaleString()}</td></tr>
                       ))}
                     </tfoot>
                   </table>
                 </td></tr>
                 {sections.map(s => (
                   <tr key={s.id}><td>
-                    <div style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{DAILY_REPORT_KIND_LABEL[s.kind]} — {s.name} ({s.currency})</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{s.name} ({s.currency})</div>
                     <table className="issued-line-items" style={{ tableLayout: 'fixed' }}>
                       <colgroup>
                         <col style={{ width: '6%' }} /><col style={{ width: '11%' }} /><col style={{ width: '13%' }} />
@@ -281,7 +281,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                         <tr>
                           <td style={{ textAlign: 'center' }}>0</td>
                           <td>전일이월</td><td></td><td></td>
-                          <td style={{ textAlign: 'right' }}>{s.opening_balance.toLocaleString()} {s.currency}</td>
+                          <td style={{ textAlign: 'right' }}>{s.opening_balance.toLocaleString()}</td>
                           <td></td><td></td>
                         </tr>
                         {s.transactions.map((t, i) => (
@@ -290,7 +290,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                             <td>{t.date}</td>
                             <td style={{ textAlign: 'right' }}>{t.expense ? t.expense.toLocaleString() : ''}</td>
                             <td style={{ textAlign: 'right' }}>{t.income ? t.income.toLocaleString() : ''}</td>
-                            <td style={{ textAlign: 'right' }}>{t.balance.toLocaleString()} {s.currency}</td>
+                            <td style={{ textAlign: 'right' }}>{t.balance.toLocaleString()}</td>
                             <td>{t.counterparty}</td>
                             <td>{t.description}</td>
                           </tr>
@@ -301,7 +301,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                           <td colSpan={2}>합계</td>
                           <td style={{ textAlign: 'right' }}>{s.total_expense.toLocaleString()}</td>
                           <td style={{ textAlign: 'right' }}>{s.total_income.toLocaleString()}</td>
-                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()} {s.currency}</td>
+                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
                           <td></td><td></td>
                         </tr>
                       </tfoot>

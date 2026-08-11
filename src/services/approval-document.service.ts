@@ -495,6 +495,13 @@ export const approvalDocumentService = {
 
     if (allApproved && doc.reference_type) {
       await applyReferenceSideEffect(doc.reference_type, doc.reference_id, 'approved');
+    } else if (doc.reference_type === 'daily_cash_report' && doc.reference_id) {
+      // 자금일보는 임시저장(기안문 작성 페이지)을 거쳐 여기서 정식 상신되므로, 이 시점에 비로소
+      // 원본 리포트를 '결재중'으로 잠그고 문서를 연결한다.
+      await supabase
+        .from('accounting_daily_reports')
+        .update({ status: 'pending_approval', approval_document_id: doc.id, updated_at: new Date().toISOString() })
+        .eq('id', doc.reference_id);
     }
 
     // 수신부서는 "이 문서를 받아 보관하는 부서"이므로, 실제로 그 부서 소속 인원이 참조함에서
@@ -536,6 +543,10 @@ export const approvalDocumentService = {
     created_by: string;
     requester_comment?: string;
     recipientOrgUnitId?: string;
+    // 자금일보처럼 결재문서 생성 이전부터 이미 원본 레코드가 있는 시스템 연동형 초안에서 씀 —
+    // 정식 제출(createDocument에 draftId로 넘어갈 때)까지 이 연결이 유지되도록 초안에도 저장해둔다.
+    reference_type?: string;
+    reference_id?: string;
   }): Promise<ApprovalDocumentWithDetails> {
     const payload = {
       document_type_id: input.document_type_id,
@@ -547,6 +558,8 @@ export const approvalDocumentService = {
       created_by: input.created_by,
       requester_comment: input.requester_comment || null,
       recipient_org_unit_id: input.recipientOrgUnitId || null,
+      reference_type: input.reference_type || null,
+      reference_id: input.reference_id || null,
       status: 'draft',
       current_step: 0,
       updated_at: new Date().toISOString(),
