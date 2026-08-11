@@ -1,65 +1,74 @@
 import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
-import type { DailyCashReport, DailyCashReportSnapshotRow } from '@/types/accounting';
+import type { DailyCashReport, DailyCashReportSnapshotSection, DailyCashReportTransactionRow } from '@/types/accounting';
 
 interface RawTxn {
   bank_account_id: string | null;
-  card_id: string | null;
   cash_register_id: string | null;
   transaction_date: string;
   transaction_type: 'income' | 'expense';
   amount: number;
+  counterparty: string | null;
+  description: string | null;
+  created_at: string;
 }
 
-const sum = (rows: RawTxn[]) => rows.reduce((s, r) => s + Number(r.amount), 0);
+// 실제 매일 결재로 올라가는 자금일보(엑셀 붙여넣기) 양식을 그대로 따른다 — 계좌별로
+// "전일이월" 한 줄 + 그날 거래를 시간순으로 늘어놓으며 매 거래마다 누적잔액을 보여주고
+// 마지막에 합계를 낸다. 카드는 이 회사 실무에서 잔액이 도는 자산이 아니라 결제수단일
+// 뿐이라 다루지 않는다(체크카드처럼 실제 잔액이 도는 카드는 통장으로 등록해서 씀).
+function buildSection(
+  kind: 'bank_account' | 'cash_register',
+  id: string,
+  name: string,
+  openingBalance: number,
+  relatedTxns: RawTxn[],
+  date: string
+): DailyCashReportSnapshotSection {
+  const prior = relatedTxns.filter(t => t.transaction_date < date);
+  const priorIncome = prior.filter(t => t.transaction_type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+  const priorExpense = prior.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+  const opening = openingBalance + priorIncome - priorExpense;
 
-// 통장/현금은 실제 현금성 잔액을 이월(개설잔액 + 그 이전 모든 거래)해서 계산한다.
-// 카드는 잔액 개념이 없어(자산이 아니라 결제수단) 그날 하루의 사용액만 보여주고
-// 누적시키지 않는다 — 총계(현금성자산 합계)에도 카드는 포함하지 않는다.
-async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotRow[]> {
-  const [{ data: accounts }, { data: cards }, { data: registers }] = await Promise.all([
+  const today = relatedTxns
+    .filter(t => t.transaction_date === date)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  let running = opening;
+  const transactions: DailyCashReportTransactionRow[] = today.map(t => {
+    const income = t.transaction_type === 'income' ? Number(t.amount) : 0;
+    const expense = t.transaction_type === 'expense' ? Number(t.amount) : 0;
+    running += income - expense;
+    return { date: t.transaction_date, income, expense, balance: running, counterparty: t.counterparty || '', description: t.description || '' };
+  });
+
+  const totalIncome = transactions.reduce((s, t) => s + t.income, 0);
+  const totalExpense = transactions.reduce((s, t) => s + t.expense, 0);
+
+  return { kind, id, name, opening_balance: opening, transactions, total_income: totalIncome, total_expense: totalExpense, closing_balance: opening + totalIncome - totalExpense };
+}
+
+async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSection[]> {
+  const [{ data: accounts }, { data: registers }] = await Promise.all([
     supabase.from('accounting_bank_accounts').select('*').eq('is_active', true).order('display_order'),
-    supabase.from('accounting_cards').select('*').eq('is_active', true).order('display_order'),
     supabase.from('accounting_cash_registers').select('*').eq('is_active', true).order('display_order'),
   ]);
 
   const { data: txns } = await supabase
     .from('accounting_cash_transactions')
-    .select('bank_account_id, card_id, cash_register_id, transaction_date, transaction_type, amount')
+    .select('bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at')
     .lte('transaction_date', date);
   const allTxns = (txns || []) as RawTxn[];
 
-  const rows: DailyCashReportSnapshotRow[] = [];
-
+  const sections: DailyCashReportSnapshotSection[] = [];
   for (const a of accounts || []) {
-    const related = allTxns.filter(t => t.bank_account_id === a.id);
-    const prior = related.filter(t => t.transaction_date < date);
-    const today = related.filter(t => t.transaction_date === date);
-    const opening = Number(a.opening_balance) + sum(prior.filter(t => t.transaction_type === 'income')) - sum(prior.filter(t => t.transaction_type === 'expense'));
-    const income = sum(today.filter(t => t.transaction_type === 'income'));
-    const expense = sum(today.filter(t => t.transaction_type === 'expense'));
-    rows.push({ kind: 'bank_account', id: a.id, name: `${a.bank_name} ${a.account_name}`, opening_balance: opening, income, expense, closing_balance: opening + income - expense });
+    sections.push(buildSection('bank_account', a.id, `${a.bank_name} ${a.account_name}`, Number(a.opening_balance), allTxns.filter(t => t.bank_account_id === a.id), date));
   }
-
   for (const r of registers || []) {
-    const related = allTxns.filter(t => t.cash_register_id === r.id);
-    const prior = related.filter(t => t.transaction_date < date);
-    const today = related.filter(t => t.transaction_date === date);
-    const opening = Number(r.opening_balance) + sum(prior.filter(t => t.transaction_type === 'income')) - sum(prior.filter(t => t.transaction_type === 'expense'));
-    const income = sum(today.filter(t => t.transaction_type === 'income'));
-    const expense = sum(today.filter(t => t.transaction_type === 'expense'));
-    rows.push({ kind: 'cash_register', id: r.id, name: r.name, opening_balance: opening, income, expense, closing_balance: opening + income - expense });
+    sections.push(buildSection('cash_register', r.id, r.name, Number(r.opening_balance), allTxns.filter(t => t.cash_register_id === r.id), date));
   }
-
-  for (const c of cards || []) {
-    const today = allTxns.filter(t => t.card_id === c.id && t.transaction_date === date);
-    const income = sum(today.filter(t => t.transaction_type === 'income'));
-    const expense = sum(today.filter(t => t.transaction_type === 'expense'));
-    rows.push({ kind: 'card', id: c.id, name: c.card_name, opening_balance: 0, income, expense, closing_balance: expense - income });
-  }
-
-  return rows;
+  return sections;
 }
 
 export async function getDailyReportByDate(date: string): Promise<DailyCashReport | null> {
@@ -122,19 +131,11 @@ export async function submitDailyReportForApproval(date: string, userId: string)
   const orgUnitId = me?.org_unit_ids[0];
   if (!orgUnitId) throw new Error('소속 부서가 조직도에 등록되어 있지 않습니다. 관리자에게 문의하세요.');
 
-  const snapshot = report.snapshot || [];
-  const cashRows = snapshot.filter(r => r.kind !== 'card');
-  const totalOpening = cashRows.reduce((s, r) => s + r.opening_balance, 0);
-  const totalIncome = cashRows.reduce((s, r) => s + r.income, 0);
-  const totalExpense = cashRows.reduce((s, r) => s + r.expense, 0);
-  const totalClosing = cashRows.reduce((s, r) => s + r.closing_balance, 0);
-  const content = [
-    `기준일: ${date}`,
-    `전일 잔액 합계: ${totalOpening.toLocaleString()}`,
-    `금일 입금 합계: ${totalIncome.toLocaleString()}`,
-    `금일 출금 합계: ${totalExpense.toLocaleString()}`,
-    `금일 잔액 합계: ${totalClosing.toLocaleString()}`,
-  ].join('\n');
+  const sections = report.snapshot || [];
+  const lines = [`기준일: ${date}`, ...sections.map(s => `${s.name}: ${s.closing_balance.toLocaleString()}`)];
+  const totalClosing = sections.reduce((s, sec) => s + sec.closing_balance, 0);
+  lines.push(`금일 잔액 합계: ${totalClosing.toLocaleString()}`);
+  const content = lines.join('\n');
 
   const doc = await approvalDocumentService.createDocument({
     document_type_id: docType.id,

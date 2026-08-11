@@ -109,13 +109,26 @@ export interface CashTransactionWithDetails extends CashTransaction {
 
 export type AccountingDailyReportStatus = 'draft' | 'pending_approval' | 'confirmed';
 
-export interface DailyCashReportSnapshotRow {
-  kind: 'bank_account' | 'card' | 'cash_register';
+// 실제 매일 결재로 올라가는 자금일보 양식(전일이월 → 그날 거래별 잔액 → 합계)을 그대로 따른다.
+// 자산 구분은 통장/현금 두 가지만 다룬다 — 카드는 이 회사 실무에서 잔액을 이월하는 자산이 아니라
+// 결제수단일 뿐이라 자금일보에는 포함하지 않는다(체크카드처럼 실제 잔액이 도는 카드는 통장으로 등록해서 씀).
+export interface DailyCashReportTransactionRow {
+  date: string;
+  income: number;
+  expense: number;
+  balance: number;
+  counterparty: string;
+  description: string;
+}
+
+export interface DailyCashReportSnapshotSection {
+  kind: 'bank_account' | 'cash_register';
   id: string;
   name: string;
   opening_balance: number;
-  income: number;
-  expense: number;
+  transactions: DailyCashReportTransactionRow[];
+  total_income: number;
+  total_expense: number;
   closing_balance: number;
 }
 
@@ -123,7 +136,7 @@ export interface DailyCashReport {
   id: string;
   report_date: string;
   status: AccountingDailyReportStatus;
-  snapshot: DailyCashReportSnapshotRow[] | null;
+  snapshot: DailyCashReportSnapshotSection[] | null;
   approval_document_id: string | null;
   confirmed_at: string | null;
   confirmed_by: string | null;

@@ -6,7 +6,7 @@ import type { ApprovalDocumentWithDetails, ApprovalDocumentType, DocumentFormFie
 import type { ShorePosition } from '@/types/models';
 import type { DailyCashReport } from '@/types/accounting';
 
-const DAILY_REPORT_KIND_LABEL: Record<string, string> = { bank_account: '통장', card: '카드', cash_register: '현금' };
+const DAILY_REPORT_KIND_LABEL: Record<string, string> = { bank_account: '통장', cash_register: '현금' };
 
 // 표(table)/항목추가(line_items) 필드는 다른 필드처럼 "왼쪽 라벨 + 오른쪽 내용" 한 줄에 넣으면
 // 폭이 좁아져 보기 나쁘므로, 연속된 일반 필드는 한 표로 묶고 이 둘은 전체 폭 블록으로 따로 뺀다.
@@ -240,54 +240,64 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
               </table>
             </td></tr>
           ) : dailyCashReport ? (() => {
-            const rows = dailyCashReport.snapshot || [];
-            const cashRows = rows.filter(r => r.kind !== 'card');
-            const cardRows = rows.filter(r => r.kind === 'card');
-            const totalOf = (list: typeof rows, key: 'opening_balance' | 'income' | 'expense' | 'closing_balance') => list.reduce((s, r) => s + r[key], 0);
+            const sections = dailyCashReport.snapshot || [];
+            const totalClosing = sections.reduce((s, sec) => s + sec.closing_balance, 0);
             return (
-              <tr><td>
-                <table className="issued-line-items">
-                  <thead>
-                    <tr><th>구분</th><th>계좌/카드명</th><th>전일잔액</th><th>입금</th><th>출금</th><th>금일잔액</th></tr>
-                  </thead>
-                  <tbody>
-                    {cashRows.map(r => (
-                      <tr key={r.id}>
-                        <td>{DAILY_REPORT_KIND_LABEL[r.kind]}</td>
-                        <td>{r.name}</td>
-                        <td style={{ textAlign: 'right' }}>{r.opening_balance.toLocaleString()}</td>
-                        <td style={{ textAlign: 'right' }}>{r.income.toLocaleString()}</td>
-                        <td style={{ textAlign: 'right' }}>{r.expense.toLocaleString()}</td>
-                        <td style={{ textAlign: 'right' }}>{r.closing_balance.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colSpan={2}>현금성자산 합계</td>
-                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'opening_balance').toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'income').toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'expense').toLocaleString()}</td>
-                      <td style={{ textAlign: 'right' }}>{totalOf(cashRows, 'closing_balance').toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-                {cardRows.length > 0 && (
-                  <table className="issued-line-items" style={{ marginTop: 10 }}>
-                    <thead>
-                      <tr><th>카드</th><th>금일 사용액</th></tr>
-                    </thead>
+              <>
+                <tr><td>
+                  <table className="issued-line-items">
+                    <thead><tr><th>구분</th><th>계좌명</th><th>금일잔액</th></tr></thead>
                     <tbody>
-                      {cardRows.map(r => (
-                        <tr key={r.id}><td>{r.name}</td><td style={{ textAlign: 'right' }}>{r.closing_balance.toLocaleString()}</td></tr>
+                      {sections.map(s => (
+                        <tr key={s.id}>
+                          <td>{DAILY_REPORT_KIND_LABEL[s.kind]}</td>
+                          <td>{s.name}</td>
+                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
+                        </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr><td>카드 사용 합계</td><td style={{ textAlign: 'right' }}>{totalOf(cardRows, 'closing_balance').toLocaleString()}</td></tr>
+                      <tr><td colSpan={2}>합계</td><td style={{ textAlign: 'right' }}>{totalClosing.toLocaleString()}</td></tr>
                     </tfoot>
                   </table>
-                )}
-              </td></tr>
+                </td></tr>
+                {sections.map(s => (
+                  <tr key={s.id}><td>
+                    <div style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{DAILY_REPORT_KIND_LABEL[s.kind]} — {s.name}</div>
+                    <table className="issued-line-items">
+                      <thead>
+                        <tr><th>일자</th><th>출금</th><th>입금</th><th>잔액</th><th>상대거래처</th><th>적요</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>전일이월</td><td></td><td></td>
+                          <td style={{ textAlign: 'right' }}>{s.opening_balance.toLocaleString()}</td>
+                          <td></td><td></td>
+                        </tr>
+                        {s.transactions.map((t, i) => (
+                          <tr key={i}>
+                            <td>{t.date}</td>
+                            <td style={{ textAlign: 'right' }}>{t.expense ? t.expense.toLocaleString() : ''}</td>
+                            <td style={{ textAlign: 'right' }}>{t.income ? t.income.toLocaleString() : ''}</td>
+                            <td style={{ textAlign: 'right' }}>{t.balance.toLocaleString()}</td>
+                            <td>{t.counterparty}</td>
+                            <td>{t.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td>합계</td>
+                          <td style={{ textAlign: 'right' }}>{s.total_expense.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{s.total_income.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
+                          <td></td><td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </td></tr>
+                ))}
+              </>
             );
           })() : fields.length > 0 ? (
             groupFields(fields).map((g, gi) => {

@@ -12,10 +12,10 @@ import { useTabContext } from '@/contexts/TabContext';
 import {
   getOrCreateDraftReport, regenerateDraftReport, submitDailyReportForApproval,
 } from '@/services/accounting-daily-report.service';
-import type { DailyCashReport, DailyCashReportSnapshotRow, AccountingDailyReportStatus } from '@/types/accounting';
+import type { DailyCashReport, DailyCashReportSnapshotSection, AccountingDailyReportStatus } from '@/types/accounting';
 import type { User } from '@/types/models';
 
-const KIND_LABEL: Record<DailyCashReportSnapshotRow['kind'], string> = { bank_account: '통장', card: '카드', cash_register: '현금' };
+const KIND_LABEL: Record<DailyCashReportSnapshotSection['kind'], string> = { bank_account: '통장', cash_register: '현금' };
 const STATUS_BADGE: Record<AccountingDailyReportStatus, { label: string; className: string }> = {
   draft: { label: '작성중', className: 'bg-gray-100 text-gray-600' },
   pending_approval: { label: '결재중', className: 'bg-yellow-100 text-yellow-700' },
@@ -107,11 +107,8 @@ export default function DailyCashReportPage() {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
   }
 
-  const rows = report?.snapshot || [];
-  const cashRows = rows.filter(r => r.kind !== 'card');
-  const cardRows = rows.filter(r => r.kind === 'card');
-  const totalOf = (list: DailyCashReportSnapshotRow[], key: keyof Pick<DailyCashReportSnapshotRow, 'opening_balance' | 'income' | 'expense' | 'closing_balance'>) =>
-    list.reduce((s, r) => s + r[key], 0);
+  const sections = report?.snapshot || [];
+  const totalClosing = sections.reduce((s, sec) => s + sec.closing_balance, 0);
   const isDraft = report?.status === 'draft';
 
   return (
@@ -120,7 +117,7 @@ export default function DailyCashReportPage() {
         <FileText className="w-6 h-6" />
         <div>
           <h1 className="text-xl font-bold text-gray-900">자금일보</h1>
-          <p className="text-sm text-gray-500">통장·카드·현금의 전일잔액-입금-출금-금일잔액을 날짜별로 정리해 결재로 상신합니다.</p>
+          <p className="text-sm text-gray-500">통장·현금 계좌별로 전일이월-거래내역-금일잔액을 정리해 결재로 상신합니다.</p>
         </div>
       </div>
 
@@ -154,76 +151,89 @@ export default function DailyCashReportPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pt-0 space-y-4">
+        <CardContent className="pt-0 space-y-5">
           <div className="border rounded-md overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-left p-2 text-xs font-medium text-gray-600">구분</th>
                   <th className="text-left p-2 text-xs font-medium text-gray-600">계좌명</th>
-                  <th className="text-right p-2 text-xs font-medium text-gray-600">전일잔액</th>
-                  <th className="text-right p-2 text-xs font-medium text-gray-600">입금</th>
-                  <th className="text-right p-2 text-xs font-medium text-gray-600">출금</th>
                   <th className="text-right p-2 text-xs font-medium text-gray-600">금일잔액</th>
                 </tr>
               </thead>
               <tbody>
-                {cashRows.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-gray-400 text-sm">등록된 통장/현금 시재가 없습니다.</td></tr>
-                ) : cashRows.map(r => (
-                  <tr key={r.id} className="border-b last:border-0">
-                    <td className="p-2 text-gray-500">{KIND_LABEL[r.kind]}</td>
-                    <td className="p-2 font-medium">{r.name}</td>
-                    <td className="p-2 text-right font-mono">{r.opening_balance.toLocaleString()}</td>
-                    <td className="p-2 text-right font-mono text-blue-700">{r.income.toLocaleString()}</td>
-                    <td className="p-2 text-right font-mono text-red-600">{r.expense.toLocaleString()}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{r.closing_balance.toLocaleString()}</td>
+                {sections.length === 0 ? (
+                  <tr><td colSpan={3} className="text-center py-8 text-gray-400 text-sm">등록된 통장/현금 시재가 없습니다.</td></tr>
+                ) : sections.map(s => (
+                  <tr key={s.id} className="border-b last:border-0">
+                    <td className="p-2 text-gray-500">{KIND_LABEL[s.kind]}</td>
+                    <td className="p-2 font-medium">{s.name}</td>
+                    <td className="p-2 text-right font-mono font-semibold">{s.closing_balance.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
-              {cashRows.length > 0 && (
+              {sections.length > 0 && (
                 <tfoot className="bg-gray-50 border-t">
                   <tr>
-                    <td colSpan={2} className="p-2 font-semibold text-sm">현금성자산 합계</td>
-                    <td className="p-2 text-right font-mono font-semibold">{totalOf(cashRows, 'opening_balance').toLocaleString()}</td>
-                    <td className="p-2 text-right font-mono font-semibold text-blue-700">{totalOf(cashRows, 'income').toLocaleString()}</td>
-                    <td className="p-2 text-right font-mono font-semibold text-red-600">{totalOf(cashRows, 'expense').toLocaleString()}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{totalOf(cashRows, 'closing_balance').toLocaleString()}</td>
+                    <td colSpan={2} className="p-2 font-semibold text-sm">합계</td>
+                    <td className="p-2 text-right font-mono font-semibold">{totalClosing.toLocaleString()}</td>
                   </tr>
                 </tfoot>
               )}
             </table>
           </div>
 
-          {cardRows.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-gray-600 mb-1.5">카드 사용 내역 (현금성자산 합계에는 포함되지 않음)</p>
+          {sections.map(s => (
+            <div key={s.id}>
+              <p className="text-xs font-semibold text-gray-600 mb-1.5">{KIND_LABEL[s.kind]} — {s.name}</p>
               <div className="border rounded-md overflow-hidden overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="text-left p-2 text-xs font-medium text-gray-600">카드명</th>
-                      <th className="text-right p-2 text-xs font-medium text-gray-600">금일 사용액</th>
+                      <th className="text-left p-2 font-medium text-gray-600">일자</th>
+                      <th className="text-right p-2 font-medium text-gray-600">출금</th>
+                      <th className="text-right p-2 font-medium text-gray-600">입금</th>
+                      <th className="text-right p-2 font-medium text-gray-600">잔액</th>
+                      <th className="text-left p-2 font-medium text-gray-600">상대거래처</th>
+                      <th className="text-left p-2 font-medium text-gray-600">적요</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {cardRows.map(r => (
-                      <tr key={r.id} className="border-b last:border-0">
-                        <td className="p-2 font-medium">{r.name}</td>
-                        <td className="p-2 text-right font-mono">{r.closing_balance.toLocaleString()}</td>
+                    <tr className="border-b bg-gray-50/50">
+                      <td className="p-2 text-gray-500">전일이월</td>
+                      <td className="p-2"></td>
+                      <td className="p-2"></td>
+                      <td className="p-2 text-right font-mono">{s.opening_balance.toLocaleString()}</td>
+                      <td className="p-2"></td>
+                      <td className="p-2"></td>
+                    </tr>
+                    {s.transactions.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-4 text-gray-400">이날 거래 내역이 없습니다.</td></tr>
+                    ) : s.transactions.map((t, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        <td className="p-2">{t.date}</td>
+                        <td className="p-2 text-right font-mono text-red-600">{t.expense ? t.expense.toLocaleString() : ''}</td>
+                        <td className="p-2 text-right font-mono text-blue-700">{t.income ? t.income.toLocaleString() : ''}</td>
+                        <td className="p-2 text-right font-mono">{t.balance.toLocaleString()}</td>
+                        <td className="p-2">{t.counterparty}</td>
+                        <td className="p-2 text-gray-500">{t.description}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-gray-50 border-t">
                     <tr>
-                      <td className="p-2 font-semibold text-sm">카드 사용 합계</td>
-                      <td className="p-2 text-right font-mono font-semibold">{totalOf(cardRows, 'closing_balance').toLocaleString()}</td>
+                      <td className="p-2 font-semibold">합계</td>
+                      <td className="p-2 text-right font-mono font-semibold text-red-600">{s.total_expense.toLocaleString()}</td>
+                      <td className="p-2 text-right font-mono font-semibold text-blue-700">{s.total_income.toLocaleString()}</td>
+                      <td className="p-2 text-right font-mono font-semibold">{s.closing_balance.toLocaleString()}</td>
+                      <td className="p-2"></td>
+                      <td className="p-2"></td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </div>
-          )}
+          ))}
         </CardContent>
       </Card>
     </div>
