@@ -168,7 +168,7 @@ export default function DailyCashReportPage() {
                   <tr key={s.id} className="border-b last:border-0">
                     <td className="p-2 text-gray-500">{KIND_LABEL[s.kind]}</td>
                     <td className="p-2 font-medium">{s.name}</td>
-                    <td className="p-2 text-right font-mono font-semibold">{s.closing_balance.toLocaleString()}</td>
+                    <td className="p-2 text-right font-mono font-semibold">{s.closing_balance.toLocaleString()} {s.currency}</td>
                   </tr>
                 ))}
               </tbody>
@@ -185,12 +185,21 @@ export default function DailyCashReportPage() {
 
           {sections.map(s => (
             <div key={s.id}>
-              <p className="text-xs font-semibold text-gray-600 mb-1.5">{KIND_LABEL[s.kind]} — {s.name}</p>
+              <p className="text-xs font-semibold text-gray-600 mb-1.5">{KIND_LABEL[s.kind]} — {s.name} ({s.currency})</p>
               <div className="border rounded-md overflow-hidden overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '11%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '13%' }} />
+                    <col style={{ width: '17%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '22%' }} />
+                  </colgroup>
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      <th className="text-center p-2 font-medium text-gray-600 w-10">No.</th>
+                      <th className="text-center p-2 font-medium text-gray-600">No.</th>
                       <th className="text-left p-2 font-medium text-gray-600">일자</th>
                       <th className="text-right p-2 font-medium text-gray-600">출금</th>
                       <th className="text-right p-2 font-medium text-gray-600">입금</th>
@@ -205,7 +214,7 @@ export default function DailyCashReportPage() {
                       <td className="p-2 text-gray-500">전일이월</td>
                       <td className="p-2"></td>
                       <td className="p-2"></td>
-                      <td className="p-2 text-right font-mono">{s.opening_balance.toLocaleString()}</td>
+                      <td className="p-2 text-right font-mono truncate">{s.opening_balance.toLocaleString()} {s.currency}</td>
                       <td className="p-2"></td>
                       <td className="p-2"></td>
                     </tr>
@@ -214,21 +223,21 @@ export default function DailyCashReportPage() {
                     ) : s.transactions.map((t, i) => (
                       <tr key={i} className="border-b last:border-0">
                         <td className="p-2 text-center text-gray-500">{i + 1}</td>
-                        <td className="p-2">{t.date}</td>
-                        <td className="p-2 text-right font-mono text-red-600">{t.expense ? t.expense.toLocaleString() : ''}</td>
-                        <td className="p-2 text-right font-mono text-blue-700">{t.income ? t.income.toLocaleString() : ''}</td>
-                        <td className="p-2 text-right font-mono">{t.balance.toLocaleString()}</td>
-                        <td className="p-2">{t.counterparty}</td>
-                        <td className="p-2 text-gray-500">{t.description}</td>
+                        <td className="p-2 truncate">{t.date}</td>
+                        <td className="p-2 text-right font-mono text-red-600 truncate">{t.expense ? t.expense.toLocaleString() : ''}</td>
+                        <td className="p-2 text-right font-mono text-blue-700 truncate">{t.income ? t.income.toLocaleString() : ''}</td>
+                        <td className="p-2 text-right font-mono truncate">{t.balance.toLocaleString()} {s.currency}</td>
+                        <td className="p-2 truncate">{t.counterparty}</td>
+                        <td className="p-2 text-gray-500 truncate">{t.description}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-gray-50 border-t">
                     <tr>
                       <td colSpan={2} className="p-2 font-semibold">합계</td>
-                      <td className="p-2 text-right font-mono font-semibold text-red-600">{s.total_expense.toLocaleString()}</td>
-                      <td className="p-2 text-right font-mono font-semibold text-blue-700">{s.total_income.toLocaleString()}</td>
-                      <td className="p-2 text-right font-mono font-semibold">{s.closing_balance.toLocaleString()}</td>
+                      <td className="p-2 text-right font-mono font-semibold text-red-600 truncate">{s.total_expense.toLocaleString()}</td>
+                      <td className="p-2 text-right font-mono font-semibold text-blue-700 truncate">{s.total_income.toLocaleString()}</td>
+                      <td className="p-2 text-right font-mono font-semibold truncate">{s.closing_balance.toLocaleString()} {s.currency}</td>
                       <td className="p-2"></td>
                       <td className="p-2"></td>
                     </tr>

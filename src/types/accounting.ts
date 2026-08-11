@@ -125,6 +125,7 @@ export interface DailyCashReportSnapshotSection {
   kind: 'bank_account' | 'cash_register';
   id: string;
   name: string;
+  currency: string;
   opening_balance: number;
   transactions: DailyCashReportTransactionRow[];
   total_income: number;

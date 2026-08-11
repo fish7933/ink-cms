@@ -252,7 +252,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                         <tr key={s.id}>
                           <td>{DAILY_REPORT_KIND_LABEL[s.kind]}</td>
                           <td>{s.name}</td>
-                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()} {s.currency}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -263,8 +263,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                 </td></tr>
                 {sections.map(s => (
                   <tr key={s.id}><td>
-                    <div style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{DAILY_REPORT_KIND_LABEL[s.kind]} — {s.name}</div>
-                    <table className="issued-line-items">
+                    <div style={{ fontSize: 13, fontWeight: 700, margin: '10px 0 4px' }}>{DAILY_REPORT_KIND_LABEL[s.kind]} — {s.name} ({s.currency})</div>
+                    <table className="issued-line-items" style={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '6%' }} /><col style={{ width: '11%' }} /><col style={{ width: '13%' }} />
+                        <col style={{ width: '13%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18%' }} /><col style={{ width: '22%' }} />
+                      </colgroup>
                       <thead>
                         <tr><th>No.</th><th>일자</th><th>출금</th><th>입금</th><th>잔액</th><th>상대거래처</th><th>적요</th></tr>
                       </thead>
@@ -272,7 +276,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                         <tr>
                           <td style={{ textAlign: 'center' }}>0</td>
                           <td>전일이월</td><td></td><td></td>
-                          <td style={{ textAlign: 'right' }}>{s.opening_balance.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{s.opening_balance.toLocaleString()} {s.currency}</td>
                           <td></td><td></td>
                         </tr>
                         {s.transactions.map((t, i) => (
@@ -281,7 +285,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                             <td>{t.date}</td>
                             <td style={{ textAlign: 'right' }}>{t.expense ? t.expense.toLocaleString() : ''}</td>
                             <td style={{ textAlign: 'right' }}>{t.income ? t.income.toLocaleString() : ''}</td>
-                            <td style={{ textAlign: 'right' }}>{t.balance.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right' }}>{t.balance.toLocaleString()} {s.currency}</td>
                             <td>{t.counterparty}</td>
                             <td>{t.description}</td>
                           </tr>
@@ -292,7 +296,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                           <td colSpan={2}>합계</td>
                           <td style={{ textAlign: 'right' }}>{s.total_expense.toLocaleString()}</td>
                           <td style={{ textAlign: 'right' }}>{s.total_income.toLocaleString()}</td>
-                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()} {s.currency}</td>
                           <td></td><td></td>
                         </tr>
                       </tfoot>

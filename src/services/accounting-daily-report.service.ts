@@ -22,6 +22,7 @@ function buildSection(
   kind: 'bank_account' | 'cash_register',
   id: string,
   name: string,
+  currency: string,
   openingBalance: number,
   relatedTxns: RawTxn[],
   date: string
@@ -46,7 +47,7 @@ function buildSection(
   const totalIncome = transactions.reduce((s, t) => s + t.income, 0);
   const totalExpense = transactions.reduce((s, t) => s + t.expense, 0);
 
-  return { kind, id, name, opening_balance: opening, transactions, total_income: totalIncome, total_expense: totalExpense, closing_balance: opening + totalIncome - totalExpense };
+  return { kind, id, name, currency, opening_balance: opening, transactions, total_income: totalIncome, total_expense: totalExpense, closing_balance: opening + totalIncome - totalExpense };
 }
 
 async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSection[]> {
@@ -63,10 +64,11 @@ async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSecti
 
   const sections: DailyCashReportSnapshotSection[] = [];
   for (const a of accounts || []) {
-    sections.push(buildSection('bank_account', a.id, `${a.bank_name} ${a.account_name}`, Number(a.opening_balance), allTxns.filter(t => t.bank_account_id === a.id), date));
+    sections.push(buildSection('bank_account', a.id, `${a.bank_name} ${a.account_name}`, a.currency, Number(a.opening_balance), allTxns.filter(t => t.bank_account_id === a.id), date));
   }
   for (const r of registers || []) {
-    sections.push(buildSection('cash_register', r.id, r.name, Number(r.opening_balance), allTxns.filter(t => t.cash_register_id === r.id), date));
+    // 시재금(현금)은 통화 구분 없이 원화(KRW)만 다룬다.
+    sections.push(buildSection('cash_register', r.id, r.name, 'KRW', Number(r.opening_balance), allTxns.filter(t => t.cash_register_id === r.id), date));
   }
   return sections;
 }
@@ -132,7 +134,7 @@ export async function submitDailyReportForApproval(date: string, userId: string)
   if (!orgUnitId) throw new Error('소속 부서가 조직도에 등록되어 있지 않습니다. 관리자에게 문의하세요.');
 
   const sections = report.snapshot || [];
-  const lines = [`기준일: ${date}`, ...sections.map(s => `${s.name}: ${s.closing_balance.toLocaleString()}`)];
+  const lines = [`기준일: ${date}`, ...sections.map(s => `${s.name}: ${s.closing_balance.toLocaleString()} ${s.currency}`)];
   const totalClosing = sections.reduce((s, sec) => s + sec.closing_balance, 0);
   lines.push(`금일 잔액 합계: ${totalClosing.toLocaleString()}`);
   const content = lines.join('\n');
