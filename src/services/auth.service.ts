@@ -19,6 +19,7 @@ export interface User {
   user_group_id: string
   company_id?: string
   is_active?: boolean
+  resignation_date?: string | null
   user_groups?: { id: string; name: string; permissions: string[] }
   companies?: { id: string; name: string; company_type: string }
 }
@@ -90,6 +91,12 @@ export async function login(username: string, password: string): Promise<LoginRe
     const user = users?.[0]
     if (!user) return { success: false, error: 'USER_NOT_FOUND' }
     if (user.is_active === false) return { success: false, error: 'USER_NOT_FOUND' }
+    // 퇴사일이 지난 직원은 계정이 남아있어도 더 이상 로그인할 수 없다 (퇴사 처리).
+    if (user.resignation_date) {
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      if (user.resignation_date <= today) return { success: false, error: 'USER_NOT_FOUND' }
+    }
 
     const passwordField = user.password || user.encrypted_password
     if (!passwordField) return { success: false, error: 'INVALID_PASSWORD' }
@@ -114,6 +121,12 @@ export async function getCurrentUser(): Promise<User | null> {
   if (!session) return null
   const user = await fetchUserById(session.userId)
   if (!user) { clearSession(); return null }
+  // 로그인해 있는 도중 퇴사일이 지나면(관리자가 뒤늦게 퇴사일을 입력한 경우 포함) 즉시 세션을 끊는다.
+  if (user.resignation_date) {
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    if (user.resignation_date <= today) { clearSession(); return null }
+  }
   return user
 }
 

@@ -25,18 +25,31 @@ import type {
 const sumByCategory = (items: { category: EmployeeSalaryItemCategory; amount: number }[], category: EmployeeSalaryItemCategory) =>
   items.filter(i => i.category === category).reduce((sum, i) => sum + Number(i.amount), 0);
 
+function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
 // --- 급여 대상 직원 ---
 
 // 육상 직원(EMPLOYEE_ROLES) 전원을 직급 선임순 → 입사일순으로 정렬해 반환 —
 // EmployeeCardManagementPage.tsx의 직원 목록 정렬과 동일한 기준.
-export async function getPayrollEligibleEmployees(): Promise<PayrollEmployee[]> {
+// excludeResignedBefore: 이 날짜보다 앞서 퇴사한 직원은 제외한다. 지정하지 않으면 내일(=오늘까지
+// 퇴사한 사람은 제외, 아직 재직 중인 사람만) 기준 — 급여회차 생성 시에는 그 달 1일을 넘겨서
+// "이번 달 중 퇴사한 사람도 마지막 급여는 받아야 하니 포함"시킨다(generatePayslipsForPeriod 참고).
+export async function getPayrollEligibleEmployees(excludeResignedBefore?: string): Promise<PayrollEmployee[]> {
+  const cutoff = excludeResignedBefore ?? (() => {
+    const d = new Date(todayIso()); d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
   const [{ data: users, error }, positions] = await Promise.all([
-    supabase.from('users').select('id, name, role, position_id, hire_date, salary_bank_name, salary_bank_account').in('role', EMPLOYEE_ROLES),
+    supabase.from('users').select('id, name, role, position_id, hire_date, resignation_date, salary_bank_name, salary_bank_account').in('role', EMPLOYEE_ROLES),
     getShorePositions(),
   ]);
   if (error) { console.error(error); return []; }
   const positionById = new Map(positions.map(p => [p.id, p]));
   return (users || [])
+    .filter(u => !u.resignation_date || u.resignation_date >= cutoff)
     .map(u => ({ ...u, position_name: u.position_id ? positionById.get(u.position_id)?.name || null : null }))
     .sort((a, b) => {
       const posA = a.position_id ? positionById.get(a.position_id)?.display_order ?? Infinity : Infinity;
@@ -46,6 +59,25 @@ export async function getPayrollEligibleEmployees(): Promise<PayrollEmployee[]> 
       const hireB = b.hire_date ?? '9999-99-99';
       return hireA.localeCompare(hireB);
     });
+}
+
+// 해당 급여월(yearMonth, 'YYYY-MM') 안에서 hire_date(입사)~resignation_date(퇴사) 구간이
+// 그 달의 며칠에 걸쳐 있는지로 일할계산 비율을 구한다. 입/퇴사가 그 달 안에 없으면 1(전액).
+function monthProration(yearMonth: string, hireDate: string | null, resignationDate: string | null): { factor: number; note: string | null } {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const totalDays = new Date(y, m, 0).getDate();
+  const monthStart = `${yearMonth}-01`;
+  const monthEnd = `${yearMonth}-${String(totalDays).padStart(2, '0')}`;
+  const effectiveStart = hireDate && hireDate > monthStart ? hireDate : monthStart;
+  const effectiveEnd = resignationDate && resignationDate < monthEnd ? resignationDate : monthEnd;
+  if (effectiveStart > effectiveEnd) return { factor: 0, note: '퇴사일이 입사일보다 앞서 이번 달 근무 일수가 없습니다.' };
+  if (effectiveStart === monthStart && effectiveEnd === monthEnd) return { factor: 1, note: null };
+  const workedDays = Math.round((new Date(effectiveEnd).getTime() - new Date(effectiveStart).getTime()) / 86400000) + 1;
+  const factor = Math.min(1, Math.max(0, workedDays / totalDays));
+  const reason = effectiveStart !== monthStart && effectiveEnd !== monthEnd
+    ? `입사일(${hireDate})과 퇴사일(${resignationDate})`
+    : effectiveStart !== monthStart ? `입사일(${hireDate})` : `퇴사일(${resignationDate})`;
+  return { factor, note: `${reason} 기준 ${yearMonth} 근무일 ${workedDays}/${totalDays}일 → 일할계산 ${(factor * 100).toFixed(1)}% 적용` };
 }
 
 // 직원별 급여표에서 급여 지급계좌를 저장 — 지출결의서 항목 상신 시 적요("이름 (은행 계좌번호)")
@@ -225,12 +257,15 @@ export async function reopenPayrollPeriod(periodId: string): Promise<void> {
 // 이 기간에 아직 명세서가 없는 대상 직원마다, 현재 급여 항목(employee_salary_items)을
 // 스냅샷으로 복사해 명세서를 생성한다. 이미 명세서가 있는 직원은 건너뛴다(중복 생성 방지).
 export async function generatePayslipsForPeriod(periodId: string): Promise<{ created: number; skipped: number }> {
-  const [{ data: period, error: periodError }, { data: existing, error: existingError }, employees] = await Promise.all([
-    supabase.from('employee_payroll_periods').select('payment_date').eq('id', periodId).single(),
-    supabase.from('employee_payslips').select('user_id').eq('period_id', periodId),
-    getPayrollEligibleEmployees(),
-  ]);
+  const { data: period, error: periodError } = await supabase.from('employee_payroll_periods').select('payment_date, year_month').eq('id', periodId).single();
   if (periodError) throw periodError;
+  const periodMonthStart = `${period.year_month}-01`;
+
+  const [{ data: existing, error: existingError }, employees] = await Promise.all([
+    supabase.from('employee_payslips').select('user_id').eq('period_id', periodId),
+    // 이번 달 1일 이후에 퇴사한 사람은 이번 달분까지는 받아야 하니 포함(마지막 달은 일할계산으로 처리).
+    getPayrollEligibleEmployees(periodMonthStart),
+  ]);
   if (existingError) throw existingError;
   const existingUserIds = new Set((existing || []).map(p => p.user_id));
   const targets = employees.filter(e => !existingUserIds.has(e.id));
@@ -251,7 +286,13 @@ export async function generatePayslipsForPeriod(periodId: string): Promise<{ cre
 
   const now = new Date().toISOString();
   await Promise.all(targets.map(async emp => {
-    const items = itemsByUser.get(emp.id) || [];
+    const rawItems = itemsByUser.get(emp.id) || [];
+    // 그 달 안에 입사/퇴사가 있으면 고정급여·수당만 일할계산한다 — 공제(4대보험/대여금 등)는
+    // 담당자가 실제 상황에 맞게 직접 정하는 항목이라 자동으로 비율을 적용하지 않는다.
+    const { factor, note } = monthProration(period.year_month, emp.hire_date, emp.resignation_date);
+    const items = factor === 1 ? rawItems : rawItems.map(i =>
+      i.category === 'deduction' ? i : { ...i, amount: Math.round(i.amount * factor) }
+    );
     const base = sumByCategory(items, 'base');
     const allowance = sumByCategory(items, 'allowance');
     const deduction = sumByCategory(items, 'deduction');
@@ -265,6 +306,7 @@ export async function generatePayslipsForPeriod(periodId: string): Promise<{ cre
         total_deduction: deduction,
         net_amount: base + allowance - deduction,
         payment_date: period.payment_date,
+        proration_note: note,
         created_at: now,
         updated_at: now,
       })

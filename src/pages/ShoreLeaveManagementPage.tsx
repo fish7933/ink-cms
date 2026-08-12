@@ -40,6 +40,13 @@ const ACTION_LABELS: Record<ShoreLeaveAdminLogWithNames['action_type'], { label:
 };
 
 const SHORE_ROLES = ['ship_manager', 'admin', 'system_admin'];
+
+function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+// 퇴사일이 지난 직원은 연차 현황/관리 대상에서 제외한다(로그인도 이미 차단됨).
+const isResigned = (u: { resignation_date?: string | null }) => !!u.resignation_date && u.resignation_date <= todayIso();
 const RESET_ROLES = ['admin', 'system_admin'];
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending: { label: '결재중', color: 'bg-yellow-100 text-yellow-700' },
@@ -134,7 +141,7 @@ export default function ShoreLeaveManagementPage() {
       setExemptUserIds(exemptIds);
       setAllLeaveRequests(leaveRequests);
 
-      const shoreUsers = allUsers.filter(u => SHORE_ROLES.includes(u.role));
+      const shoreUsers = allUsers.filter(u => SHORE_ROLES.includes(u.role) && !isResigned(u));
       const computed = await Promise.all(shoreUsers.map(async u => {
         const balance = await getLeaveBalance(u.id, u.hire_date || null);
         return { user: u, positionName: posMap.get(u.id) || null, ...balance };

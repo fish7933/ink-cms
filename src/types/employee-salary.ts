@@ -65,6 +65,7 @@ export interface EmployeePayslip {
   ack_status: PayslipAckStatus;
   ack_comment: string | null;
   ack_at: string | null;
+  proration_note: string | null; // 입사/퇴사일에 걸쳐 일할계산이 적용됐을 때 그 근거 설명
   created_at: string;
   updated_at: string;
 }
@@ -107,6 +108,7 @@ export interface PayrollEmployee {
   position_id: string | null;
   position_name: string | null;
   hire_date: string | null;
+  resignation_date: string | null;
   salary_bank_name: string | null;
   salary_bank_account: string | null;
 }

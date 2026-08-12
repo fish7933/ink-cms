@@ -159,6 +159,11 @@ export default function EmployeePayslipDetailView({ payslip, showTitle = true }:
         <div>기타 : 월 중도입사 또는 중도퇴사 시 근무일수에 따라 일할계산됩니다.</div>
       </div>
 
+      {payslip.proration_note && (
+        <div style={{ marginTop: 8, fontSize: 10.5, color: '#b45309', background: '#fffbeb', padding: '4px 8px', borderRadius: 4 }}>
+          <span style={{ fontWeight: 600 }}>일할계산 적용</span>&nbsp;&nbsp;{payslip.proration_note}
+        </div>
+      )}
       {payslip.memo && (
         <div style={{ marginTop: 8, fontSize: 10.5, color: '#555' }}><span style={{ color: '#777' }}>비고</span>&nbsp;&nbsp;{payslip.memo}</div>
       )}

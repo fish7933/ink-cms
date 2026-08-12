@@ -25,7 +25,23 @@ export const EMPLOYEE_ROLES = ['ship_manager', 'admin', 'system_admin'];
 
 type CompanyExt = Company & { company_type?: string };
 
-const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'ship_manager', company_id: '', position_id: '', hire_date: '', is_executive: false, resident_registration_number: '' };
+const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'ship_manager', company_id: '', position_id: '', hire_date: '', resignation_date: '', is_executive: false, resident_registration_number: '' };
+
+function today(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+type EmploymentStatus = 'active' | 'scheduled' | 'resigned';
+function employmentStatus(resignationDate?: string | null): EmploymentStatus {
+  if (!resignationDate) return 'active';
+  return resignationDate <= today() ? 'resigned' : 'scheduled';
+}
+const STATUS_LABELS: Record<EmploymentStatus, { label: string; className: string }> = {
+  active: { label: '재직', className: 'bg-green-100 text-green-700' },
+  scheduled: { label: '퇴사예정', className: 'bg-amber-100 text-amber-700' },
+  resigned: { label: '퇴사', className: 'bg-gray-200 text-gray-500' },
+};
 
 // 목록에서는 뒷자리를 가려서 보여준다 — 다이얼로그(의도적으로 연 화면)에서만 전체 값을 다룬다.
 const maskRrn = (rrn?: string | null) => {
@@ -52,6 +68,7 @@ export default function EmployeeCardManagementPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | EmploymentStatus>('all');
 
   const permissions = usePermissions('user_groups');
 
@@ -104,6 +121,7 @@ export default function EmployeeCardManagementPage() {
       company_id: u.company_id || '',
       position_id: eu.position_id || '',
       hire_date: u.hire_date || '',
+      resignation_date: u.resignation_date || '',
       is_executive: u.is_executive || false,
       resident_registration_number: u.resident_registration_number || '',
     });
@@ -127,6 +145,7 @@ export default function EmployeeCardManagementPage() {
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
           hire_date: formData.hire_date || null,
+          resignation_date: formData.resignation_date || null,
           is_executive: formData.is_executive,
           resident_registration_number: formData.resident_registration_number || null,
           ...(formData.password ? { password: formData.password } : {}),
@@ -139,6 +158,7 @@ export default function EmployeeCardManagementPage() {
           company_id: formData.company_id || null,
           position_id: formData.position_id || null,
           hire_date: formData.hire_date || null,
+          resignation_date: formData.resignation_date || null,
           is_executive: formData.is_executive,
           resident_registration_number: formData.resident_registration_number || null,
         });
@@ -169,7 +189,12 @@ export default function EmployeeCardManagementPage() {
   const positionOrderById = new Map(positions.map(p => [p.id, p.display_order]));
   const employees = users
     .filter(u => EMPLOYEE_ROLES.includes(u.role))
+    .filter(u => statusFilter === 'all' || employmentStatus(u.resignation_date) === statusFilter)
     .sort((a, b) => {
+      const statusA = employmentStatus(a.resignation_date);
+      const statusB = employmentStatus(b.resignation_date);
+      // 퇴사자는 항상 맨 아래로 — 현재 활동 중인 인원이 위에서 바로 보이도록.
+      if ((statusA === 'resigned') !== (statusB === 'resigned')) return statusA === 'resigned' ? 1 : -1;
       const posA = positionOrderById.get((a as User & { position_id?: string }).position_id || '') ?? Infinity;
       const posB = positionOrderById.get((b as User & { position_id?: string }).position_id || '') ?? Infinity;
       if (posA !== posB) return posA - posB;
@@ -207,6 +232,18 @@ export default function EmployeeCardManagementPage() {
                 </Button>
               )}
             </div>
+            <div className="flex rounded-md border overflow-hidden w-fit mt-3">
+              {(['all', 'active', 'scheduled', 'resigned'] as const).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setStatusFilter(f)}
+                  className={`h-7 px-2.5 text-xs transition-colors ${statusFilter === f ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >
+                  {f === 'all' ? '전체' : STATUS_LABELS[f].label}
+                </button>
+              ))}
+            </div>
           </CardHeader>
           <CardContent className="pt-0">
             {employees.length === 0 ? (
@@ -222,6 +259,7 @@ export default function EmployeeCardManagementPage() {
                       <TableHead className="text-xs">직급</TableHead>
                       <TableHead className="text-xs">주민등록번호</TableHead>
                       <TableHead className="text-xs">구분</TableHead>
+                      <TableHead className="text-xs">재직상태</TableHead>
                       <TableHead className="text-xs">역할</TableHead>
                       <TableHead className="text-right text-xs w-20">작업</TableHead>
                     </TableRow>
@@ -233,8 +271,9 @@ export default function EmployeeCardManagementPage() {
                       const protectedRow = isProtectedFromCurrentUser(u);
                       const canEditRow = permissions.canEdit && !protectedRow;
                       const canDeleteRow = permissions.canDelete && !protectedRow;
+                      const status = employmentStatus(u.resignation_date);
                       return (
-                        <TableRow key={u.id} className={`hover:bg-gray-50 ${canEditRow ? 'cursor-pointer' : ''}`} onClick={() => canEditRow && openEdit(u)}>
+                        <TableRow key={u.id} className={`hover:bg-gray-50 ${canEditRow ? 'cursor-pointer' : ''} ${status === 'resigned' ? 'opacity-60' : ''}`} onClick={() => canEditRow && openEdit(u)}>
                           <TableCell className="font-medium text-sm">{eu.username || '-'}</TableCell>
                           <TableCell className="text-sm">{u.name}</TableCell>
                           <TableCell className="text-sm">{u.email}</TableCell>
@@ -244,6 +283,12 @@ export default function EmployeeCardManagementPage() {
                             {u.is_executive
                               ? <Badge className="text-xs bg-amber-500">임원</Badge>
                               : <Badge variant="outline" className="text-xs text-gray-500">직원</Badge>}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={`text-xs ${STATUS_LABELS[status].className}`}>{STATUS_LABELS[status].label}</Badge>
+                            {status !== 'active' && u.resignation_date && (
+                              <span className="block text-[10px] text-gray-400 mt-0.5">{u.resignation_date}</span>
+                            )}
                           </TableCell>
                           <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-500'}`}>{ROLE_LABELS[u.role] || u.role}</Badge></TableCell>
                           <TableCell className="text-right" onClick={e => e.stopPropagation()}>
@@ -314,12 +359,22 @@ export default function EmployeeCardManagementPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">입사일 <span className="text-gray-400 font-normal">(연차 산정 기준)</span></Label>
+                <Label className="text-xs">입사일 <span className="text-gray-400 font-normal">(연차·급여 일할계산 기준)</span></Label>
                 <Input type="date" value={formData.hire_date} onChange={e => setFormData({ ...formData, hire_date: e.target.value })} className="h-8 text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">주민등록번호 <span className="text-gray-400 font-normal">(급여대장용)</span></Label>
                 <Input value={formData.resident_registration_number} onChange={e => setFormData({ ...formData, resident_registration_number: e.target.value })} placeholder="000000-0000000" className="h-8 text-sm" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">퇴사일 <span className="text-gray-400 font-normal">(지정하면 그 날짜부터 로그인 차단, 휴가/급여 대상에서 제외됩니다)</span></Label>
+              <div className="flex items-center gap-2">
+                <Input type="date" value={formData.resignation_date} onChange={e => setFormData({ ...formData, resignation_date: e.target.value })} className="h-8 text-sm flex-1" />
+                {formData.resignation_date && (
+                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0" onClick={() => setFormData({ ...formData, resignation_date: '' })}>재직으로 되돌리기</Button>
+                )}
               </div>
             </div>
 
