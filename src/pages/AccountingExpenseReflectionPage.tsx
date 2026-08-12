@@ -201,6 +201,17 @@ export default function AccountingExpenseReflectionPage() {
     });
   };
 
+  // 헤더 체크박스 — 문서 안의 항목이 전부 선택돼 있으면 전체 해제, 아니면(하나도 없거나 일부만)
+  // 전체 선택. 페이지네이션과 무관하게 문서 전체 항목을 대상으로 한다(반영/취소 버튼이 반영
+  // 여부에 따라 어차피 걸러서 쓰므로 반영된 항목까지 같이 선택돼도 안전하다).
+  const toggleSelectAll = (items: ExpenseReflectionItem[]) => {
+    setSelectedIndexes(prev => {
+      const allSelected = items.length > 0 && items.every(i => prev.has(i.item_index));
+      if (allSelected) return new Set();
+      return new Set(items.map(i => i.item_index));
+    });
+  };
+
   const handlePaymentMethodChange = (v: AccountingPaymentMethod) => {
     setForm(prev => ({ ...prev, payment_method: v, bank_account_id: '', card_id: '', cash_register_id: '' }));
   };
@@ -470,7 +481,14 @@ export default function AccountingExpenseReflectionPage() {
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {(permissions.canCreate || permissions.canDelete) && <th className="p-2 w-8"></th>}
+                    {(permissions.canCreate || permissions.canDelete) && (
+                      <th className="p-2 w-8 text-center">
+                        <Checkbox
+                          checked={selectedGroup.items.length > 0 && selectedGroup.items.every(i => selectedIndexes.has(i.item_index))}
+                          onCheckedChange={() => toggleSelectAll(selectedGroup.items)}
+                        />
+                      </th>
+                    )}
                     <th className="text-right p-2 w-10">No.</th>
                     <th className="text-left p-2">지출일</th>
                     <th className="text-left p-2">분류</th>
