@@ -19,6 +19,7 @@ import { getBankAccounts } from '@/services/accounting-bank-account.service';
 import { getCards } from '@/services/accounting-card.service';
 import { getCashRegisters } from '@/services/accounting-cash-register.service';
 import { getCategories } from '@/services/accounting-category.service';
+import { approvalDocumentService } from '@/services/approval-document.service';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -83,6 +84,8 @@ export default function AccountingExpenseReflectionPage() {
   const [items, setItems] = useState<ExpenseReflectionItem[]>([]);
   const [hiddenDocIds, setHiddenDocIds] = useState<Set<string>>(new Set());
   const [hiding, setHiding] = useState<string | null>(null);
+  const [permanentDeleting, setPermanentDeleting] = useState<string | null>(null);
+  const [bulkPermanentDeleting, setBulkPermanentDeleting] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<BankAccountWithBalance[]>([]);
   const [cards, setCards] = useState<CardWithDetails[]>([]);
   const [cashRegisters, setCashRegisters] = useState<CashRegisterWithBalance[]>([]);
@@ -95,6 +98,8 @@ export default function AccountingExpenseReflectionPage() {
   const [itemPage, setItemPage] = useState(1);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [unreflectingBatch, setUnreflectingBatch] = useState(false);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [bulkHiding, setBulkHiding] = useState(false);
 
   const [formTarget, setFormTarget] = useState<ExpenseReflectionItem | null>(null);
   const [batchTargets, setBatchTargets] = useState<ExpenseReflectionItem[] | null>(null);
@@ -173,7 +178,27 @@ export default function AccountingExpenseReflectionPage() {
   const itemCurrentPage = Math.min(itemPage, itemTotalPages);
   const pagedItems = selectedGroup ? selectedGroup.items.slice((itemCurrentPage - 1) * PAGE_SIZE, itemCurrentPage * PAGE_SIZE) : [];
 
-  const changeFilter = (fn: () => void) => { fn(); setPage(1); };
+  const changeFilter = (fn: () => void) => { fn(); setPage(1); setSelectedDocIds(new Set()); };
+
+  // 목록에서 선택/삭제 가능한 건은 statusFilter에 따라 다르다 — "삭제됨" 필터는 이미 숨긴
+  // 문서를 복원하는 용도(전부 대상), 그 외 필터는 아직 반영이 하나도 안 된(reflectedCount===0)
+  // 문서만 지울 수 있다(반영된 항목이 하나라도 있으면 목록에서 못 지운다).
+  const selectableDocs = () => statusFilter === 'deleted' ? pagedGroups : pagedGroups.filter(g => g.reflectedCount === 0);
+  const toggleDocSelected = (id: string) => {
+    setSelectedDocIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllDocs = () => {
+    const selectable = selectableDocs();
+    setSelectedDocIds(prev => {
+      const allSelected = selectable.length > 0 && selectable.every(g => prev.has(g.document_id));
+      if (allSelected) return new Set();
+      return new Set(selectable.map(g => g.document_id));
+    });
+  };
 
   const categoryOptions = categories.map(c => c.name);
 
@@ -343,6 +368,72 @@ export default function AccountingExpenseReflectionPage() {
       toast({ title: '복원 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setHiding(null);
+    }
+  };
+
+  const handleBulkHideDocuments = async () => {
+    if (selectedDocIds.size === 0) return;
+    if (!confirm(`선택한 ${selectedDocIds.size}건을 목록에서 지우시겠습니까?`)) return;
+    setBulkHiding(true);
+    try {
+      for (const id of selectedDocIds) await hideExpenseDocument(id, currentUser?.id || null);
+      toast({ title: `${selectedDocIds.size}건을 목록에서 지웠습니다.` });
+      setSelectedDocIds(new Set());
+      await loadData();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkHiding(false);
+    }
+  };
+
+  const handleBulkRestoreDocuments = async () => {
+    if (selectedDocIds.size === 0) return;
+    setBulkHiding(true);
+    try {
+      for (const id of selectedDocIds) await unhideExpenseDocument(id);
+      toast({ title: `${selectedDocIds.size}건을 복원했습니다.` });
+      setSelectedDocIds(new Set());
+      await loadData();
+    } catch (e) {
+      toast({ title: '복원 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkHiding(false);
+    }
+  };
+
+  // 영구삭제는 "삭제됨"(목록에서 숨긴) 문서에 대해서만, 그것도 시스템관리자만 할 수 있다 —
+  // 숨기기(복원 가능)와 달리 결재문서 자체(approval_documents)를 완전히 지우는 되돌릴 수
+  // 없는 작업이라 반영 강제취소와 동일한 수준으로 제한한다. 문서가 지워지면 CASCADE로
+  // accounting_expense_reflection_hides 행도 같이 없어진다.
+  const handlePermanentDelete = async (documentId: string, documentTitle: string) => {
+    if (!isSystemAdmin) return;
+    if (!confirm(`[관리자 영구삭제] "${documentTitle}" 결재문서를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    setPermanentDeleting(documentId);
+    try {
+      await approvalDocumentService.deleteDocument(documentId);
+      toast({ title: '영구 삭제되었습니다.' });
+      await loadData();
+    } catch (e) {
+      toast({ title: '영구 삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setPermanentDeleting(null);
+    }
+  };
+
+  const handleBulkPermanentDelete = async () => {
+    if (!isSystemAdmin || selectedDocIds.size === 0) return;
+    if (!confirm(`[관리자 영구삭제] 선택한 ${selectedDocIds.size}건의 결재문서를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    setBulkPermanentDeleting(true);
+    try {
+      for (const id of selectedDocIds) await approvalDocumentService.deleteDocument(id);
+      toast({ title: `${selectedDocIds.size}건이 영구 삭제되었습니다.` });
+      setSelectedDocIds(new Set());
+      await loadData();
+    } catch (e) {
+      toast({ title: '영구 삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkPermanentDeleting(false);
     }
   };
 
@@ -516,9 +607,16 @@ export default function AccountingExpenseReflectionPage() {
                 )}
                 {permissions.canDelete && selectedGroup.reflectedCount === 0 && (
                   hiddenDocIds.has(selectedGroup.document_id) ? (
-                    <Button size="sm" variant="outline" className="gap-1.5" disabled={hiding === selectedGroup.document_id} onClick={() => handleRestoreDocument(selectedGroup.document_id)}>
-                      <RotateCcw className="w-3.5 h-3.5" />목록에서 복원
-                    </Button>
+                    <>
+                      <Button size="sm" variant="outline" className="gap-1.5" disabled={hiding === selectedGroup.document_id} onClick={() => handleRestoreDocument(selectedGroup.document_id)}>
+                        <RotateCcw className="w-3.5 h-3.5" />목록에서 복원
+                      </Button>
+                      {isSystemAdmin && (
+                        <Button size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200" disabled={permanentDeleting === selectedGroup.document_id} onClick={() => handlePermanentDelete(selectedGroup.document_id, selectedGroup.document_title)}>
+                          <Trash2 className="w-3.5 h-3.5" />[관리자] 영구삭제
+                        </Button>
+                      )}
+                    </>
                   ) : (
                     <Button size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200" disabled={hiding === selectedGroup.document_id} onClick={() => handleHideDocument(selectedGroup.document_id)}>
                       <Trash2 className="w-3.5 h-3.5" />목록에서 지우기
@@ -617,6 +715,24 @@ export default function AccountingExpenseReflectionPage() {
                 ))}
               </div>
               <Input placeholder="문서제목/기안자 검색" value={search} onChange={e => changeFilter(() => setSearch(e.target.value))} className="h-8 w-[200px] text-xs" />
+              {permissions.canDelete && selectedDocIds.size > 0 && (
+                statusFilter === 'deleted' ? (
+                  <>
+                    <Button size="sm" variant="outline" className="gap-1.5 h-8" disabled={bulkHiding} onClick={handleBulkRestoreDocuments}>
+                      <RotateCcw className="w-3.5 h-3.5" />선택 {selectedDocIds.size}건 복원
+                    </Button>
+                    {isSystemAdmin && (
+                      <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-200" disabled={bulkPermanentDeleting} onClick={handleBulkPermanentDelete}>
+                        <Trash2 className="w-3.5 h-3.5" />[관리자] 선택 {selectedDocIds.size}건 영구삭제
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-200" disabled={bulkHiding} onClick={handleBulkHideDocuments}>
+                    <Trash2 className="w-3.5 h-3.5" />선택 {selectedDocIds.size}건 삭제
+                  </Button>
+                )
+              )}
               <span className="text-xs text-gray-400 ml-auto">{filteredGroups.length}건</span>
             </div>
 
@@ -624,6 +740,14 @@ export default function AccountingExpenseReflectionPage() {
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    {permissions.canDelete && (
+                      <th className="p-2 w-8 text-center">
+                        <Checkbox
+                          checked={selectableDocs().length > 0 && selectableDocs().every(g => selectedDocIds.has(g.document_id))}
+                          onCheckedChange={toggleSelectAllDocs}
+                        />
+                      </th>
+                    )}
                     <th className="text-right p-2 w-10">No.</th>
                     <th className="text-left p-2">문서</th>
                     <th className="text-left p-2">기안자</th>
@@ -636,12 +760,18 @@ export default function AccountingExpenseReflectionPage() {
                 </thead>
                 <tbody>
                   {pagedGroups.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center py-8 text-gray-400">지출결의서가 없습니다.</td></tr>
+                    <tr><td colSpan={permissions.canDelete ? 9 : 8} className="text-center py-8 text-gray-400">지출결의서가 없습니다.</td></tr>
                   ) : pagedGroups.map((g, idx) => {
                     const fullyReflected = g.reflectedCount === g.items.length;
                     const partiallyReflected = g.reflectedCount > 0 && !fullyReflected;
+                    const selectable = statusFilter === 'deleted' || g.reflectedCount === 0;
                     return (
                       <tr key={g.document_id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => openDocument(g.document_id)}>
+                        {permissions.canDelete && (
+                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                            {selectable && <Checkbox checked={selectedDocIds.has(g.document_id)} onCheckedChange={() => toggleDocSelected(g.document_id)} />}
+                          </td>
+                        )}
                         <td className="p-2 text-right text-gray-400">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
                         <td className="p-2">
                           <span className="flex items-center gap-1">
@@ -665,9 +795,16 @@ export default function AccountingExpenseReflectionPage() {
                             </button>
                             {permissions.canDelete && g.reflectedCount === 0 && (
                               statusFilter === 'deleted' ? (
-                                <button type="button" className="text-gray-400 hover:text-emerald-600 inline-flex" title="목록에서 복원" disabled={hiding === g.document_id} onClick={() => handleRestoreDocument(g.document_id)}>
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                </button>
+                                <>
+                                  <button type="button" className="text-gray-400 hover:text-emerald-600 inline-flex" title="목록에서 복원" disabled={hiding === g.document_id} onClick={() => handleRestoreDocument(g.document_id)}>
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                  </button>
+                                  {isSystemAdmin && (
+                                    <button type="button" className="text-gray-400 hover:text-red-600 inline-flex" title="[관리자] 영구삭제" disabled={permanentDeleting === g.document_id} onClick={() => handlePermanentDelete(g.document_id, g.document_title)}>
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </>
                               ) : (
                                 <button type="button" className="text-gray-400 hover:text-red-600 inline-flex" title="목록에서 지우기" disabled={hiding === g.document_id} onClick={() => handleHideDocument(g.document_id)}>
                                   <Trash2 className="w-3.5 h-3.5" />

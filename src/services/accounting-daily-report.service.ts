@@ -206,6 +206,29 @@ export async function forceCancelConfirmedReport(input: { reportId: string; reas
   if (error) throw error;
 }
 
+// 결재상신을 한 번도 하지 않은(작성중 상태) 자금일보를 완전히 삭제한다 — 이력 목록과
+// 달력 어디에도 더 이상 나오지 않는다. status가 draft인 자금일보는 딱 두 경우뿐이다:
+// (1) 아예 상신을 시작한 적이 없거나, (2) 상신 화면까지만 준비하고 실제로 제출은 안 한
+// 경우(prepareDailyReportDraft가 만든 기안 초안이 approval_document_id로 걸려 있음) —
+// 실제로 상신됐던 적이 있으면 반려/강제취소 시 approval_document_id가 다시 null로
+// 초기화되므로 이 두 경우와 섞이지 않는다. (2)의 경우 딸려 있는 미제출 기안 초안도 같이 정리한다.
+export async function deleteDraftDailyReport(reportId: string): Promise<void> {
+  const { data: report, error: fetchError } = await supabase
+    .from('accounting_daily_reports')
+    .select('status, approval_document_id')
+    .eq('id', reportId)
+    .single();
+  if (fetchError) throw fetchError;
+  if (report.status !== 'draft') throw new Error('작성중(결재상신 전) 상태의 자금일보만 삭제할 수 있습니다.');
+
+  if (report.approval_document_id) {
+    await approvalDocumentService.deleteDraft(report.approval_document_id).catch(() => {});
+  }
+
+  const { error } = await supabase.from('accounting_daily_reports').delete().eq('id', reportId);
+  if (error) throw error;
+}
+
 // 바로 결재를 넣지 않고, 기안문 작성 페이지에서 최종 검토 후 상신하도록 임시저장 초안만
 // 만들어 그 초안 id를 돌려준다 — 실제 상신(및 리포트 잠금)은 그 페이지에서 정식 제출할 때
 // approval-document.service.ts의 createDocument가 처리한다(daily_cash_report 케이스 참고).

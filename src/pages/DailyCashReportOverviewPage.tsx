@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, isToday, startOfMonth, startOfWeek, subMonths } from 'date-fns';
-import { FileText, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, CalendarDays, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getDailyReports } from '@/services/accounting-daily-report.service';
+import { Checkbox } from '@/components/ui/checkbox';
+import { getDailyReports, deleteDraftDailyReport } from '@/services/accounting-daily-report.service';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
+import { useToast } from '@/hooks/use-toast';
 import type { DailyCashReport, AccountingDailyReportStatus } from '@/types/accounting';
 
 const PAGE_SIZE = 20;
@@ -29,26 +31,81 @@ function todayIso(): string {
 export default function DailyCashReportOverviewPage() {
   const navigate = useNavigate();
   const { openNewTab } = useTabContext();
+  const { toast } = useToast();
   const permissions = usePermissions('accounting_daily_report');
   const [reports, setReports] = useState<DailyCashReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     if (!permissions.loading && !permissions.canView) navigate('/dashboard');
   }, [permissions.loading, permissions.canView, navigate]);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        setReports(await getDailyReports());
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  const loadReports = async () => {
+    setLoading(true);
+    try {
+      setReports(await getDailyReports());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadReports(); }, []);
+
+  // 결재상신을 한 번도 하지 않은(작성중) 자금일보만 완전히 지울 수 있다 — 지우고 나면
+  // 달력의 상태 뱃지와 아래 이력 목록 양쪽에서 바로 사라진다(둘 다 이 reports 하나로 그린다).
+  const handleDelete = async (r: DailyCashReport) => {
+    if (!confirm(`${r.report_date} 자금일보(작성중)를 완전히 삭제하시겠습니까? 이력/달력에서 사라지며 되돌릴 수 없습니다.`)) return;
+    setDeleting(r.id);
+    try {
+      await deleteDraftDailyReport(r.id);
+      toast({ title: '삭제되었습니다.' });
+      await loadReports();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  // 선택삭제 대상은 작성중(draft) 상태뿐이다 — 확정(confirmed)/결재중(pending_approval)은
+  // 절대 대상에 포함하지 않는다(개별 삭제와 동일한 규칙, 서비스 레이어에서도 다시 한번 막힘).
+  const draftIdsOnPage = () => paged.filter(r => r.status === 'draft').map(r => r.id);
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    const draftIds = draftIdsOnPage();
+    setSelectedIds(prev => {
+      const allSelected = draftIds.length > 0 && draftIds.every(id => prev.has(id));
+      if (allSelected) return new Set();
+      return new Set(draftIds);
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`선택한 ${selectedIds.size}건의 자금일보(작성중)를 완전히 삭제하시겠습니까? 이력/달력에서 사라지며 되돌릴 수 없습니다.`)) return;
+    setBulkDeleting(true);
+    try {
+      for (const id of selectedIds) await deleteDraftDailyReport(id);
+      toast({ title: `${selectedIds.size}건이 삭제되었습니다.` });
+      setSelectedIds(new Set());
+      await loadReports();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const reportByDate = useMemo(() => new Map(reports.map(r => [r.report_date, r])), [reports]);
 
@@ -141,9 +198,16 @@ export default function DailyCashReportOverviewPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base">전체 이력</CardTitle>
-            <span className="text-xs text-gray-400">{reports.length}건</span>
+            <div className="flex items-center gap-2">
+              {permissions.canDelete && selectedIds.size > 0 && (
+                <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-200" disabled={bulkDeleting} onClick={handleBulkDelete}>
+                  <Trash2 className="w-3.5 h-3.5" />선택 {selectedIds.size}건 삭제
+                </Button>
+              )}
+              <span className="text-xs text-gray-400">{reports.length}건</span>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
@@ -151,6 +215,12 @@ export default function DailyCashReportOverviewPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
+                  {permissions.canDelete && (
+                    <th className="p-2 w-8 text-center">
+                      <Checkbox checked={draftIdsOnPage().length > 0 && draftIdsOnPage().every(id => selectedIds.has(id))} onCheckedChange={toggleSelectAll} />
+                    </th>
+                  )}
+                  <th className="text-right p-2 w-10 text-xs font-medium text-gray-600">No.</th>
                   <th className="text-left p-2 text-xs font-medium text-gray-600">날짜</th>
                   <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
                   <th className="text-left p-2 text-xs font-medium text-gray-600">확정일시</th>
@@ -159,14 +229,27 @@ export default function DailyCashReportOverviewPage() {
               </thead>
               <tbody>
                 {paged.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-400 text-sm">작성된 자금일보가 없습니다.</td></tr>
-                ) : paged.map(r => (
+                  <tr><td colSpan={permissions.canDelete ? 6 : 5} className="text-center py-8 text-gray-400 text-sm">작성된 자금일보가 없습니다.</td></tr>
+                ) : paged.map((r, idx) => (
                   <tr key={r.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => goToDate(r.report_date)}>
+                    {permissions.canDelete && (
+                      <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                        {r.status === 'draft' && <Checkbox checked={selectedIds.has(r.id)} onCheckedChange={() => toggleSelected(r.id)} />}
+                      </td>
+                    )}
+                    <td className="p-2 text-right text-gray-400">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
                     <td className="p-2 font-medium">{r.report_date}</td>
                     <td className="p-2"><Badge className={`text-[10px] ${STATUS_BADGE[r.status].className}`}>{STATUS_BADGE[r.status].label}</Badge></td>
                     <td className="p-2 text-gray-500">{r.confirmed_at ? new Date(r.confirmed_at).toLocaleString('ko-KR') : '-'}</td>
-                    <td className="p-2 text-right">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={e => { e.stopPropagation(); goToDate(r.report_date); }}>보기</Button>
+                    <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => goToDate(r.report_date)}>보기</Button>
+                        {permissions.canDelete && r.status === 'draft' && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" title="삭제" disabled={deleting === r.id} onClick={() => handleDelete(r)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
