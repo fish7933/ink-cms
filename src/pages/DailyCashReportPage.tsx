@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FileText, ChevronLeft, ChevronRight, RefreshCw, Send, ExternalLink, List, Ban } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, RefreshCw, Send, ExternalLink, List, Ban, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,14 +9,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport, updateReportRemarks,
+  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport, updateReportRemarks, updateReportAttachments,
 } from '@/services/accounting-daily-report.service';
 import { DailyCashReportTable } from '@/components/accounting/daily-cash-report-table';
-import type { DailyCashReport, AccountingDailyReportStatus } from '@/types/accounting';
+import type { DailyCashReport, AccountingDailyReportStatus, CashTransactionAttachment } from '@/types/accounting';
 import type { User } from '@/types/models';
 
 const STATUS_BADGE: Record<AccountingDailyReportStatus, { label: string; className: string }> = {
@@ -51,6 +52,9 @@ export default function DailyCashReportPage() {
   const [forceCancelSubmitting, setForceCancelSubmitting] = useState(false);
   const [remarksDraft, setRemarksDraft] = useState('');
   const [remarksSaving, setRemarksSaving] = useState(false);
+  const [attachments, setAttachments] = useState<CashTransactionAttachment[]>([]);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [attachmentsSaving, setAttachmentsSaving] = useState(false);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'system_admin';
 
@@ -99,6 +103,49 @@ export default function DailyCashReportPage() {
   useEffect(() => {
     setRemarksDraft(report?.remarks || '');
   }, [report?.id, report?.remarks]);
+
+  useEffect(() => {
+    setAttachments(report?.attachments || []);
+    setNewFiles([]);
+  }, [report?.id, report?.attachments]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files).filter(f => {
+      if (f.size > 10 * 1024 * 1024) { toast({ title: `${f.name}은 10MB를 초과합니다.`, variant: 'destructive' }); return false; }
+      return true;
+    });
+    setNewFiles(prev => [...prev, ...files]);
+    e.target.value = '';
+  };
+  const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
+  const removeExistingAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
+  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+
+  const handleSaveAttachments = async () => {
+    if (!report || report.status !== 'draft') return;
+    setAttachmentsSaving(true);
+    try {
+      const uploaded: CashTransactionAttachment[] = [];
+      for (const file of newFiles) {
+        const ext = file.name.split('.').pop();
+        const path = `accounting-daily-report-attachments/${report.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+        const { error: upErr } = await supabase.storage.from('documents').upload(path, file);
+        if (upErr) throw new Error(`${file.name} 업로드 실패`);
+        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+      }
+      const merged = [...attachments, ...uploaded];
+      await updateReportAttachments(report.id, merged);
+      setReport(prev => (prev ? { ...prev, attachments: merged } : prev));
+      setAttachments(merged);
+      setNewFiles([]);
+      toast({ title: '첨부파일이 저장되었습니다.' });
+    } catch (e) {
+      toast({ title: '첨부파일 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setAttachmentsSaving(false);
+    }
+  };
 
   const handleSaveRemarks = async () => {
     if (!report || report.status !== 'draft') return;
@@ -233,6 +280,49 @@ export default function DailyCashReportPage() {
               placeholder="자금일보에 남길 비고가 있으면 입력하세요"
               disabled={!isDraft}
             />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">첨부파일 <span className="text-gray-400 font-normal">(각 거래의 증빙서류와 별개로, 자금일보 자체에 붙이는 파일 — 결재 상신 시 거래 증빙서류와 함께 일괄 첨부됩니다)</span></Label>
+              {isDraft && newFiles.length > 0 && (
+                <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={handleSaveAttachments} disabled={attachmentsSaving}>
+                  {attachmentsSaving ? '저장 중...' : '첨부파일 저장'}
+                </Button>
+              )}
+            </div>
+            {(attachments.length > 0 || newFiles.length > 0) && (
+              <div className="space-y-1.5">
+                {attachments.map((a, idx) => (
+                  <div key={a.path} className="flex items-center justify-between p-2 bg-gray-50 rounded-md text-sm">
+                    <a href={getAttachmentUrl(a.path)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{a.name}</span>
+                    </a>
+                    {isDraft && (
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeExistingAttachment(idx)} disabled={attachmentsSaving}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {newFiles.map((f, idx) => (
+                  <div key={`${f.name}-${idx}`} className="flex items-center justify-between p-2 bg-blue-50 rounded-md text-sm">
+                    <span className="flex items-center gap-2 text-blue-700 truncate">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
+                      <span className="text-xs text-blue-400 shrink-0">(신규)</span>
+                    </span>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeNewFile(idx)} disabled={attachmentsSaving}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {isDraft && (
+              <label className="flex items-center justify-center gap-1.5 h-9 border border-dashed rounded-md text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
+                <Upload className="w-3.5 h-3.5" />첨부파일 추가 (최대 10MB)
+                <input type="file" multiple className="hidden" onChange={handleFileChange} disabled={attachmentsSaving} />
+              </label>
+            )}
           </div>
         </CardContent>
       </Card>

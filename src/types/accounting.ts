@@ -147,6 +147,7 @@ export interface DailyCashReport {
   last_cancelled_by: string | null;
   last_cancel_reason: string | null;
   remarks: string | null;
+  attachments: CashTransactionAttachment[];
   created_by: string | null;
   created_at: string;
   updated_at: string;

@@ -38,7 +38,7 @@ export function DailyCashReportTable({ sections, onTransactionClick }: DailyCash
             ) : sections.map(s => (
               <tr key={s.id} className="border-b last:border-0">
                 <td className="p-2 text-gray-500 truncate">{KIND_LABEL[s.kind]}</td>
-                <td className="p-2 font-medium truncate">{s.name}</td>
+                <td className="p-2 font-medium truncate" title={s.name}>{s.name}</td>
                 <td className="p-2 text-right font-mono text-gray-400 truncate">{s.opening_balance.toLocaleString()} {s.currency}</td>
                 <td className="p-2 text-right font-mono font-semibold truncate">{s.closing_balance.toLocaleString()} {s.currency}</td>
               </tr>
@@ -106,8 +106,8 @@ export function DailyCashReportTable({ sections, onTransactionClick }: DailyCash
                     <td className="p-2 text-right font-mono text-red-600 truncate">{t.expense ? t.expense.toLocaleString() : ''}</td>
                     <td className="p-2 text-right font-mono text-blue-700 truncate">{t.income ? t.income.toLocaleString() : ''}</td>
                     <td className="p-2 text-right font-mono truncate">{t.balance.toLocaleString()} {s.currency}</td>
-                    <td className="p-2 truncate">{t.counterparty}</td>
-                    <td className="p-2 text-gray-500 truncate">{t.description}</td>
+                    <td className="p-2 truncate" title={t.counterparty}>{t.counterparty}</td>
+                    <td className="p-2 text-gray-500 truncate" title={t.description}>{t.description}</td>
                   </tr>
                 ))}
               </tbody>

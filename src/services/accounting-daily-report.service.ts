@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
-import type { DailyCashReport, DailyCashReportSnapshotSection, DailyCashReportTransactionRow } from '@/types/accounting';
+import type { DailyCashReport, DailyCashReportSnapshotSection, DailyCashReportTransactionRow, CashTransactionAttachment } from '@/types/accounting';
 
 interface RawTxn {
   id: string;
@@ -91,7 +91,7 @@ export async function getDailyReports(): Promise<DailyCashReport[]> {
     .select('id, report_date, status, approval_document_id, confirmed_at, confirmed_by, last_cancelled_at, last_cancelled_by, last_cancel_reason, created_by, created_at, updated_at')
     .order('report_date', { ascending: false });
   if (error) throw error;
-  return (data || []).map(r => ({ ...r, snapshot: null, remarks: null }));
+  return (data || []).map(r => ({ ...r, snapshot: null, remarks: null, attachments: [] }));
 }
 
 export async function getDailyReportByDate(date: string): Promise<DailyCashReport | null> {
@@ -136,6 +136,19 @@ export async function updateReportRemarks(reportId: string, remarks: string): Pr
   const { error } = await supabase
     .from('accounting_daily_reports')
     .update({ remarks: remarks || null, updated_at: new Date().toISOString() })
+    .eq('id', reportId);
+  if (error) throw error;
+}
+
+// 작성중(draft) 상태에서만 자금일보 자체에 직접 붙인 첨부파일을 고칠 수 있다 — 그날 각
+// 거래에 달린 증빙서류와는 별개로, 자금일보 전체에 대한 첨부(예: 은행 통장 사본 등)다.
+export async function updateReportAttachments(reportId: string, attachments: CashTransactionAttachment[]): Promise<void> {
+  const { data: report, error: fetchError } = await supabase.from('accounting_daily_reports').select('status').eq('id', reportId).single();
+  if (fetchError) throw fetchError;
+  if (report.status !== 'draft') throw new Error('작성중 상태의 자금일보만 첨부파일을 수정할 수 있습니다.');
+  const { error } = await supabase
+    .from('accounting_daily_reports')
+    .update({ attachments, updated_at: new Date().toISOString() })
     .eq('id', reportId);
   if (error) throw error;
 }
@@ -217,6 +230,17 @@ export async function prepareDailyReportDraft(date: string, userId: string): Pro
   for (const [currency, total] of totalsByCurrency) lines.push(`금일 잔액 합계(${currency}): ${total.toLocaleString()}`);
   const content = lines.join('\n');
 
+  // 그날 각 거래에 달린 증빙서류 + 자금일보 자체에 직접 붙인 첨부파일을 결재문서 첨부로
+  // 한꺼번에 붙인다. 다시 상신 준비를 할 때마다 그날 거래 기준으로 새로 모으므로,
+  // 상신 직전까지 영수증을 추가/수정해도 최신 상태로 반영된다.
+  const { data: dayTxns } = await supabase
+    .from('accounting_cash_transactions')
+    .select('attachments')
+    .eq('transaction_date', date);
+  const txnAttachments = (dayTxns || []).flatMap(t => (t.attachments || []) as CashTransactionAttachment[]);
+  const allAttachments = [...(report.attachments || []), ...txnAttachments];
+  const attachments = [...new Map(allAttachments.map(a => [a.path, a])).values()];
+
   // 이미 만들어둔 초안이 작성중 상태 그대로 남아있으면 새로 만들지 않고 그 초안을 최신 표로 갱신한다.
   let existingDraftId: string | undefined;
   if (report.approval_document_id) {
@@ -229,6 +253,7 @@ export async function prepareDailyReportDraft(date: string, userId: string): Pro
     document_type_id: docType.id,
     title: `${date} 자금일보`,
     content,
+    attachments,
     org_unit_id: orgUnitId,
     created_by: userId,
     reference_type: 'daily_cash_report',
