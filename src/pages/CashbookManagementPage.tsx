@@ -552,7 +552,7 @@ export default function CashbookManagementPage() {
           <div className="space-y-1.5">
             {currencyTotals.map(([currency, { income, expense }]) => (
               <Card key={currency}>
-                <CardContent className="py-2.5 px-4 flex items-center justify-center gap-x-6 gap-y-1 flex-wrap text-sm">
+                <CardContent className="py-2.5 px-4 flex items-center justify-start gap-x-6 gap-y-1 flex-wrap text-sm">
                   <span className="text-xs font-semibold text-gray-500">{currency}</span>
                   <span className="text-gray-500">기간 내 수입 <b className="text-blue-700 font-mono font-semibold">{income.toLocaleString()}</b></span>
                   <span className="text-gray-500">기간 내 지출 <b className="text-red-600 font-mono font-semibold">{expense.toLocaleString()}</b></span>
