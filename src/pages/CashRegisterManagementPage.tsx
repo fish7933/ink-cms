@@ -53,10 +53,15 @@ export default function CashRegisterManagementPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [registerList, users] = await Promise.all([getCashRegisters(), getUsers()]);
-    setRegisters(registerList);
-    setStaff(users.filter(u => STAFF_ROLES.includes(u.role)));
-    setLoading(false);
+    try {
+      const [registerList, users] = await Promise.all([getCashRegisters(), getUsers()]);
+      setRegisters(registerList);
+      setStaff(users.filter(u => STAFF_ROLES.includes(u.role)));
+    } catch (e) {
+      toast({ title: '시재 목록을 불러오지 못했습니다.', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openForm = (r?: CashRegisterWithBalance) => {

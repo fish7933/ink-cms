@@ -56,11 +56,16 @@ export default function CardManagementPage() {
 
   const loadData = async () => {
     setLoading(true);
-    const [cardList, accountList, users] = await Promise.all([getCards(), getBankAccounts(), getUsers()]);
-    setCards(cardList);
-    setBankAccounts(accountList);
-    setStaff(users.filter(u => STAFF_ROLES.includes(u.role)));
-    setLoading(false);
+    try {
+      const [cardList, accountList, users] = await Promise.all([getCards(), getBankAccounts(), getUsers()]);
+      setCards(cardList);
+      setBankAccounts(accountList);
+      setStaff(users.filter(u => STAFF_ROLES.includes(u.role)));
+    } catch (e) {
+      toast({ title: '카드 목록을 불러오지 못했습니다.', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openForm = (c?: CardWithDetails) => {
