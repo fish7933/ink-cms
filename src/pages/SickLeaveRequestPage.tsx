@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import LeaveRangeCalendar from '@/components/leave/LeaveRangeCalendar';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { uploadCompressed } from '@/lib/upload';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import {
@@ -201,11 +202,11 @@ export default function SickLeaveRequestPage() {
       setEvidenceSaving(true);
       const uploaded: SickLeaveAttachment[] = [];
       for (const file of evidenceNewFiles) {
-        const ext = file.name.split('.').pop();
-        const path = `sick-leave-evidence/${evidenceRequest.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-        const { error } = await supabase.storage.from('documents').upload(path, file);
-        if (error) throw new Error(`${file.name} 업로드 실패`);
-        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+        try {
+          uploaded.push(await uploadCompressed('documents', `sick-leave-evidence/${evidenceRequest.id}/`, file));
+        } catch {
+          throw new Error(`${file.name} 업로드 실패`);
+        }
       }
       const merged = [...evidenceAttachments, ...uploaded];
       await updateSickLeaveAttachments(evidenceRequest.id, merged);

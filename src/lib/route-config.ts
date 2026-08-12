@@ -78,6 +78,8 @@ const CashbookManagementPage = lazy(() => import('@/pages/CashbookManagementPage
 const AccountingExpenseReflectionPage = lazy(() => import('@/pages/AccountingExpenseReflectionPage'));
 const DailyCashReportOverviewPage = lazy(() => import('@/pages/DailyCashReportOverviewPage'));
 const DailyCashReportPage = lazy(() => import('@/pages/DailyCashReportPage'));
+const FileStorageSettingsPage = lazy(() => import('@/pages/FileStorageSettingsPage'));
+const FileManagementPage = lazy(() => import('@/pages/FileManagementPage'));
 
 export interface RouteEntry {
   path: string;
@@ -141,6 +143,8 @@ export const routeConfig: RouteEntry[] = [
   { path: '/companies', component: CompanyManagementPage },
   { path: '/company-info', component: CompanyInfoPage },
   { path: '/user-groups', component: UserGroupManagementPage },
+  { path: '/settings/file-storage', component: FileStorageSettingsPage },
+  { path: '/settings/files', component: FileManagementPage },
   { path: '/employee-cards', component: EmployeeCardManagementPage },
   { path: '/manager-assignments', component: ManagerAssignmentPage },
   { path: '/nationalities', component: NationalityManagementPage },

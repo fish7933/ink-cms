@@ -46,6 +46,7 @@ import {
   Landmark,
   CreditCard,
   Receipt,
+  HardDrive,
   LucideIcon,
 } from 'lucide-react';
 
@@ -97,6 +98,7 @@ const iconMap: Record<string, LucideIcon> = {
   Landmark,
   CreditCard,
   Receipt,
+  HardDrive,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {

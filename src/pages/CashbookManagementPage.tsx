@@ -20,6 +20,7 @@ import { getCashRegisters } from '@/services/accounting-cash-register.service';
 import { getCategories, addCategory, deleteCategory } from '@/services/accounting-category.service';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { uploadCompressed } from '@/lib/upload';
 import type {
   CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory,
   AccountingTransactionType, AccountingPaymentMethod, CashTransactionAttachment,
@@ -352,11 +353,11 @@ export default function CashbookManagementPage() {
 
       const uploaded: CashTransactionAttachment[] = [];
       for (const file of newFiles) {
-        const ext = file.name.split('.').pop();
-        const path = `accounting-receipts/${formView?.id || Date.now()}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-        const { error: upErr } = await supabase.storage.from('documents').upload(path, file);
-        if (upErr) throw new Error(`${file.name} 업로드 실패`);
-        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+        try {
+          uploaded.push(await uploadCompressed('documents', `accounting-receipts/${formView?.id || Date.now()}/`, file));
+        } catch {
+          throw new Error(`${file.name} 업로드 실패`);
+        }
       }
       const mergedAttachments = [...attachments, ...uploaded];
 

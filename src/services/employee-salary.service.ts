@@ -7,6 +7,7 @@ import { approvalDocumentService } from '@/services/approval-document.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { getCompanyInfo } from '@/services/company-info.service';
 import { buildPayrollLedgerWorkbook } from '@/utils/employee-payroll-ledger-export';
+import { uploadCompressed } from '@/lib/upload';
 import type {
   EmployeeSalaryItem,
   EmployeeSalaryItemVersion,
@@ -725,9 +726,9 @@ export async function submitPayrollExpenseReport(periodId: string, submittedByUs
   const workbook = buildPayrollLedgerWorkbook(ledger, company?.name || '');
   const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const path = `approval-documents/${Date.now()}_${Math.random().toString(36).substring(7)}.xlsx`;
-  const { error: uploadError } = await supabase.storage.from('documents').upload(path, blob);
-  if (uploadError) throw uploadError;
+  const ledgerFile = new File([blob], `${period.year_month}_급여대장.xlsx`, { type: blob.type });
+  const uploadedLedger = await uploadCompressed('documents', 'approval-documents/', ledgerFile);
+  const path = uploadedLedger.path;
 
   // 예전엔 전 직원 합계를 한 항목으로 뭉쳐서 상신했다 — 지출결의서 문서유형의 실제 스키마는
   // expense_items(직원별 행) 배열인데 이 화면만 안 맞는 평평한 구조를 써왔던 걸 바로잡는다.

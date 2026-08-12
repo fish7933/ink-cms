@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { uploadCompressed } from '@/lib/upload';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
@@ -128,11 +129,11 @@ export default function DailyCashReportPage() {
     try {
       const uploaded: CashTransactionAttachment[] = [];
       for (const file of newFiles) {
-        const ext = file.name.split('.').pop();
-        const path = `accounting-daily-report-attachments/${report.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-        const { error: upErr } = await supabase.storage.from('documents').upload(path, file);
-        if (upErr) throw new Error(`${file.name} 업로드 실패`);
-        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+        try {
+          uploaded.push(await uploadCompressed('documents', `accounting-daily-report-attachments/${report.id}/`, file));
+        } catch {
+          throw new Error(`${file.name} 업로드 실패`);
+        }
       }
       const merged = [...attachments, ...uploaded];
       await updateReportAttachments(report.id, merged);

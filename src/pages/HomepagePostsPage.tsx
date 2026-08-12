@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { uploadCompressed } from '@/lib/upload';
 import { getHomepagePosts, addHomepagePost, updateHomepagePost, deleteHomepagePost } from '@/services/homepage-post.service';
 import type { HomepagePost, HomepagePostAttachment } from '@/types/homepage';
 import type { User } from '@/types/models';
@@ -105,11 +106,11 @@ export default function HomepagePostsPage() {
       setSaving(true);
       const uploaded: HomepagePostAttachment[] = [];
       for (const file of newFiles) {
-        const ext = file.name.split('.').pop();
-        const path = `homepage-posts/${formView?.id || 'new'}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from('documents').upload(path, file);
-        if (uploadError) throw new Error(`${file.name} 업로드 실패`);
-        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+        try {
+          uploaded.push(await uploadCompressed('documents', `homepage-posts/${formView?.id || 'new'}/`, file));
+        } catch {
+          throw new Error(`${file.name} 업로드 실패`);
+        }
       }
       const attachments = [...form.attachments, ...uploaded];
 

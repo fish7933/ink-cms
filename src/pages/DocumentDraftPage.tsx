@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
+import { uploadCompressed } from '@/lib/upload';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService, approvalLineToChainSteps } from '@/services/approval-document.service';
 import { approvalService } from '@/services/approval.service';
@@ -516,11 +517,11 @@ export default function DocumentDraftPage() {
     setCcUserIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
 
   const uploadSingleAttachment = async (file: File): Promise<ApprovalDocumentAttachment> => {
-    const ext = file.name.split('.').pop();
-    const path = `approval-documents/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-    const { error } = await supabase.storage.from('documents').upload(path, file);
-    if (error) throw new Error(msg.file.uploadFailed(file.name));
-    return { name: file.name, path, size: file.size, type: file.type };
+    try {
+      return await uploadCompressed('documents', 'approval-documents/', file);
+    } catch {
+      throw new Error(msg.file.uploadFailed(file.name));
+    }
   };
 
   const uploadAttachments = async (files: File[]): Promise<ApprovalDocumentAttachment[]> => {
