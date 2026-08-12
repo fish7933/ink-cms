@@ -33,6 +33,12 @@ const NONE = '_none';
 const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
 const CURRENCY_LABELS: Record<string, string> = { KRW: '원화', USD: '미화', EUR: '유로', JPY: '엔화' };
 const CURRENCY_SYMBOLS: Record<string, string> = { KRW: '₩', USD: '$', EUR: '€', JPY: '¥' };
+const CURRENCY_BADGE_COLORS: Record<string, string> = {
+  KRW: 'bg-slate-100 text-slate-700 border-slate-300',
+  USD: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  EUR: 'bg-indigo-100 text-indigo-700 border-indigo-300',
+  JPY: 'bg-amber-100 text-amber-700 border-amber-300',
+};
 const PAGE_SIZE = 20;
 const PAYMENT_METHOD_LABELS: Record<AccountingPaymentMethod, string> = { bank_account: '통장', card: '카드', cash: '현금' };
 
@@ -714,7 +720,7 @@ export default function CashbookManagementPage() {
                       <th className="text-left p-2">분류</th>
                       <th className="text-left p-2">거래처</th>
                       <th className="text-left p-2">적요</th>
-                      <th className="text-center p-2 w-12">통화</th>
+                      <th className="text-center p-2 w-16">통화</th>
                       <th className="text-right p-2">수입</th>
                       <th className="text-right p-2">지출</th>
                       <th className="text-left p-2">작성자</th>
@@ -739,16 +745,18 @@ export default function CashbookManagementPage() {
                         <td className="p-2 text-center">
                           <Badge className={`text-[10px] ${t.transaction_type === 'income' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>{t.transaction_type === 'income' ? '수입' : '지출'}</Badge>
                         </td>
-                        <td className="p-2 whitespace-nowrap">{PAYMENT_METHOD_LABELS[t.payment_method]}{t.bank_account_name ? ` · ${t.bank_account_name}` : ''}{t.card_name ? ` · ${t.card_name}` : ''}{t.cash_register_name ? ` · ${t.cash_register_name}` : ''}</td>
+                        <td className="p-2 whitespace-nowrap">{t.bank_account_name || t.card_name || t.cash_register_name || PAYMENT_METHOD_LABELS[t.payment_method]}</td>
                         <td className="p-2">{t.category_name || '-'}</td>
                         <td className="p-2">{t.counterparty || '-'}</td>
                         <td className="p-2 text-gray-500">{t.description || '-'}</td>
-                        <td className="p-2 text-center text-gray-500" title={CURRENCY_LABELS[t.currency] || t.currency}>{CURRENCY_SYMBOLS[t.currency] || t.currency}</td>
+                        <td className="p-2 text-center">
+                          <Badge variant="outline" className={`text-[10px] font-normal ${CURRENCY_BADGE_COLORS[t.currency] || 'bg-gray-100 text-gray-600 border-gray-300'}`}>{CURRENCY_LABELS[t.currency] || t.currency}</Badge>
+                        </td>
                         <td className="p-2 text-right font-mono font-semibold text-blue-700">
-                          {t.transaction_type === 'income' ? Number(t.amount).toLocaleString() : ''}
+                          {t.transaction_type === 'income' ? `${CURRENCY_SYMBOLS[t.currency] || ''}${Number(t.amount).toLocaleString()}` : ''}
                         </td>
                         <td className="p-2 text-right font-mono font-semibold text-red-600">
-                          {t.transaction_type === 'expense' ? Number(t.amount).toLocaleString() : ''}
+                          {t.transaction_type === 'expense' ? `${CURRENCY_SYMBOLS[t.currency] || ''}${Number(t.amount).toLocaleString()}` : ''}
                         </td>
                         <td className="p-2 text-gray-500">{t.created_by_name || '-'}</td>
                         <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
