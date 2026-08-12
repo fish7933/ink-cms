@@ -32,6 +32,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 const NONE = '_none';
 const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
 const CURRENCY_LABELS: Record<string, string> = { KRW: '원화', USD: '미화', EUR: '유로', JPY: '엔화' };
+const CURRENCY_SYMBOLS: Record<string, string> = { KRW: '₩', USD: '$', EUR: '€', JPY: '¥' };
 const PAGE_SIZE = 20;
 const PAYMENT_METHOD_LABELS: Record<AccountingPaymentMethod, string> = { bank_account: '통장', card: '카드', cash: '현금' };
 
@@ -713,6 +714,7 @@ export default function CashbookManagementPage() {
                       <th className="text-left p-2">분류</th>
                       <th className="text-left p-2">거래처</th>
                       <th className="text-left p-2">적요</th>
+                      <th className="text-center p-2 w-12">통화</th>
                       <th className="text-right p-2">수입</th>
                       <th className="text-right p-2">지출</th>
                       <th className="text-left p-2">작성자</th>
@@ -721,7 +723,7 @@ export default function CashbookManagementPage() {
                   </thead>
                   <tbody>
                     {paged.length === 0 ? (
-                      <tr><td colSpan={10} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
+                      <tr><td colSpan={11} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
                     ) : paged.map(t => (
                       <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(t)}>
                         <td className="p-2 whitespace-nowrap">
@@ -741,6 +743,7 @@ export default function CashbookManagementPage() {
                         <td className="p-2">{t.category_name || '-'}</td>
                         <td className="p-2">{t.counterparty || '-'}</td>
                         <td className="p-2 text-gray-500">{t.description || '-'}</td>
+                        <td className="p-2 text-center text-gray-500" title={CURRENCY_LABELS[t.currency] || t.currency}>{CURRENCY_SYMBOLS[t.currency] || t.currency}</td>
                         <td className="p-2 text-right font-mono font-semibold text-blue-700">
                           {t.transaction_type === 'income' ? Number(t.amount).toLocaleString() : ''}
                         </td>
