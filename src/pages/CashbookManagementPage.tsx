@@ -580,7 +580,7 @@ export default function CashbookManagementPage() {
             ))}
             {cashRegisters.map(r => (
               <div key={r.id} className="px-2.5 py-1 bg-gray-50 border rounded-full text-xs">
-                <span className="text-gray-500">{r.name}</span> <span className="font-semibold font-mono">{balanceAsOf(Number(r.opening_balance), r.id, 'cash_register_id').toLocaleString()}</span>
+                <span className="text-gray-500">{r.name}</span> <span className="font-semibold font-mono">{balanceAsOf(Number(r.opening_balance), r.id, 'cash_register_id').toLocaleString()} {r.currency}</span>
               </div>
             ))}
           </div>

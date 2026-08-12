@@ -23,9 +23,10 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 
 const NONE = '_none';
 const STAFF_ROLES = ['ship_manager', 'admin', 'system_admin'];
+const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
 
 const emptyForm = {
-  name: '', holder_user_id: '', location: '', opening_balance: '0', opening_date: '', memo: '', is_active: true,
+  name: '', holder_user_id: '', location: '', currency: 'KRW', opening_balance: '0', opening_date: '', memo: '', is_active: true,
 };
 
 export default function CashRegisterManagementPage() {
@@ -69,7 +70,7 @@ export default function CashRegisterManagementPage() {
     if (r) {
       setForm({
         name: r.name, holder_user_id: r.holder_user_id || '', location: r.location || '',
-        opening_balance: String(r.opening_balance), opening_date: r.opening_date || '',
+        currency: r.currency || 'KRW', opening_balance: String(r.opening_balance), opening_date: r.opening_date || '',
         memo: r.memo || '', is_active: r.is_active,
       });
     } else {
@@ -85,7 +86,7 @@ export default function CashRegisterManagementPage() {
       setSaving(true);
       const data = {
         name: form.name.trim(), holder_user_id: form.holder_user_id || null, location: form.location.trim() || null,
-        opening_balance: parseFloat(form.opening_balance) || 0, opening_date: form.opening_date || null,
+        currency: form.currency, opening_balance: parseFloat(form.opening_balance) || 0, opening_date: form.opening_date || null,
         memo: form.memo.trim() || null, is_active: form.is_active,
       };
       if (formView?.id) {
@@ -156,7 +157,7 @@ export default function CashRegisterManagementPage() {
               <div className="space-y-1.5"><Label className="text-xs">시재명 *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="예: 총무부 시재금" className="h-9 text-sm" /></div>
               <div className="space-y-1.5"><Label className="text-xs">보관 위치</Label><Input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="예: 본사 총무팀" className="h-9 text-sm" /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">담당자</Label>
                 <Select value={form.holder_user_id || NONE} onValueChange={v => setForm({ ...form, holder_user_id: v === NONE ? '' : v })}>
@@ -165,6 +166,13 @@ export default function CashRegisterManagementPage() {
                     <SelectItem value={NONE}>선택 안 함</SelectItem>
                     {staff.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
                   </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">통화</Label>
+                <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v })}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5"><Label className="text-xs">개설잔액</Label><Input type="number" step="0.01" value={form.opening_balance} onChange={e => setForm({ ...form, opening_balance: e.target.value })} className="h-9 text-sm" /></div>
@@ -203,6 +211,7 @@ export default function CashRegisterManagementPage() {
                   <TableHead className="text-xs">시재명</TableHead>
                   <TableHead className="text-xs">보관 위치</TableHead>
                   <TableHead className="text-xs">담당자</TableHead>
+                  <TableHead className="text-xs">통화</TableHead>
                   <TableHead className="text-right text-xs">현재잔액</TableHead>
                   <TableHead className="text-xs w-16">상태</TableHead>
                   <TableHead className="text-right text-xs w-20">작업</TableHead>
@@ -216,7 +225,8 @@ export default function CashRegisterManagementPage() {
                         <TableCell className="text-sm font-medium">{r.name}</TableCell>
                         <TableCell className="text-sm">{r.location || '-'}</TableCell>
                         <TableCell className="text-sm">{r.holder_user_name || '-'}</TableCell>
-                        <TableCell className="text-right text-sm font-mono font-semibold">{r.current_balance.toLocaleString()}</TableCell>
+                        <TableCell className="text-sm font-mono text-gray-500">{r.currency}</TableCell>
+                        <TableCell className="text-right text-sm font-mono font-semibold">{r.current_balance.toLocaleString()} {r.currency}</TableCell>
                         <TableCell>
                           {r.is_active
                             ? <Badge className="bg-green-100 text-green-700 text-xs">사용중</Badge>

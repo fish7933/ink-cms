@@ -47,6 +47,7 @@ export interface CashRegister {
   name: string;
   holder_user_id: string | null;
   location: string | null;
+  currency: string;
   opening_balance: number;
   opening_date: string | null;
   display_order: number;

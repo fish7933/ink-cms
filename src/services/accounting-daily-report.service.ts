@@ -78,8 +78,7 @@ async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSecti
     sections.push(buildSection('bank_account', a.id, a.account_name, a.currency, Number(a.opening_balance), allTxns.filter(t => t.bank_account_id === a.id), date));
   }
   for (const r of registers || []) {
-    // 시재금(현금)은 통화 구분 없이 원화(KRW)만 다룬다.
-    sections.push(buildSection('cash_register', r.id, r.name, 'KRW', Number(r.opening_balance), allTxns.filter(t => t.cash_register_id === r.id), date));
+    sections.push(buildSection('cash_register', r.id, r.name, r.currency || 'KRW', Number(r.opening_balance), allTxns.filter(t => t.cash_register_id === r.id), date));
   }
   return sections;
 }
