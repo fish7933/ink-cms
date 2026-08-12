@@ -14,6 +14,7 @@ import { getEvaluations, addEvaluation, updateEvaluation, deleteEvaluation } fro
 import type { CrewEvaluationWithDetails, EvaluationAttachment } from '@/types/evaluation';
 import type { Rank } from '@/types/models';
 import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -108,7 +109,7 @@ export default function CrewEvaluationPage() {
   };
   const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
   const removeExistingAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
-  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+  const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
   const uploadNewFiles = async (files: File[]): Promise<EvaluationAttachment[]> => {
     const uploaded: EvaluationAttachment[] = [];

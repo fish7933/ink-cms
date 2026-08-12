@@ -20,7 +20,7 @@ import { getCashRegisters } from '@/services/accounting-cash-register.service';
 import { getCategories, addCategory, deleteCategory } from '@/services/accounting-category.service';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { uploadCompressed } from '@/lib/upload';
+import { uploadCompressed, getFileUrl } from '@/lib/upload';
 import type {
   CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory,
   AccountingTransactionType, AccountingPaymentMethod, CashTransactionAttachment,
@@ -325,7 +325,7 @@ export default function CashbookManagementPage() {
   };
   const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
   const removeExistingAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
-  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+  const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
   const handlePaymentMethodChange = (v: AccountingPaymentMethod) => {
     setForm(prev => ({ ...prev, payment_method: v, bank_account_id: '', card_id: '', cash_register_id: '' }));

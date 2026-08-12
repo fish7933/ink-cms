@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { crewService } from '@/services/crew.service';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewDisplayName } from '@/lib/utils';
@@ -533,8 +534,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   };
 
   const openCertFile = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+    window.open(getFileUrl('documents', path), '_blank');
   };
 
   const selectedRank = ranks.find(r => r.id === formData.rank_id);

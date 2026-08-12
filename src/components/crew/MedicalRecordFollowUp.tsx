@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import {
   getMedicalRecordLogs, addMedicalRecordLog, deleteMedicalRecordLog, updateMedicalRecordLogAttachments, updateMedicalRecord,
 } from '@/services/crew-extended.service';
@@ -42,7 +43,7 @@ function filterSizeOk(files: File[], toast: ReturnType<typeof useToast>['toast']
   });
 }
 
-const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
 // 상병 기록 하나에 계속 쌓아나가는 치료 경과 로그와 첨부파일(진단서/청구서/영수증 등)을 관리한다.
 // 기록 전체에 딸린 첨부파일뿐 아니라, 로그 항목 하나하나에도 그때그때의 파일을 붙일 수 있다.

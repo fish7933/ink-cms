@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -186,8 +187,7 @@ export default function ApprovalDocumentDetailPage() {
   };
 
   const openAttachment = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+    window.open(getFileUrl('documents', path), '_blank');
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;

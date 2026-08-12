@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { sanitizeTableHtml } from '@/utils/table-field';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { LeaveDetail } from '@/services/approval-document.service';
@@ -345,14 +345,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                                 const files = Array.isArray(raw) ? raw : [];
                                 return (
                                   <td key={c.key}>
-                                    {files.length === 0 ? '-' : files.map((f, fi) => {
-                                      const { data } = supabase.storage.from('documents').getPublicUrl(f.path);
-                                      return (
-                                        <div key={fi}>
-                                          <a href={data?.publicUrl} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{f.name}</a>
-                                        </div>
-                                      );
-                                    })}
+                                    {files.length === 0 ? '-' : files.map((f, fi) => (
+                                      <div key={fi}>
+                                        <a href={getFileUrl('documents', f.path)} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{f.name}</a>
+                                      </div>
+                                    ))}
                                   </td>
                                 );
                               }
@@ -425,8 +422,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
               맞지 않아 제외한다 — PDF/기타 형식은 위 "붙임" 줄의 파일명 표기로 충분하고, 원본은
               화면(인쇄 전 미리보기)의 "새 탭에서 열기"로 따로 인쇄하게 한다. */}
           {includeAttachments && doc.attachments.map((a, i) => {
-            const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
-            const url = data?.publicUrl;
+            const url = getFileUrl('documents', a.path);
             const isImage = a.type?.startsWith('image/');
             if (!(isImage && url)) return null;
             return (

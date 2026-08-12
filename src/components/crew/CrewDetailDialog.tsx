@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Edit, Trash2, User, ExternalLink } from 'lucide-react';
 import type { CrewWithDetails } from '@/services/crew.service';
 import CrewStatusBadge from './CrewStatusBadge';
-import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 
 interface Certificate {
   name: string;
@@ -48,8 +48,7 @@ export function CrewDetailDialog({ open, crew, onClose, onEdit, onDelete }: Crew
   const certificates = parseCertificates();
 
   const openCertFile = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+    window.open(getFileUrl('documents', path), '_blank');
   };
 
   const formatDate = (d?: string) => {

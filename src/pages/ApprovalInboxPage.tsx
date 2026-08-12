@@ -25,6 +25,7 @@ import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.servic
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 
@@ -513,8 +514,7 @@ export default function ApprovalInboxPage() {
   const docPaginated = docFiltered.slice((docPage - 1) * docItemsPerPage, docPage * docItemsPerPage);
 
   const openAttachment = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+    window.open(getFileUrl('documents', path), '_blank');
   };
 
   const renderDocAction = () => {

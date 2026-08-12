@@ -15,6 +15,7 @@ import { approvalService } from '@/services/approval.service';
 import { supervisorService } from '@/services/supervisor.service';
 import { useTabContext } from '@/contexts/TabContext';
 import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { CrewRecommendationWithDetails, CrewRecommendationResumeFile, User, Company, Fleet, Ship, Rank } from '@/types/models';
@@ -397,8 +398,7 @@ export default function RecommendationReviewPage() {
   const openResume = async (r: CrewRecommendationWithDetails) => {
     if (!r.resume_files?.length) { alert('첨부된 이력서가 없습니다.'); return; }
     for (const f of r.resume_files) {
-      const { data } = supabase.storage.from('documents').getPublicUrl(f.path);
-      if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+      window.open(getFileUrl('documents', f.path), '_blank');
     }
   };
 

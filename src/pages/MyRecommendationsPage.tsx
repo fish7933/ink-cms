@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { crewRecommendationService } from '@/services/crew-recommendation.service';
 import { CertificateUploadDialog } from '@/components/crew/CertificateUploadDialog';
-import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/lib/store';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { CrewRecommendationWithDetails, User as UserType, Company, Fleet, Ship, Rank } from '@/types/models';
@@ -164,8 +164,7 @@ export default function MyRecommendationsPage() {
   const openResume = async (r: CrewRecommendationWithDetails) => {
     if (!r.resume_files?.length) { alert('첨부된 이력서가 없습니다.'); return; }
     for (const f of r.resume_files) {
-      const { data } = supabase.storage.from('documents').getPublicUrl(f.path);
-      if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+      window.open(getFileUrl('documents', f.path), '_blank');
     }
   };
 

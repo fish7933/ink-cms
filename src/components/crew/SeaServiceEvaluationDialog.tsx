@@ -14,6 +14,7 @@ import type { CrewEvaluationWithDetails, EvaluationAttachment } from '@/types/ev
 import type { SeaServiceRecord } from '@/types/crew-extended';
 import type { Rank } from '@/types/models';
 import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { useToast } from '@/hooks/use-toast';
 
@@ -134,7 +135,7 @@ export default function SeaServiceEvaluationDialog({ open, onOpenChange, crewId,
     } catch (e) { toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); } finally { setSaving(false); setUploading(false); }
   };
 
-  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+  const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
   const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;

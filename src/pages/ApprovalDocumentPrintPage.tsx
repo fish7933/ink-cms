@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { getCurrentUser } from '@/lib/store';
-import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { approvalDocumentService, getLeaveDetail, type LeaveDetail } from '@/services/approval-document.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
@@ -63,8 +63,7 @@ export default function ApprovalDocumentPrintPage() {
   // 뷰어로 따로 인쇄할 수 있게 한다.
   const nonImageAttachments = doc.attachments.filter(a => !a.type?.startsWith('image/'));
   const openAttachment = (path: string) => {
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    if (data?.publicUrl) window.open(data.publicUrl, '_blank');
+    window.open(getFileUrl('documents', path), '_blank');
   };
 
   return (

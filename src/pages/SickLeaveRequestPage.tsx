@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import LeaveRangeCalendar from '@/components/leave/LeaveRangeCalendar';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { uploadCompressed } from '@/lib/upload';
+import { uploadCompressed, getFileUrl } from '@/lib/upload';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import {
@@ -194,7 +194,7 @@ export default function SickLeaveRequestPage() {
   };
   const removeNewEvidenceFile = (idx: number) => setEvidenceNewFiles(prev => prev.filter((_, i) => i !== idx));
   const removeExistingEvidenceAttachment = (idx: number) => setEvidenceAttachments(prev => prev.filter((_, i) => i !== idx));
-  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+  const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
   const saveEvidence = async () => {
     if (!evidenceRequest) return;

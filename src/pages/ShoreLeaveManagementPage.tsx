@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
-import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import { getUsers } from '@/services/user.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { useTabContext } from '@/contexts/TabContext';
@@ -612,7 +612,7 @@ export default function ShoreLeaveManagementPage() {
                                   <summary className="cursor-pointer text-blue-600 inline-flex items-center gap-1 list-none"><Paperclip className="w-3 h-3" />{r.attachments.length}</summary>
                                   <div className="mt-1 space-y-0.5">
                                     {r.attachments.map(a => (
-                                      <a key={a.path} href={supabase.storage.from('documents').getPublicUrl(a.path).data.publicUrl} target="_blank" rel="noreferrer" className="block text-blue-600 hover:underline truncate max-w-[160px]">{a.name}</a>
+                                      <a key={a.path} href={getFileUrl('documents', a.path)} target="_blank" rel="noreferrer" className="block text-blue-600 hover:underline truncate max-w-[160px]">{a.name}</a>
                                     ))}
                                   </div>
                                 </details>

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { uploadToExternalStorage } from '@/lib/s3-client';
 
 const IMAGE_TYPE_RE = /^image\/(jpeg|png|webp|gif|bmp)$/i;
 
@@ -47,12 +48,32 @@ export interface UploadedFileMeta {
   type: string;
 }
 
-// 그룹웨어/경리 첨부파일 전용 업로드 — 이미지/PDF는 자동 압축 후 올린다.
+// 그룹웨어/경리 첨부파일 전용 업로드 — 이미지/PDF는 자동 압축 후 올린다. 파일 저장소 설정에서
+// 외부 S3 호환 저장소를 켜뒀으면 그쪽으로, 아니면 이 시스템(Supabase Storage)으로 올라간다.
+// 외부로 올라간 파일은 path에 완전한 URL을 그대로 저장해두므로(상대경로가 아니라) 나중에
+// getFileUrl()이 백엔드를 몰라도 그대로 열 수 있다 — 저장소 설정이 나중에 바뀌어도 이미
+// 올라간 파일의 링크는 안 깨진다.
 export async function uploadCompressed(bucket: string, pathPrefix: string, file: File): Promise<UploadedFileMeta> {
   const toUpload = await compressForUpload(file);
   const ext = file.name.split('.').pop();
-  const path = `${pathPrefix}${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-  const { error } = await supabase.storage.from(bucket).upload(path, toUpload);
+  const relativePath = `${pathPrefix}${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+
+  const externalUrl = await uploadToExternalStorage(bucket, relativePath, toUpload, toUpload.type || file.type).catch(e => {
+    console.error('외부 저장소 업로드 실패, Supabase Storage로 대체합니다:', e);
+    return null;
+  });
+  if (externalUrl) {
+    return { name: file.name, path: externalUrl, size: toUpload.size, type: toUpload.type || file.type };
+  }
+
+  const { error } = await supabase.storage.from(bucket).upload(relativePath, toUpload);
   if (error) throw error;
-  return { name: file.name, path, size: toUpload.size, type: toUpload.type || file.type };
+  return { name: file.name, path: relativePath, size: toUpload.size, type: toUpload.type || file.type };
+}
+
+// 첨부파일의 저장 위치(path)가 이미 완전한 URL(외부 저장소로 올라간 파일)이면 그대로,
+// 상대경로(Supabase Storage에 올라간 기존/현재 파일)면 getPublicUrl로 변환한다.
+export function getFileUrl(bucket: string, path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }

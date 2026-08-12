@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AutocompleteInput } from '@/components/ui/autocomplete-input';
-import { supabase } from '@/lib/supabase';
+import { getFileUrl } from '@/lib/upload';
 import {
   getReflectableExpenseItems, reflectExpenseItem, reflectExpenseItemsBatch, unreflectExpenseItem, type ExpenseReflectionItem,
 } from '@/services/accounting-expense-reflection.service';
@@ -41,9 +41,8 @@ function AttachmentLinks({ attachments }: { attachments: { name: string; path: s
   return (
     <div className="space-y-1">
       {attachments.map((a, i) => {
-        const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
         return (
-          <a key={i} href={data?.publicUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 hover:underline">
+          <a key={i} href={getFileUrl('documents', a.path)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 hover:underline">
             <FileText className="h-3 w-3 shrink-0" />{a.name}
           </a>
         );

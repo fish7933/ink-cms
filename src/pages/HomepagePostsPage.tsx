@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { uploadCompressed } from '@/lib/upload';
+import { uploadCompressed, getFileUrl } from '@/lib/upload';
 import { getHomepagePosts, addHomepagePost, updateHomepagePost, deleteHomepagePost } from '@/services/homepage-post.service';
 import type { HomepagePost, HomepagePostAttachment } from '@/types/homepage';
 import type { User } from '@/types/models';
@@ -96,7 +96,7 @@ export default function HomepagePostsPage() {
   };
   const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
   const removeExistingAttachment = (idx: number) => setForm(prev => ({ ...prev, attachments: prev.attachments.filter((_, i) => i !== idx) }));
-  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+  const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
   const handleSave = async () => {
     if (!currentUser) return;

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { uploadCompressed } from '@/lib/upload';
+import { uploadCompressed, getFileUrl } from '@/lib/upload';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
@@ -121,7 +121,7 @@ export default function DailyCashReportPage() {
   };
   const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
   const removeExistingAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
-  const getAttachmentUrl = (path: string) => supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+  const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
   const handleSaveAttachments = async () => {
     if (!report || report.status !== 'draft') return;
