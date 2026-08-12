@@ -114,14 +114,16 @@ export default function DailyCashReportOverviewPage() {
                 const inMonth = isSameMonth(day, viewMonth);
                 const r = reportByDate.get(iso);
                 const dow = day.getDay();
+                const isFuture = iso > today;
                 return (
                   <button
                     type="button"
                     key={iso}
-                    onClick={() => goToDate(iso)}
-                    className={`min-h-[68px] border-b border-r p-1.5 text-left align-top hover:bg-blue-50/40 transition-colors ${!inMonth ? 'bg-gray-50/50' : ''} ${isToday(day) ? 'bg-blue-50/60' : ''}`}
+                    onClick={() => !isFuture && goToDate(iso)}
+                    disabled={isFuture}
+                    className={`min-h-[68px] border-b border-r p-1.5 text-left align-top transition-colors ${isFuture ? 'cursor-not-allowed bg-gray-50/70' : 'hover:bg-blue-50/40'} ${!inMonth ? 'bg-gray-50/50' : ''} ${isToday(day) ? 'bg-blue-50/60' : ''}`}
                   >
-                    <p className={`text-xs mb-1 ${!inMonth ? 'text-gray-300' : iso === today ? 'font-bold text-blue-600' : dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-600'}`}>
+                    <p className={`text-xs mb-1 ${isFuture ? 'text-gray-300' : !inMonth ? 'text-gray-300' : iso === today ? 'font-bold text-blue-600' : dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-600'}`}>
                       {format(day, 'd')}
                     </p>
                     {r && (

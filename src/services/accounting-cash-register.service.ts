@@ -14,16 +14,25 @@ export async function getCashRegisters(): Promise<CashRegisterWithBalance[]> {
   const holderIds = [...new Set(registers.map(r => r.holder_user_id).filter((id): id is string => !!id))];
   const ids = registers.map(r => r.id);
 
-  const [{ data: holders }, { data: txns }] = await Promise.all([
+  // PostgREST 기본 조회 상한(1000행)에 걸리지 않도록 다 받을 때까지 이어붙인다.
+  const PAGE_SIZE = 1000;
+  const txns: { cash_register_id: string; transaction_type: string; amount: number }[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase.from('accounting_cash_transactions').select('cash_register_id, transaction_type, amount').in('cash_register_id', ids).range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    txns.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+
+  const [{ data: holders }] = await Promise.all([
     holderIds.length > 0
       ? supabase.from('users').select('id, name').in('id', holderIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    supabase.from('accounting_cash_transactions').select('cash_register_id, transaction_type, amount').in('cash_register_id', ids),
   ]);
 
   const holderNameById = new Map((holders || []).map(u => [u.id, u.name]));
   const deltaByRegister = new Map<string, number>();
-  for (const t of txns || []) {
+  for (const t of txns) {
     const delta = t.transaction_type === 'income' ? Number(t.amount) : -Number(t.amount);
     deltaByRegister.set(t.cash_register_id, (deltaByRegister.get(t.cash_register_id) || 0) + delta);
   }

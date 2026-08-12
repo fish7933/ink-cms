@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Trash2, Save, Edit2, ArrowLeft, Receipt, Settings2, ChevronLeft, ChevronRight, Upload, FileText, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,8 +38,23 @@ function currentMonth(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// toISOString()은 UTC 기준이라 한국 시간 자정~오전 9시 사이엔 실제 로컬 날짜보다 하루
+// 늦게 계산된다 — 로컬 달력 날짜를 직접 조합해서 이 어긋남을 없앤다.
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function shiftDay(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function shiftMonth(month: string, months: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(y, m - 1 + months, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 type DateFilterMode = 'day' | 'month' | 'all';
@@ -48,11 +64,12 @@ const emptyForm = {
   payment_method: 'bank_account' as AccountingPaymentMethod,
   bank_account_id: '', card_id: '', cash_register_id: '',
   transaction_type: 'expense' as AccountingTransactionType,
-  category_name: '', counterparty: '', description: '', amount: '', currency: 'KRW',
+  category_name: '', counterparty: '', description: '', amount: '', currency: 'KRW', remarks: '',
 };
 
 export default function CashbookManagementPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const permissions = usePermissions('accounting_cashbook');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -83,7 +100,64 @@ export default function CashbookManagementPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categorySaving, setCategorySaving] = useState(false);
 
+  // 거래처/적요는 별도 테이블이 없고 과거 거래에서 뽑아낸 값이라 "삭제"는 DB에서 지우는 게
+  // 아니라 이 브라우저(계정)의 드롭다운 후보 목록에서만 숨긴다 — DocumentDraftPage의
+  // 자주 쓰는 문서 목록 숨기기와 동일한 패턴.
+  const [dismissedCounterparties, setDismissedCounterparties] = useState<Set<string>>(new Set());
+  const [dismissedDescriptions, setDismissedDescriptions] = useState<Set<string>>(new Set());
+
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      const rawC = localStorage.getItem(`cashbook-counterparty-dismissed:${currentUser.id}`);
+      if (rawC) setDismissedCounterparties(new Set(JSON.parse(rawC)));
+      const rawD = localStorage.getItem(`cashbook-description-dismissed:${currentUser.id}`);
+      if (rawD) setDismissedDescriptions(new Set(JSON.parse(rawD)));
+    } catch { /* 무시 */ }
+  }, [currentUser]);
+
+  // 자금일보 화면에서 특정 거래를 클릭해 넘어온 경우(?edit=<id>) — 목록이 로드되면 그 거래의
+  // 수정 폼을 자동으로 연다. 저장 후 목록이 다시 로드돼도 재실행되지 않도록 한 번만 연다.
+  const editParamHandledRef = useRef(false);
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (!editId || editParamHandledRef.current || transactions.length === 0) return;
+    const target = transactions.find(t => t.id === editId);
+    if (target) {
+      editParamHandledRef.current = true;
+      openForm(target);
+    }
+  }, [searchParams, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dismissCounterparty = (opt: string) => {
+    if (!currentUser) return;
+    setDismissedCounterparties(prev => {
+      const next = new Set(prev).add(opt);
+      localStorage.setItem(`cashbook-counterparty-dismissed:${currentUser.id}`, JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const dismissDescription = (opt: string) => {
+    if (!currentUser) return;
+    setDismissedDescriptions(prev => {
+      const next = new Set(prev).add(opt);
+      localStorage.setItem(`cashbook-description-dismissed:${currentUser.id}`, JSON.stringify([...next]));
+      return next;
+    });
+  };
+  const deleteCategoryOption = async (name: string) => {
+    const cat = categoriesForType.find(c => c.name === name);
+    if (!cat) return;
+    if (cat.is_system) { toast({ title: '시스템 기본 분류는 삭제할 수 없습니다.', variant: 'destructive' }); return; }
+    try {
+      await deleteCategory(cat);
+      setCategories(await getCategories());
+    } catch (e) {
+      toast({ title: '분류 삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    }
+  };
 
   useEffect(() => {
     if (!permissions.loading && !permissions.canView) navigate('/dashboard');
@@ -146,12 +220,12 @@ export default function CashbookManagementPage() {
   // 한 번 입력된 거래처는 다음부터 드롭다운으로 골라 쓸 수 있게 하되(datalist), 목록에 없는
   // 이름도 자유롭게 새로 입력할 수 있다.
   const counterpartyOptions = useMemo(
-    () => [...new Set(transactions.map(t => t.counterparty).filter((c): c is string => !!c))].sort((a, b) => a.localeCompare(b, 'ko')),
-    [transactions]
+    () => [...new Set(transactions.map(t => t.counterparty).filter((c): c is string => !!c))].filter(c => !dismissedCounterparties.has(c)).sort((a, b) => a.localeCompare(b, 'ko')),
+    [transactions, dismissedCounterparties]
   );
   const descriptionOptions = useMemo(
-    () => [...new Set(transactions.map(t => t.description).filter((d): d is string => !!d))].sort((a, b) => a.localeCompare(b, 'ko')),
-    [transactions]
+    () => [...new Set(transactions.map(t => t.description).filter((d): d is string => !!d))].filter(d => !dismissedDescriptions.has(d)).sort((a, b) => a.localeCompare(b, 'ko')),
+    [transactions, dismissedDescriptions]
   );
 
   const openForm = (t?: CashTransactionWithDetails) => {
@@ -162,7 +236,7 @@ export default function CashbookManagementPage() {
         bank_account_id: t.bank_account_id || '', card_id: t.card_id || '', cash_register_id: t.cash_register_id || '',
         transaction_type: t.transaction_type, category_name: t.category_name || '',
         counterparty: t.counterparty || '', description: t.description || '',
-        amount: String(t.amount), currency: t.currency,
+        amount: String(t.amount), currency: t.currency, remarks: t.remarks || '',
       });
       setAttachments(t.attachments || []);
     } else {
@@ -208,6 +282,7 @@ export default function CashbookManagementPage() {
 
   const handleSave = async () => {
     if (!form.transaction_date) { setError('날짜를 입력하세요.'); return; }
+    if (form.transaction_date > today()) { setError('미래 날짜는 입력할 수 없습니다.'); return; }
     if (form.payment_method === 'bank_account' && !form.bank_account_id) { setError('계좌를 선택하세요.'); return; }
     if (form.payment_method === 'card' && !form.card_id) { setError('카드를 선택하세요.'); return; }
     if (form.payment_method === 'cash' && !form.cash_register_id) { setError('시재를 선택하세요.'); return; }
@@ -234,7 +309,8 @@ export default function CashbookManagementPage() {
         cash_register_id: form.payment_method === 'cash' ? form.cash_register_id : null,
         transaction_type: form.transaction_type, category_id: categoryId,
         counterparty: form.counterparty.trim() || null, description: form.description.trim() || null,
-        amount, currency: form.currency, attachments: mergedAttachments, created_by: currentUser?.id || null,
+        amount, currency: form.currency, attachments: mergedAttachments, remarks: form.remarks.trim() || null,
+        created_by: currentUser?.id || null,
       };
       if (formView?.id) {
         await updateCashTransaction(formView.id, data);
@@ -244,8 +320,8 @@ export default function CashbookManagementPage() {
         await addCashTransaction(data);
         await loadData();
         // 같은 통장/카드/시재에 계속 거래를 입력하는 경우가 많아, 날짜·결제수단·계좌 선택은
-        // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액/영수증)만 비워 바로 이어서 입력할 수 있게 한다.
-        setForm(prev => ({ ...prev, category_name: '', counterparty: '', description: '', amount: '' }));
+        // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액/증빙서류)만 비워 바로 이어서 입력할 수 있게 한다.
+        setForm(prev => ({ ...prev, category_name: '', counterparty: '', description: '', amount: '', remarks: '' }));
         setAttachments([]);
         setNewFiles([]);
         toast({ title: '저장되었습니다.', description: '이어서 같은 계좌에 거래를 추가할 수 있습니다.' });
@@ -321,7 +397,7 @@ export default function CashbookManagementPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label className="text-xs">날짜 *</Label><Input type="date" value={form.transaction_date} onChange={e => setForm({ ...form, transaction_date: e.target.value })} className="h-9 text-sm" /></div>
+              <div className="space-y-1.5"><Label className="text-xs">날짜 *</Label><Input type="date" value={form.transaction_date} max={today()} onChange={e => setForm({ ...form, transaction_date: e.target.value })} className="h-9 text-sm" /></div>
               <div className="space-y-1.5">
                 <Label className="text-xs">구분 *</Label>
                 <div className="grid grid-cols-2 gap-2">
@@ -382,16 +458,16 @@ export default function CashbookManagementPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">분류</Label>
-                <AutocompleteInput value={form.category_name} onChange={v => setForm({ ...form, category_name: v })} options={categoryOptions} className="h-9 text-sm" placeholder="분류 입력 또는 검색" />
+                <AutocompleteInput value={form.category_name} onChange={v => setForm({ ...form, category_name: v })} options={categoryOptions} onDeleteOption={deleteCategoryOption} className="h-9 text-sm" placeholder="분류 입력 또는 검색" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">거래처</Label>
-                <AutocompleteInput value={form.counterparty} onChange={v => setForm({ ...form, counterparty: v })} options={counterpartyOptions} className="h-9 text-sm" placeholder="거래처 입력 또는 검색" />
+                <AutocompleteInput value={form.counterparty} onChange={v => setForm({ ...form, counterparty: v })} options={counterpartyOptions} onDeleteOption={dismissCounterparty} className="h-9 text-sm" placeholder="거래처 입력 또는 검색" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">적요</Label>
-              <AutocompleteInput value={form.description} onChange={v => setForm({ ...form, description: v })} options={descriptionOptions} className="h-9 text-sm" placeholder="적요 입력 또는 검색" />
+              <AutocompleteInput value={form.description} onChange={v => setForm({ ...form, description: v })} options={descriptionOptions} onDeleteOption={dismissDescription} className="h-9 text-sm" placeholder="적요 입력 또는 검색" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label className="text-xs">금액 *</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="h-9 text-sm" /></div>
@@ -404,7 +480,11 @@ export default function CashbookManagementPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">영수증</Label>
+              <Label className="text-xs">비고</Label>
+              <Textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} rows={3} className="text-sm resize-y" placeholder="추가로 남길 메모가 있으면 입력하세요" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">증빙서류</Label>
               {(attachments.length > 0 || newFiles.length > 0) && (
                 <div className="space-y-1.5">
                   {attachments.map((a, idx) => (
@@ -431,7 +511,7 @@ export default function CashbookManagementPage() {
                 </div>
               )}
               <label className="flex items-center justify-center gap-1.5 h-9 border border-dashed rounded-md text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
-                <Upload className="w-3.5 h-3.5" />영수증 파일 추가 (최대 10MB)
+                <Upload className="w-3.5 h-3.5" />증빙서류 파일 추가 (최대 10MB)
                 <input type="file" multiple className="hidden" onChange={handleFileChange} disabled={saving} />
               </label>
             </div>
@@ -440,31 +520,17 @@ export default function CashbookManagementPage() {
         </Card>
       ) : (
         <>
-          <div className="space-y-2">
-            {currencyTotals.length === 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-xs text-gray-500">기간 내 수입</p><p className="text-lg font-bold text-blue-700">0</p></CardContent></Card>
-                <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-xs text-gray-500">기간 내 지출</p><p className="text-lg font-bold text-red-600">0</p></CardContent></Card>
-                <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-xs text-gray-500">차액</p><p className="text-lg font-bold">0</p></CardContent></Card>
-              </div>
-            ) : currencyTotals.map(([currency, { income, expense }]) => (
-              <div key={currency}>
-                {currencyTotals.length > 1 && <p className="text-xs font-semibold text-gray-500 mb-1">{currency}</p>}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <Card><CardContent className="pt-4 pb-3 text-center">
-                    <p className="text-xs text-gray-500">기간 내 수입</p>
-                    <p className="text-lg font-bold text-blue-700">{income.toLocaleString()} <span className="text-xs font-normal text-gray-400">{currency}</span></p>
-                  </CardContent></Card>
-                  <Card><CardContent className="pt-4 pb-3 text-center">
-                    <p className="text-xs text-gray-500">기간 내 지출</p>
-                    <p className="text-lg font-bold text-red-600">{expense.toLocaleString()} <span className="text-xs font-normal text-gray-400">{currency}</span></p>
-                  </CardContent></Card>
-                  <Card><CardContent className="pt-4 pb-3 text-center">
-                    <p className="text-xs text-gray-500">차액</p>
-                    <p className="text-lg font-bold">{(income - expense).toLocaleString()} <span className="text-xs font-normal text-gray-400">{currency}</span></p>
-                  </CardContent></Card>
-                </div>
-              </div>
+          <div className="space-y-1.5">
+            {(currencyTotals.length > 0 ? currencyTotals : ([['KRW', { income: 0, expense: 0 }]] as typeof currencyTotals)).map(([currency, { income, expense }]) => (
+              <Card key={currency}>
+                <CardContent className="py-2.5 px-4 flex items-center justify-center gap-x-6 gap-y-1 flex-wrap text-sm">
+                  {currencyTotals.length > 1 && <span className="text-xs font-semibold text-gray-500">{currency}</span>}
+                  <span className="text-gray-500">기간 내 수입 <b className="text-blue-700 font-mono font-semibold">{income.toLocaleString()}</b></span>
+                  <span className="text-gray-500">기간 내 지출 <b className="text-red-600 font-mono font-semibold">{expense.toLocaleString()}</b></span>
+                  <span className="text-gray-500">차액 <b className="font-mono font-semibold">{(income - expense).toLocaleString()}</b></span>
+                  {currencyTotals.length <= 1 && <span className="text-xs text-gray-400">{currency}</span>}
+                </CardContent>
+              </Card>
             ))}
           </div>
 
@@ -505,10 +571,18 @@ export default function CashbookManagementPage() {
                   ))}
                 </div>
                 {dateFilterMode === 'day' && (
-                  <Input type="date" value={dayFilter} onChange={e => changeFilter(() => setDayFilter(e.target.value))} className="h-8 w-[150px] text-xs" />
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setDayFilter(d => shiftDay(d, -1)))}><ChevronLeft className="w-3.5 h-3.5" /></Button>
+                    <Input type="date" value={dayFilter} onChange={e => changeFilter(() => setDayFilter(e.target.value))} className="h-8 w-[150px] text-xs" />
+                    <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setDayFilter(d => shiftDay(d, 1)))}><ChevronRight className="w-3.5 h-3.5" /></Button>
+                  </div>
                 )}
                 {dateFilterMode === 'month' && (
-                  <Input type="month" value={monthFilter} onChange={e => changeFilter(() => setMonthFilter(e.target.value))} className="h-8 w-[150px] text-xs" />
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setMonthFilter(m => shiftMonth(m, -1)))}><ChevronLeft className="w-3.5 h-3.5" /></Button>
+                    <Input type="month" value={monthFilter} onChange={e => changeFilter(() => setMonthFilter(e.target.value))} className="h-8 w-[150px] text-xs" />
+                    <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setMonthFilter(m => shiftMonth(m, 1)))}><ChevronRight className="w-3.5 h-3.5" /></Button>
+                  </div>
                 )}
                 <Select value={paymentMethodFilter} onValueChange={v => changeFilter(() => setPaymentMethodFilter(v as typeof paymentMethodFilter))}>
                   <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
@@ -519,14 +593,18 @@ export default function CashbookManagementPage() {
                     <SelectItem value="cash" className="text-xs">현금</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={typeFilter} onValueChange={v => changeFilter(() => setTypeFilter(v as typeof typeFilter))}>
-                  <SelectTrigger className="h-8 w-[100px] text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">전체 구분</SelectItem>
-                    <SelectItem value="income" className="text-xs">수입</SelectItem>
-                    <SelectItem value="expense" className="text-xs">지출</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex rounded-md border overflow-hidden">
+                  {(['all', 'income', 'expense'] as const).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => changeFilter(() => setTypeFilter(v))}
+                      className={`h-8 px-2.5 text-xs transition-colors ${typeFilter === v ? (v === 'income' ? 'bg-blue-600 text-white' : v === 'expense' ? 'bg-red-600 text-white' : 'bg-gray-700 text-white') : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      {v === 'all' ? '전체' : v === 'income' ? '수입' : '지출'}
+                    </button>
+                  ))}
+                </div>
                 <Input placeholder="거래처/적요 검색" value={search} onChange={e => changeFilter(() => setSearch(e.target.value))} className="h-8 w-[160px] text-xs" />
                 <span className="text-xs text-gray-400 ml-auto">{filtered.length}건</span>
               </div>
@@ -556,7 +634,7 @@ export default function CashbookManagementPage() {
                           <span className="inline-flex items-center gap-1">
                             {t.transaction_date}
                             {t.attachments && t.attachments.length > 0 && (
-                              <span className="inline-flex items-center gap-0.5 text-gray-400" title={`영수증 ${t.attachments.length}개`}>
+                              <span className="inline-flex items-center gap-0.5 text-gray-400" title={`증빙서류 ${t.attachments.length}개`}>
                                 <Paperclip className="w-3 h-3" />{t.attachments.length}
                               </span>
                             )}

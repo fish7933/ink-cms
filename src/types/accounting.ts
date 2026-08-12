@@ -94,6 +94,7 @@ export interface CashTransaction {
   amount: number;
   currency: string;
   attachments: CashTransactionAttachment[];
+  remarks: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -113,6 +114,7 @@ export type AccountingDailyReportStatus = 'draft' | 'pending_approval' | 'confir
 // 자산 구분은 통장/현금 두 가지만 다룬다 — 카드는 이 회사 실무에서 잔액을 이월하는 자산이 아니라
 // 결제수단일 뿐이라 자금일보에는 포함하지 않는다(체크카드처럼 실제 잔액이 도는 카드는 통장으로 등록해서 씀).
 export interface DailyCashReportTransactionRow {
+  id: string;
   date: string;
   income: number;
   expense: number;
@@ -144,6 +146,7 @@ export interface DailyCashReport {
   last_cancelled_at: string | null;
   last_cancelled_by: string | null;
   last_cancel_reason: string | null;
+  remarks: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

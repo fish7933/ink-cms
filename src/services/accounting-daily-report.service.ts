@@ -4,6 +4,7 @@ import { approvalDocumentService } from '@/services/approval-document.service';
 import type { DailyCashReport, DailyCashReportSnapshotSection, DailyCashReportTransactionRow } from '@/types/accounting';
 
 interface RawTxn {
+  id: string;
   bank_account_id: string | null;
   cash_register_id: string | null;
   transaction_date: string;
@@ -41,7 +42,7 @@ function buildSection(
     const income = t.transaction_type === 'income' ? Number(t.amount) : 0;
     const expense = t.transaction_type === 'expense' ? Number(t.amount) : 0;
     running += income - expense;
-    return { date: t.transaction_date, income, expense, balance: running, counterparty: t.counterparty || '', description: t.description || '' };
+    return { id: t.id, date: t.transaction_date, income, expense, balance: running, counterparty: t.counterparty || '', description: t.description || '' };
   });
 
   const totalIncome = transactions.reduce((s, t) => s + t.income, 0);
@@ -56,11 +57,21 @@ async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSecti
     supabase.from('accounting_cash_registers').select('*').eq('is_active', true).order('display_order'),
   ]);
 
-  const { data: txns } = await supabase
-    .from('accounting_cash_transactions')
-    .select('bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at')
-    .lte('transaction_date', date);
-  const allTxns = (txns || []) as RawTxn[];
+  // PostgREST 기본 조회 상한(1행당 최대 1000건)에 걸리지 않도록 다 받을 때까지 이어붙인다 —
+  // 안 그러면 거래가 쌓일수록 일부(특히 정렬 순서상 뒤쪽) 거래가 조용히 누락된다.
+  const PAGE_SIZE = 1000;
+  const allTxns: RawTxn[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await supabase
+      .from('accounting_cash_transactions')
+      .select('id, bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at')
+      .lte('transaction_date', date)
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!page || page.length === 0) break;
+    allTxns.push(...(page as RawTxn[]));
+    if (page.length < PAGE_SIZE) break;
+  }
 
   const sections: DailyCashReportSnapshotSection[] = [];
   for (const a of accounts || []) {
@@ -80,7 +91,7 @@ export async function getDailyReports(): Promise<DailyCashReport[]> {
     .select('id, report_date, status, approval_document_id, confirmed_at, confirmed_by, last_cancelled_at, last_cancelled_by, last_cancel_reason, created_by, created_at, updated_at')
     .order('report_date', { ascending: false });
   if (error) throw error;
-  return (data || []).map(r => ({ ...r, snapshot: null }));
+  return (data || []).map(r => ({ ...r, snapshot: null, remarks: null }));
 }
 
 export async function getDailyReportByDate(date: string): Promise<DailyCashReport | null> {
@@ -95,9 +106,19 @@ export async function getDailyReportById(id: string): Promise<DailyCashReport | 
   return data;
 }
 
+// 아직 지나지 않은 날은 그날의 입출금이 확정되지 않았으므로 자금일보를 만들 수 없다.
+// toISOString()은 UTC 기준이라 한국 시간 자정~오전 9시 사이에는 실제 로컬 날짜보다 하루
+// 늦게 계산되는 문제가 있었다 — 로컬 달력 날짜를 직접 조합해서 이 어긋남을 없앤다.
+function assertNotFutureDate(date: string): void {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (date > today) throw new Error('미래 날짜의 자금일보는 작성할 수 없습니다.');
+}
+
 export async function getOrCreateDraftReport(date: string, userId: string): Promise<DailyCashReport> {
   const existing = await getDailyReportByDate(date);
   if (existing) return existing;
+  assertNotFutureDate(date);
   const { data, error } = await supabase
     .from('accounting_daily_reports')
     .insert({ report_date: date, status: 'draft', created_by: userId })
@@ -105,6 +126,18 @@ export async function getOrCreateDraftReport(date: string, userId: string): Prom
     .single();
   if (error) throw error;
   return data;
+}
+
+// 작성중(draft) 상태에서만 비고를 고칠 수 있다 — 상신/확정된 자금일보는 당시 내용 그대로 고정.
+export async function updateReportRemarks(reportId: string, remarks: string): Promise<void> {
+  const { data: report, error: fetchError } = await supabase.from('accounting_daily_reports').select('status').eq('id', reportId).single();
+  if (fetchError) throw fetchError;
+  if (report.status !== 'draft') throw new Error('작성중 상태의 자금일보만 비고를 수정할 수 있습니다.');
+  const { error } = await supabase
+    .from('accounting_daily_reports')
+    .update({ remarks: remarks || null, updated_at: new Date().toISOString() })
+    .eq('id', reportId);
+  if (error) throw error;
 }
 
 // 작성중(draft) 상태의 리포트만 재계산할 수 있다 — 상신/확정된 날짜는 스냅샷이 그대로 고정된다.
@@ -123,8 +156,10 @@ export async function regenerateDraftReport(date: string, userId: string): Promi
 }
 
 // 해당 날짜에 상신/확정된 자금일보가 있으면 금전출납 거래를 잠근다 — 급여 지출결의서의
-// "draft 상태의 회차만 수정 가능" 가드와 동일한 원칙.
+// "draft 상태의 회차만 수정 가능" 가드와 동일한 원칙. 아직 오지 않은 날짜도 마찬가지로 막는다
+// (아직 실제로 일어나지 않은 거래를 미리 입력할 수는 없다).
 export async function assertDateEditable(date: string): Promise<void> {
+  assertNotFutureDate(date);
   const report = await getDailyReportByDate(date);
   if (report && report.status !== 'draft') {
     throw new Error('이 날짜는 이미 자금일보가 상신/확정되어 거래를 수정할 수 없습니다.');

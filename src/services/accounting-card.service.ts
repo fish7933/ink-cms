@@ -13,20 +13,29 @@ export async function getCards(): Promise<CardWithDetails[]> {
   const holderIds = [...new Set(cards.map(c => c.holder_user_id).filter((id): id is string => !!id))];
   const cardIds = cards.map(c => c.id);
 
-  const [{ data: accounts }, { data: holders }, { data: txns }] = await Promise.all([
+  // PostgREST 기본 조회 상한(1000행)에 걸리지 않도록 다 받을 때까지 이어붙인다.
+  const PAGE_SIZE = 1000;
+  const txns: { card_id: string; amount: number }[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase.from('accounting_cash_transactions').select('card_id, amount').in('card_id', cardIds).eq('transaction_type', 'expense').range(from, from + PAGE_SIZE - 1);
+    if (!page || page.length === 0) break;
+    txns.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+
+  const [{ data: accounts }, { data: holders }] = await Promise.all([
     bankAccountIds.length > 0
       ? supabase.from('accounting_bank_accounts').select('id, account_name').in('id', bankAccountIds)
       : Promise.resolve({ data: [] as { id: string; account_name: string }[] }),
     holderIds.length > 0
       ? supabase.from('users').select('id, name').in('id', holderIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    supabase.from('accounting_cash_transactions').select('card_id, amount').in('card_id', cardIds).eq('transaction_type', 'expense'),
   ]);
 
   const accountNameById = new Map((accounts || []).map(a => [a.id, a.account_name]));
   const holderNameById = new Map((holders || []).map(u => [u.id, u.name]));
   const usedByCard = new Map<string, number>();
-  for (const t of txns || []) {
+  for (const t of txns) {
     usedByCard.set(t.card_id, (usedByCard.get(t.card_id) || 0) + Number(t.amount));
   }
 

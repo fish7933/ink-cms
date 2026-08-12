@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport,
+  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport, updateReportRemarks,
 } from '@/services/accounting-daily-report.service';
 import { DailyCashReportTable } from '@/components/accounting/daily-cash-report-table';
 import type { DailyCashReport, AccountingDailyReportStatus } from '@/types/accounting';
@@ -49,6 +49,8 @@ export default function DailyCashReportPage() {
   const [forceCancelOpen, setForceCancelOpen] = useState(false);
   const [forceCancelReason, setForceCancelReason] = useState('');
   const [forceCancelSubmitting, setForceCancelSubmitting] = useState(false);
+  const [remarksDraft, setRemarksDraft] = useState('');
+  const [remarksSaving, setRemarksSaving] = useState(false);
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'system_admin';
 
@@ -57,8 +59,10 @@ export default function DailyCashReportPage() {
   }, [permissions.loading, permissions.canView, navigate]);
 
   // 날짜 이동(화살표/직접 입력) 시 주소도 함께 바꿔, 이 탭을 새로고침하거나 다시 열어도
-  // 같은 날짜가 유지되게 한다.
+  // 같은 날짜가 유지되게 한다. 아직 지나지 않은 날은 자금일보 자체가 만들어지지 않으므로
+  // (서비스 레이어에서도 막힘) 오늘을 넘어가지 못하게 막는다.
   const changeDate = (next: string) => {
+    if (next > todayIso()) return;
     setDate(next);
     navigate(`/accounting/daily-report/${next}`, { replace: true });
   };
@@ -71,7 +75,8 @@ export default function DailyCashReportPage() {
       setReport(r);
     } catch (e) {
       console.error(e);
-      toast({ title: '자금일보를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      setReport(null);
+      toast({ title: '자금일보를 불러오는 중 오류가 발생했습니다.', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -90,6 +95,24 @@ export default function DailyCashReportPage() {
     if (currentUser) loadReport(date, currentUser.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
+
+  useEffect(() => {
+    setRemarksDraft(report?.remarks || '');
+  }, [report?.id, report?.remarks]);
+
+  const handleSaveRemarks = async () => {
+    if (!report || report.status !== 'draft') return;
+    setRemarksSaving(true);
+    try {
+      await updateReportRemarks(report.id, remarksDraft.trim());
+      setReport(prev => (prev ? { ...prev, remarks: remarksDraft.trim() || null } : prev));
+      toast({ title: '비고가 저장되었습니다.' });
+    } catch (e) {
+      toast({ title: '비고 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setRemarksSaving(false);
+    }
+  };
 
   const handleRegenerate = async () => {
     if (!currentUser || !report || report.status !== 'draft') return;
@@ -161,8 +184,8 @@ export default function DailyCashReportPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-1.5">
               <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeDate(shiftDate(date, -1))}><ChevronLeft className="w-4 h-4" /></Button>
-              <Input type="date" value={date} onChange={e => changeDate(e.target.value)} className="h-8 w-[150px] text-sm" />
-              <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeDate(shiftDate(date, 1))}><ChevronRight className="w-4 h-4" /></Button>
+              <Input type="date" value={date} max={todayIso()} onChange={e => changeDate(e.target.value)} className="h-8 w-[150px] text-sm" />
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeDate(shiftDate(date, 1))} disabled={date >= todayIso()}><ChevronRight className="w-4 h-4" /></Button>
               {report && <Badge className={`text-xs ${STATUS_BADGE[report.status].className}`}>{STATUS_BADGE[report.status].label}</Badge>}
             </div>
             <div className="flex items-center gap-2">
@@ -191,8 +214,26 @@ export default function DailyCashReportPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pt-0">
-          <DailyCashReportTable sections={sections} />
+        <CardContent className="pt-0 space-y-4">
+          <DailyCashReportTable sections={sections} onTransactionClick={id => openNewTab(`/accounting/cashbook?edit=${id}`, '금전출납')} />
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">비고</Label>
+              {isDraft && (
+                <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={handleSaveRemarks} disabled={remarksSaving || remarksDraft === (report?.remarks || '')}>
+                  {remarksSaving ? '저장 중...' : '비고 저장'}
+                </Button>
+              )}
+            </div>
+            <Textarea
+              value={remarksDraft}
+              onChange={e => setRemarksDraft(e.target.value)}
+              rows={3}
+              className="text-sm resize-y"
+              placeholder="자금일보에 남길 비고가 있으면 입력하세요"
+              disabled={!isDraft}
+            />
+          </div>
         </CardContent>
       </Card>
 

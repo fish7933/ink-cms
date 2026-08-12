@@ -13,18 +13,30 @@ export interface CashTransactionFilters {
 }
 
 export async function getCashTransactions(filters: CashTransactionFilters = {}): Promise<CashTransactionWithDetails[]> {
-  let query = supabase.from('accounting_cash_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
-  if (filters.bankAccountId) query = query.eq('bank_account_id', filters.bankAccountId);
-  if (filters.cardId) query = query.eq('card_id', filters.cardId);
-  if (filters.cashRegisterId) query = query.eq('cash_register_id', filters.cashRegisterId);
-  if (filters.dateFrom) query = query.gte('transaction_date', filters.dateFrom);
-  if (filters.dateTo) query = query.lte('transaction_date', filters.dateTo);
-  if (filters.transactionType) query = query.eq('transaction_type', filters.transactionType);
-  if (filters.paymentMethod) query = query.eq('payment_method', filters.paymentMethod);
+  const buildQuery = () => {
+    let query = supabase.from('accounting_cash_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+    if (filters.bankAccountId) query = query.eq('bank_account_id', filters.bankAccountId);
+    if (filters.cardId) query = query.eq('card_id', filters.cardId);
+    if (filters.cashRegisterId) query = query.eq('cash_register_id', filters.cashRegisterId);
+    if (filters.dateFrom) query = query.gte('transaction_date', filters.dateFrom);
+    if (filters.dateTo) query = query.lte('transaction_date', filters.dateTo);
+    if (filters.transactionType) query = query.eq('transaction_type', filters.transactionType);
+    if (filters.paymentMethod) query = query.eq('payment_method', filters.paymentMethod);
+    return query;
+  };
 
-  const { data: rows, error } = await query;
-  if (error) { console.error(error); return []; }
-  if (!rows || rows.length === 0) return [];
+  // PostgREST는 기본적으로 한 번에 최대 1000행만 돌려준다 — 거래가 그 이상 쌓이면 최신순
+  // 정렬 기준으로 뒤쪽(오래된) 달이 통째로 잘려나가므로, 다 받을 때까지 range로 이어붙인다.
+  const PAGE_SIZE = 1000;
+  const rows: CashTransaction[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page, error } = await buildQuery().range(from, from + PAGE_SIZE - 1);
+    if (error) { console.error(error); break; }
+    if (!page || page.length === 0) break;
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  if (rows.length === 0) return [];
 
   const bankAccountIds = [...new Set(rows.map(r => r.bank_account_id).filter((id): id is string => !!id))];
   const cardIds = [...new Set(rows.map(r => r.card_id).filter((id): id is string => !!id))];

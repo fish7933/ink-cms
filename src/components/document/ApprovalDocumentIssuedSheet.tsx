@@ -248,20 +248,21 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
               <>
                 <tr><td>
                   <table className="issued-line-items" style={{ tableLayout: 'fixed' }}>
-                    <colgroup><col style={{ width: '15%' }} /><col style={{ width: '55%' }} /><col style={{ width: '30%' }} /></colgroup>
-                    <thead><tr><th>구분</th><th>계좌명</th><th>금일잔액</th></tr></thead>
+                    <colgroup><col style={{ width: '13%' }} /><col style={{ width: '42%' }} /><col style={{ width: '22%' }} /><col style={{ width: '23%' }} /></colgroup>
+                    <thead><tr><th>구분</th><th>계좌명</th><th>전일잔액</th><th>금일잔액</th></tr></thead>
                     <tbody>
                       {sections.map(s => (
                         <tr key={s.id}>
                           <td>{DAILY_REPORT_KIND_LABEL[s.kind]}</td>
                           <td>{s.name} ({s.currency})</td>
+                          <td style={{ textAlign: 'right', color: '#999' }}>{s.opening_balance.toLocaleString()}</td>
                           <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       {[...totalsByCurrency.entries()].map(([currency, total]) => (
-                        <tr key={currency}><td colSpan={2}>합계 ({currency})</td><td style={{ textAlign: 'right' }}>{total.toLocaleString()}</td></tr>
+                        <tr key={currency}><td colSpan={3}>합계 ({currency})</td><td style={{ textAlign: 'right' }}>{total.toLocaleString()}</td></tr>
                       ))}
                     </tfoot>
                   </table>
