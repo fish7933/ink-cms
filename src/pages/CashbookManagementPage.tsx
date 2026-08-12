@@ -51,6 +51,12 @@ function shiftDay(date: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function lastDayOfMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(y, m, 0); // 다음달 0일 = 이번달 마지막날
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function shiftMonth(month: string, months: number): string {
   const [y, m] = month.split('-').map(Number);
   const d = new Date(y, m - 1 + months, 1);
@@ -203,8 +209,12 @@ export default function CashbookManagementPage() {
   const changeFilter = (fn: () => void) => { fn(); setPage(1); };
 
   // 통화가 다르면 그냥 더하는 게 의미가 없으므로(원화/달러) 통화별로 따로 합산한다.
+  // 실제 등록된 계좌가 쓰는 두 통화(KRW/USD)는 그 기간에 거래가 하나도 없어도 0으로 항상 보여준다.
   const currencyTotals = useMemo(() => {
-    const map = new Map<string, { income: number; expense: number }>();
+    const map = new Map<string, { income: number; expense: number }>([
+      ['KRW', { income: 0, expense: 0 }],
+      ['USD', { income: 0, expense: 0 }],
+    ]);
     for (const t of filtered) {
       const cur = map.get(t.currency) || { income: 0, expense: 0 };
       if (t.transaction_type === 'income') cur.income += Number(t.amount);
@@ -213,6 +223,25 @@ export default function CashbookManagementPage() {
     }
     return [...map.entries()].sort(([a], [b]) => (a === 'KRW' ? -1 : b === 'KRW' ? 1 : a.localeCompare(b)));
   }, [filtered]);
+
+  // 잔액 칩은 지금까지 계속 "오늘 기준 최신 잔액"만 보여줘서, 월별로 지난 달을 보고 있어도
+  // 그 달과 무관한 최신 잔액이 표시되는 문제가 있었다 — 필터 기준에 맞는 날짜(일별=그 날짜,
+  // 월별=그 달 말일, 전체=오늘)까지의 거래만 반영한 잔액을 그때그때 다시 계산해서 보여준다.
+  const balanceAsOfDate = useMemo(() => {
+    if (dateFilterMode === 'day') return dayFilter;
+    if (dateFilterMode === 'month') return lastDayOfMonth(monthFilter);
+    return today();
+  }, [dateFilterMode, dayFilter, monthFilter]);
+
+  const balanceAsOf = (openingBalance: number, accountId: string, field: 'bank_account_id' | 'cash_register_id') => {
+    let balance = openingBalance;
+    for (const t of transactions) {
+      if (t[field] !== accountId) continue;
+      if (t.transaction_date > balanceAsOfDate) continue;
+      balance += t.transaction_type === 'income' ? Number(t.amount) : -Number(t.amount);
+    }
+    return balance;
+  };
 
   const categoriesForType = categories.filter(c => c.transaction_type === form.transaction_type);
   const categoryOptions = categoriesForType.map(c => c.name);
@@ -521,28 +550,28 @@ export default function CashbookManagementPage() {
       ) : (
         <>
           <div className="space-y-1.5">
-            {(currencyTotals.length > 0 ? currencyTotals : ([['KRW', { income: 0, expense: 0 }]] as typeof currencyTotals)).map(([currency, { income, expense }]) => (
+            {currencyTotals.map(([currency, { income, expense }]) => (
               <Card key={currency}>
                 <CardContent className="py-2.5 px-4 flex items-center justify-center gap-x-6 gap-y-1 flex-wrap text-sm">
-                  {currencyTotals.length > 1 && <span className="text-xs font-semibold text-gray-500">{currency}</span>}
+                  <span className="text-xs font-semibold text-gray-500">{currency}</span>
                   <span className="text-gray-500">기간 내 수입 <b className="text-blue-700 font-mono font-semibold">{income.toLocaleString()}</b></span>
                   <span className="text-gray-500">기간 내 지출 <b className="text-red-600 font-mono font-semibold">{expense.toLocaleString()}</b></span>
                   <span className="text-gray-500">차액 <b className="font-mono font-semibold">{(income - expense).toLocaleString()}</b></span>
-                  {currencyTotals.length <= 1 && <span className="text-xs text-gray-400">{currency}</span>}
                 </CardContent>
               </Card>
             ))}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-gray-400">{balanceAsOfDate} 기준 잔액</span>
             {bankAccounts.map(a => (
               <div key={a.id} className="px-2.5 py-1 bg-gray-50 border rounded-full text-xs">
-                <span className="text-gray-500">{a.account_name}</span> <span className="font-semibold font-mono">{a.current_balance.toLocaleString()} {a.currency}</span>
+                <span className="text-gray-500">{a.account_name}</span> <span className="font-semibold font-mono">{balanceAsOf(Number(a.opening_balance), a.id, 'bank_account_id').toLocaleString()} {a.currency}</span>
               </div>
             ))}
             {cashRegisters.map(r => (
               <div key={r.id} className="px-2.5 py-1 bg-gray-50 border rounded-full text-xs">
-                <span className="text-gray-500">{r.name}</span> <span className="font-semibold font-mono">{r.current_balance.toLocaleString()}</span>
+                <span className="text-gray-500">{r.name}</span> <span className="font-semibold font-mono">{balanceAsOf(Number(r.opening_balance), r.id, 'cash_register_id').toLocaleString()}</span>
               </div>
             ))}
           </div>
