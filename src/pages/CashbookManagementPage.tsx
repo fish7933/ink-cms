@@ -91,6 +91,8 @@ export default function CashbookManagementPage() {
   const [monthFilter, setMonthFilter] = useState(currentMonth());
   const [dayFilter, setDayFilter] = useState(today());
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | AccountingPaymentMethod>('all');
+  // 통장/카드/현금 필터를 고르면 그 안에서 특정 계좌/카드/시재 하나로 더 좁힐 수 있게 하는 필터.
+  const [assetFilter, setAssetFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | AccountingTransactionType>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -187,6 +189,22 @@ export default function CashbookManagementPage() {
     }
   };
 
+  const bankAccountById = useMemo(() => new Map(bankAccounts.map(a => [a.id, a])), [bankAccounts]);
+  const cardById = useMemo(() => new Map(cards.map(c => [c.id, c])), [cards]);
+
+  // 거래 하나가 어느 자산에 딸린 건지 찾아 계좌번호/카드번호까지 포함한 검색용 텍스트를 만든다.
+  const assetSearchText = (t: CashTransactionWithDetails): string => {
+    if (t.payment_method === 'bank_account' && t.bank_account_id) {
+      const a = bankAccountById.get(t.bank_account_id);
+      return a ? `${a.bank_name} ${a.account_name} ${a.account_number}` : '';
+    }
+    if (t.payment_method === 'card' && t.card_id) {
+      const c = cardById.get(t.card_id);
+      return c ? `${c.card_name} ${c.issuer} ${c.card_number_last4 || ''}` : '';
+    }
+    return '';
+  };
+
   const filtered = useMemo(() => {
     return transactions
       .filter(t => {
@@ -195,13 +213,23 @@ export default function CashbookManagementPage() {
         return t.transaction_date.slice(0, 7) === monthFilter;
       })
       .filter(t => paymentMethodFilter === 'all' || t.payment_method === paymentMethodFilter)
+      .filter(t => {
+        if (!assetFilter) return true;
+        if (paymentMethodFilter === 'bank_account') return t.bank_account_id === assetFilter;
+        if (paymentMethodFilter === 'card') return t.card_id === assetFilter;
+        if (paymentMethodFilter === 'cash') return t.cash_register_id === assetFilter;
+        return true;
+      })
       .filter(t => typeFilter === 'all' || t.transaction_type === typeFilter)
       .filter(t => {
         if (!search.trim()) return true;
         const q = search.trim().toLowerCase();
-        return (t.counterparty || '').toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q);
+        return (t.counterparty || '').toLowerCase().includes(q)
+          || (t.description || '').toLowerCase().includes(q)
+          || assetSearchText(t).toLowerCase().includes(q);
       });
-  }, [transactions, dateFilterMode, monthFilter, dayFilter, paymentMethodFilter, typeFilter, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, dateFilterMode, monthFilter, dayFilter, paymentMethodFilter, assetFilter, typeFilter, search, bankAccountById, cardById]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -622,7 +650,7 @@ export default function CashbookManagementPage() {
                     <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setMonthFilter(m => shiftMonth(m, 1)))}><ChevronRight className="w-3.5 h-3.5" /></Button>
                   </div>
                 )}
-                <Select value={paymentMethodFilter} onValueChange={v => changeFilter(() => setPaymentMethodFilter(v as typeof paymentMethodFilter))}>
+                <Select value={paymentMethodFilter} onValueChange={v => changeFilter(() => { setPaymentMethodFilter(v as typeof paymentMethodFilter); setAssetFilter(''); })}>
                   <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all" className="text-xs">전체 수단</SelectItem>
@@ -631,6 +659,33 @@ export default function CashbookManagementPage() {
                     <SelectItem value="cash" className="text-xs">현금</SelectItem>
                   </SelectContent>
                 </Select>
+                {paymentMethodFilter === 'bank_account' && (
+                  <Select value={assetFilter || '_all'} onValueChange={v => changeFilter(() => setAssetFilter(v === '_all' ? '' : v))}>
+                    <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="전체 계좌" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_all" className="text-xs">전체 계좌</SelectItem>
+                      {bankAccounts.map(a => <SelectItem key={a.id} value={a.id} className="text-xs">{a.bank_name} {a.account_name} ({a.account_number})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {paymentMethodFilter === 'card' && (
+                  <Select value={assetFilter || '_all'} onValueChange={v => changeFilter(() => setAssetFilter(v === '_all' ? '' : v))}>
+                    <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="전체 카드" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_all" className="text-xs">전체 카드</SelectItem>
+                      {cards.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.card_name}{c.card_number_last4 ? ` (**** ${c.card_number_last4})` : ''}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {paymentMethodFilter === 'cash' && (
+                  <Select value={assetFilter || '_all'} onValueChange={v => changeFilter(() => setAssetFilter(v === '_all' ? '' : v))}>
+                    <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="전체 시재" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_all" className="text-xs">전체 시재</SelectItem>
+                      {cashRegisters.map(r => <SelectItem key={r.id} value={r.id} className="text-xs">{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
                 <div className="flex rounded-md border overflow-hidden">
                   {(['all', 'income', 'expense'] as const).map(v => (
                     <button
@@ -643,7 +698,7 @@ export default function CashbookManagementPage() {
                     </button>
                   ))}
                 </div>
-                <Input placeholder="거래처/적요 검색" value={search} onChange={e => changeFilter(() => setSearch(e.target.value))} className="h-8 w-[160px] text-xs" />
+                <Input placeholder="거래처/적요/계좌번호 검색" value={search} onChange={e => changeFilter(() => setSearch(e.target.value))} className="h-8 w-[180px] text-xs" />
                 <span className="text-xs text-gray-400 ml-auto">{filtered.length}건</span>
               </div>
 
