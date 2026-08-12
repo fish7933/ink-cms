@@ -122,6 +122,14 @@ export default function DailyCashReportOverviewPage() {
   const goToDate = (date: string) => openNewTab(`/accounting/daily-report/${date}`, `${date} 자금일보`);
   const today = todayIso();
 
+  // 자금일보가 없는 날짜를 클릭하면 그 즉시 draft 행이 생겨버리므로(getOrCreateDraftReport),
+  // 실수로 눌러도 빈 이력이 쌓이지 않도록 새로 작성할지 먼저 확인한다. 이미 자금일보가
+  // 있는 날짜는 조회일 뿐이니 바로 들어간다.
+  const handleDayClick = (day: Date, iso: string) => {
+    if (reportByDate.has(iso)) { goToDate(iso); return; }
+    if (confirm(`${format(day, 'yyyy년 M월 d일')}의 자금일보를 작성하시겠습니까?`)) goToDate(iso);
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
   }
@@ -176,7 +184,7 @@ export default function DailyCashReportOverviewPage() {
                   <button
                     type="button"
                     key={iso}
-                    onClick={() => !isFuture && goToDate(iso)}
+                    onClick={() => !isFuture && handleDayClick(day, iso)}
                     disabled={isFuture}
                     className={`min-h-[68px] border-b border-r p-1.5 text-left align-top transition-colors ${isFuture ? 'cursor-not-allowed bg-gray-50/70' : 'hover:bg-blue-50/40'} ${!inMonth ? 'bg-gray-50/50' : ''} ${isToday(day) ? 'bg-blue-50/60' : ''}`}
                   >
