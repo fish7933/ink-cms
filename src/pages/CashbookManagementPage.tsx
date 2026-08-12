@@ -72,7 +72,11 @@ function shiftMonth(month: string, months: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-type DateFilterMode = 'day' | 'month' | 'all';
+function currentYear(): string {
+  return String(new Date().getFullYear());
+}
+
+type DateFilterMode = 'day' | 'month' | 'year' | 'all';
 
 const emptyForm = {
   transaction_date: new Date().toISOString().slice(0, 10),
@@ -98,6 +102,7 @@ export default function CashbookManagementPage() {
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month');
   const [monthFilter, setMonthFilter] = useState(currentMonth());
   const [dayFilter, setDayFilter] = useState(today());
+  const [yearFilter, setYearFilter] = useState(currentYear());
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | AccountingPaymentMethod>('all');
   // 통장/카드/현금 필터를 고르면 그 안에서 특정 계좌/카드/시재 하나로 더 좁힐 수 있게 하는 필터.
   const [assetFilter, setAssetFilter] = useState('');
@@ -218,6 +223,7 @@ export default function CashbookManagementPage() {
       .filter(t => {
         if (dateFilterMode === 'all') return true;
         if (dateFilterMode === 'day') return t.transaction_date === dayFilter;
+        if (dateFilterMode === 'year') return t.transaction_date.slice(0, 4) === yearFilter;
         return t.transaction_date.slice(0, 7) === monthFilter;
       })
       .filter(t => paymentMethodFilter === 'all' || t.payment_method === paymentMethodFilter)
@@ -237,7 +243,7 @@ export default function CashbookManagementPage() {
           || assetSearchText(t).toLowerCase().includes(q);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, dateFilterMode, monthFilter, dayFilter, paymentMethodFilter, assetFilter, typeFilter, search, bankAccountById, cardById]);
+  }, [transactions, dateFilterMode, monthFilter, dayFilter, yearFilter, paymentMethodFilter, assetFilter, typeFilter, search, bankAccountById, cardById]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -267,8 +273,9 @@ export default function CashbookManagementPage() {
   const balanceAsOfDate = useMemo(() => {
     if (dateFilterMode === 'day') return dayFilter;
     if (dateFilterMode === 'month') return lastDayOfMonth(monthFilter);
+    if (dateFilterMode === 'year') return `${yearFilter}-12-31`;
     return today();
-  }, [dateFilterMode, dayFilter, monthFilter]);
+  }, [dateFilterMode, dayFilter, monthFilter, yearFilter]);
 
   const balanceAsOf = (openingBalance: number, accountId: string, field: 'bank_account_id' | 'cash_register_id') => {
     let balance = openingBalance;
@@ -633,14 +640,14 @@ export default function CashbookManagementPage() {
             <CardContent className="pt-0 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex rounded-md border overflow-hidden">
-                  {(['day', 'month', 'all'] as DateFilterMode[]).map(mode => (
+                  {(['day', 'month', 'year', 'all'] as DateFilterMode[]).map(mode => (
                     <button
                       key={mode}
                       type="button"
                       onClick={() => changeFilter(() => setDateFilterMode(mode))}
                       className={`h-8 px-2.5 text-xs transition-colors ${dateFilterMode === mode ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                     >
-                      {mode === 'day' ? '일별' : mode === 'month' ? '월별' : '전체 기간'}
+                      {mode === 'day' ? '일별' : mode === 'month' ? '월별' : mode === 'year' ? '연도별' : '전체 기간'}
                     </button>
                   ))}
                 </div>
@@ -656,6 +663,13 @@ export default function CashbookManagementPage() {
                     <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setMonthFilter(m => shiftMonth(m, -1)))}><ChevronLeft className="w-3.5 h-3.5" /></Button>
                     <Input type="month" value={monthFilter} onChange={e => changeFilter(() => setMonthFilter(e.target.value))} className="h-8 w-[150px] text-xs" />
                     <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setMonthFilter(m => shiftMonth(m, 1)))}><ChevronRight className="w-3.5 h-3.5" /></Button>
+                  </div>
+                )}
+                {dateFilterMode === 'year' && (
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setYearFilter(y => String(Number(y) - 1)))}><ChevronLeft className="w-3.5 h-3.5" /></Button>
+                    <Input type="number" value={yearFilter} onChange={e => changeFilter(() => setYearFilter(e.target.value))} className="h-8 w-[90px] text-xs" />
+                    <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => changeFilter(() => setYearFilter(y => String(Number(y) + 1)))}><ChevronRight className="w-3.5 h-3.5" /></Button>
                   </div>
                 )}
                 <Select value={paymentMethodFilter} onValueChange={v => changeFilter(() => { setPaymentMethodFilter(v as typeof paymentMethodFilter); setAssetFilter(''); })}>
