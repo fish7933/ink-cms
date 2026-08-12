@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,10 +14,12 @@ import {
   addEmployeeSalaryItem,
   updateEmployeeSalaryItem,
   deleteEmployeeSalaryItem,
+  renewEmployeeSalaryItems,
+  getEmployeeSalaryItemHistory,
   getSalaryItemCatalog,
   updateEmployeeSalaryBankAccount,
 } from '@/services/employee-salary.service';
-import type { EmployeeSalaryItem, EmployeeSalaryItemCatalogEntry, EmployeeSalaryItemCategory, PayrollEmployee } from '@/types/employee-salary';
+import type { EmployeeSalaryItem, EmployeeSalaryItemVersion, EmployeeSalaryItemCatalogEntry, EmployeeSalaryItemCategory, PayrollEmployee } from '@/types/employee-salary';
 
 const CATEGORY_LABELS: Record<EmployeeSalaryItemCategory, string> = { base: '기본급', allowance: '수당', deduction: '공제' };
 const CATEGORIES: EmployeeSalaryItemCategory[] = ['base', 'allowance', 'deduction'];
@@ -36,6 +38,13 @@ export default function EmployeeSalaryItemsSection() {
   const [catalog, setCatalog] = useState<EmployeeSalaryItemCatalogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(false);
+
+  const [history, setHistory] = useState<EmployeeSalaryItemVersion[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+  const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+  const [renewDate, setRenewDate] = useState('');
+  const [renewing, setRenewing] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<EmployeeSalaryItem | null>(null);
@@ -59,9 +68,15 @@ export default function EmployeeSalaryItemsSection() {
   }, []);
 
   useEffect(() => {
-    if (!selectedEmployeeId) { setItems([]); return; }
+    if (!selectedEmployeeId) { setItems([]); setHistory([]); return; }
     setItemsLoading(true);
-    getEmployeeSalaryItems(selectedEmployeeId).then(list => { setItems(list); setItemsLoading(false); });
+    setHistoryOpen(false);
+    setExpandedVersion(null);
+    Promise.all([getEmployeeSalaryItems(selectedEmployeeId), getEmployeeSalaryItemHistory(selectedEmployeeId)]).then(([list, hist]) => {
+      setItems(list);
+      setHistory(hist);
+      setItemsLoading(false);
+    });
   }, [selectedEmployeeId]);
 
   useEffect(() => {
@@ -92,6 +107,32 @@ export default function EmployeeSalaryItemsSection() {
   const reloadItems = () => {
     if (!selectedEmployeeId) return;
     getEmployeeSalaryItems(selectedEmployeeId).then(setItems);
+    getEmployeeSalaryItemHistory(selectedEmployeeId).then(setHistory);
+  };
+
+  const currentVersion = history.find(v => v.effective_until === null);
+
+  const openRenewDialog = () => {
+    // 기본값: 다음 달 1일 — 급여 인상은 보통 새 달부터 적용하니 실무에서 가장 흔한 값으로 미리 채워둔다.
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    setRenewDate(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-01`);
+    setRenewDialogOpen(true);
+  };
+
+  const handleRenew = async () => {
+    if (!selectedEmployeeId || !renewDate) return;
+    try {
+      setRenewing(true);
+      await renewEmployeeSalaryItems(selectedEmployeeId, renewDate);
+      toast({ title: '급여표가 갱신되었습니다.', description: `${renewDate}부터 새 버전이 적용됩니다. 이전 급여표는 이력에서 확인할 수 있습니다.` });
+      setRenewDialogOpen(false);
+      reloadItems();
+    } catch (e) {
+      toast({ title: '갱신 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setRenewing(false);
+    }
   };
 
   const availableCatalogEntries = (category: EmployeeSalaryItemCategory) => {
@@ -213,6 +254,16 @@ export default function EmployeeSalaryItemsSection() {
         <div className="flex items-center justify-center py-6"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" /></div>
       ) : (
         <>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">
+              현행 급여표 {currentVersion && <span className="text-gray-400">({currentVersion.effective_from} 부터 적용)</span>}
+            </span>
+            {permissions.canCreate && (
+              <Button size="sm" variant="outline" className="h-6 px-2 text-xs gap-1" onClick={openRenewDialog}>
+                <RefreshCw className="w-3 h-3" />급여표 갱신
+              </Button>
+            )}
+          </div>
           {CATEGORIES.map(category => {
             const categoryItems = items.filter(i => i.category === category);
             return (
@@ -269,8 +320,70 @@ export default function EmployeeSalaryItemsSection() {
             <span className="text-xs font-semibold text-blue-900">월 예상 실지급액 (기본급+수당-공제)</span>
             <span className="text-sm font-bold font-mono text-blue-900">{fmt(netTotal)}원</span>
           </div>
+
+          {history.filter(v => v.effective_until !== null).length > 0 && (
+            <div className="rounded-md border overflow-hidden">
+              <button type="button" className="w-full flex items-center justify-between bg-gray-50 border-b px-2.5 py-1.5" onClick={() => setHistoryOpen(o => !o)}>
+                <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                  {historyOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  이전 급여표 이력 ({history.filter(v => v.effective_until !== null).length}건)
+                </span>
+              </button>
+              {historyOpen && (
+                <div className="divide-y">
+                  {history.filter(v => v.effective_until !== null).map(v => {
+                    const net = v.items.reduce((s, i) => s + (i.category === 'deduction' ? -i.amount : i.amount), 0);
+                    const expanded = expandedVersion === v.version_group_id;
+                    return (
+                      <div key={v.version_group_id}>
+                        <button type="button" className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs hover:bg-gray-50" onClick={() => setExpandedVersion(expanded ? null : v.version_group_id)}>
+                          <span className="flex items-center gap-1 text-gray-600">
+                            {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            {v.effective_from} ~ {v.effective_until}
+                          </span>
+                          <span className="font-mono text-gray-500">실지급 {fmt(net)}원</span>
+                        </button>
+                        {expanded && (
+                          <table className="w-full text-xs bg-gray-50/50">
+                            <tbody>
+                              {v.items.map(item => (
+                                <tr key={item.id} className="border-t">
+                                  <td className="py-1 pl-6 pr-2 text-gray-500">{CATEGORY_LABELS[item.category]}</td>
+                                  <td className="py-1 px-2">{item.name}</td>
+                                  <td className="py-1 pr-2.5 text-right font-mono">{item.category === 'deduction' ? '-' : ''}{fmt(item.amount)}원</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
+
+      <Dialog open={renewDialogOpen} onOpenChange={o => !renewing && setRenewDialogOpen(o)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">급여표 갱신</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-xs text-gray-500">현재 급여표를 그대로 복제해 새 버전을 만듭니다. 기존 급여표는 새 적용일 전날까지로 종료되어 이력에 남고, 새 버전을 자유롭게 수정할 수 있습니다.</p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">새 적용 시작일 *</Label>
+              <Input type="date" value={renewDate} min={currentVersion ? currentVersion.effective_from : undefined} onChange={e => setRenewDate(e.target.value)} className="h-9 text-sm" disabled={renewing} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={() => setRenewDialogOpen(false)} disabled={renewing}>취소</Button>
+            <Button type="button" size="sm" onClick={handleRenew} disabled={renewing || !renewDate}>{renewing ? '갱신 중...' : '갱신'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={o => !saving && setDialogOpen(o)}>
         <DialogContent className="max-w-sm">

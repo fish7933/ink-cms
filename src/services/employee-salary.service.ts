@@ -9,6 +9,7 @@ import { getCompanyInfo } from '@/services/company-info.service';
 import { buildPayrollLedgerWorkbook } from '@/utils/employee-payroll-ledger-export';
 import type {
   EmployeeSalaryItem,
+  EmployeeSalaryItemVersion,
   EmployeeSalaryItemCategory,
   EmployeeSalaryItemPayGroup,
   EmployeeSalaryItemCatalogEntry,
@@ -122,8 +123,28 @@ export async function deactivateSalaryItemCatalogEntry(id: string): Promise<void
 }
 
 // --- 급여 항목 (정보관리) ---
+// 급여 인상 등으로 항목/금액이 바뀌면 기존 값을 덮어쓰지 않고 새 유효기간 버전을 만든다
+// (선원 급여 템플릿의 effective_from/effective_until/버전 갱신과 동일한 로직). 편집 화면에서
+// 보이는 "현재 급여표"는 항상 effective_until이 null인 버전이고, 지난 버전은 이력으로 남는다.
 
-export async function getEmployeeSalaryItems(userId: string): Promise<EmployeeSalaryItem[]> {
+// asOfDate를 지정하면 그 날짜에 적용 중이던 버전을 조회한다(급여명세서 생성 시 그 달에 유효했던
+// 항목을 그대로 쓰기 위함). 지정하지 않으면 오늘 기준 현행 버전.
+export async function getEmployeeSalaryItems(userId: string, asOfDate?: string): Promise<EmployeeSalaryItem[]> {
+  const date = asOfDate || todayIso();
+  const { data, error } = await supabase
+    .from('employee_salary_items')
+    .select('*')
+    .eq('user_id', userId)
+    .lte('effective_from', date)
+    .or(`effective_until.is.null,effective_until.gte.${date}`)
+    .order('category')
+    .order('display_order');
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+// 사용자별 갱신 이력 전체 — 버전(version_group_id)별로 묶어 최신순으로 반환.
+export async function getEmployeeSalaryItemHistory(userId: string): Promise<EmployeeSalaryItemVersion[]> {
   const { data, error } = await supabase
     .from('employee_salary_items')
     .select('*')
@@ -131,17 +152,47 @@ export async function getEmployeeSalaryItems(userId: string): Promise<EmployeeSa
     .order('category')
     .order('display_order');
   if (error) { console.error(error); return []; }
-  return data || [];
+  const byVersion = new Map<string, EmployeeSalaryItemVersion>();
+  for (const item of data || []) {
+    let v = byVersion.get(item.version_group_id);
+    if (!v) {
+      v = { version_group_id: item.version_group_id, effective_from: item.effective_from, effective_until: item.effective_until, items: [] };
+      byVersion.set(item.version_group_id, v);
+    }
+    v.items.push(item);
+  }
+  return [...byVersion.values()].sort((a, b) => b.effective_from.localeCompare(a.effective_from));
 }
 
-export async function addEmployeeSalaryItem(data: Omit<EmployeeSalaryItem, 'id' | 'created_at' | 'updated_at'>): Promise<EmployeeSalaryItem> {
+async function getCurrentVersionInfo(userId: string): Promise<{ version_group_id: string; effective_from: string } | null> {
+  const { data, error } = await supabase
+    .from('employee_salary_items')
+    .select('version_group_id, effective_from')
+    .eq('user_id', userId)
+    .is('effective_until', null)
+    .limit(1)
+    .maybeSingle();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+
+export async function addEmployeeSalaryItem(
+  data: Omit<EmployeeSalaryItem, 'id' | 'created_at' | 'updated_at' | 'effective_from' | 'effective_until' | 'version_group_id'>
+): Promise<EmployeeSalaryItem> {
   const now = new Date().toISOString();
-  const { data: result, error } = await supabase.from('employee_salary_items').insert({ ...data, created_at: now, updated_at: now }).select().single();
+  const current = await getCurrentVersionInfo(data.user_id);
+  const version_group_id = current?.version_group_id || crypto.randomUUID();
+  const effective_from = current?.effective_from || todayIso();
+  const { data: result, error } = await supabase
+    .from('employee_salary_items')
+    .insert({ ...data, version_group_id, effective_from, effective_until: null, created_at: now, updated_at: now })
+    .select()
+    .single();
   if (error) throw error;
   return result;
 }
 
-export async function updateEmployeeSalaryItem(id: string, data: Partial<Omit<EmployeeSalaryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>>): Promise<void> {
+export async function updateEmployeeSalaryItem(id: string, data: Partial<Pick<EmployeeSalaryItem, 'amount' | 'name'>>): Promise<void> {
   const { error } = await supabase.from('employee_salary_items').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
   if (error) throw error;
 }
@@ -149,6 +200,44 @@ export async function updateEmployeeSalaryItem(id: string, data: Partial<Omit<Em
 export async function deleteEmployeeSalaryItem(id: string): Promise<void> {
   const { error } = await supabase.from('employee_salary_items').delete().eq('id', id);
   if (error) throw error;
+}
+
+// 직원별 급여표 갱신: 현행 버전 항목을 그대로 복제해 새 유효기간 버전을 만들고, 기존 버전은
+// newEffectiveFrom 전날까지로 종료시킨다. 복제된 새 버전을 그대로 편집해서 인상분 등을 반영하면 된다.
+export async function renewEmployeeSalaryItems(userId: string, newEffectiveFrom: string): Promise<EmployeeSalaryItem[]> {
+  const { data: current, error } = await supabase
+    .from('employee_salary_items')
+    .select('*')
+    .eq('user_id', userId)
+    .is('effective_until', null);
+  if (error) throw error;
+  if (!current || current.length === 0) throw new Error('현재 급여표에 항목이 없습니다. 먼저 항목을 추가해주세요.');
+  if (newEffectiveFrom <= current[0].effective_from) throw new Error('새 적용일은 현재 버전의 적용 시작일보다 뒤여야 합니다.');
+
+  const dayBefore = new Date(newEffectiveFrom);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  const effectiveUntil = `${dayBefore.getFullYear()}-${String(dayBefore.getMonth() + 1).padStart(2, '0')}-${String(dayBefore.getDate()).padStart(2, '0')}`;
+
+  const { error: closeError } = await supabase
+    .from('employee_salary_items')
+    .update({ effective_until: effectiveUntil, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .is('effective_until', null);
+  if (closeError) throw closeError;
+
+  const newVersionGroupId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const { data: inserted, error: insertError } = await supabase
+    .from('employee_salary_items')
+    .insert(current.map(i => ({
+      user_id: i.user_id, catalog_id: i.catalog_id, pay_group: i.pay_group, category: i.category,
+      name: i.name, amount: i.amount, display_order: i.display_order, is_active: i.is_active,
+      version_group_id: newVersionGroupId, effective_from: newEffectiveFrom, effective_until: null,
+      created_at: now, updated_at: now,
+    })))
+    .select();
+  if (insertError) throw insertError;
+  return inserted || [];
 }
 
 // --- 월별 지급 회차 ---
@@ -260,6 +349,8 @@ export async function generatePayslipsForPeriod(periodId: string): Promise<{ cre
   const { data: period, error: periodError } = await supabase.from('employee_payroll_periods').select('payment_date, year_month').eq('id', periodId).single();
   if (periodError) throw periodError;
   const periodMonthStart = `${period.year_month}-01`;
+  const [py, pm] = period.year_month.split('-').map(Number);
+  const periodMonthEnd = `${period.year_month}-${String(new Date(py, pm, 0).getDate()).padStart(2, '0')}`;
 
   const [{ data: existing, error: existingError }, employees] = await Promise.all([
     supabase.from('employee_payslips').select('user_id').eq('period_id', periodId),
@@ -271,11 +362,14 @@ export async function generatePayslipsForPeriod(periodId: string): Promise<{ cre
   const targets = employees.filter(e => !existingUserIds.has(e.id));
   if (targets.length === 0) return { created: 0, skipped: employees.length };
 
+  // 급여표가 그 사이 갱신됐을 수 있으니, 이번 급여월의 말일 기준으로 적용 중이던 버전을 쓴다.
   const { data: allItems, error: itemsError } = await supabase
     .from('employee_salary_items')
     .select('*')
     .in('user_id', targets.map(e => e.id))
     .eq('is_active', true)
+    .lte('effective_from', periodMonthEnd)
+    .or(`effective_until.is.null,effective_until.gte.${periodMonthEnd}`)
     .order('display_order');
   if (itemsError) throw itemsError;
   const itemsByUser = new Map<string, EmployeeSalaryItem[]>();

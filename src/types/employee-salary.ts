@@ -26,8 +26,19 @@ export interface EmployeeSalaryItem {
   amount: number;
   display_order: number;
   is_active: boolean;
+  effective_from: string; // 이 버전의 적용 시작일 (선원 급여 템플릿의 effective_from과 동일 로직)
+  effective_until: string | null; // null = 현행 버전, 값이 있으면 갱신되어 종료된 과거 버전
+  version_group_id: string; // 같은 갱신 시점에 만들어진 항목들을 묶는 id
   created_at: string;
   updated_at: string;
+}
+
+// 직원별 급여표 갱신 이력 한 건 — 특정 버전(version_group_id)의 항목 스냅샷 + 유효기간.
+export interface EmployeeSalaryItemVersion {
+  version_group_id: string;
+  effective_from: string;
+  effective_until: string | null;
+  items: EmployeeSalaryItem[];
 }
 
 export type EmployeePayrollPeriodStatus = 'draft' | 'pending_ack' | 'pending_approval' | 'confirmed';
