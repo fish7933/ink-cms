@@ -263,7 +263,7 @@ export default function DailyCashReportPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-4">
-          <DailyCashReportTable sections={sections} onTransactionClick={id => openNewTab(`/accounting/cashbook?edit=${id}`, '금전출납')} />
+          <DailyCashReportTable sections={sections} onTransactionClick={id => openNewTab(`/accounting/cashbook/transaction/${id}`, '거래 수정')} />
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-xs">비고</Label>
