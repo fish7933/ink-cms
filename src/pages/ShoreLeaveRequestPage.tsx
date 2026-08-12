@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Send, X, Ban } from 'lucide-react';
+import { CalendarDays, Send, X, Ban, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,7 @@ import { getCurrentUser } from '@/lib/store';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, linkLeaveCancellationDocument, getLeaveBalance } from '@/services/shore-leave.service';
-import { formatLeaveHours, type LeaveBalance } from '@/lib/leave-calc';
+import { formatLeaveHours, explainAccruedLeaveDays, HOURS_PER_DAY, type LeaveBalance } from '@/lib/leave-calc';
 import { calculateLeaveHours, isWorkingDay, rangesOverlap } from '@/lib/leave-duration';
 import { getHolidays, type Holiday } from '@/services/holiday.service';
 import type { OrgUnit, ApprovalChainStep } from '@/types/org-chart';
@@ -65,6 +65,7 @@ export default function ShoreLeaveRequestPage() {
   const [cancelTarget, setCancelTarget] = useState<ShoreLeaveRequest | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [showLegalExplain, setShowLegalExplain] = useState(false);
 
   const [form, setForm] = useState({ start_date: '', end_date: '', leaveType: 'full' as LeaveType, reason: '', ccOrgUnitIds: [] as string[] });
 
@@ -302,7 +303,9 @@ export default function ShoreLeaveRequestPage() {
       <Card>
         <CardContent className="pt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
           <div className="p-3 bg-gray-50 rounded-md">
-            <p className="text-xs text-gray-500">법정 발생 연차</p>
+            <button type="button" className="flex items-center justify-center gap-1 text-xs text-gray-500 mx-auto hover:text-blue-600" onClick={() => setShowLegalExplain(true)}>
+              법정 발생 연차<Info className="h-3 w-3" />
+            </button>
             <p className="text-xl font-bold">{formatLeaveHours(balance.legalAccruedHours)}</p>
           </div>
           <div className="p-3 bg-gray-50 rounded-md">
@@ -498,6 +501,46 @@ export default function ShoreLeaveRequestPage() {
             <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelSubmitting}>닫기</Button>
             <Button variant="destructive" onClick={submitCancellation} disabled={cancelSubmitting}>{cancelSubmitting ? '제출 중...' : '취소 신청 제출'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showLegalExplain} onOpenChange={setShowLegalExplain}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>법정 발생 연차 계산</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const ex = currentUser?.hire_date ? explainAccruedLeaveDays(currentUser.hire_date) : null;
+            if (!ex || !currentUser?.hire_date) {
+              return <p className="text-sm text-gray-400 py-4 text-center">입사일이 등록되어 있지 않아 계산할 수 없습니다.</p>;
+            }
+            return (
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 bg-gray-50 rounded-md">
+                    <p className="text-xs text-gray-500">입사일</p>
+                    <p className="font-medium">{ex.hireDate}</p>
+                  </div>
+                  <div className="p-2.5 bg-gray-50 rounded-md">
+                    <p className="text-xs text-gray-500">기준일(오늘)</p>
+                    <p className="font-medium">{ex.asOfDate}</p>
+                  </div>
+                </div>
+                <div className="p-2.5 bg-gray-50 rounded-md">
+                  <p className="text-xs text-gray-500">적용 규정</p>
+                  <p className="font-medium">{ex.ruleLabel} (근로기준법 제60조)</p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-md">
+                  <p className="text-xs text-blue-600 mb-1">계산 과정</p>
+                  <p className="text-sm text-blue-900">{ex.formulaText}</p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-md text-center">
+                  <p className="text-xs text-blue-600">결과</p>
+                  <p className="text-lg font-bold text-blue-700">{ex.days}일 ({ex.days * HOURS_PER_DAY}시간)</p>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
