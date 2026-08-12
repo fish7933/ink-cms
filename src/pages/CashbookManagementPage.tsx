@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, Save, Edit2, ArrowLeft, Receipt, Settings2, ChevronLeft, ChevronRight, Upload, FileText, Paperclip } from 'lucide-react';
+import { Plus, Trash2, Save, Edit2, ArrowLeft, Receipt, Settings2, ChevronLeft, ChevronRight, Upload, FileText, Paperclip, FileDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ import { getCategories, addCategory, deleteCategory } from '@/services/accountin
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { uploadCompressed, getFileUrl } from '@/lib/upload';
+import { exportAccountingLedgerWorkbook } from '@/utils/accounting-excel-export';
 import type {
   CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory,
   AccountingTransactionType, AccountingPaymentMethod, CashTransactionAttachment,
@@ -116,6 +117,8 @@ export default function CashbookManagementPage() {
   const [error, setError] = useState('');
   const [attachments, setAttachments] = useState<CashTransactionAttachment[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
+
+  const [exporting, setExporting] = useState(false);
 
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryFormType, setCategoryFormType] = useState<AccountingTransactionType>('expense');
@@ -250,6 +253,17 @@ export default function CashbookManagementPage() {
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const changeFilter = (fn: () => void) => { fn(); setPage(1); };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      await exportAccountingLedgerWorkbook();
+    } catch (e) {
+      toast({ title: '엑셀 내보내기 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // 통화가 다르면 그냥 더하는 게 의미가 없으므로(원화/달러) 통화별로 따로 합산한다.
   // 실제 등록된 계좌가 쓰는 두 통화(KRW/USD)는 그 기간에 거래가 하나도 없어도 0으로 항상 보여준다.
@@ -632,9 +646,14 @@ export default function CashbookManagementPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-base">거래 내역</CardTitle>
-                {permissions.canCreate && (
-                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />거래 추가</Button>
-                )}
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={handleExportExcel} disabled={exporting}>
+                    <FileDown className="w-3.5 h-3.5" />{exporting ? '내보내는 중...' : '엑셀 다운로드'}
+                  </Button>
+                  {permissions.canCreate && (
+                    <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />거래 추가</Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="pt-0 space-y-3">
