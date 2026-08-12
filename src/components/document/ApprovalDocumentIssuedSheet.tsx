@@ -253,7 +253,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                     <tbody>
                       {sections.map(s => (
                         <tr key={s.id}>
-                          <td>{DAILY_REPORT_KIND_LABEL[s.kind]}</td>
+                          <td style={{ textAlign: 'center' }}>{DAILY_REPORT_KIND_LABEL[s.kind]}</td>
                           <td>{s.name} ({s.currency})</td>
                           <td style={{ textAlign: 'right', color: '#999' }}>{s.opening_balance.toLocaleString()}</td>
                           <td style={{ textAlign: 'right' }}>{s.closing_balance.toLocaleString()}</td>
