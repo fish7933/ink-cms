@@ -21,7 +21,7 @@ import { getCategories, addCategory, deleteCategory } from '@/services/accountin
 import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { uploadCompressed, getFileUrl } from '@/lib/upload';
-import { exportAccountingLedgerWorkbook } from '@/utils/accounting-excel-export';
+import { exportAccountingLedgerWorkbook, type ExportDateRange } from '@/utils/accounting-excel-export';
 import type {
   CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory,
   AccountingTransactionType, AccountingPaymentMethod, CashTransactionAttachment,
@@ -257,7 +257,17 @@ export default function CashbookManagementPage() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      await exportAccountingLedgerWorkbook();
+      let range: ExportDateRange;
+      if (dateFilterMode === 'day') {
+        range = { start: dayFilter, end: dayFilter, label: dayFilter };
+      } else if (dateFilterMode === 'month') {
+        range = { start: `${monthFilter}-01`, end: lastDayOfMonth(monthFilter), label: monthFilter };
+      } else if (dateFilterMode === 'year') {
+        range = { start: `${yearFilter}-01-01`, end: `${yearFilter}-12-31`, label: yearFilter };
+      } else {
+        range = { start: null, end: null, label: '전체기간' };
+      }
+      await exportAccountingLedgerWorkbook(range);
     } catch (e) {
       toast({ title: '엑셀 내보내기 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {

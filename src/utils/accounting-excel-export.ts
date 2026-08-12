@@ -13,11 +13,17 @@ interface SaveFilePickerWindow extends Window {
   }>;
 }
 
+// 화면에서 인쇄해도 안전하도록 옅은 색만 쓰고 글자 크기를 통일한다.
 const THIN = 'CCCCCC';
-const HEADER_BG = 'F5F5F5';
+const HEADER_BG = 'E8ECF3';
+const SUBTOTAL_BG = 'F2F2F2';
+const OPENING_BG = 'FAFAFA';
+const FONT_SZ = 9;
+const HEADER_FONT_SZ = 9;
 
 function cell(v: string | number, style: Record<string, unknown> = {}) {
-  return { v, t: typeof v === 'number' ? 'n' : 's', s: style };
+  const base = { font: { sz: FONT_SZ, ...(style.font as Record<string, unknown> || {}) } };
+  return { v, t: typeof v === 'number' ? 'n' : 's', s: { ...base, ...style, font: { ...base.font, ...(style.font as Record<string, unknown> || {}) } } };
 }
 
 const border = {
@@ -34,12 +40,16 @@ const border = {
 const COLUMN_LABELS = ['no.', '거래일시', '입금', '출금', '거래후잔액', '은행기재', '상대거래처', '구분', '선사', '내용'];
 const COL_WIDTHS = [5, 12, 13, 13, 15, 18, 18, 12, 8, 30];
 
+export interface ExportDateRange {
+  start: string | null; // null이면 계좌 개설일부터
+  end: string | null;   // null이면 끝까지
+  label: string;         // 파일명에 들어갈 기간 표시(예: "2026-08", "2026", "2026-08-12", "전체기간")
+}
+
 interface LedgerAccount {
   name: string;
   accountNumber: string | null;
   openingBalance: number;
-  bankAccountId?: string;
-  cashRegisterId?: string;
 }
 
 interface RawTxn {
@@ -71,28 +81,67 @@ async function fetchAllTransactions(): Promise<RawTxn[]> {
   return rows;
 }
 
-function buildAccountSheet(companyName: string, account: LedgerAccount, txns: RawTxn[], categoryNameById: Map<string, string>): XLSX.WorkSheet {
+function emptyRow(colCount: number, style: Record<string, unknown> = {}) {
+  return Array.from({ length: colCount }, () => cell('', style));
+}
+
+function buildAccountSheet(companyName: string, account: LedgerAccount, allTxns: RawTxn[], categoryNameById: Map<string, string>, range: ExportDateRange): XLSX.WorkSheet {
   const colCount = COLUMN_LABELS.length;
   const aoa: ReturnType<typeof cell>[][] = [];
 
-  aoa.push([cell(`예금주명 : ${companyName}`, { font: { bold: true } }), ...Array.from({ length: colCount - 1 }, () => cell('', {}))]);
-  aoa.push([cell('계좌번호 : ', {}), cell(account.accountNumber || '', {}), ...Array.from({ length: colCount - 2 }, () => cell('', {}))]);
-  aoa.push(COLUMN_LABELS.map(label => cell(label, { font: { bold: true }, fill: { fgColor: { rgb: HEADER_BG } }, border, alignment: { horizontal: 'center' } })));
+  aoa.push([cell(`예금주명 : ${companyName}`, { font: { bold: true, sz: 11 } }), ...emptyRow(colCount - 1)]);
+  aoa.push([cell('계좌번호 : ', {}), cell(account.accountNumber || '', {}), ...emptyRow(colCount - 2)]);
+  aoa.push([cell(`조회 기간 : ${range.label}`, { font: { italic: true, color: { rgb: '666666' } } }), ...emptyRow(colCount - 1)]);
+  aoa.push(COLUMN_LABELS.map(label => cell(label, { font: { bold: true, sz: HEADER_FONT_SZ }, fill: { fgColor: { rgb: HEADER_BG } }, border, alignment: { horizontal: 'center' } })));
+
+  // range.start 이전 거래로 이월잔액을 먼저 계산하고, 실제로 표에 나열하는 건 범위 안의 거래만 —
+  // "일별/월별/연도별 조회 중인 내역만 다운로드"가 되도록 목록은 그 기간으로 좁히되, 잔액은
+  // 처음부터 누적한 진짜 값이 이어지게 한다.
+  const before = range.start ? allTxns.filter(t => t.transaction_date < range.start!) : [];
+  const inRange = allTxns.filter(t => (!range.start || t.transaction_date >= range.start) && (!range.end || t.transaction_date <= range.end));
 
   let balance = account.openingBalance;
+  for (const t of before) balance += t.transaction_type === 'income' ? Number(t.amount) : -Number(t.amount);
+
   let no = 0;
   aoa.push([
-    cell(no, { border, alignment: { horizontal: 'right' } }),
-    cell('전일이월', { border }),
-    cell('', { border }), cell('', { border }),
-    cell(balance, { border, alignment: { horizontal: 'right' } }),
-    cell('', { border }), cell('', { border }), cell('', { border }), cell('', { border }), cell('', { border }),
+    cell(no, { border, alignment: { horizontal: 'right' }, fill: { fgColor: { rgb: OPENING_BG } } }),
+    cell('전일이월', { border, fill: { fgColor: { rgb: OPENING_BG } } }),
+    cell('', { border, fill: { fgColor: { rgb: OPENING_BG } } }), cell('', { border, fill: { fgColor: { rgb: OPENING_BG } } }),
+    cell(balance, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: OPENING_BG } } }),
+    ...emptyRow(colCount - 5, { border, fill: { fgColor: { rgb: OPENING_BG } } }),
   ]);
 
-  for (const t of txns) {
+  // 월이 바뀔 때마다 그 달의 입금/출금 합계와 월말 잔액을 소계 행으로 끊어 보여준다(기존
+  // 경리부서 양식처럼 계좌별 거래내역표 하단에 늘 "합계"가 있던 것과 같은 취지).
+  let currentMonth: string | null = null;
+  let monthIncome = 0;
+  let monthExpense = 0;
+
+  const flushMonthSubtotal = () => {
+    if (currentMonth === null) return;
+    const label = `${currentMonth.slice(0, 4)}년 ${Number(currentMonth.slice(5, 7))}월 소계`;
+    aoa.push([
+      cell('', { border, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      cell(label, { border, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      cell(monthIncome, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      cell(monthExpense, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      cell(balance, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      ...emptyRow(colCount - 5, { border, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+    ]);
+    monthIncome = 0;
+    monthExpense = 0;
+  };
+
+  for (const t of inRange) {
+    const ym = t.transaction_date.slice(0, 7);
+    if (currentMonth !== null && ym !== currentMonth) flushMonthSubtotal();
+    currentMonth = ym;
+
     const amount = Number(t.amount);
     balance += t.transaction_type === 'income' ? amount : -amount;
     no += 1;
+    if (t.transaction_type === 'income') monthIncome += amount; else monthExpense += amount;
     const categoryName = t.category_id ? categoryNameById.get(t.category_id) || '' : '';
     aoa.push([
       cell(no, { border, alignment: { horizontal: 'right' } }),
@@ -107,6 +156,7 @@ function buildAccountSheet(companyName: string, account: LedgerAccount, txns: Ra
       cell(t.description || '', { border }),
     ]);
   }
+  flushMonthSubtotal();
 
   const sheet = XLSX.utils.aoa_to_sheet(aoa.map(row => row.map(c => c.v)));
   sheet['!cols'] = COL_WIDTHS.map(w => ({ wch: w }));
@@ -115,6 +165,12 @@ function buildAccountSheet(companyName: string, account: LedgerAccount, txns: Ra
     const addr = XLSX.utils.encode_cell({ r, c: cIdx });
     if (sheet[addr]) sheet[addr].s = c.s;
   }));
+
+  // 인쇄했을 때 잘리거나 여백이 어긋나지 않도록 — 열이 10개라 가로로 눕히고 폭에 맞춘다.
+  sheet['!pageSetup'] = { orientation: 'landscape', fitToWidth: 1, fitToHeight: 0, scale: 100 };
+  sheet['!margins'] = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
+  sheet['!printHeader'] = [3, 3]; // 매 인쇄 페이지마다 헤더 행(4번째 행, 0-indexed 3)을 반복
+
   return sheet;
 }
 
@@ -138,9 +194,10 @@ async function writeWorkbook(workbook: XLSX.WorkBook, fileName: string): Promise
   XLSX.writeFile(workbook, fileName);
 }
 
-// 계좌별(통장 전부 + 현금 시재) 거래 전체를 시트로 나눠 하나의 엑셀로 내보낸다 —
-// 경리 부서가 쓰던 원본 양식과 같은 구조라 그대로 이어서 쓸 수 있다.
-export async function exportAccountingLedgerWorkbook(): Promise<void> {
+// 계좌별(통장 전부 + 현금 시재) 거래를 시트로 나눠 하나의 엑셀로 내보낸다 — 경리 부서가 쓰던
+// 원본 양식과 같은 구조라 그대로 이어서 쓸 수 있다. range로 지정한 기간(일/월/연도/전체)의
+// 거래만 목록에 나열되고, 잔액은 계좌 개설일부터 진짜로 누적된 값이 이어진다.
+export async function exportAccountingLedgerWorkbook(range: ExportDateRange): Promise<void> {
   const [company, bankAccounts, cashRegisters, allTxns, { data: categories }] = await Promise.all([
     getCompanyInfo(),
     getBankAccounts(),
@@ -154,19 +211,17 @@ export async function exportAccountingLedgerWorkbook(): Promise<void> {
   const workbook = XLSX.utils.book_new();
 
   for (const a of bankAccounts) {
-    const account: LedgerAccount = { name: a.account_name, accountNumber: a.account_number, openingBalance: Number(a.opening_balance), bankAccountId: a.id };
+    const account: LedgerAccount = { name: a.account_name, accountNumber: a.account_number, openingBalance: Number(a.opening_balance) };
     const txns = allTxns.filter(t => t.bank_account_id === a.id);
-    const sheet = buildAccountSheet(companyName, account, txns, categoryNameById);
+    const sheet = buildAccountSheet(companyName, account, txns, categoryNameById, range);
     XLSX.utils.book_append_sheet(workbook, sheet, a.account_name.slice(0, 31));
   }
   for (const r of cashRegisters) {
-    const account: LedgerAccount = { name: r.name, accountNumber: null, openingBalance: Number(r.opening_balance), cashRegisterId: r.id };
+    const account: LedgerAccount = { name: r.name, accountNumber: null, openingBalance: Number(r.opening_balance) };
     const txns = allTxns.filter(t => t.cash_register_id === r.id);
-    const sheet = buildAccountSheet(companyName, account, txns, categoryNameById);
+    const sheet = buildAccountSheet(companyName, account, txns, categoryNameById, range);
     XLSX.utils.book_append_sheet(workbook, sheet, r.name.slice(0, 31));
   }
 
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
-  await writeWorkbook(workbook, `${companyName || '경리'}_거래내역_${dateStr}.xlsx`);
+  await writeWorkbook(workbook, `${companyName || '경리'}_거래내역_${range.label}.xlsx`);
 }
