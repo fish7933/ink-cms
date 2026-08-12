@@ -30,6 +30,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 const NONE = '_none';
 const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
+const CURRENCY_LABELS: Record<string, string> = { KRW: '원화', USD: '미화', EUR: '유로', JPY: '엔화' };
 const PAGE_SIZE = 20;
 const PAYMENT_METHOD_LABELS: Record<AccountingPaymentMethod, string> = { bank_account: '통장', card: '카드', cash: '현금' };
 
@@ -549,16 +550,22 @@ export default function CashbookManagementPage() {
         </Card>
       ) : (
         <>
-          <div className="space-y-1.5">
+          <div className="rounded-lg border overflow-hidden bg-white">
+            <div className="grid grid-cols-[80px_1fr_1fr_1fr] bg-gray-50 border-b">
+              <div className="px-4 py-2 text-xs font-medium text-gray-500">통화</div>
+              <div className="px-4 py-2 text-xs font-medium text-gray-500 text-right">기간 내 수입</div>
+              <div className="px-4 py-2 text-xs font-medium text-gray-500 text-right">기간 내 지출</div>
+              <div className="px-4 py-2 text-xs font-medium text-gray-500 text-right">차액</div>
+            </div>
             {currencyTotals.map(([currency, { income, expense }]) => (
-              <Card key={currency}>
-                <CardContent className="py-2.5 px-4 flex items-center justify-start gap-x-6 gap-y-1 flex-wrap text-sm">
-                  <span className="text-xs font-semibold text-gray-500">{currency}</span>
-                  <span className="text-gray-500">기간 내 수입 <b className="text-blue-700 font-mono font-semibold">{income.toLocaleString()}</b></span>
-                  <span className="text-gray-500">기간 내 지출 <b className="text-red-600 font-mono font-semibold">{expense.toLocaleString()}</b></span>
-                  <span className="text-gray-500">차액 <b className="font-mono font-semibold">{(income - expense).toLocaleString()}</b></span>
-                </CardContent>
-              </Card>
+              <div key={currency} className="grid grid-cols-[80px_1fr_1fr_1fr] items-center border-b last:border-0 hover:bg-gray-50/60 transition-colors">
+                <div className="px-4 py-2.5">
+                  <Badge variant="outline" className="text-xs font-medium text-gray-600 border-gray-300">{CURRENCY_LABELS[currency] || currency}</Badge>
+                </div>
+                <div className="px-4 py-2.5 text-right font-mono font-semibold text-sm text-blue-700">{income.toLocaleString()}</div>
+                <div className="px-4 py-2.5 text-right font-mono font-semibold text-sm text-red-600">{expense.toLocaleString()}</div>
+                <div className="px-4 py-2.5 text-right font-mono font-semibold text-sm">{(income - expense).toLocaleString()}</div>
+              </div>
             ))}
           </div>
 
