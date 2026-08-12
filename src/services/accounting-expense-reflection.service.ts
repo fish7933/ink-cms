@@ -160,7 +160,29 @@ export async function reflectExpenseItemsBatch(inputs: ReflectExpenseItemInput[]
 }
 
 // 반영 취소 = 그때 만들어진 금전출납 거래를 지운다(금전출납 화면의 삭제와 동일한 규칙 —
-// 이미 상신/확정된 자금일보 날짜면 assertDateEditable에서 막힌다).
-export async function unreflectExpenseItem(transactionId: string): Promise<void> {
+// 이미 상신/확정된 자금일보 날짜면 assertDateEditable에서 막힌다). 이미 반영된 건은
+// 시스템관리자만 강제취소할 수 있다 — 호출하는 화면(AccountingExpenseReflectionPage)에서
+// role 체크로 버튼 자체를 막아두지만, 서비스 레이어에서도 최종 방어선으로 한 번 더 확인한다.
+export async function unreflectExpenseItem(transactionId: string, isSystemAdmin: boolean): Promise<void> {
+  if (!isSystemAdmin) throw new Error('반영 취소는 시스템관리자만 할 수 있습니다.');
   await deleteCashTransaction(transactionId);
+}
+
+// 지출결의 반영 목록에서 미반영 문서를 숨긴다(문서 자체는 그대로 유지).
+export async function getHiddenExpenseDocumentIds(): Promise<Set<string>> {
+  const { data, error } = await supabase.from('accounting_expense_reflection_hides').select('document_id');
+  if (error) throw error;
+  return new Set((data || []).map(r => r.document_id));
+}
+
+export async function hideExpenseDocument(documentId: string, userId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('accounting_expense_reflection_hides')
+    .upsert({ document_id: documentId, hidden_by: userId }, { onConflict: 'document_id' });
+  if (error) throw error;
+}
+
+export async function unhideExpenseDocument(documentId: string): Promise<void> {
+  const { error } = await supabase.from('accounting_expense_reflection_hides').delete().eq('document_id', documentId);
+  if (error) throw error;
 }

@@ -2,5 +2,7 @@
 -- DB 단에서 최종적으로 막는다. DB 서버는 UTC 기준이라 한국 등 UTC+ 시간대에서의 "오늘"이
 -- UTC로는 아직 어제일 수 있으므로, 하루의 여유를 두어 정상적인 당일 입력까지 막지 않는다.
 ALTER TABLE accounting_daily_reports
+  DROP CONSTRAINT IF EXISTS accounting_daily_reports_no_future_date;
+ALTER TABLE accounting_daily_reports
   ADD CONSTRAINT accounting_daily_reports_no_future_date
   CHECK (report_date <= CURRENT_DATE + INTERVAL '1 day');

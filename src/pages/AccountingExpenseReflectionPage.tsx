@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, ArrowLeft, Save, ChevronLeft, ChevronRight, Undo2, FileText, Layers, ExternalLink } from 'lucide-react';
+import { ClipboardCheck, ArrowLeft, Save, ChevronLeft, ChevronRight, Undo2, FileText, Layers, ExternalLink, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AutocompleteInput } from '@/components/ui/autocomplete-input';
 import { getFileUrl } from '@/lib/upload';
 import {
-  getReflectableExpenseItems, reflectExpenseItem, reflectExpenseItemsBatch, unreflectExpenseItem, type ExpenseReflectionItem,
+  getReflectableExpenseItems, reflectExpenseItem, reflectExpenseItemsBatch, unreflectExpenseItem,
+  getHiddenExpenseDocumentIds, hideExpenseDocument, unhideExpenseDocument, type ExpenseReflectionItem,
 } from '@/services/accounting-expense-reflection.service';
 import { getBankAccounts } from '@/services/accounting-bank-account.service';
 import { getCards } from '@/services/accounting-card.service';
@@ -29,7 +30,7 @@ const NONE = '_none';
 const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
 const PAGE_SIZE = 20;
 
-type StatusFilter = 'all' | 'reflected' | 'unreflected';
+type StatusFilter = 'all' | 'reflected' | 'unreflected' | 'deleted';
 
 function today(): string {
   const now = new Date();
@@ -78,7 +79,10 @@ export default function AccountingExpenseReflectionPage() {
   const permissions = usePermissions('accounting_expense_reflection');
   const { openNewTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const isSystemAdmin = currentUser?.role === 'system_admin';
   const [items, setItems] = useState<ExpenseReflectionItem[]>([]);
+  const [hiddenDocIds, setHiddenDocIds] = useState<Set<string>>(new Set());
+  const [hiding, setHiding] = useState<string | null>(null);
   const [bankAccounts, setBankAccounts] = useState<BankAccountWithBalance[]>([]);
   const [cards, setCards] = useState<CardWithDetails[]>([]);
   const [cashRegisters, setCashRegisters] = useState<CashRegisterWithBalance[]>([]);
@@ -109,8 +113,9 @@ export default function AccountingExpenseReflectionPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [me, list, accounts, cardList, registers, cats] = await Promise.all([
+      const [me, list, accounts, cardList, registers, cats, hiddenIds] = await Promise.all([
         getCurrentUser(), getReflectableExpenseItems(), getBankAccounts(), getCards(), getCashRegisters(), getCategories('expense'),
+        getHiddenExpenseDocumentIds(),
       ]);
       setCurrentUser(me);
       setItems(list);
@@ -118,6 +123,7 @@ export default function AccountingExpenseReflectionPage() {
       setCards(cardList);
       setCashRegisters(registers);
       setCategories(cats);
+      setHiddenDocIds(hiddenIds);
     } finally {
       setLoading(false);
     }
@@ -148,12 +154,15 @@ export default function AccountingExpenseReflectionPage() {
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
     return groups.filter(g => {
+      const hidden = hiddenDocIds.has(g.document_id);
+      if (statusFilter === 'deleted') return hidden && (!q || g.document_title.toLowerCase().includes(q) || g.submitted_by_name.toLowerCase().includes(q));
+      if (hidden) return false;
       if (statusFilter === 'reflected' && g.reflectedCount !== g.items.length) return false;
       if (statusFilter === 'unreflected' && g.reflectedCount >= g.items.length) return false;
       if (q && !g.document_title.toLowerCase().includes(q) && !g.submitted_by_name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [groups, statusFilter, search]);
+  }, [groups, statusFilter, search, hiddenDocIds]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -273,12 +282,14 @@ export default function AccountingExpenseReflectionPage() {
     }
   };
 
+  // 이미 반영된(금전출납 거래가 생성된) 건의 반영 취소는 시스템관리자만 할 수 있는 강제
+  // 작업이다 — 일반 담당자가 실수로/임의로 이미 확정된 거래를 지우지 못하도록 막는다.
   const handleUnreflect = async (item: ExpenseReflectionItem) => {
-    if (!item.reflected_transaction_id) return;
-    if (!confirm('반영을 취소하시겠습니까? 금전출납에 생성된 거래가 삭제됩니다.')) return;
+    if (!item.reflected_transaction_id || !isSystemAdmin) return;
+    if (!confirm('[관리자 강제취소] 반영을 취소하시겠습니까? 금전출납에 생성된 거래가 삭제됩니다.')) return;
     setUnreflecting(item.reflected_transaction_id);
     try {
-      await unreflectExpenseItem(item.reflected_transaction_id);
+      await unreflectExpenseItem(item.reflected_transaction_id, isSystemAdmin);
       toast({ title: '반영이 취소되었습니다.' });
       await loadData();
     } catch (e) {
@@ -289,12 +300,13 @@ export default function AccountingExpenseReflectionPage() {
   };
 
   const handleUnreflectBatch = async (targets: ExpenseReflectionItem[]) => {
+    if (!isSystemAdmin) return;
     const ids = targets.map(t => t.reflected_transaction_id).filter((id): id is string => !!id);
     if (ids.length === 0) return;
-    if (!confirm(`선택한 ${ids.length}건의 반영을 취소하시겠습니까? 금전출납에 생성된 거래가 모두 삭제됩니다.`)) return;
+    if (!confirm(`[관리자 강제취소] 선택한 ${ids.length}건의 반영을 취소하시겠습니까? 금전출납에 생성된 거래가 모두 삭제됩니다.`)) return;
     setUnreflectingBatch(true);
     try {
-      for (const id of ids) await unreflectExpenseItem(id);
+      for (const id of ids) await unreflectExpenseItem(id, isSystemAdmin);
       toast({ title: `${ids.length}건의 반영이 취소되었습니다.` });
       setSelectedIndexes(new Set());
       await loadData();
@@ -302,6 +314,35 @@ export default function AccountingExpenseReflectionPage() {
       toast({ title: '반영 취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setUnreflectingBatch(false);
+    }
+  };
+
+  // 아직 하나도 반영 안 된(미반영) 지출결의서만 목록에서 지울 수 있다 — 이미 반영된 항목이
+  // 하나라도 있으면 그 건에 연결된 금전출납 거래가 이미 존재하므로 목록에서 숨기지 않는다.
+  const handleHideDocument = async (documentId: string) => {
+    setHiding(documentId);
+    try {
+      await hideExpenseDocument(documentId, currentUser?.id || null);
+      toast({ title: '목록에서 지웠습니다.' });
+      closeDocument();
+      await loadData();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setHiding(null);
+    }
+  };
+
+  const handleRestoreDocument = async (documentId: string) => {
+    setHiding(documentId);
+    try {
+      await unhideExpenseDocument(documentId);
+      toast({ title: '복원되었습니다.' });
+      await loadData();
+    } catch (e) {
+      toast({ title: '복원 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setHiding(null);
     }
   };
 
@@ -468,10 +509,21 @@ export default function AccountingExpenseReflectionPage() {
                     <Layers className="w-3.5 h-3.5" />선택 {selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && !i.reflected).length}건 일괄 반영
                   </Button>
                 )}
-                {permissions.canDelete && selectedGroup.items.some(i => selectedIndexes.has(i.item_index) && i.reflected) && (
+                {isSystemAdmin && selectedGroup.items.some(i => selectedIndexes.has(i.item_index) && i.reflected) && (
                   <Button size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200" disabled={unreflectingBatch} onClick={() => handleUnreflectBatch(selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && i.reflected))}>
-                    <Undo2 className="w-3.5 h-3.5" />선택 {selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && i.reflected).length}건 반영 취소
+                    <Undo2 className="w-3.5 h-3.5" />[관리자] 선택 {selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && i.reflected).length}건 반영 강제취소
                   </Button>
+                )}
+                {permissions.canDelete && selectedGroup.reflectedCount === 0 && (
+                  hiddenDocIds.has(selectedGroup.document_id) ? (
+                    <Button size="sm" variant="outline" className="gap-1.5" disabled={hiding === selectedGroup.document_id} onClick={() => handleRestoreDocument(selectedGroup.document_id)}>
+                      <RotateCcw className="w-3.5 h-3.5" />목록에서 복원
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200" disabled={hiding === selectedGroup.document_id} onClick={() => handleHideDocument(selectedGroup.document_id)}>
+                      <Trash2 className="w-3.5 h-3.5" />목록에서 지우기
+                    </Button>
+                  )
                 )}
               </div>
             </div>
@@ -481,7 +533,7 @@ export default function AccountingExpenseReflectionPage() {
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {(permissions.canCreate || permissions.canDelete) && (
+                    {(permissions.canCreate || isSystemAdmin) && (
                       <th className="p-2 w-8 text-center">
                         <Checkbox
                           checked={selectedGroup.items.length > 0 && selectedGroup.items.every(i => selectedIndexes.has(i.item_index))}
@@ -502,7 +554,7 @@ export default function AccountingExpenseReflectionPage() {
                 <tbody>
                   {pagedItems.map((item, idx) => (
                     <tr key={item.item_index} className="border-b last:border-0 hover:bg-gray-50">
-                      {(permissions.canCreate || permissions.canDelete) && (
+                      {(permissions.canCreate || isSystemAdmin) && (
                         <td className="p-2 text-center">
                           <Checkbox checked={selectedIndexes.has(item.item_index)} onCheckedChange={() => toggleSelected(item.item_index)} />
                         </td>
@@ -520,9 +572,9 @@ export default function AccountingExpenseReflectionPage() {
                       </td>
                       <td className="p-2 text-center">
                         {item.reflected ? (
-                          permissions.canDelete && (
-                            <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 px-1.5" onClick={() => handleUnreflect(item)} disabled={unreflecting === item.reflected_transaction_id}>
-                              <Undo2 className="w-3 h-3" />취소
+                          isSystemAdmin && (
+                            <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 px-1.5 text-red-600" onClick={() => handleUnreflect(item)} disabled={unreflecting === item.reflected_transaction_id}>
+                              <Undo2 className="w-3 h-3" />강제취소
                             </Button>
                           )
                         ) : (
@@ -553,14 +605,14 @@ export default function AccountingExpenseReflectionPage() {
           <CardContent className="pt-0 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex rounded-md border overflow-hidden">
-                {(['unreflected', 'reflected', 'all'] as StatusFilter[]).map(f => (
+                {(['unreflected', 'reflected', 'all', 'deleted'] as StatusFilter[]).map(f => (
                   <button
                     key={f}
                     type="button"
                     onClick={() => changeFilter(() => setStatusFilter(f))}
                     className={`h-8 px-2.5 text-xs transition-colors ${statusFilter === f ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                   >
-                    {f === 'unreflected' ? '미반영' : f === 'reflected' ? '반영됨' : '전체'}
+                    {f === 'unreflected' ? '미반영' : f === 'reflected' ? '반영됨' : f === 'deleted' ? '삭제됨' : '전체'}
                   </button>
                 ))}
               </div>
@@ -607,9 +659,22 @@ export default function AccountingExpenseReflectionPage() {
                           </Badge>
                         </td>
                         <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
-                          <button type="button" className="text-gray-400 hover:text-blue-600 inline-flex" title="시행문 보기" onClick={() => openNewTab(`/documents/${g.document_id}`, g.document_title)}>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button type="button" className="text-gray-400 hover:text-blue-600 inline-flex" title="시행문 보기" onClick={() => openNewTab(`/documents/${g.document_id}`, g.document_title)}>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                            {permissions.canDelete && g.reflectedCount === 0 && (
+                              statusFilter === 'deleted' ? (
+                                <button type="button" className="text-gray-400 hover:text-emerald-600 inline-flex" title="목록에서 복원" disabled={hiding === g.document_id} onClick={() => handleRestoreDocument(g.document_id)}>
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button type="button" className="text-gray-400 hover:text-red-600 inline-flex" title="목록에서 지우기" disabled={hiding === g.document_id} onClick={() => handleHideDocument(g.document_id)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -100,7 +101,7 @@ export default function CashbookManagementPage() {
   const [categories, setCategories] = useState<AccountingCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month');
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('day');
   const [monthFilter, setMonthFilter] = useState(currentMonth());
   const [dayFilter, setDayFilter] = useState(today());
   const [yearFilter, setYearFilter] = useState(currentYear());
@@ -110,6 +111,8 @@ export default function CashbookManagementPage() {
   const [typeFilter, setTypeFilter] = useState<'all' | AccountingTransactionType>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [formView, setFormView] = useState<{ id?: string } | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -252,7 +255,7 @@ export default function CashbookManagementPage() {
   const currentPage = Math.min(page, totalPages);
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const changeFilter = (fn: () => void) => { fn(); setPage(1); };
+  const changeFilter = (fn: () => void) => { fn(); setPage(1); setSelectedIds(new Set()); };
 
   const handleExportExcel = async () => {
     setExporting(true);
@@ -436,6 +439,37 @@ export default function CashbookManagementPage() {
     if (!confirm('이 거래 내역을 삭제하시겠습니까?')) return;
     try { await deleteCashTransaction(t.id); await loadData(); }
     catch (e) { toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds(prev => {
+      const allSelected = paged.length > 0 && paged.every(t => prev.has(t.id));
+      if (allSelected) return new Set();
+      return new Set(paged.map(t => t.id));
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`선택한 ${selectedIds.size}건의 거래 내역을 삭제하시겠습니까?`)) return;
+    setBulkDeleting(true);
+    try {
+      for (const id of selectedIds) await deleteCashTransaction(id);
+      toast({ title: `${selectedIds.size}건이 삭제되었습니다.` });
+      setSelectedIds(new Set());
+      await loadData();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   const handleAddCategory = async () => {
@@ -657,6 +691,11 @@ export default function CashbookManagementPage() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-base">거래 내역</CardTitle>
                 <div className="flex items-center gap-2">
+                  {permissions.canDelete && selectedIds.size > 0 && (
+                    <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-200" disabled={bulkDeleting} onClick={handleBulkDelete}>
+                      <Trash2 className="w-3.5 h-3.5" />선택 {selectedIds.size}건 삭제
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={handleExportExcel} disabled={exporting}>
                     <FileDown className="w-3.5 h-3.5" />{exporting ? '내보내는 중...' : '엑셀 다운로드'}
                   </Button>
@@ -757,6 +796,12 @@ export default function CashbookManagementPage() {
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b">
                     <tr>
+                      {permissions.canDelete && (
+                        <th className="p-2 w-8 text-center">
+                          <Checkbox checked={paged.length > 0 && paged.every(t => selectedIds.has(t.id))} onCheckedChange={toggleSelectAllOnPage} />
+                        </th>
+                      )}
+                      <th className="text-right p-2 w-10">No.</th>
                       <th className="text-left p-2">날짜</th>
                       <th className="text-center p-2">구분</th>
                       <th className="text-left p-2">결제수단</th>
@@ -772,9 +817,15 @@ export default function CashbookManagementPage() {
                   </thead>
                   <tbody>
                     {paged.length === 0 ? (
-                      <tr><td colSpan={11} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
-                    ) : paged.map(t => (
+                      <tr><td colSpan={permissions.canDelete ? 13 : 12} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
+                    ) : paged.map((t, idx) => (
                       <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(t)}>
+                        {permissions.canDelete && (
+                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                            <Checkbox checked={selectedIds.has(t.id)} onCheckedChange={() => toggleSelected(t.id)} />
+                          </td>
+                        )}
+                        <td className="p-2 text-right text-gray-400">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
                         <td className="p-2 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1">
                             {t.transaction_date}
