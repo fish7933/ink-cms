@@ -1,8 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { addCashTransaction, deleteCashTransaction } from '@/services/accounting-cash-transaction.service';
 import { getCategories, addCategory } from '@/services/accounting-category.service';
-import type { AccountingPaymentMethod, AccountingTransactionType } from '@/types/accounting';
-import type { LineItemRow } from '@/types/approval-document';
+import type { AccountingPaymentMethod, AccountingTransactionType, CashTransactionAttachment } from '@/types/accounting';
+import type { LineItemRow, ApprovalDocumentAttachment } from '@/types/approval-document';
 
 export interface ExpenseReflectionItem {
   document_id: string;
@@ -16,17 +16,21 @@ export interface ExpenseReflectionItem {
   purpose: string;
   amount: number;
   vendor: string;
+  attachments: ApprovalDocumentAttachment[];
   reflected: boolean;
   reflected_transaction_id: string | null;
 }
 
 // 지출결의서 항목 하나의 값(문자/숫자만 다룬다 — line_items 컬럼은 select/table 형이 없으므로).
 function str(v: LineItemRow[string] | undefined): string {
-  return v === null || v === undefined ? '' : String(v);
+  return v === null || v === undefined || Array.isArray(v) ? '' : String(v);
 }
 function num(v: LineItemRow[string] | undefined): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+function files(v: LineItemRow[string] | undefined): ApprovalDocumentAttachment[] {
+  return Array.isArray(v) ? v : [];
 }
 
 // 승인된 지출결의서를 전부 가져와 항목(줄) 단위로 펼친다. 지금 스키마는 expense_items 배열이지만,
@@ -87,6 +91,7 @@ export async function getReflectableExpenseItems(): Promise<ExpenseReflectionIte
         purpose: str(row.purpose),
         amount: num(row.amount),
         vendor: str(row.vendor),
+        attachments: files(row.attachments),
         reflected: reflectedMap.has(key),
         reflected_transaction_id: reflectedMap.get(key) || null,
       });
@@ -119,6 +124,7 @@ export interface ReflectExpenseItemInput {
   description: string;
   amount: number;
   currency: string;
+  attachments?: CashTransactionAttachment[];
   createdBy: string | null;
 }
 
@@ -137,12 +143,20 @@ export async function reflectExpenseItem(input: ReflectExpenseItemInput): Promis
     description: input.description.trim() || null,
     amount: input.amount,
     currency: input.currency,
-    attachments: [],
+    attachments: input.attachments || [],
     remarks: null,
     source_document_id: input.documentId,
     source_item_index: input.itemIndex,
     created_by: input.createdBy,
   });
+}
+
+// 같은 결재문서 안의 여러 항목을 한 번에(같은 거래일·자산으로) 반영한다 — 항목별 분류/지급처/
+// 적요/금액/증빙서류는 각자의 것을 그대로 쓴다. 순서대로 하나씩 반영하며, 중간에 실패하면
+// 그 항목에서 멈추고(부분 반영된 상태) 에러를 그대로 던진다 — 어디까지 반영됐는지는
+// getReflectableExpenseItems를 다시 불러서 확인할 수 있다.
+export async function reflectExpenseItemsBatch(inputs: ReflectExpenseItemInput[]): Promise<void> {
+  for (const input of inputs) await reflectExpenseItem(input);
 }
 
 // 반영 취소 = 그때 만들어진 금전출납 거래를 지운다(금전출납 화면의 삭제와 동일한 규칙 —

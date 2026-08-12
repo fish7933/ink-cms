@@ -515,15 +515,17 @@ export default function DocumentDraftPage() {
   const toggleCcUser = (userId: string) =>
     setCcUserIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
 
+  const uploadSingleAttachment = async (file: File): Promise<ApprovalDocumentAttachment> => {
+    const ext = file.name.split('.').pop();
+    const path = `approval-documents/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(path, file);
+    if (error) throw new Error(msg.file.uploadFailed(file.name));
+    return { name: file.name, path, size: file.size, type: file.type };
+  };
+
   const uploadAttachments = async (files: File[]): Promise<ApprovalDocumentAttachment[]> => {
     const attachments: ApprovalDocumentAttachment[] = [];
-    for (const file of files) {
-      const ext = file.name.split('.').pop();
-      const path = `approval-documents/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-      const { error } = await supabase.storage.from('documents').upload(path, file);
-      if (error) throw new Error(msg.file.uploadFailed(file.name));
-      attachments.push({ name: file.name, path, size: file.size, type: file.type });
-    }
+    for (const file of files) attachments.push(await uploadSingleAttachment(file));
     return attachments;
   };
 
@@ -830,6 +832,7 @@ export default function DocumentDraftPage() {
                   values={formValues}
                   onChange={(key, value) => setFormValues(prev => ({ ...prev, [key]: value }))}
                   disabled={submitting}
+                  onUploadFile={uploadSingleAttachment}
                 />
               ) : isSystemLinkedDraft && loadedReferenceType === 'daily_cash_report' ? (
                 <div className="space-y-1.5">

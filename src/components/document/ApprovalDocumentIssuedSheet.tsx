@@ -341,8 +341,23 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                           <tr key={ri}>
                             {columns.map(c => {
                               const raw = row[c.key];
+                              if (c.type === 'file') {
+                                const files = Array.isArray(raw) ? raw : [];
+                                return (
+                                  <td key={c.key}>
+                                    {files.length === 0 ? '-' : files.map((f, fi) => {
+                                      const { data } = supabase.storage.from('documents').getPublicUrl(f.path);
+                                      return (
+                                        <div key={fi}>
+                                          <a href={data?.publicUrl} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{f.name}</a>
+                                        </div>
+                                      );
+                                    })}
+                                  </td>
+                                );
+                              }
                               const isEmpty = raw === null || raw === undefined || raw === '';
-                              const display = isEmpty ? '-' : c.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : raw;
+                              const display = isEmpty ? '-' : c.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : String(raw);
                               return <td key={c.key} style={c.type === 'number' ? { textAlign: 'right' } : undefined}>{display}</td>;
                             })}
                           </tr>

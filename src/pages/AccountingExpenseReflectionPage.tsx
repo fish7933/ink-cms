@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, ArrowLeft, Save, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react';
+import { ClipboardCheck, ArrowLeft, Save, ChevronLeft, ChevronRight, Undo2, FileText, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AutocompleteInput } from '@/components/ui/autocomplete-input';
+import { supabase } from '@/lib/supabase';
 import {
-  getReflectableExpenseItems, reflectExpenseItem, unreflectExpenseItem, type ExpenseReflectionItem,
+  getReflectableExpenseItems, reflectExpenseItem, reflectExpenseItemsBatch, unreflectExpenseItem, type ExpenseReflectionItem,
 } from '@/services/accounting-expense-reflection.service';
 import { getBankAccounts } from '@/services/accounting-bank-account.service';
 import { getCards } from '@/services/accounting-card.service';
@@ -31,6 +33,22 @@ type StatusFilter = 'all' | 'reflected' | 'unreflected';
 function today(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+function AttachmentLinks({ attachments }: { attachments: { name: string; path: string }[] }) {
+  if (attachments.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      {attachments.map((a, i) => {
+        const { data } = supabase.storage.from('documents').getPublicUrl(a.path);
+        return (
+          <a key={i} href={data?.publicUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[11px] text-blue-600 hover:underline">
+            <FileText className="h-3 w-3 shrink-0" />{a.name}
+          </a>
+        );
+      })}
+    </div>
+  );
 }
 
 interface DocumentGroup {
@@ -71,6 +89,8 @@ export default function AccountingExpenseReflectionPage() {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
 
   const [formTarget, setFormTarget] = useState<ExpenseReflectionItem | null>(null);
+  const [batchTargets, setBatchTargets] = useState<ExpenseReflectionItem[] | null>(null);
+  const [selectedIndexes, setSelectedIndexes] = useState<Set<number>>(new Set());
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -151,40 +171,78 @@ export default function AccountingExpenseReflectionPage() {
     });
     setFormTarget(item);
   };
+  // 여러 항목을 한 번에 반영할 때는 거래일·자산만 공통으로 지정하고, 분류/지급처/적요/금액/
+  // 증빙서류는 각 항목이 가진 값을 그대로 쓴다 — 지출결의자가 넣은 내용이 기본이라는 원칙 유지.
+  const openBatchForm = (items: ExpenseReflectionItem[]) => {
+    setError('');
+    const firstDate = items.find(i => i.expense_date)?.expense_date;
+    setForm({ ...emptyForm, transaction_date: firstDate || today() });
+    setBatchTargets(items);
+  };
   // 반영 폼에서 뒤로가면 목록 전체가 아니라 그 지출결의 건의 항목 화면으로 돌아간다.
-  const closeForm = () => { setFormTarget(null); setError(''); };
-  const closeDocument = () => setSelectedDocumentId(null);
+  const closeForm = () => { setFormTarget(null); setBatchTargets(null); setError(''); };
+  const closeDocument = () => { setSelectedDocumentId(null); setSelectedIndexes(new Set()); };
+
+  const toggleSelected = (index: number) => {
+    setSelectedIndexes(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  };
 
   const handlePaymentMethodChange = (v: AccountingPaymentMethod) => {
     setForm(prev => ({ ...prev, payment_method: v, bank_account_id: '', card_id: '', cash_register_id: '' }));
   };
 
   const handleSave = async () => {
-    if (!formTarget) return;
+    if (!formTarget && !batchTargets) return;
     if (!form.transaction_date) { setError('거래일을 입력하세요.'); return; }
     if (form.payment_method === 'bank_account' && !form.bank_account_id) { setError('계좌를 선택하세요.'); return; }
     if (form.payment_method === 'card' && !form.card_id) { setError('카드를 선택하세요.'); return; }
     if (form.payment_method === 'cash' && !form.cash_register_id) { setError('시재를 선택하세요.'); return; }
-    const amount = parseFloat(form.amount);
-    if (!amount || amount <= 0) { setError('금액을 확인하세요.'); return; }
     try {
       setSaving(true);
-      await reflectExpenseItem({
-        documentId: formTarget.document_id,
-        itemIndex: formTarget.item_index,
-        transactionDate: form.transaction_date,
-        paymentMethod: form.payment_method,
-        bankAccountId: form.bank_account_id || undefined,
-        cardId: form.card_id || undefined,
-        cashRegisterId: form.cash_register_id || undefined,
-        categoryName: form.category_name,
-        counterparty: form.counterparty,
-        description: form.description,
-        amount,
-        currency: form.currency,
-        createdBy: currentUser?.id || null,
-      });
-      toast({ title: '금전출납에 반영되었습니다.' });
+      if (batchTargets) {
+        await reflectExpenseItemsBatch(batchTargets.map(item => ({
+          documentId: item.document_id,
+          itemIndex: item.item_index,
+          transactionDate: form.transaction_date,
+          paymentMethod: form.payment_method,
+          bankAccountId: form.bank_account_id || undefined,
+          cardId: form.card_id || undefined,
+          cashRegisterId: form.cash_register_id || undefined,
+          categoryName: item.category,
+          counterparty: item.vendor,
+          description: item.purpose,
+          amount: item.amount,
+          currency: form.currency,
+          attachments: item.attachments,
+          createdBy: currentUser?.id || null,
+        })));
+        toast({ title: `${batchTargets.length}건이 금전출납에 반영되었습니다.` });
+        setSelectedIndexes(new Set());
+      } else if (formTarget) {
+        const amount = parseFloat(form.amount);
+        if (!amount || amount <= 0) { setError('금액을 확인하세요.'); setSaving(false); return; }
+        await reflectExpenseItem({
+          documentId: formTarget.document_id,
+          itemIndex: formTarget.item_index,
+          transactionDate: form.transaction_date,
+          paymentMethod: form.payment_method,
+          bankAccountId: form.bank_account_id || undefined,
+          cardId: form.card_id || undefined,
+          cashRegisterId: form.cash_register_id || undefined,
+          categoryName: form.category_name,
+          counterparty: form.counterparty,
+          description: form.description,
+          amount,
+          currency: form.currency,
+          attachments: formTarget.attachments,
+          createdBy: currentUser?.id || null,
+        });
+        toast({ title: '금전출납에 반영되었습니다.' });
+      }
       closeForm();
       await loadData();
     } catch (e) {
@@ -223,22 +281,48 @@ export default function AccountingExpenseReflectionPage() {
         </div>
       </div>
 
-      {formTarget ? (
+      {(formTarget || batchTargets) ? (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>
-                <CardTitle className="text-sm">{formTarget.document_title} — 반영하기</CardTitle>
+                <CardTitle className="text-sm">
+                  {batchTargets ? `${batchTargets.length}건 일괄 반영하기` : `${formTarget!.document_title} — 반영하기`}
+                </CardTitle>
               </div>
               <Button size="sm" onClick={handleSave} disabled={saving}><Save className="w-3.5 h-3.5 mr-1" />{saving ? '저장 중...' : '반영'}</Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="p-2.5 bg-gray-50 rounded-md text-xs text-gray-500 space-y-0.5">
-              <p>기안자: {formTarget.submitted_by_name} · 지출일(기안): {formTarget.expense_date || '-'}</p>
-              <p>원본 항목: {formTarget.category} / {formTarget.vendor} / {formTarget.purpose} / {formTarget.amount.toLocaleString()}원</p>
-            </div>
+            {batchTargets ? (
+              <div className="border rounded-md overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 border-b">
+                    <tr><th className="text-left p-2">지출일</th><th className="text-left p-2">분류</th><th className="text-left p-2">지급처/적요</th><th className="text-right p-2">금액</th></tr>
+                  </thead>
+                  <tbody>
+                    {batchTargets.map(item => (
+                      <tr key={item.item_index} className="border-b last:border-0">
+                        <td className="p-2 whitespace-nowrap">{item.expense_date || '-'}</td>
+                        <td className="p-2">{item.category || '-'}</td>
+                        <td className="p-2 text-gray-500">{item.vendor}{item.purpose ? ` / ${item.purpose}` : ''}</td>
+                        <td className="p-2 text-right font-mono">{item.amount.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 font-semibold"><td className="p-2" colSpan={3}>합계</td><td className="p-2 text-right font-mono">{batchTargets.reduce((s, i) => s + i.amount, 0).toLocaleString()}</td></tr>
+                  </tfoot>
+                </table>
+                <p className="text-[11px] text-gray-400 p-2 border-t bg-gray-50">각 항목의 분류/지급처/적요/금액/증빙서류는 그대로 유지되고, 아래 거래일·자산만 공통으로 적용됩니다.</p>
+              </div>
+            ) : (
+              <div className="p-2.5 bg-gray-50 rounded-md text-xs text-gray-500 space-y-0.5">
+                <p>기안자: {formTarget!.submitted_by_name} · 지출일(기안): {formTarget!.expense_date || '-'}</p>
+                <p>원본 항목: {formTarget!.category} / {formTarget!.vendor} / {formTarget!.purpose} / {formTarget!.amount.toLocaleString()}원</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">거래일 * <span className="text-gray-400 font-normal">(자산·거래일은 담당자가 지정)</span></Label>
@@ -301,15 +385,25 @@ export default function AccountingExpenseReflectionPage() {
                 </div>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">분류</Label>
-                <AutocompleteInput value={form.category_name} onChange={v => setForm({ ...form, category_name: v })} options={categoryOptions} className="h-9 text-sm" placeholder="분류 입력 또는 검색" />
-              </div>
-              <div className="space-y-1.5"><Label className="text-xs">거래처</Label><Input value={form.counterparty} onChange={e => setForm({ ...form, counterparty: e.target.value })} className="h-9 text-sm" /></div>
-            </div>
-            <div className="space-y-1.5"><Label className="text-xs">적요</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="h-9 text-sm" /></div>
-            <div className="space-y-1.5"><Label className="text-xs">금액 *</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="h-9 text-sm" /></div>
+            {!batchTargets && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">분류</Label>
+                    <AutocompleteInput value={form.category_name} onChange={v => setForm({ ...form, category_name: v })} options={categoryOptions} className="h-9 text-sm" placeholder="분류 입력 또는 검색" />
+                  </div>
+                  <div className="space-y-1.5"><Label className="text-xs">거래처</Label><Input value={form.counterparty} onChange={e => setForm({ ...form, counterparty: e.target.value })} className="h-9 text-sm" /></div>
+                </div>
+                <div className="space-y-1.5"><Label className="text-xs">적요</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="h-9 text-sm" /></div>
+                <div className="space-y-1.5"><Label className="text-xs">금액 *</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="h-9 text-sm" /></div>
+                {formTarget && formTarget.attachments.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">증빙서류 <span className="text-gray-400 font-normal">(지출결의 항목에 첨부된 파일이 그대로 반영됩니다)</span></Label>
+                    <AttachmentLinks attachments={formTarget.attachments} />
+                  </div>
+                )}
+              </>
+            )}
             {error && <Alert variant="destructive"><AlertDescription className="text-xs">{error}</AlertDescription></Alert>}
           </CardContent>
         </Card>
@@ -327,6 +421,11 @@ export default function AccountingExpenseReflectionPage() {
                   <p className="text-xs text-gray-400 mt-0.5">기안자: {selectedGroup.submitted_by_name} · {selectedGroup.reflectedCount}/{selectedGroup.items.length}건 반영됨</p>
                 </div>
               </div>
+              {permissions.canCreate && selectedIndexes.size > 0 && (
+                <Button size="sm" className="gap-1.5" onClick={() => openBatchForm(selectedGroup.items.filter(i => selectedIndexes.has(i.item_index)))}>
+                  <Layers className="w-3.5 h-3.5" />선택 {selectedIndexes.size}건 일괄 반영
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="pt-0">
@@ -334,10 +433,12 @@ export default function AccountingExpenseReflectionPage() {
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    {permissions.canCreate && <th className="p-2 w-8"></th>}
                     <th className="text-left p-2">지출일</th>
                     <th className="text-left p-2">분류</th>
                     <th className="text-left p-2">지급처 / 적요</th>
                     <th className="text-right p-2">금액</th>
+                    <th className="text-left p-2">증빙서류</th>
                     <th className="text-center p-2">상태</th>
                     <th className="p-2 w-20"></th>
                   </tr>
@@ -345,10 +446,18 @@ export default function AccountingExpenseReflectionPage() {
                 <tbody>
                   {selectedGroup.items.map(item => (
                     <tr key={item.item_index} className="border-b last:border-0 hover:bg-gray-50">
+                      {permissions.canCreate && (
+                        <td className="p-2 text-center">
+                          {!item.reflected && (
+                            <Checkbox checked={selectedIndexes.has(item.item_index)} onCheckedChange={() => toggleSelected(item.item_index)} />
+                          )}
+                        </td>
+                      )}
                       <td className="p-2 whitespace-nowrap">{item.expense_date || '-'}</td>
                       <td className="p-2">{item.category || '-'}</td>
                       <td className="p-2 text-gray-500 truncate max-w-[320px]" title={`${item.vendor} / ${item.purpose}`}>{item.vendor}{item.purpose ? ` / ${item.purpose}` : ''}</td>
                       <td className="p-2 text-right font-mono font-semibold">{item.amount.toLocaleString()}</td>
+                      <td className="p-2 min-w-[140px]"><AttachmentLinks attachments={item.attachments} /></td>
                       <td className="p-2 text-center">
                         <Badge className={`text-[10px] ${item.reflected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                           {item.reflected ? '반영됨' : '미반영'}

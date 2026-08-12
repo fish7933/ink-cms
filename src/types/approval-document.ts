@@ -1,4 +1,4 @@
-export type DocumentFormFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'table' | 'line_items';
+export type DocumentFormFieldType = 'text' | 'textarea' | 'number' | 'date' | 'select' | 'table' | 'line_items' | 'file';
 
 export interface DocumentFormField {
   key: string;
@@ -9,8 +9,8 @@ export interface DocumentFormField {
   columns?: DocumentFormField[]; // type === 'line_items'일 때만 사용 — 항목(행) 하나의 열 구성. 중첩(line_items 안에 line_items)은 지원하지 않는다.
 }
 
-// line_items 필드 한 행의 값 — columns의 각 key에 대응하는 값들.
-export type LineItemRow = Record<string, string | number | null>;
+// line_items 필드 한 행의 값 — columns의 각 key에 대응하는 값들. type === 'file' 컬럼의 값만 첨부파일 배열이다.
+export type LineItemRow = Record<string, string | number | null | ApprovalDocumentAttachment[]>;
 export type FormFieldValue = string | number | null | LineItemRow[];
 
 export interface ApprovalDocumentType {

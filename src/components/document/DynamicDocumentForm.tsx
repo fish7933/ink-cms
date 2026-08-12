@@ -4,17 +4,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PasteableTableField from '@/components/document/PasteableTableField';
 import LineItemsField from '@/components/document/LineItemsField';
-import type { DocumentFormField, FormFieldValue, LineItemRow } from '@/types/approval-document';
+import type { DocumentFormField, FormFieldValue, LineItemRow, ApprovalDocumentAttachment } from '@/types/approval-document';
 
 interface DynamicDocumentFormProps {
   fields: DocumentFormField[];
   values: Record<string, FormFieldValue>;
   onChange: (key: string, value: FormFieldValue) => void;
   disabled?: boolean;
+  onUploadFile?: (file: File) => Promise<ApprovalDocumentAttachment>;
 }
 
 // field_schema를 기반으로 문서유형별 구조화 입력폼을 그린다 (기안서 작성 화면에서 사용).
-export default function DynamicDocumentForm({ fields, values, onChange, disabled }: DynamicDocumentFormProps) {
+export default function DynamicDocumentForm({ fields, values, onChange, disabled, onUploadFile }: DynamicDocumentFormProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {fields.map(field => {
@@ -28,7 +29,7 @@ export default function DynamicDocumentForm({ fields, values, onChange, disabled
             ) : field.type === 'table' ? (
               <PasteableTableField value={String(value)} onChange={v => onChange(field.key, v)} disabled={disabled} />
             ) : field.type === 'line_items' ? (
-              <LineItemsField field={field} value={Array.isArray(value) ? value as LineItemRow[] : []} onChange={rows => onChange(field.key, rows)} disabled={disabled} />
+              <LineItemsField field={field} value={Array.isArray(value) ? value as LineItemRow[] : []} onChange={rows => onChange(field.key, rows)} disabled={disabled} onUploadFile={onUploadFile} />
             ) : field.type === 'select' ? (
               <Select value={String(value)} onValueChange={v => onChange(field.key, v)} disabled={disabled}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
