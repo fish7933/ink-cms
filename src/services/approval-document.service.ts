@@ -13,6 +13,7 @@ import type {
   ApprovalDocumentWithDetails,
   ApprovalDocumentRejectionHistoryEntry,
   DocumentFormField,
+  FormFieldValue,
 } from '@/types/approval-document';
 
 // 참조(user_id 직접 지정 또는 org_unit_id 부서 지정) 대상 문서 id 목록을 가져온다.
@@ -418,7 +419,7 @@ export const approvalDocumentService = {
     document_type_id: string;
     title: string;
     content?: string;
-    form_data?: Record<string, string | number | null>;
+    form_data?: Record<string, FormFieldValue>;
     attachments?: ApprovalDocumentAttachment[];
     org_unit_id: string;
     created_by: string;
@@ -537,7 +538,7 @@ export const approvalDocumentService = {
     document_type_id: string;
     title: string;
     content?: string;
-    form_data?: Record<string, string | number | null>;
+    form_data?: Record<string, FormFieldValue>;
     attachments?: ApprovalDocumentAttachment[];
     org_unit_id?: string;
     created_by: string;
@@ -898,7 +899,7 @@ export const approvalDocumentService = {
     document_type_id: string;
     title: string;
     content?: string;
-    form_data?: Record<string, string | number | null>;
+    form_data?: Record<string, FormFieldValue>;
     attachments?: ApprovalDocumentAttachment[];
     org_unit_id: string;
     requester_comment?: string;

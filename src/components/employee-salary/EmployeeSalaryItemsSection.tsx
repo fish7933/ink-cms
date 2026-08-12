@@ -15,6 +15,7 @@ import {
   updateEmployeeSalaryItem,
   deleteEmployeeSalaryItem,
   getSalaryItemCatalog,
+  updateEmployeeSalaryBankAccount,
 } from '@/services/employee-salary.service';
 import type { EmployeeSalaryItem, EmployeeSalaryItemCatalogEntry, EmployeeSalaryItemCategory, PayrollEmployee } from '@/types/employee-salary';
 
@@ -44,6 +45,10 @@ export default function EmployeeSalaryItemsSection() {
   const [form, setForm] = useState({ name: '', amount: '' });
   const [saving, setSaving] = useState(false);
 
+  // 급여 지급계좌 — 지출결의서 항목 적요("이름 (은행 계좌번호)") 자동 생성에 쓰인다.
+  const [bankForm, setBankForm] = useState({ salary_bank_name: '', salary_bank_account: '' });
+  const [bankSaving, setBankSaving] = useState(false);
+
   useEffect(() => {
     Promise.all([getPayrollEligibleEmployees(), getSalaryItemCatalog()]).then(([list, catalogList]) => {
       setEmployees(list);
@@ -58,6 +63,31 @@ export default function EmployeeSalaryItemsSection() {
     setItemsLoading(true);
     getEmployeeSalaryItems(selectedEmployeeId).then(list => { setItems(list); setItemsLoading(false); });
   }, [selectedEmployeeId]);
+
+  useEffect(() => {
+    const emp = employees.find(e => e.id === selectedEmployeeId);
+    setBankForm({ salary_bank_name: emp?.salary_bank_name || '', salary_bank_account: emp?.salary_bank_account || '' });
+  }, [selectedEmployeeId, employees]);
+
+  const bankFormDirty = (() => {
+    const emp = employees.find(e => e.id === selectedEmployeeId);
+    return bankForm.salary_bank_name !== (emp?.salary_bank_name || '') || bankForm.salary_bank_account !== (emp?.salary_bank_account || '');
+  })();
+
+  const handleSaveBankAccount = async () => {
+    if (!selectedEmployeeId) return;
+    setBankSaving(true);
+    try {
+      const data = { salary_bank_name: bankForm.salary_bank_name.trim() || null, salary_bank_account: bankForm.salary_bank_account.trim() || null };
+      await updateEmployeeSalaryBankAccount(selectedEmployeeId, data);
+      setEmployees(prev => prev.map(e => (e.id === selectedEmployeeId ? { ...e, ...data } : e)));
+      toast({ title: '급여 지급계좌가 저장되었습니다.' });
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBankSaving(false);
+    }
+  };
 
   const reloadItems = () => {
     if (!selectedEmployeeId) return;
@@ -159,6 +189,23 @@ export default function EmployeeSalaryItemsSection() {
           </SelectContent>
         </Select>
       </div>
+
+      {selectedEmployeeId && (
+        <div className="max-w-md space-y-1.5 rounded-md border p-2.5 bg-gray-50/50">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">급여 지급계좌 <span className="text-gray-400 font-normal">(지출결의서 적요에 자동으로 반영됩니다)</span></Label>
+            {bankFormDirty && (
+              <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={handleSaveBankAccount} disabled={bankSaving}>
+                {bankSaving ? '저장 중...' : '계좌 저장'}
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Input value={bankForm.salary_bank_name} onChange={e => setBankForm(prev => ({ ...prev, salary_bank_name: e.target.value }))} placeholder="은행명 (예: 우리은행)" className="h-8 text-xs" />
+            <Input value={bankForm.salary_bank_account} onChange={e => setBankForm(prev => ({ ...prev, salary_bank_account: e.target.value }))} placeholder="계좌번호" className="h-8 text-xs" />
+          </div>
+        </div>
+      )}
 
       {!selectedEmployeeId ? (
         <div className="text-center py-6 text-xs text-gray-400">직원을 선택해주세요.</div>

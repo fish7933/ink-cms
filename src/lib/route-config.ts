@@ -75,6 +75,7 @@ const CardManagementPage = lazy(() => import('@/pages/CardManagementPage'));
 const CashRegisterManagementPage = lazy(() => import('@/pages/CashRegisterManagementPage'));
 const AccountingSettingsPage = lazy(() => import('@/pages/AccountingSettingsPage'));
 const CashbookManagementPage = lazy(() => import('@/pages/CashbookManagementPage'));
+const AccountingExpenseReflectionPage = lazy(() => import('@/pages/AccountingExpenseReflectionPage'));
 const DailyCashReportOverviewPage = lazy(() => import('@/pages/DailyCashReportOverviewPage'));
 const DailyCashReportPage = lazy(() => import('@/pages/DailyCashReportPage'));
 
@@ -173,6 +174,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/accounting/cash-registers', component: CashRegisterManagementPage },
   { path: '/accounting/settings', component: AccountingSettingsPage },
   { path: '/accounting/cashbook', component: CashbookManagementPage },
+  { path: '/accounting/expense-reflection', component: AccountingExpenseReflectionPage },
   { path: '/accounting/daily-report', component: DailyCashReportOverviewPage },
   { path: '/accounting/daily-report/:date', component: DailyCashReportPage },
 ];

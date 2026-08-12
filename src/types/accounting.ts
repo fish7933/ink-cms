@@ -95,6 +95,9 @@ export interface CashTransaction {
   currency: string;
   attachments: CashTransactionAttachment[];
   remarks: string | null;
+  // 지출결의서에서 반영된 거래면 그 결재문서/항목을 가리킨다 — 값이 있으면 "반영됨"의 근거.
+  source_document_id: string | null;
+  source_item_index: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

@@ -107,6 +107,8 @@ export interface PayrollEmployee {
   position_id: string | null;
   position_name: string | null;
   hire_date: string | null;
+  salary_bank_name: string | null;
+  salary_bank_account: string | null;
 }
 
 // 전체 직원 급여대장(표 형태) 출력/엑셀용 — 기본급 옆에 수당/공제 항목을 열(컬럼)로 펼쳐 보여준다.
@@ -116,6 +118,8 @@ export interface PayrollLedgerRow {
   employee_name: string;
   resident_registration_number: string | null;
   hire_date: string | null;
+  salary_bank_name: string | null;
+  salary_bank_account: string | null;
   base_amount: number;
   allowance_by_name: Record<string, number>;
   gross_amount: number; // 기본급 + 수당 합계

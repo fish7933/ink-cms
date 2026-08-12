@@ -31,7 +31,7 @@ const sumByCategory = (items: { category: EmployeeSalaryItemCategory; amount: nu
 // EmployeeCardManagementPage.tsx의 직원 목록 정렬과 동일한 기준.
 export async function getPayrollEligibleEmployees(): Promise<PayrollEmployee[]> {
   const [{ data: users, error }, positions] = await Promise.all([
-    supabase.from('users').select('id, name, role, position_id, hire_date').in('role', EMPLOYEE_ROLES),
+    supabase.from('users').select('id, name, role, position_id, hire_date, salary_bank_name, salary_bank_account').in('role', EMPLOYEE_ROLES),
     getShorePositions(),
   ]);
   if (error) { console.error(error); return []; }
@@ -46,6 +46,13 @@ export async function getPayrollEligibleEmployees(): Promise<PayrollEmployee[]> 
       const hireB = b.hire_date ?? '9999-99-99';
       return hireA.localeCompare(hireB);
     });
+}
+
+// 직원별 급여표에서 급여 지급계좌를 저장 — 지출결의서 항목 상신 시 적요("이름 (은행 계좌번호)")
+// 자동 생성에 쓰인다(submitPayrollExpenseReport).
+export async function updateEmployeeSalaryBankAccount(userId: string, data: { salary_bank_name: string | null; salary_bank_account: string | null }): Promise<void> {
+  const { error } = await supabase.from('users').update(data).eq('id', userId);
+  if (error) throw error;
 }
 
 // --- 급여 항목 카탈로그 (회사 공통) ---
@@ -475,7 +482,7 @@ export async function getPayrollLedgerForPeriod(periodId: string): Promise<Payro
   const payslips = await getPayslipsForPeriod(periodId);
   const { data: users } = await supabase
     .from('users')
-    .select('id, resident_registration_number, hire_date')
+    .select('id, resident_registration_number, hire_date, salary_bank_name, salary_bank_account')
     .in('id', payslips.map(p => p.user_id));
   const userById = new Map((users || []).map(u => [u.id, u]));
 
@@ -509,6 +516,8 @@ export async function getPayrollLedgerForPeriod(periodId: string): Promise<Payro
       employee_name: p.employee_name,
       resident_registration_number: u?.resident_registration_number || null,
       hire_date: u?.hire_date || null,
+      salary_bank_name: u?.salary_bank_name || null,
+      salary_bank_account: u?.salary_bank_account || null,
       base_amount: p.base_amount,
       allowance_by_name: allowanceByName,
       gross_amount: p.base_amount + p.total_allowance,
@@ -584,16 +593,25 @@ export async function submitPayrollExpenseReport(periodId: string, submittedByUs
   const { error: uploadError } = await supabase.storage.from('documents').upload(path, blob);
   if (uploadError) throw uploadError;
 
+  // 예전엔 전 직원 합계를 한 항목으로 뭉쳐서 상신했다 — 지출결의서 문서유형의 실제 스키마는
+  // expense_items(직원별 행) 배열인데 이 화면만 안 맞는 평평한 구조를 써왔던 걸 바로잡는다.
+  // 승인 후 각 행이 경리 화면(지출결의 반영)에서 직원별로 각각 금전출납 거래가 된다.
+  const expenseItems = ledger.rows.map(r => ({
+    expense_category: '급여',
+    purpose: `${period.year_month} 급여`,
+    amount: r.net_amount,
+    vendor: r.salary_bank_name && r.salary_bank_account
+      ? `${r.employee_name} (${r.salary_bank_name} ${r.salary_bank_account})`
+      : r.employee_name,
+  }));
+
   const doc = await approvalDocumentService.createDocument({
     document_type_id: docType.id,
     title: `${period.year_month} 급여 지출결의서`,
     content,
     form_data: {
       expense_date: period.payment_date,
-      expense_category: '급여',
-      purpose: `${period.year_month} 급여 지급 (${ledger.rows.length}명)`,
-      amount: totalGross,
-      vendor: '임직원 급여계좌 일괄이체',
+      expense_items: expenseItems,
       notes: content,
     },
     attachments: [{ name: `${period.year_month}_급여대장.xlsx`, path, size: blob.size, type: blob.type }],

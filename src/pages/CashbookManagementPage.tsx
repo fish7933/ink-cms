@@ -343,11 +343,13 @@ export default function CashbookManagementPage() {
         created_by: currentUser?.id || null,
       };
       if (formView?.id) {
+        // 수정 저장은 부분 업데이트라 source_document_id/source_item_index는 건드리지 않는다 —
+        // 지출결의 반영으로 생긴 거래를 여기서 고쳐도 "반영됨" 연결이 끊기면 안 된다.
         await updateCashTransaction(formView.id, data);
         await loadData();
         closeForm();
       } else {
-        await addCashTransaction(data);
+        await addCashTransaction({ ...data, source_document_id: null, source_item_index: null });
         await loadData();
         // 같은 통장/카드/시재에 계속 거래를 입력하는 경우가 많아, 날짜·결제수단·계좌 선택은
         // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액/증빙서류)만 비워 바로 이어서 입력할 수 있게 한다.
