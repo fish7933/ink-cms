@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, ArrowLeft, Save, ChevronLeft, ChevronRight, Undo2, FileText, Layers } from 'lucide-react';
+import { ClipboardCheck, ArrowLeft, Save, ChevronLeft, ChevronRight, Undo2, FileText, Layers, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,7 @@ import { getCategories } from '@/services/accounting-category.service';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTabContext } from '@/contexts/TabContext';
 import type { BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory, AccountingPaymentMethod } from '@/types/accounting';
 import type { User } from '@/types/models';
 
@@ -76,6 +77,7 @@ export default function AccountingExpenseReflectionPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const permissions = usePermissions('accounting_expense_reflection');
+  const { openNewTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [items, setItems] = useState<ExpenseReflectionItem[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccountWithBalance[]>([]);
@@ -85,8 +87,11 @@ export default function AccountingExpenseReflectionPage() {
   const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('unreflected');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [itemPage, setItemPage] = useState(1);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [unreflectingBatch, setUnreflectingBatch] = useState(false);
 
   const [formTarget, setFormTarget] = useState<ExpenseReflectionItem | null>(null);
   const [batchTargets, setBatchTargets] = useState<ExpenseReflectionItem[] | null>(null);
@@ -142,18 +147,23 @@ export default function AccountingExpenseReflectionPage() {
   }, [items]);
 
   const filteredGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return groups.filter(g => {
-      if (statusFilter === 'reflected') return g.reflectedCount === g.items.length;
-      if (statusFilter === 'unreflected') return g.reflectedCount < g.items.length;
+      if (statusFilter === 'reflected' && g.reflectedCount !== g.items.length) return false;
+      if (statusFilter === 'unreflected' && g.reflectedCount >= g.items.length) return false;
+      if (q && !g.document_title.toLowerCase().includes(q) && !g.submitted_by_name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [groups, statusFilter]);
+  }, [groups, statusFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pagedGroups = filteredGroups.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const selectedGroup = selectedDocumentId ? groups.find(g => g.document_id === selectedDocumentId) || null : null;
+  const itemTotalPages = Math.max(1, Math.ceil((selectedGroup?.items.length || 0) / PAGE_SIZE));
+  const itemCurrentPage = Math.min(itemPage, itemTotalPages);
+  const pagedItems = selectedGroup ? selectedGroup.items.slice((itemCurrentPage - 1) * PAGE_SIZE, itemCurrentPage * PAGE_SIZE) : [];
 
   const changeFilter = (fn: () => void) => { fn(); setPage(1); };
 
@@ -181,7 +191,8 @@ export default function AccountingExpenseReflectionPage() {
   };
   // 반영 폼에서 뒤로가면 목록 전체가 아니라 그 지출결의 건의 항목 화면으로 돌아간다.
   const closeForm = () => { setFormTarget(null); setBatchTargets(null); setError(''); };
-  const closeDocument = () => { setSelectedDocumentId(null); setSelectedIndexes(new Set()); };
+  const closeDocument = () => { setSelectedDocumentId(null); setSelectedIndexes(new Set()); setItemPage(1); };
+  const openDocument = (documentId: string) => { setSelectedDocumentId(documentId); setSelectedIndexes(new Set()); setItemPage(1); };
 
   const toggleSelected = (index: number) => {
     setSelectedIndexes(prev => {
@@ -264,6 +275,23 @@ export default function AccountingExpenseReflectionPage() {
       toast({ title: '반영 취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setUnreflecting(null);
+    }
+  };
+
+  const handleUnreflectBatch = async (targets: ExpenseReflectionItem[]) => {
+    const ids = targets.map(t => t.reflected_transaction_id).filter((id): id is string => !!id);
+    if (ids.length === 0) return;
+    if (!confirm(`선택한 ${ids.length}건의 반영을 취소하시겠습니까? 금전출납에 생성된 거래가 모두 삭제됩니다.`)) return;
+    setUnreflectingBatch(true);
+    try {
+      for (const id of ids) await unreflectExpenseItem(id);
+      toast({ title: `${ids.length}건의 반영이 취소되었습니다.` });
+      setSelectedIndexes(new Set());
+      await loadData();
+    } catch (e) {
+      toast({ title: '반영 취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setUnreflectingBatch(false);
     }
   };
 
@@ -410,30 +438,41 @@ export default function AccountingExpenseReflectionPage() {
       ) : selectedGroup ? (
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeDocument}><ArrowLeft className="w-4 h-4" /></Button>
                 <div>
                   <CardTitle className="text-sm flex items-center gap-1.5">
                     {selectedGroup.document_title}
                     {selectedGroup.reference_type === 'employee_payroll_period' && <Badge className="text-[10px] bg-blue-100 text-blue-700">급여</Badge>}
+                    <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[11px] text-gray-400 hover:text-blue-600 gap-1" onClick={() => openNewTab(`/documents/${selectedGroup.document_id}`, selectedGroup.document_title)}>
+                      <ExternalLink className="w-3 h-3" />시행문 보기
+                    </Button>
                   </CardTitle>
                   <p className="text-xs text-gray-400 mt-0.5">기안자: {selectedGroup.submitted_by_name} · {selectedGroup.reflectedCount}/{selectedGroup.items.length}건 반영됨</p>
                 </div>
               </div>
-              {permissions.canCreate && selectedIndexes.size > 0 && (
-                <Button size="sm" className="gap-1.5" onClick={() => openBatchForm(selectedGroup.items.filter(i => selectedIndexes.has(i.item_index)))}>
-                  <Layers className="w-3.5 h-3.5" />선택 {selectedIndexes.size}건 일괄 반영
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {permissions.canCreate && selectedGroup.items.some(i => selectedIndexes.has(i.item_index) && !i.reflected) && (
+                  <Button size="sm" className="gap-1.5" onClick={() => openBatchForm(selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && !i.reflected))}>
+                    <Layers className="w-3.5 h-3.5" />선택 {selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && !i.reflected).length}건 일괄 반영
+                  </Button>
+                )}
+                {permissions.canDelete && selectedGroup.items.some(i => selectedIndexes.has(i.item_index) && i.reflected) && (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200" disabled={unreflectingBatch} onClick={() => handleUnreflectBatch(selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && i.reflected))}>
+                    <Undo2 className="w-3.5 h-3.5" />선택 {selectedGroup.items.filter(i => selectedIndexes.has(i.item_index) && i.reflected).length}건 반영 취소
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 space-y-3">
             <div className="border rounded-md overflow-hidden overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    {permissions.canCreate && <th className="p-2 w-8"></th>}
+                    {(permissions.canCreate || permissions.canDelete) && <th className="p-2 w-8"></th>}
+                    <th className="text-right p-2 w-10">No.</th>
                     <th className="text-left p-2">지출일</th>
                     <th className="text-left p-2">분류</th>
                     <th className="text-left p-2">지급처 / 적요</th>
@@ -444,15 +483,14 @@ export default function AccountingExpenseReflectionPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedGroup.items.map(item => (
+                  {pagedItems.map((item, idx) => (
                     <tr key={item.item_index} className="border-b last:border-0 hover:bg-gray-50">
-                      {permissions.canCreate && (
+                      {(permissions.canCreate || permissions.canDelete) && (
                         <td className="p-2 text-center">
-                          {!item.reflected && (
-                            <Checkbox checked={selectedIndexes.has(item.item_index)} onCheckedChange={() => toggleSelected(item.item_index)} />
-                          )}
+                          <Checkbox checked={selectedIndexes.has(item.item_index)} onCheckedChange={() => toggleSelected(item.item_index)} />
                         </td>
                       )}
+                      <td className="p-2 text-right text-gray-400">{(itemCurrentPage - 1) * PAGE_SIZE + idx + 1}</td>
                       <td className="p-2 whitespace-nowrap">{item.expense_date || '-'}</td>
                       <td className="p-2">{item.category || '-'}</td>
                       <td className="p-2 text-gray-500 truncate max-w-[320px]" title={`${item.vendor} / ${item.purpose}`}>{item.vendor}{item.purpose ? ` / ${item.purpose}` : ''}</td>
@@ -465,9 +503,11 @@ export default function AccountingExpenseReflectionPage() {
                       </td>
                       <td className="p-2 text-center">
                         {item.reflected ? (
-                          <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 px-1.5" onClick={() => handleUnreflect(item)} disabled={unreflecting === item.reflected_transaction_id}>
-                            <Undo2 className="w-3 h-3" />취소
-                          </Button>
+                          permissions.canDelete && (
+                            <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 px-1.5" onClick={() => handleUnreflect(item)} disabled={unreflecting === item.reflected_transaction_id}>
+                              <Undo2 className="w-3 h-3" />취소
+                            </Button>
+                          )
                         ) : (
                           permissions.canCreate && (
                             <Button size="sm" className="h-6 text-[10px] px-2" onClick={() => openForm(item)}>반영하기</Button>
@@ -479,6 +519,13 @@ export default function AccountingExpenseReflectionPage() {
                 </tbody>
               </table>
             </div>
+            {itemTotalPages > 1 && (
+              <div className="flex items-center justify-center gap-2">
+                <Button type="button" size="sm" variant="outline" className="h-7 px-2" disabled={itemCurrentPage <= 1} onClick={() => setItemPage(p => p - 1)}><ChevronLeft className="w-3.5 h-3.5" /></Button>
+                <span className="text-xs text-gray-500">{itemCurrentPage} / {itemTotalPages}</span>
+                <Button type="button" size="sm" variant="outline" className="h-7 px-2" disabled={itemCurrentPage >= itemTotalPages} onClick={() => setItemPage(p => p + 1)}><ChevronRight className="w-3.5 h-3.5" /></Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -500,6 +547,7 @@ export default function AccountingExpenseReflectionPage() {
                   </button>
                 ))}
               </div>
+              <Input placeholder="문서제목/기안자 검색" value={search} onChange={e => changeFilter(() => setSearch(e.target.value))} className="h-8 w-[200px] text-xs" />
               <span className="text-xs text-gray-400 ml-auto">{filteredGroups.length}건</span>
             </div>
 
@@ -507,22 +555,25 @@ export default function AccountingExpenseReflectionPage() {
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    <th className="text-right p-2 w-10">No.</th>
                     <th className="text-left p-2">문서</th>
                     <th className="text-left p-2">기안자</th>
                     <th className="text-left p-2">완료일</th>
                     <th className="text-center p-2">항목 수</th>
                     <th className="text-right p-2">총액</th>
                     <th className="text-center p-2">반영 현황</th>
+                    <th className="p-2 w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pagedGroups.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center py-8 text-gray-400">지출결의서가 없습니다.</td></tr>
-                  ) : pagedGroups.map(g => {
+                    <tr><td colSpan={8} className="text-center py-8 text-gray-400">지출결의서가 없습니다.</td></tr>
+                  ) : pagedGroups.map((g, idx) => {
                     const fullyReflected = g.reflectedCount === g.items.length;
                     const partiallyReflected = g.reflectedCount > 0 && !fullyReflected;
                     return (
-                      <tr key={g.document_id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedDocumentId(g.document_id)}>
+                      <tr key={g.document_id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => openDocument(g.document_id)}>
+                        <td className="p-2 text-right text-gray-400">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
                         <td className="p-2">
                           <span className="flex items-center gap-1">
                             {g.document_title}
@@ -537,6 +588,11 @@ export default function AccountingExpenseReflectionPage() {
                           <Badge className={`text-[10px] ${fullyReflected ? 'bg-green-100 text-green-700' : partiallyReflected ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
                             {g.reflectedCount}/{g.items.length} 반영
                           </Badge>
+                        </td>
+                        <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                          <button type="button" className="text-gray-400 hover:text-blue-600 inline-flex" title="시행문 보기" onClick={() => openNewTab(`/documents/${g.document_id}`, g.document_title)}>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );

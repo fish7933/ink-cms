@@ -33,14 +33,18 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
 
   const isItemActive = (item: MenuItem) => {
     if (!item.path) return false;
-    const itemPath = item.path.split('?')[0];
-    if (item.query) {
-      return location.pathname === itemPath && location.search.includes(item.query);
+    const [itemPath, itemQuery] = item.path.split('?');
+    // 쿼리로만 구분되는 형제 메뉴(예: /companies?type=owner vs ?type=manning)는 경로가 같으므로
+    // 쿼리까지 정확히 비교해야 한다.
+    if (itemQuery) {
+      return location.pathname === itemPath && location.search.replace(/^\?/, '') === itemQuery;
     }
     if (location.pathname === itemPath) return true;
-    const base = '/' + itemPath.split('/').filter(Boolean)[0];
-    // "/crew"가 "/crew-rotation"의 문자열 접두사라는 이유만으로 잘못 매칭되지 않도록 경로 구분자 경계까지 확인
-    return base.length > 1 && (location.pathname === base || location.pathname.startsWith(base + '/'));
+    // "/crew"가 "/crew-rotation"의 문자열 접두사라는 이유만으로 잘못 매칭되지 않도록 경로 구분자
+    // 경계까지 확인 — 첫 세그먼트가 아니라 이 항목의 전체 경로를 기준으로 삼아야
+    // "/settings/file-storage"와 "/settings/files"처럼 상위 세그먼트를 공유하는 형제 항목끼리
+    // 서로 잘못 활성화되지 않는다.
+    return itemPath.length > 1 && location.pathname.startsWith(itemPath + '/');
   };
 
   const filterItemsByRole = (items: MenuItem[]) =>
