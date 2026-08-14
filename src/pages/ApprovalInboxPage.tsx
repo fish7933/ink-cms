@@ -555,7 +555,7 @@ export default function ApprovalInboxPage() {
         )}
 
         {selectedDocument.requester_comment && (
-          <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{selectedDocument.requester_comment}</p></div>
+          <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">비고:</p><p className="text-sm text-gray-700">{selectedDocument.requester_comment}</p></div>
         )}
 
         <ReferenceReadStatus documentId={selectedDocument.id} />

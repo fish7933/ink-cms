@@ -278,6 +278,9 @@ export async function prepareDailyReportDraft(date: string, userId: string): Pro
     attachments,
     org_unit_id: orgUnitId,
     created_by: userId,
+    // 자금일보 작성 화면에서 적어둔 비고를 결재문서의 비고(requester_comment)로 그대로 넘긴다 —
+    // 상신 준비를 다시 할 때마다(재계산) 그 시점의 최신 비고로 갱신된다.
+    requester_comment: report.remarks || undefined,
     reference_type: 'daily_cash_report',
     reference_id: report.id,
   });

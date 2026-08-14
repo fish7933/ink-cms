@@ -268,7 +268,7 @@ export default function ApprovalDocumentDetailPage() {
       )}
 
       {doc.requester_comment && (
-        <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">요청 사유:</p><p className="text-sm text-gray-700">{doc.requester_comment}</p></div>
+        <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">비고:</p><p className="text-sm text-gray-700">{doc.requester_comment}</p></div>
       )}
       {doc.final_comment && (
         <div className="bg-red-50 p-3 rounded"><p className="text-sm font-semibold mb-1">반려 사유:</p><p className="text-sm text-gray-700">{doc.final_comment}</p></div>
