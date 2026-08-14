@@ -15,7 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport, updateReportRemarks, updateReportAttachments,
+  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport,
+  updateReportRemarks, updateReportAttachments, deleteDraftDailyReport,
 } from '@/services/accounting-daily-report.service';
 import { DailyCashReportTable } from '@/components/accounting/daily-cash-report-table';
 import type { DailyCashReport, AccountingDailyReportStatus, CashTransactionAttachment } from '@/types/accounting';
@@ -41,13 +42,14 @@ export default function DailyCashReportPage() {
   const navigate = useNavigate();
   const params = useParams<{ date?: string }>();
   const { toast } = useToast();
-  const { openNewTab } = useTabContext();
+  const { openNewTab, activeTabId, closeTab } = useTabContext();
   const permissions = usePermissions('accounting_daily_report');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [date, setDate] = useState(params.date || todayIso());
   const [report, setReport] = useState<DailyCashReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [forceCancelOpen, setForceCancelOpen] = useState(false);
   const [forceCancelReason, setForceCancelReason] = useState('');
   const [forceCancelSubmitting, setForceCancelSubmitting] = useState(false);
@@ -205,6 +207,25 @@ export default function DailyCashReportPage() {
     }
   };
 
+  // 목록 화면(DailyCashReportOverviewPage)의 작성중 건 삭제와 동일한 기능 — 결재상신을 한 번도
+  // 안 한 자금일보를 완전히 지운다(이력/달력에서 사라짐). 이 화면은 열 때마다 draft 행을 만들기
+  // 때문에(getOrCreateDraftReport), 삭제 후에는 그대로 두면 다시 같은 draft가 생기므로 탭을 닫는다.
+  const handleDeleteDraft = async () => {
+    if (!report || report.status !== 'draft') return;
+    if (!confirm(`${date} 자금일보(작성중)를 완전히 삭제하시겠습니까? 이력/달력에서 사라지며 되돌릴 수 없습니다.`)) return;
+    setDeleting(true);
+    try {
+      await deleteDraftDailyReport(report.id);
+      toast({ title: '삭제되었습니다.' });
+      if (activeTabId) closeTab(activeTabId);
+      else navigate('/accounting/daily-report');
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading && !report) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
   }
@@ -242,6 +263,11 @@ export default function DailyCashReportPage() {
                   <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleRegenerate} disabled={working || loading}>
                     <RefreshCw className="w-3.5 h-3.5" />새로고침
                   </Button>
+                  {permissions.canDelete && (
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-red-600 border-red-200 hover:bg-red-50" onClick={handleDeleteDraft} disabled={deleting || working || loading}>
+                      <Trash2 className="w-3.5 h-3.5" />작성취소
+                    </Button>
+                  )}
                   {permissions.canCreate && (
                     <Button size="sm" className="h-8 gap-1.5" onClick={handleSubmit} disabled={working || loading}>
                       <Send className="w-3.5 h-3.5" />결재 상신
