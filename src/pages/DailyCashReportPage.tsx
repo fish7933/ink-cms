@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FileText, ChevronLeft, ChevronRight, RefreshCw, Send, ExternalLink, List, Ban, Upload, Trash2 } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, RefreshCw, Send, ExternalLink, List, Ban, Upload, Trash2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,6 +58,12 @@ export default function DailyCashReportPage() {
   const [attachments, setAttachments] = useState<CashTransactionAttachment[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [attachmentsSaving, setAttachmentsSaving] = useState(false);
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const [submitConfirmSaving, setSubmitConfirmSaving] = useState(false);
+  const [closingAfterSave, setClosingAfterSave] = useState(false);
+
+  const hasUnsavedRemarks = remarksDraft !== (report?.remarks || '');
+  const hasUnsavedAttachments = newFiles.length > 0;
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'system_admin';
 
@@ -164,6 +170,43 @@ export default function DailyCashReportPage() {
     }
   };
 
+  // 비고/첨부파일을 한 번에 저장한다 — 결재 상신 직전 확인 다이얼로그, 저장후 닫기에서 재사용.
+  const persistDraftFields = async (): Promise<void> => {
+    if (!report) return;
+    const uploaded: CashTransactionAttachment[] = [];
+    for (const file of newFiles) {
+      try {
+        uploaded.push(await uploadCompressed('documents', `accounting-daily-report-attachments/${report.id}/`, file));
+      } catch {
+        throw new Error(`${file.name} 업로드 실패`);
+      }
+    }
+    const mergedAttachments = [...attachments, ...uploaded];
+    const trimmedRemarks = remarksDraft.trim();
+    await Promise.all([
+      updateReportAttachments(report.id, mergedAttachments),
+      updateReportRemarks(report.id, trimmedRemarks),
+    ]);
+    setReport(prev => (prev ? { ...prev, attachments: mergedAttachments, remarks: trimmedRemarks || null } : prev));
+    setAttachments(mergedAttachments);
+    setNewFiles([]);
+  };
+
+  const handleSaveAndClose = async () => {
+    if (!report) return;
+    setClosingAfterSave(true);
+    try {
+      await persistDraftFields();
+      toast({ title: '저장되었습니다.' });
+      if (activeTabId) closeTab(activeTabId);
+      else navigate('/accounting/daily-report');
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setClosingAfterSave(false);
+    }
+  };
+
   const handleRegenerate = async () => {
     if (!currentUser || !report || report.status !== 'draft') return;
     setWorking(true);
@@ -177,9 +220,8 @@ export default function DailyCashReportPage() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!currentUser || !report || report.status !== 'draft') return;
-    if (!confirm(`${date} 자금일보 기안문을 작성하시겠습니까? 기안문 작성 화면에서 결재선을 확인하고 최종 상신할 수 있습니다.`)) return;
+  const submitPreparedDraft = async () => {
+    if (!currentUser || !report) return;
     setWorking(true);
     try {
       const { draftId } = await prepareDailyReportDraft(date, currentUser.id);
@@ -189,6 +231,34 @@ export default function DailyCashReportPage() {
     } finally {
       setWorking(false);
     }
+  };
+
+  const handleSubmit = () => {
+    if (!currentUser || !report || report.status !== 'draft') return;
+    // 비고/첨부파일을 입력만 하고 저장 버튼을 안 눌렀으면, 그 내용은 아직 DB에 없어
+    // 결재상신 준비(prepareDailyReportDraft)가 못 읽어온다 — 그대로 상신하면 방금 적은
+    // 비고/첨부파일이 빠진 채로 나가버리므로, 상신 전에 반드시 먼저 확인시킨다.
+    if (hasUnsavedRemarks || hasUnsavedAttachments) { setSubmitConfirmOpen(true); return; }
+    if (!confirm(`${date} 자금일보 기안문을 작성하시겠습니까? 기안문 작성 화면에서 결재선을 확인하고 최종 상신할 수 있습니다.`)) return;
+    submitPreparedDraft();
+  };
+
+  const handleSubmitAfterSaving = async () => {
+    setSubmitConfirmSaving(true);
+    try {
+      await persistDraftFields();
+      setSubmitConfirmOpen(false);
+      await submitPreparedDraft();
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSubmitConfirmSaving(false);
+    }
+  };
+
+  const handleSubmitWithoutSaving = async () => {
+    setSubmitConfirmOpen(false);
+    await submitPreparedDraft();
   };
 
   const handleForceCancel = async () => {
@@ -265,6 +335,9 @@ export default function DailyCashReportPage() {
             <div className="flex items-center gap-2">
               {isDraft && (
                 <>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleSaveAndClose} disabled={closingAfterSave || working || loading}>
+                    <Save className="w-3.5 h-3.5" />{closingAfterSave ? '저장 중...' : '저장후 닫기'}
+                  </Button>
                   <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleRegenerate} disabled={working || loading}>
                     <RefreshCw className="w-3.5 h-3.5" />새로고침
                   </Button>
@@ -274,7 +347,7 @@ export default function DailyCashReportPage() {
                     </Button>
                   )}
                   {permissions.canCreate && (
-                    <Button size="sm" className="h-8 gap-1.5" onClick={handleSubmit} disabled={working || loading}>
+                    <Button size="sm" className="h-8 gap-1.5" onClick={handleSubmit} disabled={working || loading || submitConfirmOpen}>
                       <Send className="w-3.5 h-3.5" />결재 상신
                     </Button>
                   )}
@@ -388,6 +461,21 @@ export default function DailyCashReportPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setForceCancelOpen(false)} disabled={forceCancelSubmitting}>닫기</Button>
             <Button variant="destructive" onClick={handleForceCancel} disabled={forceCancelSubmitting}>{forceCancelSubmitting ? '처리 중...' : '확정 취소'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={submitConfirmOpen} onOpenChange={open => !open && !submitConfirmSaving && setSubmitConfirmOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>저장하지 않은 내용이 있습니다</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            {hasUnsavedRemarks && hasUnsavedAttachments ? '비고와 첨부파일이' : hasUnsavedRemarks ? '비고가' : '첨부파일이'} 아직 저장되지 않았습니다. 저장하지 않고 상신하면 방금 적은 내용은 이번 결재문서에 반영되지 않습니다. 저장 후 송부하시겠습니까?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={handleSubmitWithoutSaving} disabled={submitConfirmSaving || working}>저장없이 결재 상신</Button>
+            <Button onClick={handleSubmitAfterSaving} disabled={submitConfirmSaving || working}>{submitConfirmSaving ? '저장 중...' : '저장후 결재 상신'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
