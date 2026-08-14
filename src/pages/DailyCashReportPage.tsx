@@ -232,6 +232,11 @@ export default function DailyCashReportPage() {
 
   const sections = report?.snapshot || [];
   const isDraft = report?.status === 'draft';
+  // 결재 상신 시 실제로 함께 첨부되는 그날 각 거래의 증빙서류를, 상신 전에도 미리 한눈에
+  // 볼 수 있게 여기서도 모아서 보여준다(같은 파일이 여러 거래에 겹쳐 있으면 한 번만).
+  const transactionAttachments = [...new Map(
+    sections.flatMap(s => s.transactions.flatMap(t => t.attachments)).map(a => [a.path, a])
+  ).values()];
 
   return (
     <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
@@ -317,6 +322,18 @@ export default function DailyCashReportPage() {
                 </Button>
               )}
             </div>
+            {transactionAttachments.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-gray-400">거래 증빙서류 (자동 포함, {transactionAttachments.length}건 — 각 거래에서 직접 첨부/삭제)</p>
+                {transactionAttachments.map(a => (
+                  <div key={a.path} className="flex items-center justify-between p-2 bg-gray-50 rounded-md text-sm">
+                    <a href={getAttachmentUrl(a.path)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{a.name}</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
             {(attachments.length > 0 || newFiles.length > 0) && (
               <div className="space-y-1.5">
                 {attachments.map((a, idx) => (

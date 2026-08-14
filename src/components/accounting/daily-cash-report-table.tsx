@@ -1,4 +1,3 @@
-import { Paperclip } from 'lucide-react';
 import type { DailyCashReportSnapshotSection } from '@/types/accounting';
 
 const KIND_LABEL: Record<DailyCashReportSnapshotSection['kind'], string> = { bank_account: '통장', cash_register: '현금' };
@@ -103,16 +102,7 @@ export function DailyCashReportTable({ sections, onTransactionClick }: DailyCash
                     title={onTransactionClick ? '클릭하면 금전출납에서 이 거래를 수정할 수 있습니다' : undefined}
                   >
                     <td className="p-2 text-center text-gray-500">{i + 1}</td>
-                    <td className="p-2 truncate">
-                      <span className="inline-flex items-center gap-1">
-                        {t.date}
-                        {t.attachments.length > 0 && (
-                          <span className="inline-flex items-center gap-0.5 text-gray-400" title={`증빙서류 ${t.attachments.length}개`}>
-                            <Paperclip className="w-3 h-3" />{t.attachments.length}
-                          </span>
-                        )}
-                      </span>
-                    </td>
+                    <td className="p-2 truncate">{t.date}</td>
                     <td className="p-2 text-right font-mono text-red-600 truncate">{t.expense ? t.expense.toLocaleString() : ''}</td>
                     <td className="p-2 text-right font-mono text-blue-700 truncate">{t.income ? t.income.toLocaleString() : ''}</td>
                     <td className="p-2 text-right font-mono truncate">{t.balance.toLocaleString()} {s.currency}</td>
