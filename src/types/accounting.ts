@@ -125,6 +125,7 @@ export interface DailyCashReportTransactionRow {
   balance: number;
   counterparty: string;
   description: string;
+  attachments: CashTransactionAttachment[];
 }
 
 export interface DailyCashReportSnapshotSection {

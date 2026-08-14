@@ -13,6 +13,7 @@ interface RawTxn {
   counterparty: string | null;
   description: string | null;
   created_at: string;
+  attachments: CashTransactionAttachment[] | null;
 }
 
 // 실제 매일 결재로 올라가는 자금일보(엑셀 붙여넣기) 양식을 그대로 따른다 — 계좌별로
@@ -42,7 +43,7 @@ function buildSection(
     const income = t.transaction_type === 'income' ? Number(t.amount) : 0;
     const expense = t.transaction_type === 'expense' ? Number(t.amount) : 0;
     running += income - expense;
-    return { id: t.id, date: t.transaction_date, income, expense, balance: running, counterparty: t.counterparty || '', description: t.description || '' };
+    return { id: t.id, date: t.transaction_date, income, expense, balance: running, counterparty: t.counterparty || '', description: t.description || '', attachments: t.attachments || [] };
   });
 
   const totalIncome = transactions.reduce((s, t) => s + t.income, 0);
@@ -64,7 +65,7 @@ async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSecti
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
       .from('accounting_cash_transactions')
-      .select('id, bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at')
+      .select('id, bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at, attachments')
       .lte('transaction_date', date)
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
