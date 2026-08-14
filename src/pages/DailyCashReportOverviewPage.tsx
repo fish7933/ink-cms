@@ -56,6 +56,14 @@ export default function DailyCashReportOverviewPage() {
 
   useEffect(() => { loadReports(); }, []);
 
+  // 자금일보 작성 화면(다른 탭)에서 삭제/확정취소 등으로 상태가 바뀌면 이 목록·달력도 함께
+  // 갱신한다 — 안 그러면 예를 들어 삭제된 자금일보가 여기엔 그대로 남아 보인다.
+  useEffect(() => {
+    const handler = () => loadReports();
+    window.addEventListener('daily-report-data-changed', handler);
+    return () => window.removeEventListener('daily-report-data-changed', handler);
+  }, []);
+
   // 결재상신을 한 번도 하지 않은(작성중) 자금일보만 완전히 지울 수 있다 — 지우고 나면
   // 달력의 상태 뱃지와 아래 이력 목록 양쪽에서 바로 사라진다(둘 다 이 reports 하나로 그린다).
   const handleDelete = async (r: DailyCashReport) => {
