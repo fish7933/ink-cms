@@ -91,14 +91,8 @@ export async function updateCashTransaction(id: string, data: Partial<CashTransa
   if (error) throw error;
 }
 
-// 지출결의 반영으로 생성된 거래(source_document_id 있음)는 시스템관리자만 지울 수 있다 —
-// 금전출납에서 직접 지워버리면 지출결의 반영 화면의 "반영 취소"(시스템관리자 전용)를 그대로
-// 우회하는 구멍이 생기기 때문에 여기서도 동일하게 막는다.
-export async function deleteCashTransaction(id: string, isSystemAdmin: boolean): Promise<void> {
-  const { data: existing } = await supabase.from('accounting_cash_transactions').select('transaction_date, source_document_id').eq('id', id).single();
-  if (existing?.source_document_id && !isSystemAdmin) {
-    throw new Error('지출결의 반영으로 생성된 거래는 시스템관리자만 삭제할 수 있습니다. 지출결의 반영 화면에서 반영을 취소하세요.');
-  }
+export async function deleteCashTransaction(id: string): Promise<void> {
+  const { data: existing } = await supabase.from('accounting_cash_transactions').select('transaction_date').eq('id', id).single();
   if (existing) await assertDateEditable(existing.transaction_date);
 
   const { error } = await supabase.from('accounting_cash_transactions').delete().eq('id', id);

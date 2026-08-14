@@ -165,7 +165,7 @@ export async function reflectExpenseItemsBatch(inputs: ReflectExpenseItemInput[]
 // role 체크로 버튼 자체를 막아두지만, 서비스 레이어에서도 최종 방어선으로 한 번 더 확인한다.
 export async function unreflectExpenseItem(transactionId: string, isSystemAdmin: boolean): Promise<void> {
   if (!isSystemAdmin) throw new Error('반영 취소는 시스템관리자만 할 수 있습니다.');
-  await deleteCashTransaction(transactionId, isSystemAdmin);
+  await deleteCashTransaction(transactionId);
 }
 
 // 지출결의 반영 목록에서 미반영 문서를 숨긴다(문서 자체는 그대로 유지).
