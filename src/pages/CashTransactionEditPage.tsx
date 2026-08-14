@@ -211,7 +211,7 @@ export default function CashTransactionEditPage() {
     if (!confirm('이 거래 내역을 삭제하시겠습니까?')) return;
     setDeleting(true);
     try {
-      await deleteCashTransaction(id);
+      await deleteCashTransaction(id, isSystemAdmin);
       toast({ title: '삭제되었습니다.' });
       window.dispatchEvent(new CustomEvent('cashbook-data-changed'));
       closeThisTab();
@@ -222,7 +222,12 @@ export default function CashTransactionEditPage() {
     }
   };
 
+  const isSystemAdmin = currentUser?.role === 'system_admin';
   const currentIndex = transactions.findIndex(t => t.id === id);
+  const currentTransaction = currentIndex >= 0 ? transactions[currentIndex] : null;
+  // 지출결의 반영으로 생성된 거래는 시스템관리자만 지울 수 있다(지출결의 반영 화면의
+  // "반영 취소"와 동일한 제한 — 여기서 직접 지워버리면 그 제한을 그대로 우회하게 된다).
+  const canDeleteThisTransaction = permissions.canDelete && (isSystemAdmin || !currentTransaction?.source_document_id);
   // 이 앱의 탭은 TabContext에 저장된 path로 렌더링을 고정하기 때문에(TabPageRenderer가
   // <Routes location={tab.path}>로 그림), navigate()만 호출하면 브라우저 주소는 바뀌어도
   // 이 탭에 실제로 그려지는 내용은 그대로다 — updateTab으로 탭의 path/title도 같이 갱신해야
@@ -289,10 +294,12 @@ export default function CashTransactionEditPage() {
         />
         {error && <Alert variant="destructive"><AlertDescription className="text-xs">{error}</AlertDescription></Alert>}
         <div className="flex items-center justify-between pt-2 border-t">
-          {permissions.canDelete ? (
+          {canDeleteThisTransaction ? (
             <Button variant="outline" size="sm" className="gap-1.5 text-red-600 border-red-200" disabled={deleting} onClick={handleDelete}>
               <Trash2 className="w-3.5 h-3.5" />삭제
             </Button>
+          ) : permissions.canDelete && currentTransaction?.source_document_id ? (
+            <span className="text-[11px] text-gray-400">지출결의 반영으로 생성된 거래 — 반영 취소는 지출결의 반영 화면에서(시스템관리자)</span>
           ) : <span />}
           <Button size="sm" onClick={handleSave} disabled={saving || !permissions.canEdit}>
             <Save className="w-3.5 h-3.5 mr-1" />{saving ? '저장 중...' : '저장'}

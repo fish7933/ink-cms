@@ -269,6 +269,7 @@ export default function DailyCashReportPage() {
       await forceCancelConfirmedReport({ reportId: report.id, reason: forceCancelReason.trim(), performedBy: currentUser.id });
       toast({ title: '확정이 취소되었습니다.', description: '작성중 상태로 되돌아갔습니다. 필요하면 수정 후 다시 상신하세요.' });
       setForceCancelOpen(false);
+      window.dispatchEvent(new CustomEvent('daily-report-data-changed'));
       await loadReport(date, currentUser.id);
     } catch (e) {
       toast({ title: '확정 취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
@@ -287,6 +288,7 @@ export default function DailyCashReportPage() {
     try {
       await deleteDraftDailyReport(report.id);
       toast({ title: '삭제되었습니다.' });
+      window.dispatchEvent(new CustomEvent('daily-report-data-changed'));
       if (activeTabId) closeTab(activeTabId);
       else navigate('/accounting/daily-report');
     } catch (e) {

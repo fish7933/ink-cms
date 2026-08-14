@@ -82,6 +82,7 @@ export default function CashbookManagementPage() {
   const { openNewTab } = useTabContext();
   const permissions = usePermissions('accounting_cashbook');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const isSystemAdmin = currentUser?.role === 'system_admin';
   const [transactions, setTransactions] = useState<CashTransactionWithDetails[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccountWithBalance[]>([]);
   const [cards, setCards] = useState<CardWithDetails[]>([]);
@@ -404,9 +405,14 @@ export default function CashbookManagementPage() {
     }
   };
 
+  // 지출결의 반영으로 생성된 거래는 시스템관리자만 지울 수 있다(지출결의 반영 화면의
+  // "반영 취소"와 동일한 제한 — 금전출납에서 직접 지워버리면 그 제한을 우회하게 된다).
+  const canDeleteTransaction = (t: CashTransactionWithDetails) => permissions.canDelete && (isSystemAdmin || !t.source_document_id);
+
   const handleDelete = async (t: CashTransactionWithDetails) => {
+    if (!canDeleteTransaction(t)) return;
     if (!confirm('이 거래 내역을 삭제하시겠습니까?')) return;
-    try { await deleteCashTransaction(t.id); await loadData(); }
+    try { await deleteCashTransaction(t.id, isSystemAdmin); await loadData(); }
     catch (e) { toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); }
   };
 
@@ -418,10 +424,11 @@ export default function CashbookManagementPage() {
     });
   };
   const toggleSelectAllOnPage = () => {
+    const selectable = paged.filter(canDeleteTransaction);
     setSelectedIds(prev => {
-      const allSelected = paged.length > 0 && paged.every(t => prev.has(t.id));
+      const allSelected = selectable.length > 0 && selectable.every(t => prev.has(t.id));
       if (allSelected) return new Set();
-      return new Set(paged.map(t => t.id));
+      return new Set(selectable.map(t => t.id));
     });
   };
 
@@ -430,7 +437,7 @@ export default function CashbookManagementPage() {
     if (!confirm(`선택한 ${selectedIds.size}건의 거래 내역을 삭제하시겠습니까?`)) return;
     setBulkDeleting(true);
     try {
-      for (const id of selectedIds) await deleteCashTransaction(id);
+      for (const id of selectedIds) await deleteCashTransaction(id, isSystemAdmin);
       toast({ title: `${selectedIds.size}건이 삭제되었습니다.` });
       setSelectedIds(new Set());
       await loadData();
@@ -671,7 +678,7 @@ export default function CashbookManagementPage() {
                     <tr>
                       {permissions.canDelete && (
                         <th className="p-2 w-8 text-center">
-                          <Checkbox checked={paged.length > 0 && paged.every(t => selectedIds.has(t.id))} onCheckedChange={toggleSelectAllOnPage} />
+                          <Checkbox checked={paged.filter(canDeleteTransaction).length > 0 && paged.filter(canDeleteTransaction).every(t => selectedIds.has(t.id))} onCheckedChange={toggleSelectAllOnPage} />
                         </th>
                       )}
                       <th className="text-right p-2 w-10">No.</th>
@@ -695,7 +702,7 @@ export default function CashbookManagementPage() {
                       <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openEditTab(t)}>
                         {permissions.canDelete && (
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
-                            <Checkbox checked={selectedIds.has(t.id)} onCheckedChange={() => toggleSelected(t.id)} />
+                            {canDeleteTransaction(t) && <Checkbox checked={selectedIds.has(t.id)} onCheckedChange={() => toggleSelected(t.id)} />}
                           </td>
                         )}
                         <td className="p-2 text-right text-gray-400">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
@@ -729,7 +736,7 @@ export default function CashbookManagementPage() {
                         <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-center gap-0.5">
                             {permissions.canEdit && <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openEditTab(t)}><Edit2 className="h-3 w-3" /></Button>}
-                            {permissions.canDelete && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(t)}><Trash2 className="h-3 w-3" /></Button>}
+                            {canDeleteTransaction(t) && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(t)}><Trash2 className="h-3 w-3" /></Button>}
                           </div>
                         </td>
                       </tr>
