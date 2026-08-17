@@ -1,8 +1,11 @@
 import * as XLSX from 'xlsx-js-style';
+import JSZip from 'jszip';
 import { supabase } from '@/lib/supabase';
 import { getBankAccounts } from '@/services/accounting-bank-account.service';
 import { getCashRegisters } from '@/services/accounting-cash-register.service';
 import { getCompanyInfo } from '@/services/company-info.service';
+
+const NUM_FMT = '#,##0';
 
 interface SaveFilePickerWindow extends Window {
   showSaveFilePicker?: (options: {
@@ -108,7 +111,7 @@ function buildAccountSheet(companyName: string, account: LedgerAccount, allTxns:
     cell(no, { border, alignment: { horizontal: 'right' }, fill: { fgColor: { rgb: OPENING_BG } } }),
     cell('전일이월', { border, fill: { fgColor: { rgb: OPENING_BG } } }),
     cell('', { border, fill: { fgColor: { rgb: OPENING_BG } } }), cell('', { border, fill: { fgColor: { rgb: OPENING_BG } } }),
-    cell(balance, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: OPENING_BG } } }),
+    cell(balance, { border, numFmt: NUM_FMT, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: OPENING_BG } } }),
     ...emptyRow(colCount - 5, { border, fill: { fgColor: { rgb: OPENING_BG } } }),
   ]);
 
@@ -124,9 +127,9 @@ function buildAccountSheet(companyName: string, account: LedgerAccount, allTxns:
     aoa.push([
       cell('', { border, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
       cell(label, { border, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
-      cell(monthIncome, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
-      cell(monthExpense, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
-      cell(balance, { border, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      cell(monthIncome, { border, numFmt: NUM_FMT, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      cell(monthExpense, { border, numFmt: NUM_FMT, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
+      cell(balance, { border, numFmt: NUM_FMT, alignment: { horizontal: 'right' }, font: { bold: true }, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
       ...emptyRow(colCount - 5, { border, fill: { fgColor: { rgb: SUBTOTAL_BG } } }),
     ]);
     monthIncome = 0;
@@ -146,9 +149,9 @@ function buildAccountSheet(companyName: string, account: LedgerAccount, allTxns:
     aoa.push([
       cell(no, { border, alignment: { horizontal: 'right' } }),
       cell(t.transaction_date, { border }),
-      cell(t.transaction_type === 'income' ? amount : '', { border, alignment: { horizontal: 'right' } }),
-      cell(t.transaction_type === 'expense' ? amount : '', { border, alignment: { horizontal: 'right' } }),
-      cell(balance, { border, alignment: { horizontal: 'right' } }),
+      cell(t.transaction_type === 'income' ? amount : '', { border, numFmt: NUM_FMT, alignment: { horizontal: 'right' } }),
+      cell(t.transaction_type === 'expense' ? amount : '', { border, numFmt: NUM_FMT, alignment: { horizontal: 'right' } }),
+      cell(balance, { border, numFmt: NUM_FMT, alignment: { horizontal: 'right' } }),
       cell(t.counterparty || '', { border }),
       cell(t.counterparty || '', { border }),
       cell(categoryName, { border }),
@@ -166,15 +169,43 @@ function buildAccountSheet(companyName: string, account: LedgerAccount, allTxns:
     if (sheet[addr]) sheet[addr].s = c.s;
   }));
 
-  // 인쇄했을 때 잘리거나 여백이 어긋나지 않도록 — 열이 10개라 가로로 눕히고 폭에 맞춘다.
-  sheet['!pageSetup'] = { orientation: 'landscape', fitToWidth: 1, fitToHeight: 0, scale: 100 };
-  sheet['!margins'] = { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
-  sheet['!printHeader'] = [3, 3]; // 매 인쇄 페이지마다 헤더 행(4번째 행, 0-indexed 3)을 반복
-
   return sheet;
 }
 
+// xlsx-js-style(SheetJS 커뮤니티 빌드)은 인쇄 배율/방향 쓰기를 지원하지 않아 워크북 생성 API
+// (`!pageSetup`/`!margins`)만으로는 적용이 안 된다(crew-payroll-export.ts의 applyPrintFit와
+// 동일한 이유) — 만들어진 xlsx는 zip이므로 시트별 XML에 표준 OOXML 순서(mergeCells →
+// pageMargins → pageSetup → ignoredErrors)를 지켜 직접 끼워 넣는다. 계좌 원장은 열이 10개라
+// 전부 가로로 눕히고 폭만 한 페이지에 맞춘다(세로는 거래가 많으면 여러 페이지 허용).
+async function applyLandscapeFitWidth(buffer: ArrayBuffer, sheetCount: number): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(buffer);
+  for (let i = 1; i <= sheetCount; i++) {
+    const path = `xl/worksheets/sheet${i}.xml`;
+    const file = zip.file(path);
+    if (!file) continue;
+    let xml = await file.async('string');
+    if (!xml.includes('<sheetPr')) {
+      xml = xml.replace(/(<worksheet[^>]*>)/, `$1<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>`);
+    }
+    const pageSetupTag = `<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>`;
+    if (xml.includes('<pageMargins')) {
+      xml = xml.replace(/(<pageMargins[^/]*\/>)/, `$1${pageSetupTag}`);
+    } else {
+      const defaultMargins = `<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>`;
+      xml = xml.includes('<ignoredErrors')
+        ? xml.replace('<ignoredErrors', `${defaultMargins}${pageSetupTag}<ignoredErrors`)
+        : xml.replace('</worksheet>', `${defaultMargins}${pageSetupTag}</worksheet>`);
+    }
+    zip.file(path, xml);
+  }
+  return zip.generateAsync({ type: 'uint8array' });
+}
+
 async function writeWorkbook(workbook: XLSX.WorkBook, fileName: string): Promise<void> {
+  const rawBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+  const buffer = await applyLandscapeFitWidth(rawBuffer, workbook.SheetNames.length);
+  const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
   if (picker) {
     try {
@@ -182,22 +213,39 @@ async function writeWorkbook(workbook: XLSX.WorkBook, fileName: string): Promise
         suggestedName: fileName,
         types: [{ description: 'Excel Workbook', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }],
       });
-      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       const writable = await handle.createWritable();
-      await writable.write(buffer);
+      await writable.write(blob);
       await writable.close();
       return;
     } catch (e) {
       if ((e as DOMException)?.name === 'AbortError') return;
     }
   }
-  XLSX.writeFile(workbook, fileName);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
-// 계좌별(통장 전부 + 현금 시재) 거래를 시트로 나눠 하나의 엑셀로 내보낸다 — 경리 부서가 쓰던
-// 원본 양식과 같은 구조라 그대로 이어서 쓸 수 있다. range로 지정한 기간(일/월/연도/전체)의
-// 거래만 목록에 나열되고, 잔액은 계좌 개설일부터 진짜로 누적된 값이 이어진다.
-export async function exportAccountingLedgerWorkbook(range: ExportDateRange): Promise<void> {
+export interface LedgerSheetPreview {
+  sheetName: string;
+  html: string;
+}
+
+export interface LedgerWorkbookResult {
+  workbook: XLSX.WorkBook;
+  fileName: string;
+  previews: LedgerSheetPreview[];
+}
+
+// 계좌별(통장 전부 + 현금 시재) 거래를 시트로 나눠 워크북을 만든다 — 다운로드와 미리보기 양쪽이
+// 이 함수 하나로 같은 데이터를 쓴다. range로 지정한 기간(일/월/연도/전체)의 거래만 목록에
+// 나열되고, 잔액은 계좌 개설일부터 진짜로 누적된 값이 이어진다.
+export async function buildAccountingLedgerWorkbook(range: ExportDateRange): Promise<LedgerWorkbookResult> {
   const [company, bankAccounts, cashRegisters, allTxns, { data: categories }] = await Promise.all([
     getCompanyInfo(),
     getBankAccounts(),
@@ -209,19 +257,28 @@ export async function exportAccountingLedgerWorkbook(range: ExportDateRange): Pr
   const companyName = company?.name || '';
 
   const workbook = XLSX.utils.book_new();
+  const previews: LedgerSheetPreview[] = [];
+
+  const addSheet = (name: string, accountNumber: string | null, openingBalance: number, txns: RawTxn[]) => {
+    const sheetName = name.slice(0, 31);
+    const sheet = buildAccountSheet(companyName, { name, accountNumber, openingBalance }, txns, categoryNameById, range);
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    previews.push({ sheetName, html: XLSX.utils.sheet_to_html(sheet, { editable: false }) });
+  };
 
   for (const a of bankAccounts) {
-    const account: LedgerAccount = { name: a.account_name, accountNumber: a.account_number, openingBalance: Number(a.opening_balance) };
-    const txns = allTxns.filter(t => t.bank_account_id === a.id);
-    const sheet = buildAccountSheet(companyName, account, txns, categoryNameById, range);
-    XLSX.utils.book_append_sheet(workbook, sheet, a.account_name.slice(0, 31));
+    addSheet(a.account_name, a.account_number, Number(a.opening_balance), allTxns.filter(t => t.bank_account_id === a.id));
   }
   for (const r of cashRegisters) {
-    const account: LedgerAccount = { name: r.name, accountNumber: null, openingBalance: Number(r.opening_balance) };
-    const txns = allTxns.filter(t => t.cash_register_id === r.id);
-    const sheet = buildAccountSheet(companyName, account, txns, categoryNameById, range);
-    XLSX.utils.book_append_sheet(workbook, sheet, r.name.slice(0, 31));
+    addSheet(r.name, null, Number(r.opening_balance), allTxns.filter(t => t.cash_register_id === r.id));
   }
 
-  await writeWorkbook(workbook, `${companyName || '경리'}_거래내역_${range.label}.xlsx`);
+  return { workbook, fileName: `${companyName || '경리'}_거래내역_${range.label}.xlsx`, previews };
+}
+
+// 계좌별(통장 전부 + 현금 시재) 거래를 시트로 나눠 하나의 엑셀로 내보낸다 — 경리 부서가 쓰던
+// 원본 양식과 같은 구조라 그대로 이어서 쓸 수 있다.
+export async function exportAccountingLedgerWorkbook(range: ExportDateRange): Promise<void> {
+  const { workbook, fileName } = await buildAccountingLedgerWorkbook(range);
+  await writeWorkbook(workbook, fileName);
 }
