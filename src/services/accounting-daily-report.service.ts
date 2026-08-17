@@ -13,6 +13,7 @@ interface RawTxn {
   counterparty: string | null;
   description: string | null;
   created_at: string;
+  attachments: CashTransactionAttachment[] | null;
 }
 
 // 실제 매일 결재로 올라가는 자금일보(엑셀 붙여넣기) 양식을 그대로 따른다 — 계좌별로
@@ -42,7 +43,7 @@ function buildSection(
     const income = t.transaction_type === 'income' ? Number(t.amount) : 0;
     const expense = t.transaction_type === 'expense' ? Number(t.amount) : 0;
     running += income - expense;
-    return { id: t.id, date: t.transaction_date, income, expense, balance: running, counterparty: t.counterparty || '', description: t.description || '' };
+    return { id: t.id, date: t.transaction_date, income, expense, balance: running, counterparty: t.counterparty || '', description: t.description || '', attachments: t.attachments || [] };
   });
 
   const totalIncome = transactions.reduce((s, t) => s + t.income, 0);
@@ -64,7 +65,7 @@ async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSecti
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data: page, error } = await supabase
       .from('accounting_cash_transactions')
-      .select('id, bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at')
+      .select('id, bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at, attachments')
       .lte('transaction_date', date)
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
@@ -206,6 +207,29 @@ export async function forceCancelConfirmedReport(input: { reportId: string; reas
   if (error) throw error;
 }
 
+// 결재상신을 한 번도 하지 않은(작성중 상태) 자금일보를 완전히 삭제한다 — 이력 목록과
+// 달력 어디에도 더 이상 나오지 않는다. status가 draft인 자금일보는 딱 두 경우뿐이다:
+// (1) 아예 상신을 시작한 적이 없거나, (2) 상신 화면까지만 준비하고 실제로 제출은 안 한
+// 경우(prepareDailyReportDraft가 만든 기안 초안이 approval_document_id로 걸려 있음) —
+// 실제로 상신됐던 적이 있으면 반려/강제취소 시 approval_document_id가 다시 null로
+// 초기화되므로 이 두 경우와 섞이지 않는다. (2)의 경우 딸려 있는 미제출 기안 초안도 같이 정리한다.
+export async function deleteDraftDailyReport(reportId: string): Promise<void> {
+  const { data: report, error: fetchError } = await supabase
+    .from('accounting_daily_reports')
+    .select('status, approval_document_id')
+    .eq('id', reportId)
+    .single();
+  if (fetchError) throw fetchError;
+  if (report.status !== 'draft') throw new Error('작성중(결재상신 전) 상태의 자금일보만 삭제할 수 있습니다.');
+
+  if (report.approval_document_id) {
+    await approvalDocumentService.deleteDraft(report.approval_document_id).catch(() => {});
+  }
+
+  const { error } = await supabase.from('accounting_daily_reports').delete().eq('id', reportId);
+  if (error) throw error;
+}
+
 // 바로 결재를 넣지 않고, 기안문 작성 페이지에서 최종 검토 후 상신하도록 임시저장 초안만
 // 만들어 그 초안 id를 돌려준다 — 실제 상신(및 리포트 잠금)은 그 페이지에서 정식 제출할 때
 // approval-document.service.ts의 createDocument가 처리한다(daily_cash_report 케이스 참고).
@@ -255,6 +279,9 @@ export async function prepareDailyReportDraft(date: string, userId: string): Pro
     attachments,
     org_unit_id: orgUnitId,
     created_by: userId,
+    // 자금일보 작성 화면에서 적어둔 비고를 결재문서의 비고(requester_comment)로 그대로 넘긴다 —
+    // 상신 준비를 다시 할 때마다(재계산) 그 시점의 최신 비고로 갱신된다.
+    requester_comment: report.remarks || undefined,
     reference_type: 'daily_cash_report',
     reference_id: report.id,
   });

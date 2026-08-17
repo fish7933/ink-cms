@@ -1,26 +1,24 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Trash2, Save, Edit2, ArrowLeft, Receipt, Settings2, ChevronLeft, ChevronRight, Upload, FileText, Paperclip, FileDown } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Trash2, Edit2, Receipt, Settings2, ChevronLeft, ChevronRight, Paperclip, FileDown, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { AutocompleteInput } from '@/components/ui/autocomplete-input';
+import CashTransactionForm, { emptyCashTransactionForm, type CashTransactionFormState } from '@/components/accounting/CashTransactionForm';
 import {
-  getCashTransactions, addCashTransaction, updateCashTransaction, deleteCashTransaction,
+  getCashTransactions, addCashTransaction, deleteCashTransaction,
 } from '@/services/accounting-cash-transaction.service';
 import { getBankAccounts } from '@/services/accounting-bank-account.service';
 import { getCards } from '@/services/accounting-card.service';
 import { getCashRegisters } from '@/services/accounting-cash-register.service';
 import { getCategories, addCategory, deleteCategory } from '@/services/accounting-category.service';
 import { getCurrentUser } from '@/lib/store';
-import { supabase } from '@/lib/supabase';
-import { uploadCompressed, getFileUrl } from '@/lib/upload';
+import { uploadCompressed } from '@/lib/upload';
 import { exportAccountingLedgerWorkbook, type ExportDateRange } from '@/utils/accounting-excel-export';
 import type {
   CashTransactionWithDetails, BankAccountWithBalance, CardWithDetails, CashRegisterWithBalance, AccountingCategory,
@@ -29,9 +27,8 @@ import type {
 import type { User } from '@/types/models';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTabContext } from '@/contexts/TabContext';
 
-const NONE = '_none';
-const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
 const CURRENCY_LABELS: Record<string, string> = { KRW: '원화', USD: '미화', EUR: '유로', JPY: '엔화' };
 const CURRENCY_SYMBOLS: Record<string, string> = { KRW: '₩', USD: '$', EUR: '€', JPY: '¥' };
 const CURRENCY_BADGE_COLORS: Record<string, string> = {
@@ -79,18 +76,10 @@ function currentYear(): string {
 
 type DateFilterMode = 'day' | 'month' | 'year' | 'all';
 
-const emptyForm = {
-  transaction_date: new Date().toISOString().slice(0, 10),
-  payment_method: 'bank_account' as AccountingPaymentMethod,
-  bank_account_id: '', card_id: '', cash_register_id: '',
-  transaction_type: 'expense' as AccountingTransactionType,
-  category_name: '', counterparty: '', description: '', amount: '', currency: 'KRW', remarks: '',
-};
-
 export default function CashbookManagementPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { openNewTab } = useTabContext();
   const permissions = usePermissions('accounting_cashbook');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<CashTransactionWithDetails[]>([]);
@@ -100,7 +89,7 @@ export default function CashbookManagementPage() {
   const [categories, setCategories] = useState<AccountingCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('month');
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>('day');
   const [monthFilter, setMonthFilter] = useState(currentMonth());
   const [dayFilter, setDayFilter] = useState(today());
   const [yearFilter, setYearFilter] = useState(currentYear());
@@ -110,9 +99,11 @@ export default function CashbookManagementPage() {
   const [typeFilter, setTypeFilter] = useState<'all' | AccountingTransactionType>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const [formView, setFormView] = useState<{ id?: string } | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState<CashTransactionFormState>(emptyCashTransactionForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [attachments, setAttachments] = useState<CashTransactionAttachment[]>([]);
@@ -143,18 +134,13 @@ export default function CashbookManagementPage() {
     } catch { /* 무시 */ }
   }, [currentUser]);
 
-  // 자금일보 화면에서 특정 거래를 클릭해 넘어온 경우(?edit=<id>) — 목록이 로드되면 그 거래의
-  // 수정 폼을 자동으로 연다. 저장 후 목록이 다시 로드돼도 재실행되지 않도록 한 번만 연다.
-  const editParamHandledRef = useRef(false);
+  // 거래 수정은 별도 탭(CashTransactionEditPage)에서 이뤄지므로, 그 탭에서 저장/삭제가
+  // 일어나면 이 목록도 최신 상태로 다시 불러온다.
   useEffect(() => {
-    const editId = searchParams.get('edit');
-    if (!editId || editParamHandledRef.current || transactions.length === 0) return;
-    const target = transactions.find(t => t.id === editId);
-    if (target) {
-      editParamHandledRef.current = true;
-      openForm(target);
-    }
-  }, [searchParams, transactions]); // eslint-disable-line react-hooks/exhaustive-deps
+    const handler = () => loadData();
+    window.addEventListener('cashbook-data-changed', handler);
+    return () => window.removeEventListener('cashbook-data-changed', handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dismissCounterparty = (opt: string) => {
     if (!currentUser) return;
@@ -252,7 +238,7 @@ export default function CashbookManagementPage() {
   const currentPage = Math.min(page, totalPages);
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const changeFilter = (fn: () => void) => { fn(); setPage(1); };
+  const changeFilter = (fn: () => void) => { fn(); setPage(1); setSelectedIds(new Set()); };
 
   const handleExportExcel = async () => {
     setExporting(true);
@@ -325,25 +311,20 @@ export default function CashbookManagementPage() {
     [transactions, dismissedDescriptions]
   );
 
-  const openForm = (t?: CashTransactionWithDetails) => {
+  const openAddForm = () => {
     setError('');
-    if (t) {
-      setForm({
-        transaction_date: t.transaction_date, payment_method: t.payment_method,
-        bank_account_id: t.bank_account_id || '', card_id: t.card_id || '', cash_register_id: t.cash_register_id || '',
-        transaction_type: t.transaction_type, category_name: t.category_name || '',
-        counterparty: t.counterparty || '', description: t.description || '',
-        amount: String(t.amount), currency: t.currency, remarks: t.remarks || '',
-      });
-      setAttachments(t.attachments || []);
-    } else {
-      setForm(emptyForm);
-      setAttachments([]);
-    }
+    setForm(emptyCashTransactionForm());
+    setAttachments([]);
     setNewFiles([]);
-    setFormView({ id: t?.id });
+    setAdding(true);
   };
-  const closeForm = () => { setFormView(null); setError(''); };
+  const closeForm = () => { setAdding(false); setError(''); };
+
+  // 기존 거래 수정은 목록에서 벗어나지 않도록 별도 탭으로 연다(CashTransactionEditPage) —
+  // 필터/스크롤 위치를 잃지 않고 여러 건을 오가며 볼 수 있다.
+  const openEditTab = (t: CashTransactionWithDetails) => {
+    openNewTab(`/accounting/cashbook/transaction/${t.id}`, t.description || t.counterparty || '거래 수정');
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -356,7 +337,6 @@ export default function CashbookManagementPage() {
   };
   const removeNewFile = (idx: number) => setNewFiles(prev => prev.filter((_, i) => i !== idx));
   const removeExistingAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
-  const getAttachmentUrl = (path: string) => getFileUrl('documents', path);
 
   const handlePaymentMethodChange = (v: AccountingPaymentMethod) => {
     setForm(prev => ({ ...prev, payment_method: v, bank_account_id: '', card_id: '', cash_register_id: '' }));
@@ -392,7 +372,7 @@ export default function CashbookManagementPage() {
       const uploaded: CashTransactionAttachment[] = [];
       for (const file of newFiles) {
         try {
-          uploaded.push(await uploadCompressed('documents', `accounting-receipts/${formView?.id || Date.now()}/`, file));
+          uploaded.push(await uploadCompressed('documents', `accounting-receipts/${Date.now()}/`, file));
         } catch {
           throw new Error(`${file.name} 업로드 실패`);
         }
@@ -409,22 +389,14 @@ export default function CashbookManagementPage() {
         amount, currency: form.currency, attachments: mergedAttachments, remarks: form.remarks.trim() || null,
         created_by: currentUser?.id || null,
       };
-      if (formView?.id) {
-        // 수정 저장은 부분 업데이트라 source_document_id/source_item_index는 건드리지 않는다 —
-        // 지출결의 반영으로 생긴 거래를 여기서 고쳐도 "반영됨" 연결이 끊기면 안 된다.
-        await updateCashTransaction(formView.id, data);
-        await loadData();
-        closeForm();
-      } else {
-        await addCashTransaction({ ...data, source_document_id: null, source_item_index: null });
-        await loadData();
-        // 같은 통장/카드/시재에 계속 거래를 입력하는 경우가 많아, 날짜·결제수단·계좌 선택은
-        // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액/증빙서류)만 비워 바로 이어서 입력할 수 있게 한다.
-        setForm(prev => ({ ...prev, category_name: '', counterparty: '', description: '', amount: '', remarks: '' }));
-        setAttachments([]);
-        setNewFiles([]);
-        toast({ title: '저장되었습니다.', description: '이어서 같은 계좌에 거래를 추가할 수 있습니다.' });
-      }
+      await addCashTransaction({ ...data, source_document_id: null, source_item_index: null });
+      await loadData();
+      // 같은 통장/카드/시재에 계속 거래를 입력하는 경우가 많아, 날짜·결제수단·계좌 선택은
+      // 그대로 두고 거래별로 달라지는 항목(분류/거래처/적요/금액/증빙서류)만 비워 바로 이어서 입력할 수 있게 한다.
+      setForm(prev => ({ ...prev, category_name: '', counterparty: '', description: '', amount: '', remarks: '' }));
+      setAttachments([]);
+      setNewFiles([]);
+      toast({ title: '저장되었습니다.', description: '이어서 같은 계좌에 거래를 추가할 수 있습니다.' });
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장 중 오류가 발생했습니다.');
     } finally {
@@ -436,6 +408,37 @@ export default function CashbookManagementPage() {
     if (!confirm('이 거래 내역을 삭제하시겠습니까?')) return;
     try { await deleteCashTransaction(t.id); await loadData(); }
     catch (e) { toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' }); }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds(prev => {
+      const allSelected = paged.length > 0 && paged.every(t => prev.has(t.id));
+      if (allSelected) return new Set();
+      return new Set(paged.map(t => t.id));
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`선택한 ${selectedIds.size}건의 거래 내역을 삭제하시겠습니까?`)) return;
+    setBulkDeleting(true);
+    try {
+      for (const id of selectedIds) await deleteCashTransaction(id);
+      toast({ title: `${selectedIds.size}건이 삭제되었습니다.` });
+      setSelectedIds(new Set());
+      await loadData();
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   const handleAddCategory = async () => {
@@ -476,147 +479,51 @@ export default function CashbookManagementPage() {
             <p className="text-sm text-gray-500">통장·카드·현금의 입출금 내역을 기록하고 관리합니다.</p>
           </div>
         </div>
-        {formView === null && (
+        {!adding && (
           <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={() => setCategoryDialogOpen(true)}>
             <Settings2 className="w-3.5 h-3.5" />분류 관리
           </Button>
         )}
       </div>
 
-      {formView !== null ? (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>
-                <CardTitle className="text-sm">{formView.id ? '거래 수정' : '거래 추가'}</CardTitle>
-              </div>
+      {adding ? (
+        // 거래 수정(CashTransactionEditPage, 별도 탭)과 완전히 같은 형식 — 다른 점(이전/다음
+        // 거래 탐색, 삭제 버튼)은 새 거래에는 해당하지 않아 자연히 빠진다.
+        <div className="max-w-3xl mx-auto space-y-4">
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
+            <div />
+            <h1 className="text-base font-semibold text-gray-900 truncate text-center">거래 추가</h1>
+            <Button variant="ghost" size="sm" onClick={closeForm} className="h-8 px-2 shrink-0"><X className="w-4 h-4 mr-1" />닫기</Button>
+          </div>
+          <div className="bg-white border rounded-lg p-4 space-y-4">
+            <CashTransactionForm
+              form={form}
+              onChange={patch => setForm(prev => ({ ...prev, ...patch }))}
+              onPaymentMethodChange={handlePaymentMethodChange}
+              onTypeChange={handleTypeChange}
+              bankAccounts={bankAccounts}
+              cards={cards}
+              cashRegisters={cashRegisters}
+              categoryOptions={categoryOptions}
+              onDeleteCategoryOption={deleteCategoryOption}
+              counterpartyOptions={counterpartyOptions}
+              onDismissCounterparty={dismissCounterparty}
+              descriptionOptions={descriptionOptions}
+              onDismissDescription={dismissDescription}
+              attachments={attachments}
+              newFiles={newFiles}
+              onFileChange={handleFileChange}
+              onRemoveNewFile={removeNewFile}
+              onRemoveExistingAttachment={removeExistingAttachment}
+              saving={saving}
+              maxDate={today()}
+            />
+            {error && <Alert variant="destructive"><AlertDescription className="text-xs">{error}</AlertDescription></Alert>}
+            <div className="flex items-center justify-end pt-2 border-t">
               <Button size="sm" onClick={handleSave} disabled={saving}><Save className="w-3.5 h-3.5 mr-1" />{saving ? '저장 중...' : '저장'}</Button>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label className="text-xs">날짜 *</Label><Input type="date" value={form.transaction_date} max={today()} onChange={e => setForm({ ...form, transaction_date: e.target.value })} className="h-9 text-sm" /></div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">구분 *</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => handleTypeChange('income')} className={`h-9 rounded-md text-sm border transition-colors ${form.transaction_type === 'income' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>수입</button>
-                  <button type="button" onClick={() => handleTypeChange('expense')} className={`h-9 rounded-md text-sm border transition-colors ${form.transaction_type === 'expense' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>지출</button>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">결제수단 *</Label>
-                <Select value={form.payment_method} onValueChange={v => handlePaymentMethodChange(v as AccountingPaymentMethod)}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank_account">통장</SelectItem>
-                    <SelectItem value="card">카드</SelectItem>
-                    <SelectItem value="cash">현금</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {form.payment_method === 'bank_account' && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">계좌 *</Label>
-                  <Select value={form.bank_account_id || NONE} onValueChange={v => setForm({ ...form, bank_account_id: v === NONE ? '' : v })}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="계좌 선택" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>계좌 선택</SelectItem>
-                      {bankAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.bank_name} {a.account_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {form.payment_method === 'card' && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">카드 *</Label>
-                  <Select value={form.card_id || NONE} onValueChange={v => setForm({ ...form, card_id: v === NONE ? '' : v })}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="카드 선택" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>카드 선택</SelectItem>
-                      {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.card_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {form.payment_method === 'cash' && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">시재 *</Label>
-                  <Select value={form.cash_register_id || NONE} onValueChange={v => setForm({ ...form, cash_register_id: v === NONE ? '' : v })}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="시재 선택" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>시재 선택</SelectItem>
-                      {cashRegisters.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">분류</Label>
-                <AutocompleteInput value={form.category_name} onChange={v => setForm({ ...form, category_name: v })} options={categoryOptions} onDeleteOption={deleteCategoryOption} className="h-9 text-sm" placeholder="분류 입력 또는 검색" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">거래처</Label>
-                <AutocompleteInput value={form.counterparty} onChange={v => setForm({ ...form, counterparty: v })} options={counterpartyOptions} onDeleteOption={dismissCounterparty} className="h-9 text-sm" placeholder="거래처 입력 또는 검색" />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">적요</Label>
-              <AutocompleteInput value={form.description} onChange={v => setForm({ ...form, description: v })} options={descriptionOptions} onDeleteOption={dismissDescription} className="h-9 text-sm" placeholder="적요 입력 또는 검색" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label className="text-xs">금액 *</Label><Input type="number" step="0.01" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} className="h-9 text-sm" /></div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">통화</Label>
-                <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">비고</Label>
-              <Textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} rows={3} className="text-sm resize-y" placeholder="추가로 남길 메모가 있으면 입력하세요" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">증빙서류</Label>
-              {(attachments.length > 0 || newFiles.length > 0) && (
-                <div className="space-y-1.5">
-                  {attachments.map((a, idx) => (
-                    <div key={a.path} className="flex items-center justify-between p-2 bg-gray-50 rounded-md text-sm">
-                      <a href={getAttachmentUrl(a.path)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
-                        <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{a.name}</span>
-                      </a>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeExistingAttachment(idx)} disabled={saving}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                  {newFiles.map((f, idx) => (
-                    <div key={`${f.name}-${idx}`} className="flex items-center justify-between p-2 bg-blue-50 rounded-md text-sm">
-                      <span className="flex items-center gap-2 text-blue-700 truncate">
-                        <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{f.name}</span>
-                        <span className="text-xs text-blue-400 shrink-0">(신규)</span>
-                      </span>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 shrink-0" onClick={() => removeNewFile(idx)} disabled={saving}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <label className="flex items-center justify-center gap-1.5 h-9 border border-dashed rounded-md text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
-                <Upload className="w-3.5 h-3.5" />증빙서류 파일 추가 (최대 10MB)
-                <input type="file" multiple className="hidden" onChange={handleFileChange} disabled={saving} />
-              </label>
-            </div>
-            {error && <Alert variant="destructive"><AlertDescription className="text-xs">{error}</AlertDescription></Alert>}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <>
           <div className="rounded-lg border overflow-hidden bg-white">
@@ -657,11 +564,16 @@ export default function CashbookManagementPage() {
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-base">거래 내역</CardTitle>
                 <div className="flex items-center gap-2">
+                  {permissions.canDelete && selectedIds.size > 0 && (
+                    <Button size="sm" variant="outline" className="gap-1.5 h-8 text-red-600 border-red-200" disabled={bulkDeleting} onClick={handleBulkDelete}>
+                      <Trash2 className="w-3.5 h-3.5" />선택 {selectedIds.size}건 삭제
+                    </Button>
+                  )}
                   <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={handleExportExcel} disabled={exporting}>
                     <FileDown className="w-3.5 h-3.5" />{exporting ? '내보내는 중...' : '엑셀 다운로드'}
                   </Button>
                   {permissions.canCreate && (
-                    <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />거래 추가</Button>
+                    <Button size="sm" className="gap-1.5 h-8" onClick={openAddForm}><Plus className="w-4 h-4" />거래 추가</Button>
                   )}
                 </div>
               </div>
@@ -757,6 +669,12 @@ export default function CashbookManagementPage() {
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b">
                     <tr>
+                      {permissions.canDelete && (
+                        <th className="p-2 w-8 text-center">
+                          <Checkbox checked={paged.length > 0 && paged.every(t => selectedIds.has(t.id))} onCheckedChange={toggleSelectAllOnPage} />
+                        </th>
+                      )}
+                      <th className="text-right p-2 w-10">No.</th>
                       <th className="text-left p-2">날짜</th>
                       <th className="text-center p-2">구분</th>
                       <th className="text-left p-2">결제수단</th>
@@ -772,9 +690,15 @@ export default function CashbookManagementPage() {
                   </thead>
                   <tbody>
                     {paged.length === 0 ? (
-                      <tr><td colSpan={11} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
-                    ) : paged.map(t => (
-                      <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(t)}>
+                      <tr><td colSpan={permissions.canDelete ? 13 : 12} className="text-center py-8 text-gray-400">내역이 없습니다.</td></tr>
+                    ) : paged.map((t, idx) => (
+                      <tr key={t.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openEditTab(t)}>
+                        {permissions.canDelete && (
+                          <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
+                            <Checkbox checked={selectedIds.has(t.id)} onCheckedChange={() => toggleSelected(t.id)} />
+                          </td>
+                        )}
+                        <td className="p-2 text-right text-gray-400">{(currentPage - 1) * PAGE_SIZE + idx + 1}</td>
                         <td className="p-2 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1">
                             {t.transaction_date}
@@ -804,7 +728,7 @@ export default function CashbookManagementPage() {
                         <td className="p-2 text-gray-500">{t.created_by_name || '-'}</td>
                         <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                           <div className="flex justify-center gap-0.5">
-                            {permissions.canEdit && <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openForm(t)}><Edit2 className="h-3 w-3" /></Button>}
+                            {permissions.canEdit && <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => openEditTab(t)}><Edit2 className="h-3 w-3" /></Button>}
                             {permissions.canDelete && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(t)}><Trash2 className="h-3 w-3" /></Button>}
                           </div>
                         </td>

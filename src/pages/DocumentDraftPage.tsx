@@ -861,12 +861,12 @@ export default function DocumentDraftPage() {
               )}
 
               <div className="space-y-1.5">
-                <Label className="text-xs">요청 사유 <span className="text-gray-400 font-normal">(선택)</span></Label>
+                <Label className="text-xs">비고 <span className="text-gray-400 font-normal">(선택)</span></Label>
                 <Textarea value={requesterComment} onChange={e => setRequesterComment(e.target.value)} placeholder="결재자에게 전달할 메모" rows={2} disabled={submitting} />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">결재할 문서(양식) 첨부 <span className="text-gray-400 font-normal">(선택)</span></Label>
+                <Label className="text-xs">첨부파일 <span className="text-gray-400 font-normal">(선택)</span></Label>
                 <div className="border-2 border-dashed rounded-md p-4 text-center">
                   <input type="file" id="doc-upload" multiple onChange={handleFileChange} className="hidden" disabled={submitting} />
                   <label htmlFor="doc-upload" className={`cursor-pointer flex flex-col items-center gap-2 ${submitting ? 'opacity-50 pointer-events-none' : ''}`}>

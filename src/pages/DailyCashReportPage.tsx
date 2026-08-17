@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FileText, ChevronLeft, ChevronRight, RefreshCw, Send, ExternalLink, List, Ban, Upload, Trash2 } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, RefreshCw, Send, ExternalLink, List, Ban, Upload, Trash2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import {
-  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport, updateReportRemarks, updateReportAttachments,
+  getOrCreateDraftReport, regenerateDraftReport, prepareDailyReportDraft, forceCancelConfirmedReport,
+  updateReportRemarks, updateReportAttachments, deleteDraftDailyReport,
 } from '@/services/accounting-daily-report.service';
 import { DailyCashReportTable } from '@/components/accounting/daily-cash-report-table';
 import type { DailyCashReport, AccountingDailyReportStatus, CashTransactionAttachment } from '@/types/accounting';
@@ -41,13 +42,14 @@ export default function DailyCashReportPage() {
   const navigate = useNavigate();
   const params = useParams<{ date?: string }>();
   const { toast } = useToast();
-  const { openNewTab } = useTabContext();
+  const { openNewTab, activeTabId, closeTab } = useTabContext();
   const permissions = usePermissions('accounting_daily_report');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [date, setDate] = useState(params.date || todayIso());
   const [report, setReport] = useState<DailyCashReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [forceCancelOpen, setForceCancelOpen] = useState(false);
   const [forceCancelReason, setForceCancelReason] = useState('');
   const [forceCancelSubmitting, setForceCancelSubmitting] = useState(false);
@@ -56,6 +58,12 @@ export default function DailyCashReportPage() {
   const [attachments, setAttachments] = useState<CashTransactionAttachment[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [attachmentsSaving, setAttachmentsSaving] = useState(false);
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
+  const [submitConfirmSaving, setSubmitConfirmSaving] = useState(false);
+  const [closingAfterSave, setClosingAfterSave] = useState(false);
+
+  const hasUnsavedRemarks = remarksDraft !== (report?.remarks || '');
+  const hasUnsavedAttachments = newFiles.length > 0;
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'system_admin';
 
@@ -162,6 +170,43 @@ export default function DailyCashReportPage() {
     }
   };
 
+  // 비고/첨부파일을 한 번에 저장한다 — 결재 상신 직전 확인 다이얼로그, 저장후 닫기에서 재사용.
+  const persistDraftFields = async (): Promise<void> => {
+    if (!report) return;
+    const uploaded: CashTransactionAttachment[] = [];
+    for (const file of newFiles) {
+      try {
+        uploaded.push(await uploadCompressed('documents', `accounting-daily-report-attachments/${report.id}/`, file));
+      } catch {
+        throw new Error(`${file.name} 업로드 실패`);
+      }
+    }
+    const mergedAttachments = [...attachments, ...uploaded];
+    const trimmedRemarks = remarksDraft.trim();
+    await Promise.all([
+      updateReportAttachments(report.id, mergedAttachments),
+      updateReportRemarks(report.id, trimmedRemarks),
+    ]);
+    setReport(prev => (prev ? { ...prev, attachments: mergedAttachments, remarks: trimmedRemarks || null } : prev));
+    setAttachments(mergedAttachments);
+    setNewFiles([]);
+  };
+
+  const handleSaveAndClose = async () => {
+    if (!report) return;
+    setClosingAfterSave(true);
+    try {
+      await persistDraftFields();
+      toast({ title: '저장되었습니다.' });
+      if (activeTabId) closeTab(activeTabId);
+      else navigate('/accounting/daily-report');
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setClosingAfterSave(false);
+    }
+  };
+
   const handleRegenerate = async () => {
     if (!currentUser || !report || report.status !== 'draft') return;
     setWorking(true);
@@ -175,9 +220,8 @@ export default function DailyCashReportPage() {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!currentUser || !report || report.status !== 'draft') return;
-    if (!confirm(`${date} 자금일보 기안문을 작성하시겠습니까? 기안문 작성 화면에서 결재선을 확인하고 최종 상신할 수 있습니다.`)) return;
+  const submitPreparedDraft = async () => {
+    if (!currentUser || !report) return;
     setWorking(true);
     try {
       const { draftId } = await prepareDailyReportDraft(date, currentUser.id);
@@ -189,6 +233,34 @@ export default function DailyCashReportPage() {
     }
   };
 
+  const handleSubmit = () => {
+    if (!currentUser || !report || report.status !== 'draft') return;
+    // 비고/첨부파일을 입력만 하고 저장 버튼을 안 눌렀으면, 그 내용은 아직 DB에 없어
+    // 결재상신 준비(prepareDailyReportDraft)가 못 읽어온다 — 그대로 상신하면 방금 적은
+    // 비고/첨부파일이 빠진 채로 나가버리므로, 상신 전에 반드시 먼저 확인시킨다.
+    if (hasUnsavedRemarks || hasUnsavedAttachments) { setSubmitConfirmOpen(true); return; }
+    if (!confirm(`${date} 자금일보 기안문을 작성하시겠습니까? 기안문 작성 화면에서 결재선을 확인하고 최종 상신할 수 있습니다.`)) return;
+    submitPreparedDraft();
+  };
+
+  const handleSubmitAfterSaving = async () => {
+    setSubmitConfirmSaving(true);
+    try {
+      await persistDraftFields();
+      setSubmitConfirmOpen(false);
+      await submitPreparedDraft();
+    } catch (e) {
+      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSubmitConfirmSaving(false);
+    }
+  };
+
+  const handleSubmitWithoutSaving = async () => {
+    setSubmitConfirmOpen(false);
+    await submitPreparedDraft();
+  };
+
   const handleForceCancel = async () => {
     if (!currentUser || !report || report.status !== 'confirmed') return;
     if (!forceCancelReason.trim()) { toast({ title: '사유를 입력하세요.', variant: 'destructive' }); return; }
@@ -197,11 +269,32 @@ export default function DailyCashReportPage() {
       await forceCancelConfirmedReport({ reportId: report.id, reason: forceCancelReason.trim(), performedBy: currentUser.id });
       toast({ title: '확정이 취소되었습니다.', description: '작성중 상태로 되돌아갔습니다. 필요하면 수정 후 다시 상신하세요.' });
       setForceCancelOpen(false);
+      window.dispatchEvent(new CustomEvent('daily-report-data-changed'));
       await loadReport(date, currentUser.id);
     } catch (e) {
       toast({ title: '확정 취소 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setForceCancelSubmitting(false);
+    }
+  };
+
+  // 목록 화면(DailyCashReportOverviewPage)의 작성중 건 삭제와 동일한 기능 — 결재상신을 한 번도
+  // 안 한 자금일보를 완전히 지운다(이력/달력에서 사라짐). 이 화면은 열 때마다 draft 행을 만들기
+  // 때문에(getOrCreateDraftReport), 삭제 후에는 그대로 두면 다시 같은 draft가 생기므로 탭을 닫는다.
+  const handleDeleteDraft = async () => {
+    if (!report || report.status !== 'draft') return;
+    if (!confirm(`${date} 자금일보(작성중)를 완전히 삭제하시겠습니까? 이력/달력에서 사라지며 되돌릴 수 없습니다.`)) return;
+    setDeleting(true);
+    try {
+      await deleteDraftDailyReport(report.id);
+      toast({ title: '삭제되었습니다.' });
+      window.dispatchEvent(new CustomEvent('daily-report-data-changed'));
+      if (activeTabId) closeTab(activeTabId);
+      else navigate('/accounting/daily-report');
+    } catch (e) {
+      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -211,6 +304,11 @@ export default function DailyCashReportPage() {
 
   const sections = report?.snapshot || [];
   const isDraft = report?.status === 'draft';
+  // 결재 상신 시 실제로 함께 첨부되는 그날 각 거래의 증빙서류를, 상신 전에도 미리 한눈에
+  // 볼 수 있게 여기서도 모아서 보여준다(같은 파일이 여러 거래에 겹쳐 있으면 한 번만).
+  const transactionAttachments = [...new Map(
+    sections.flatMap(s => s.transactions.flatMap(t => t.attachments)).map(a => [a.path, a])
+  ).values()];
 
   return (
     <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
@@ -239,11 +337,19 @@ export default function DailyCashReportPage() {
             <div className="flex items-center gap-2">
               {isDraft && (
                 <>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleSaveAndClose} disabled={closingAfterSave || working || loading}>
+                    <Save className="w-3.5 h-3.5" />{closingAfterSave ? '저장 중...' : '저장후 닫기'}
+                  </Button>
                   <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleRegenerate} disabled={working || loading}>
                     <RefreshCw className="w-3.5 h-3.5" />새로고침
                   </Button>
+                  {permissions.canDelete && (
+                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-red-600 border-red-200 hover:bg-red-50" onClick={handleDeleteDraft} disabled={deleting || working || loading}>
+                      <Trash2 className="w-3.5 h-3.5" />작성취소
+                    </Button>
+                  )}
                   {permissions.canCreate && (
-                    <Button size="sm" className="h-8 gap-1.5" onClick={handleSubmit} disabled={working || loading}>
+                    <Button size="sm" className="h-8 gap-1.5" onClick={handleSubmit} disabled={working || loading || submitConfirmOpen}>
                       <Send className="w-3.5 h-3.5" />결재 상신
                     </Button>
                   )}
@@ -263,7 +369,7 @@ export default function DailyCashReportPage() {
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-4">
-          <DailyCashReportTable sections={sections} onTransactionClick={id => openNewTab(`/accounting/cashbook?edit=${id}`, '금전출납')} />
+          <DailyCashReportTable sections={sections} onTransactionClick={id => openNewTab(`/accounting/cashbook/transaction/${id}`, '거래 수정')} />
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-xs">비고</Label>
@@ -291,6 +397,18 @@ export default function DailyCashReportPage() {
                 </Button>
               )}
             </div>
+            {transactionAttachments.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-gray-400">거래 증빙서류 (자동 포함, {transactionAttachments.length}건 — 각 거래에서 직접 첨부/삭제)</p>
+                {transactionAttachments.map(a => (
+                  <div key={a.path} className="flex items-center justify-between p-2 bg-gray-50 rounded-md text-sm">
+                    <a href={getAttachmentUrl(a.path)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 hover:underline truncate">
+                      <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{a.name}</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
             {(attachments.length > 0 || newFiles.length > 0) && (
               <div className="space-y-1.5">
                 {attachments.map((a, idx) => (
@@ -345,6 +463,21 @@ export default function DailyCashReportPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setForceCancelOpen(false)} disabled={forceCancelSubmitting}>닫기</Button>
             <Button variant="destructive" onClick={handleForceCancel} disabled={forceCancelSubmitting}>{forceCancelSubmitting ? '처리 중...' : '확정 취소'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={submitConfirmOpen} onOpenChange={open => !open && !submitConfirmSaving && setSubmitConfirmOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>저장하지 않은 내용이 있습니다</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            {hasUnsavedRemarks && hasUnsavedAttachments ? '비고와 첨부파일이' : hasUnsavedRemarks ? '비고가' : '첨부파일이'} 아직 저장되지 않았습니다. 저장하지 않고 상신하면 방금 적은 내용은 이번 결재문서에 반영되지 않습니다. 저장 후 송부하시겠습니까?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={handleSubmitWithoutSaving} disabled={submitConfirmSaving || working}>저장없이 결재 상신</Button>
+            <Button onClick={handleSubmitAfterSaving} disabled={submitConfirmSaving || working}>{submitConfirmSaving ? '저장 중...' : '저장후 결재 상신'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
