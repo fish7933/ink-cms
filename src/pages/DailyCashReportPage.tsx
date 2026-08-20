@@ -306,8 +306,10 @@ export default function DailyCashReportPage() {
   const isDraft = report?.status === 'draft';
   // 결재 상신 시 실제로 함께 첨부되는 그날 각 거래의 증빙서류를, 상신 전에도 미리 한눈에
   // 볼 수 있게 여기서도 모아서 보여준다(같은 파일이 여러 거래에 겹쳐 있으면 한 번만).
+  // 이 첨부파일 fix가 배포되기 전에 스냅샷이 저장된 확정/결재중 자금일보는(작성중이 아니라
+  // 다시 계산되지 않으므로) 거래 행에 attachments 필드가 아예 없을 수 있다 — 방어적으로 처리.
   const transactionAttachments = [...new Map(
-    sections.flatMap(s => s.transactions.flatMap(t => t.attachments)).map(a => [a.path, a])
+    sections.flatMap(s => s.transactions.flatMap(t => t.attachments || [])).map(a => [a.path, a])
   ).values()];
 
   return (
