@@ -34,6 +34,11 @@ const SalaryComponentsPage = lazy(() => import('@/pages/SalaryComponentsPage'));
 const SalaryTemplatesPage = lazy(() => import('@/pages/SalaryTemplatesPage'));
 const SalaryTemplateFormPage = lazy(() => import('@/pages/SalaryTemplateFormPage'));
 const SalaryTemplateDetailPage = lazy(() => import('@/pages/SalaryTemplateDetailPage'));
+const ManagementFeeItemsPage = lazy(() => import('@/pages/ManagementFeeItemsPage'));
+const ManagementFeeTemplatesPage = lazy(() => import('@/pages/ManagementFeeTemplatesPage'));
+const ManagementFeeTemplateFormPage = lazy(() => import('@/pages/ManagementFeeTemplateFormPage'));
+const ManagementFeeTemplateDetailPage = lazy(() => import('@/pages/ManagementFeeTemplateDetailPage'));
+const ManagementFeeCalculationPage = lazy(() => import('@/pages/ManagementFeeCalculationPage'));
 const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
 const AllowanceTypesManagementPage = lazy(() => import('@/pages/AllowanceTypesManagementPage'));
 const CrewPayrollManagementPage = lazy(() => import('@/pages/CrewPayrollManagementPage'));
@@ -132,6 +137,12 @@ export const routeConfig: RouteEntry[] = [
   { path: '/salary/templates/:id/edit', component: SalaryTemplateFormPage },
   { path: '/salary/templates/:id', component: SalaryTemplateDetailPage },
   { path: '/salary/templates', component: SalaryTemplatesPage },
+  { path: '/management-fee-items', component: ManagementFeeItemsPage },
+  { path: '/management-fee/templates/new', component: ManagementFeeTemplateFormPage },
+  { path: '/management-fee/templates/:id/edit', component: ManagementFeeTemplateFormPage },
+  { path: '/management-fee/templates/:id', component: ManagementFeeTemplateDetailPage },
+  { path: '/management-fee/templates', component: ManagementFeeTemplatesPage },
+  { path: '/management-fee-calculation', component: ManagementFeeCalculationPage },
   { path: '/shore-positions', component: ShorePositionsPage },
   { path: '/org-chart', component: OrgChartManagementPage },
   { path: '/document-types', component: DocumentTypesManagementPage },

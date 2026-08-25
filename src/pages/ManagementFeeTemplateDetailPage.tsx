@@ -1,0 +1,285 @@
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { Edit2, RefreshCw, ChevronDown, ChevronRight, Ship as ShipIcon, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { useTabContext } from '@/contexts/TabContext';
+import {
+  getManagementFeeTemplateWithItems,
+  getManagementFeeTemplateHistory,
+  deleteManagementFeeTemplateHistoryVersion,
+  renewManagementFeeTemplate,
+  getEffectiveTemplateMapForShips,
+  type ManagementFeeTemplateWithItems,
+  type ManagementFeeTemplate,
+} from '@/lib/management-fee-store';
+import { getNationalities } from '@/services/nationality.service';
+import { getShips } from '@/services/ship.service';
+import type { Nationality } from '@/types/nationality';
+import ManagementFeeTemplateItemsSummary from '@/components/management-fee/ManagementFeeTemplateItemsSummary';
+
+export default function ManagementFeeTemplateDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
+  const { openNewTab, activeTabId, updateTab } = useTabContext();
+
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ManagementFeeTemplateWithItems | null>(null);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
+  const [assignedShips, setAssignedShips] = useState<string[]>([]);
+
+  const [history, setHistory] = useState<ManagementFeeTemplate[]>([]);
+  const [historyDetails, setHistoryDetails] = useState<Record<string, ManagementFeeTemplateWithItems | null>>({});
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+
+  const [renewOpen, setRenewOpen] = useState(false);
+  const [renewDate, setRenewDate] = useState('');
+  const [renewing, setRenewing] = useState(false);
+
+  const loadData = async (templateId: string, isInitial = false) => {
+    setLoading(true);
+    try {
+      // 다른 탭에서 이 템플릿을 갱신했다면 URL의 id는 이미 종료된 과거 버전일 수 있음 —
+      // 항상 같은 계보의 실제 현재(활성) 버전을 찾아 표시 대상으로 삼는다.
+      const hist = await getManagementFeeTemplateHistory(templateId);
+      const currentInLineage = hist.find(h => h.effective_until === null);
+      const resolvedId = currentInLineage ? currentInLineage.id : templateId;
+
+      const [full, nats, ships] = await Promise.all([
+        getManagementFeeTemplateWithItems(resolvedId),
+        getNationalities(),
+        getShips(),
+      ]);
+      setData(full);
+      setNationalities(nats);
+      if (isInitial && activeTabId && full) updateTab(activeTabId, { title: `관리비 템플릿 상세: ${full.name}` });
+
+      const templateMap = await getEffectiveTemplateMapForShips(ships);
+      setAssignedShips(
+        ships.filter(s => templateMap[s.id]?.id === resolvedId).map(s => s.name)
+      );
+
+      setHistory(hist.filter(h => h.id !== resolvedId));
+    } catch (e) {
+      console.error(e);
+      toast({ title: '불러오기 실패', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) loadData(id, true);
+  }, [id]);
+
+  useEffect(() => {
+    const handler = () => { if (id) loadData(id); };
+    window.addEventListener('management-fee-template-data-changed', handler);
+    return () => window.removeEventListener('management-fee-template-data-changed', handler);
+  }, [id]);
+
+  const toggleHistory = async (h: ManagementFeeTemplate) => {
+    if (expandedHistoryId === h.id) { setExpandedHistoryId(null); return; }
+    setExpandedHistoryId(h.id);
+    if (!historyDetails[h.id]) {
+      const full = await getManagementFeeTemplateWithItems(h.id);
+      setHistoryDetails(prev => ({ ...prev, [h.id]: full }));
+    }
+  };
+
+  const handleDeleteHistory = async (h: ManagementFeeTemplate) => {
+    if (!confirm(`${h.effective_from} ~ ${h.effective_until} 버전을 삭제하시겠습니까?\n앞뒤 버전의 유효기간이 자동으로 이어붙습니다.`)) return;
+    const ok = await deleteManagementFeeTemplateHistoryVersion(h.id);
+    if (!ok) {
+      toast({ title: '삭제 실패', variant: 'destructive' });
+      return;
+    }
+    toast({ title: '삭제 완료' });
+    window.dispatchEvent(new CustomEvent('management-fee-template-data-changed'));
+  };
+
+  const openRenew = () => {
+    setRenewDate(new Date().toISOString().slice(0, 10));
+    setRenewOpen(true);
+  };
+
+  const handleRenew = async () => {
+    if (!data || !renewDate) return;
+    setRenewing(true);
+    try {
+      const newTemplate = await renewManagementFeeTemplate(data.id, renewDate);
+      if (!newTemplate) {
+        toast({ title: '갱신 실패', description: '적용 시작일은 기존 유효기간 이후여야 합니다.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: '갱신 완료', description: '새 버전이 생성되었습니다. 인상분 금액을 수정해주세요.' });
+      window.dispatchEvent(new CustomEvent('management-fee-template-data-changed'));
+      setRenewOpen(false);
+      openNewTab(`/management-fee/templates/${newTemplate.id}/edit`, `템플릿 수정: ${newTemplate.name}`);
+    } finally {
+      setRenewing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-sm text-gray-500">로딩 중...</p>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-sm text-gray-500">템플릿을 찾을 수 없습니다.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-4 space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">{data.name}</CardTitle>
+            <div className="flex gap-2">
+              <Button
+                size="sm" variant="outline" className="gap-1.5 h-8"
+                onClick={() => openNewTab(`/management-fee/templates/${data.id}/edit`, `템플릿 수정: ${data.name}`)}
+              >
+                <Edit2 className="h-4 w-4" />수정
+              </Button>
+              <Button size="sm" className="gap-1.5 h-8" onClick={openRenew}>
+                <RefreshCw className="h-4 w-4" />갱신
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* 기본 정보 */}
+          <div className="grid grid-cols-4 gap-3 text-sm">
+            <div>
+              <Label className="text-xs text-gray-500">기본 통화</Label>
+              <div className="mt-0.5">{data.currency}</div>
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs text-gray-500">유효기간</Label>
+              <div className="mt-0.5">{data.effective_from} ~ {data.effective_until || '현재'}</div>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500">상태</Label>
+              <div className="mt-0.5">
+                <Badge variant={data.is_active ? 'default' : 'secondary'} className="text-xs">
+                  {data.is_active ? '활성' : '비활성'}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          {data.description && (
+            <div>
+              <Label className="text-xs text-gray-500">설명</Label>
+              <div className="mt-0.5 text-sm text-gray-700">{data.description}</div>
+            </div>
+          )}
+
+          {/* 청구 항목 구성 */}
+          <div>
+            <Label className="text-sm">청구 항목 구성</Label>
+            <div className="mt-1.5"><ManagementFeeTemplateItemsSummary items={data.items} nationalities={nationalities} /></div>
+          </div>
+
+          {/* 할당된 선박 */}
+          <div>
+            <Label className="text-sm flex items-center gap-1.5">
+              <ShipIcon className="h-3.5 w-3.5" />할당된 선박 ({assignedShips.length})
+            </Label>
+            <div className="mt-1.5">
+              {assignedShips.length === 0 ? (
+                <p className="text-xs text-gray-400">할당된 선박이 없습니다.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {assignedShips.map(name => (
+                    <Badge key={name} variant="outline" className="text-xs">{name}</Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 갱신 히스토리 */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">갱신 히스토리 ({history.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {history.length === 0 ? (
+            <p className="text-xs text-gray-400 py-2 text-center">이전 버전이 없습니다.</p>
+          ) : (
+            history.map(h => (
+              <div key={h.id} className="border rounded-md">
+                <div className="w-full flex items-center justify-between p-2.5 text-sm hover:bg-gray-50">
+                  <button type="button" onClick={() => toggleHistory(h)} className="flex items-center gap-1.5 flex-1 text-left">
+                    {expandedHistoryId === h.id ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    {h.effective_from} ~ {h.effective_until}
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">종료된 버전</Badge>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHistory(h)}
+                      className="text-gray-400 hover:text-red-600"
+                      title="이 버전 삭제"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                {expandedHistoryId === h.id && (
+                  <div className="p-2.5 pt-0">
+                    {historyDetails[h.id] ? (
+                      <ManagementFeeTemplateItemsSummary items={historyDetails[h.id]!.items} nationalities={nationalities} />
+                    ) : (
+                      <p className="text-xs text-gray-400 py-2 text-center">불러오는 중...</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 갱신 다이얼로그 */}
+      <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">템플릿 갱신 — {data.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-gray-500">
+              새 유효기간 버전을 생성합니다. 기존 금액이 그대로 복사되며, 이 템플릿을 사용 중인 선박/플릿/선주 배정은 자동으로 새 버전으로 이전됩니다.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-sm">적용 시작일</Label>
+              <Input type="date" value={renewDate} onChange={e => setRenewDate(e.target.value)} className="h-9 text-sm" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRenewOpen(false)}>취소</Button>
+            <Button size="sm" onClick={handleRenew} disabled={renewing || !renewDate}>
+              {renewing ? '갱신 중...' : '갱신'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
