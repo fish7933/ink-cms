@@ -46,6 +46,22 @@ export interface ManagementFeeTemplateWithItems extends ManagementFeeTemplate {
   items: (ManagementFeeTemplateItem & { fee_item: ManagementFeeItem })[];
 }
 
+// actual_cost(실비) 항목의 건별 수기 기록 — 승선기록 기반 자동계산 대상이 아니라, 그 달에
+// 실제로 발생한 건만 필요한 만큼 직접 입력한다 (승하선 비용상세 시트와 1:1 대응).
+export interface ManagementFeeActualCostEntry {
+  id: string;
+  period_id: string;
+  fee_item_id: string;
+  crew_member_id?: string | null;
+  currency: string;
+  unit_price?: number | null;
+  quantity?: number | null;
+  amount_usd: number;
+  remark?: string | null;
+  created_by?: string;
+  created_at: string;
+}
+
 export interface ShipManagementFeeAssignment {
   id: string;
   ship_id: string;
@@ -1040,4 +1056,86 @@ export async function getEffectiveTemplateMapForShips(
     result[ship.id] = null;
   }
   return result;
+}
+
+// actual_cost(실비) 항목 건별 기록 CRUD
+export async function getActualCostEntries(periodId: string): Promise<ManagementFeeActualCostEntry[]> {
+  const { data, error } = await supabase
+    .from('management_fee_actual_cost_entries')
+    .select('*')
+    .eq('period_id', periodId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching management fee actual cost entries:', error);
+    return [];
+  }
+
+  return (data || []).map(item => ({
+    ...item,
+    id: String(item.id),
+    period_id: String(item.period_id),
+    fee_item_id: String(item.fee_item_id),
+    crew_member_id: item.crew_member_id ? String(item.crew_member_id) : null,
+    amount_usd: Number(item.amount_usd),
+  })) as ManagementFeeActualCostEntry[];
+}
+
+export async function addActualCostEntry(entry: {
+  period_id: string;
+  fee_item_id: string;
+  crew_member_id?: string | null;
+  currency: string;
+  unit_price?: number | null;
+  quantity?: number | null;
+  amount_usd: number;
+  remark?: string | null;
+}): Promise<ManagementFeeActualCostEntry | null> {
+  const currentUser = await getCurrentUser();
+
+  const { data, error } = await supabase
+    .from('management_fee_actual_cost_entries')
+    .insert([{ ...entry, created_by: currentUser?.id }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding management fee actual cost entry:', error);
+    return null;
+  }
+
+  return data ? { ...data, id: String(data.id), amount_usd: Number(data.amount_usd) } as ManagementFeeActualCostEntry : null;
+}
+
+export async function updateActualCostEntry(
+  id: string,
+  updates: Partial<Pick<ManagementFeeActualCostEntry, 'fee_item_id' | 'crew_member_id' | 'currency' | 'unit_price' | 'quantity' | 'amount_usd' | 'remark'>>,
+): Promise<ManagementFeeActualCostEntry | null> {
+  const { data, error } = await supabase
+    .from('management_fee_actual_cost_entries')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating management fee actual cost entry:', error);
+    return null;
+  }
+
+  return data ? { ...data, id: String(data.id), amount_usd: Number(data.amount_usd) } as ManagementFeeActualCostEntry : null;
+}
+
+export async function deleteActualCostEntry(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('management_fee_actual_cost_entries')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting management fee actual cost entry:', error);
+    return false;
+  }
+
+  return true;
 }

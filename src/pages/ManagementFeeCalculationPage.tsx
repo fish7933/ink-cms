@@ -20,6 +20,7 @@ import {
   type ManagementFeeLedgerData,
 } from '@/services/management-fee-calc.service';
 import type { Ship } from '@/lib/store';
+import ManagementFeeActualCostEntriesSection from '@/components/management-fee/ManagementFeeActualCostEntriesSection';
 
 const STATUS_LABELS: Record<string, string> = { none: '미생성', draft: '임시저장' };
 const STATUS_COLORS: Record<string, string> = {
@@ -158,9 +159,7 @@ export default function ManagementFeeCalculationPage() {
     if (!ledgerPeriodId) return;
     setRegenerating(true);
     try {
-      const user = await getCurrentUser();
-      if (!user) return;
-      await managementFeeCalcService.regeneratePeriod(ledgerPeriodId, user.id);
+      await managementFeeCalcService.regeneratePeriod(ledgerPeriodId);
       toast({ title: '재계산 완료' });
       await loadRows(yearMonth, ships);
       const updatedRow = rows.find(r => r.period_id === ledgerPeriodId);
@@ -391,6 +390,17 @@ export default function ManagementFeeCalculationPage() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+
+                {/* 실비(수기입력) 항목 기록 — 승·하선 비용상세와 1:1 대응 */}
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">실비 항목 기록</h3>
+                  <ManagementFeeActualCostEntriesSection
+                    periodId={ledgerPeriodId}
+                    shipId={ledgerData.period.ship_id}
+                    entries={ledgerData.actual_cost_entries}
+                    onChanged={() => loadLedger(ledgerPeriodId)}
+                  />
                 </div>
               </>
             )}

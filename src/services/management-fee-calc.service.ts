@@ -179,25 +179,11 @@ function buildShipManagementFeeLines(input: {
           currency: matched.currency,
           ship_cap_amount: matched.ship_cap_amount ?? null,
         });
-      } else {
-        // actual_cost — 자동계산 제외, 청구서 작성 시 수기 입력 대상이라는 표시로 라인만 생성
-        results.push({
-          embarkation_record_id: rec.id,
-          crew_member_id: rec.crew_member_id,
-          rank_id: rec.rank_id,
-          fee_item_id: feeItemId,
-          template_item_id: matched.id,
-          billing_basis: 'actual_cost',
-          period_start_date: null,
-          period_end_date: null,
-          days_served: null,
-          days_in_month: null,
-          standard_amount: null,
-          amount: null,
-          currency: matched.currency,
-          ship_cap_amount: null,
-        });
       }
+      // actual_cost(실비) 항목은 승선기록마다 자동으로 라인을 만들지 않는다 — 그 달에 실제로
+      // 발생한 건만 관리비 계산 화면의 "실비 항목 기록"에서 건별로 직접 입력한다
+      // (management_fee_actual_cost_entries). 어떤 항목이 이 선박에 배정돼 있는지는
+      // 템플릿에서 그대로 조회 가능하므로 여기서 빈 라인을 만들 필요가 없다.
     }
   }
 
@@ -231,6 +217,19 @@ export interface ManagementFeeLedgerItemTotal {
   was_capped: boolean;
 }
 
+export interface ManagementFeeLedgerActualCostEntry {
+  id: string;
+  fee_item_id: string;
+  fee_item_name: string;
+  crew_member_id: string | null;
+  crew_name: string | null;
+  currency: string;
+  unit_price: number | null;
+  quantity: number | null;
+  amount_usd: number;
+  remark: string | null;
+}
+
 export interface ManagementFeeLedgerData {
   period: ManagementFeePeriod;
   ship_name: string;
@@ -241,6 +240,7 @@ export interface ManagementFeeLedgerData {
   fee_item_columns: string[];
   rows: ManagementFeeLedgerRow[];
   item_totals: ManagementFeeLedgerItemTotal[];
+  actual_cost_entries: ManagementFeeLedgerActualCostEntry[];
 }
 
 export const managementFeeCalcService = {
@@ -494,14 +494,98 @@ export const managementFeeCalcService = {
     return result;
   },
 
-  // draft 회차를 지우고(라인/캡은 CASCADE로 함께 삭제) 같은 조건으로 다시 생성한다.
-  async regeneratePeriod(periodId: string, createdBy: string): Promise<void> {
+  // 같은 조건으로 라인/상한 캡만 다시 계산한다. period 행 자체는 지우지 않는다 — 지웠다 새로
+  // 만들면 management_fee_actual_cost_entries(실비 항목 수기 기록)가 CASCADE로 함께 삭제되어
+  // 버리는 결과가 되므로, period_id는 유지한 채 라인/캡만 삭제 후 재계산한다.
+  async regeneratePeriod(periodId: string): Promise<void> {
     const period = await this.getPeriodById(periodId);
     if (!period) throw new Error('회차를 찾을 수 없습니다.');
-    const { error } = await supabase.from('management_fee_periods').delete().eq('id', periodId);
-    if (error) throw error;
-    const result = await this.generateForShips([period.ship_id], period.year_month, createdBy);
-    if (result.failed.length > 0) throw new Error(result.failed[0].error);
+    const shipId = period.ship_id;
+    const yearMonth = period.year_month;
+    const { start, end } = monthRange(yearMonth);
+
+    const { data: shipRaw, error: shipError } = await supabase.from('ships').select('id, fleet_id, owner_id, ship_type').eq('id', shipId).single();
+    if (shipError || !shipRaw) throw shipError || new Error('선박을 찾을 수 없습니다.');
+    const shipType = shipRaw.ship_type as string | undefined;
+
+    const template = await getEffectiveTemplateForShip(shipId);
+
+    const { data: recordsRaw, error: recError } = await supabase
+      .from('crew_embarkation_records')
+      .select('id, ship_id, crew_member_id, rank_id, embark_date, disembark_date')
+      .eq('ship_id', shipId)
+      .lte('embark_date', end)
+      .or(`disembark_date.is.null,disembark_date.gte.${start}`);
+    if (recError) throw recError;
+    const records = (recordsRaw || []) as EmbarkRecord[];
+
+    const rankIds = [...new Set(records.map(r => r.rank_id).filter((v): v is string => !!v))];
+    const { data: ranks } = rankIds.length > 0 ? await supabase.from('ranks').select('id, rank_category').in('id', rankIds) : { data: [] as { id: string; rank_category: string }[] };
+    const rankCategoryByRankId = new Map((ranks || []).map(r => [r.id, r.rank_category]));
+
+    const crewMemberIds = [...new Set(records.map(r => r.crew_member_id))];
+    const { data: crewMembers } = crewMemberIds.length > 0
+      ? await supabase.from('crew_members').select('id, nationality').in('id', crewMemberIds)
+      : { data: [] as { id: string; nationality?: string }[] };
+    const nationalityByCrewMemberId = new Map((crewMembers || []).map(c => [c.id, c.nationality]));
+
+    let templateItems: ManagementFeeTemplateItem[] = [];
+    if (template) {
+      const { data: templateItemsRaw } = await supabase.from('management_fee_template_items').select('*').eq('template_id', template.id);
+      templateItems = (templateItemsRaw || []).map(item => ({
+        ...item, id: String(item.id), template_id: String(item.template_id), fee_item_id: String(item.fee_item_id), amount: Number(item.amount),
+      }));
+    }
+
+    const built = buildShipManagementFeeLines({
+      yearMonth, shipType, templateItems, records, rankCategoryByRankId, nationalityByCrewMemberId,
+    });
+
+    await supabase.from('management_fee_lines').delete().eq('period_id', periodId);
+    await supabase.from('management_fee_ship_item_caps').delete().eq('period_id', periodId);
+
+    if (built.length > 0) {
+      const { error: lineError } = await supabase.from('management_fee_lines').insert(built.map(b => ({
+        period_id: periodId,
+        embarkation_record_id: b.embarkation_record_id,
+        crew_member_id: b.crew_member_id,
+        rank_id: b.rank_id,
+        fee_item_id: b.fee_item_id,
+        template_item_id: b.template_item_id,
+        billing_basis: b.billing_basis,
+        period_start_date: b.period_start_date,
+        period_end_date: b.period_end_date,
+        days_served: b.days_served,
+        days_in_month: b.days_in_month,
+        standard_amount: b.standard_amount,
+        amount: b.amount,
+        currency: b.currency,
+      })));
+      if (lineError) throw lineError;
+    }
+
+    const capGroups = new Map<string, { feeItemId: string; currency: string; cap: number; total: number }>();
+    for (const line of built) {
+      if (line.amount == null || line.ship_cap_amount == null) continue;
+      const key = `${line.fee_item_id}::${line.currency}`;
+      const g = capGroups.get(key) || { feeItemId: line.fee_item_id, currency: line.currency, cap: line.ship_cap_amount, total: 0 };
+      g.total += line.amount;
+      capGroups.set(key, g);
+    }
+    if (capGroups.size > 0) {
+      const { error: capError } = await supabase.from('management_fee_ship_item_caps').insert(
+        [...capGroups.values()].map(g => ({
+          period_id: periodId,
+          fee_item_id: g.feeItemId,
+          currency: g.currency,
+          cap_amount: g.cap,
+          raw_total: g.total,
+          billed_total: Math.min(g.total, g.cap),
+          was_capped: g.total > g.cap,
+        }))
+      );
+      if (capError) throw capError;
+    }
   },
 
   async deletePeriod(periodId: string): Promise<void> {
@@ -528,11 +612,18 @@ export const managementFeeCalcService = {
     if (linesError) { console.error('Error fetching management fee lines:', linesError); return null; }
 
     const { data: caps } = await supabase.from('management_fee_ship_item_caps').select('*').eq('period_id', periodId);
+    const { data: actualCostEntriesRaw } = await supabase.from('management_fee_actual_cost_entries').select('*').eq('period_id', periodId).order('created_at', { ascending: false });
 
-    const crewMemberIds = [...new Set((lines || []).map(l => l.crew_member_id))];
+    const crewMemberIds = [...new Set([
+      ...(lines || []).map(l => l.crew_member_id),
+      ...(actualCostEntriesRaw || []).map(e => e.crew_member_id).filter((v): v is string => !!v),
+    ])];
     const embarkationRecordIds = [...new Set((lines || []).map(l => l.embarkation_record_id))];
     const rankIds = [...new Set((lines || []).map(l => l.rank_id).filter((v): v is string => !!v))];
-    const feeItemIds = [...new Set((lines || []).map(l => l.fee_item_id))];
+    const feeItemIds = [...new Set([
+      ...(lines || []).map(l => l.fee_item_id),
+      ...(actualCostEntriesRaw || []).map(e => e.fee_item_id),
+    ])];
 
     const [{ data: crewMembers }, { data: embarkRecords }, { data: ranks }, { data: feeItems }] = await Promise.all([
       crewMemberIds.length > 0 ? supabase.from('crew_members').select('id, name, name_english, nationality').in('id', crewMemberIds) : Promise.resolve({ data: [] as { id: string; name: string; name_english?: string; nationality?: string }[] }),
@@ -544,6 +635,22 @@ export const managementFeeCalcService = {
     const embarkById = new Map((embarkRecords || []).map(r => [r.id, r]));
     const rankCodeById = new Map((ranks || []).map(r => [r.id, r.rank_code]));
     const feeItemById = new Map((feeItems || []).map(f => [String(f.id), f as ManagementFeeItem]));
+
+    const actualCostEntries: ManagementFeeLedgerActualCostEntry[] = (actualCostEntriesRaw || []).map(e => {
+      const crew = e.crew_member_id ? crewById.get(e.crew_member_id) : undefined;
+      return {
+        id: String(e.id),
+        fee_item_id: String(e.fee_item_id),
+        fee_item_name: feeItemById.get(String(e.fee_item_id))?.name || 'Unknown',
+        crew_member_id: e.crew_member_id ? String(e.crew_member_id) : null,
+        crew_name: crew ? crewDisplayName(crew) : null,
+        currency: e.currency,
+        unit_price: e.unit_price == null ? null : Number(e.unit_price),
+        quantity: e.quantity == null ? null : Number(e.quantity),
+        amount_usd: Number(e.amount_usd),
+        remark: e.remark,
+      };
+    });
 
     const feeItemColumns = [...feeItemIds]
       .sort((a, b) => (feeItemById.get(a)?.display_order ?? 0) - (feeItemById.get(b)?.display_order ?? 0))
@@ -601,6 +708,24 @@ export const managementFeeCalcService = {
         was_capped: false,
       });
     }
+
+    // 실비 항목 기록도 항목별 합계에 반영 (전부 USD 환산 금액이라 상한 개념 없이 그대로 합산)
+    const actualCostTotalsByFeeItem = new Map<string, number>();
+    for (const e of actualCostEntries) {
+      actualCostTotalsByFeeItem.set(e.fee_item_id, (actualCostTotalsByFeeItem.get(e.fee_item_id) || 0) + e.amount_usd);
+    }
+    for (const [feeItemId, total] of actualCostTotalsByFeeItem) {
+      itemTotals.push({
+        fee_item_id: feeItemId,
+        fee_item_name: feeItemById.get(feeItemId)?.name || 'Unknown',
+        currency: 'USD',
+        raw_total: total,
+        cap_amount: null,
+        billed_total: total,
+        was_capped: false,
+      });
+    }
+
     itemTotals.sort((a, b) => (feeItemById.get(a.fee_item_id)?.display_order ?? 0) - (feeItemById.get(b.fee_item_id)?.display_order ?? 0));
 
     return {
@@ -613,6 +738,7 @@ export const managementFeeCalcService = {
       fee_item_columns: feeItemColumns,
       rows: [...rowsByCrewRecord.values()],
       item_totals: itemTotals,
+      actual_cost_entries: actualCostEntries,
     };
   },
 };
