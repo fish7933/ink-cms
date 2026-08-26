@@ -397,13 +397,13 @@ export const managementFeeCalcService = {
 
     const rankIds = [...new Set(records.map(r => r.rank_id).filter((v): v is string => !!v))];
     const { data: ranks } = rankIds.length > 0 ? await supabase.from('ranks').select('id, rank_category').in('id', rankIds) : { data: [] as { id: string; rank_category: string }[] };
-    const rankCategoryByRankId = new Map((ranks || []).map(r => [r.id, r.rank_category]));
+    const rankCategoryByRankId = new Map<string, string>((ranks || []).map(r => [r.id, r.rank_category] as [string, string]));
 
     const crewMemberIds = [...new Set(records.map(r => r.crew_member_id))];
     const { data: crewMembers } = crewMemberIds.length > 0
       ? await supabase.from('crew_members').select('id, nationality').in('id', crewMemberIds)
       : { data: [] as { id: string; nationality?: string }[] };
-    const nationalityByCrewMemberId = new Map((crewMembers || []).map(c => [c.id, c.nationality]));
+    const nationalityByCrewMemberId = new Map<string, string | undefined>((crewMembers || []).map(c => [c.id, c.nationality] as [string, string | undefined]));
 
     const templateIds = [...new Set(Object.values(templateMap).filter((t): t is ManagementFeeTemplate => !!t).map(t => t.id))];
     const { data: templateItemsRaw } = templateIds.length > 0
@@ -521,13 +521,13 @@ export const managementFeeCalcService = {
 
     const rankIds = [...new Set(records.map(r => r.rank_id).filter((v): v is string => !!v))];
     const { data: ranks } = rankIds.length > 0 ? await supabase.from('ranks').select('id, rank_category').in('id', rankIds) : { data: [] as { id: string; rank_category: string }[] };
-    const rankCategoryByRankId = new Map((ranks || []).map(r => [r.id, r.rank_category]));
+    const rankCategoryByRankId = new Map<string, string>((ranks || []).map(r => [r.id, r.rank_category] as [string, string]));
 
     const crewMemberIds = [...new Set(records.map(r => r.crew_member_id))];
     const { data: crewMembers } = crewMemberIds.length > 0
       ? await supabase.from('crew_members').select('id, nationality').in('id', crewMemberIds)
       : { data: [] as { id: string; nationality?: string }[] };
-    const nationalityByCrewMemberId = new Map((crewMembers || []).map(c => [c.id, c.nationality]));
+    const nationalityByCrewMemberId = new Map<string, string | undefined>((crewMembers || []).map(c => [c.id, c.nationality] as [string, string | undefined]));
 
     let templateItems: ManagementFeeTemplateItem[] = [];
     if (template) {
@@ -631,7 +631,7 @@ export const managementFeeCalcService = {
       rankIds.length > 0 ? supabase.from('ranks').select('id, rank_code').in('id', rankIds) : Promise.resolve({ data: [] as { id: string; rank_code: string }[] }),
       feeItemIds.length > 0 ? supabase.from('management_fee_items').select('*').in('id', feeItemIds) : Promise.resolve({ data: [] as ManagementFeeItem[] }),
     ]);
-    const crewById = new Map((crewMembers || []).map(c => [c.id, c]));
+    const crewById = new Map<string, { id: string; name: string; name_english?: string; nationality?: string }>((crewMembers || []).map(c => [c.id, c] as [string, typeof c]));
     const embarkById = new Map((embarkRecords || []).map(r => [r.id, r]));
     const rankCodeById = new Map((ranks || []).map(r => [r.id, r.rank_code]));
     const feeItemById = new Map((feeItems || []).map(f => [String(f.id), f as ManagementFeeItem]));

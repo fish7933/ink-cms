@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
-import { Receipt, RefreshCw, Trash2, Search, X } from 'lucide-react';
+import { Receipt, RefreshCw, Trash2, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,7 +20,9 @@ import {
   type ManagementFeeLedgerData,
 } from '@/services/management-fee-calc.service';
 import type { Ship } from '@/lib/store';
+import type { Company, Fleet } from '@/types/models';
 import ManagementFeeActualCostEntriesSection from '@/components/management-fee/ManagementFeeActualCostEntriesSection';
+import OwnerFleetShipCheckTree from '@/components/management-fee/OwnerFleetShipCheckTree';
 
 const STATUS_LABELS: Record<string, string> = { none: '미생성', draft: '임시저장' };
 const STATUS_COLORS: Record<string, string> = {
@@ -37,8 +39,9 @@ export default function ManagementFeeCalculationPage() {
   const { toast } = useToast();
 
   const [ships, setShips] = useState<Ship[]>([]);
-  const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
-  const [fleets, setFleets] = useState<{ id: string; name: string }[]>([]);
+  const [owners, setOwners] = useState<Company[]>([]);
+  const [fleets, setFleets] = useState<Fleet[]>([]);
+  const [showQuickSelect, setShowQuickSelect] = useState(false);
   const [yearMonth, setYearMonth] = useState(currentYearMonth());
   const [rows, setRows] = useState<ManagementFeeDashboardRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,11 +74,11 @@ export default function ManagementFeeCalculationPage() {
       const ownerIds = [...new Set(scopedShips.map(s => s.owner_id).filter((v): v is string => !!v))];
       const fleetIds = [...new Set(scopedShips.map(s => s.fleet_id).filter((v): v is string => !!v))];
       const [{ data: ownerRows }, { data: fleetRows }] = await Promise.all([
-        ownerIds.length > 0 ? supabase.from('companies').select('id, name').in('id', ownerIds).order('name') : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-        fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds).order('name') : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        ownerIds.length > 0 ? supabase.from('companies').select('*').in('id', ownerIds).order('name') : Promise.resolve({ data: [] as Company[] }),
+        fleetIds.length > 0 ? supabase.from('fleets').select('*').in('id', fleetIds).order('name') : Promise.resolve({ data: [] as Fleet[] }),
       ]);
-      setOwners(ownerRows || []);
-      setFleets(fleetRows || []);
+      setOwners((ownerRows || []) as Company[]);
+      setFleets((fleetRows || []) as Fleet[]);
     })();
   }, []);
 
@@ -116,7 +119,7 @@ export default function ManagementFeeCalculationPage() {
     return [...byOwner.values()].sort((a, b) => a.ownerName.localeCompare(b.ownerName));
   }, [filteredRows]);
 
-  const generatableIds = filteredRows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'none').map(r => r.ship_id);
+  const generatableIds = rows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'none').map(r => r.ship_id);
   const allSelectableIds = filteredRows.map(r => r.ship_id);
 
   const toggleSelect = (shipId: string) => setSelectedIds(prev => prev.includes(shipId) ? prev.filter(id => id !== shipId) : [...prev, shipId]);
@@ -230,6 +233,28 @@ export default function ManagementFeeCalculationPage() {
             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="선박명" className="h-7 text-xs w-44 pl-7" />
           </div>
         </div>
+      </div>
+
+      <div className="border rounded-md">
+        <button
+          type="button"
+          onClick={() => setShowQuickSelect(v => !v)}
+          className="w-full flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+        >
+          {showQuickSelect ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+          전체 / 선주 / 플릿 / 선박 단위로 빠르게 선택
+        </button>
+        {showQuickSelect && (
+          <div className="px-3 pb-3 pt-1 border-t">
+            <OwnerFleetShipCheckTree
+              ships={ships}
+              companies={owners}
+              fleets={fleets}
+              selectedShipIds={new Set(selectedIds)}
+              onChange={ids => setSelectedIds([...ids])}
+            />
+          </div>
+        )}
       </div>
 
       {selectedIds.length > 0 && (

@@ -40,6 +40,7 @@ const ManagementFeeTemplateFormPage = lazy(() => import('@/pages/ManagementFeeTe
 const ManagementFeeTemplateDetailPage = lazy(() => import('@/pages/ManagementFeeTemplateDetailPage'));
 const ManagementFeeCalculationPage = lazy(() => import('@/pages/ManagementFeeCalculationPage'));
 const ManagementFeeInvoicePage = lazy(() => import('@/pages/ManagementFeeInvoicePage'));
+const ExchangeRateManagementPage = lazy(() => import('@/pages/ExchangeRateManagementPage'));
 const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
 const AllowanceTypesManagementPage = lazy(() => import('@/pages/AllowanceTypesManagementPage'));
 const CrewPayrollManagementPage = lazy(() => import('@/pages/CrewPayrollManagementPage'));
@@ -145,6 +146,7 @@ export const routeConfig: RouteEntry[] = [
   { path: '/management-fee/templates', component: ManagementFeeTemplatesPage },
   { path: '/management-fee-calculation', component: ManagementFeeCalculationPage },
   { path: '/management-fee-invoice', component: ManagementFeeInvoicePage },
+  { path: '/exchange-rate-management', component: ExchangeRateManagementPage },
   { path: '/shore-positions', component: ShorePositionsPage },
   { path: '/org-chart', component: OrgChartManagementPage },
   { path: '/document-types', component: DocumentTypesManagementPage },

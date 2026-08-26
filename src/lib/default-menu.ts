@@ -333,13 +333,22 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 7,
         is_active: true,
       },
+    ],
+  },
+  {
+    id: 'billing',
+    label: '청구 관리',
+    icon: 'FileSpreadsheet',
+    order: 7,
+    is_active: true,
+    items: [
       {
         id: 'management-fee-templates',
         label: '관리비 템플릿',
         path: '/management-fee/templates',
         icon: 'FileText',
         roles: ['ship_manager'],
-        order: 8,
+        order: 1,
         is_active: true,
       },
       {
@@ -348,7 +357,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/management-fee-items',
         icon: 'Coins',
         roles: ['ship_manager'],
-        order: 9,
+        order: 2,
         is_active: true,
       },
       {
@@ -357,7 +366,7 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/management-fee-calculation',
         icon: 'Receipt',
         roles: ['ship_manager'],
-        order: 10,
+        order: 3,
         is_active: true,
       },
       {
@@ -366,7 +375,16 @@ export const defaultMenuStructure: MenuCategory[] = [
         path: '/management-fee-invoice',
         icon: 'FileSpreadsheet',
         roles: ['ship_manager'],
-        order: 11,
+        order: 4,
+        is_active: true,
+      },
+      {
+        id: 'exchange-rate-management',
+        label: '환율 관리',
+        path: '/exchange-rate-management',
+        icon: 'Landmark',
+        roles: ['ship_manager'],
+        order: 5,
         is_active: true,
       },
     ],
@@ -375,7 +393,7 @@ export const defaultMenuStructure: MenuCategory[] = [
     id: 'reports',
     label: '보고서/통계',
     icon: 'BarChart3',
-    order: 7,
+    order: 8,
     is_active: true,
     items: [
       {
@@ -393,7 +411,7 @@ export const defaultMenuStructure: MenuCategory[] = [
     id: 'settings',
     label: '설정',
     icon: 'Settings',
-    order: 8,
+    order: 9,
     is_active: true,
     items: [
       {
@@ -475,7 +493,7 @@ export const defaultMenuStructure: MenuCategory[] = [
     id: 'accounting',
     label: '경리',
     icon: 'Landmark',
-    order: 9,
+    order: 10,
     is_active: true,
     items: [
       {
