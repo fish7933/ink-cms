@@ -360,6 +360,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 10,
         is_active: true,
       },
+      {
+        id: 'management-fee-invoice',
+        label: '관리비 청구서',
+        path: '/management-fee-invoice',
+        icon: 'FileSpreadsheet',
+        roles: ['ship_manager'],
+        order: 11,
+        is_active: true,
+      },
     ],
   },
   {
