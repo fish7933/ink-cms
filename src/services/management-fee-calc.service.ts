@@ -157,7 +157,7 @@ function buildShipManagementFeeLines(input: {
           days_served: daysServed,
           days_in_month: totalDays,
           standard_amount: rate,
-          amount: Math.round(rate * ratio),
+          amount: Math.round(rate * ratio * 100) / 100,
           currency: matched.currency,
           ship_cap_amount: matched.ship_cap_amount ?? null,
         });
