@@ -35,6 +35,16 @@ const PAYMENT_TYPE_COLOR: Record<string, string> = {
   deferred: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
+const OWNER_BILLING_LABEL: Record<string, string> = {
+  monthly: '매월',
+  on_disembark: '하선월',
+};
+
+const OWNER_BILLING_COLOR: Record<string, string> = {
+  monthly: 'bg-teal-50 text-teal-700 border-teal-200',
+  on_disembark: 'bg-orange-50 text-orange-700 border-orange-200',
+};
+
 export default function SalaryComponentsPage() {
   const navigate = useNavigate();
   const [components, setComponents] = useState<SalaryComponent[]>([]);
@@ -48,6 +58,7 @@ export default function SalaryComponentsPage() {
     display_order: 0,
     component_type: 'earning' as 'earning' | 'deduction',
     payment_type: 'monthly' as 'monthly' | 'deferred',
+    owner_billing_basis: 'monthly' as 'monthly' | 'on_disembark',
     skip_deduction_on_partial_month: false,
   });
   const [error, setError] = useState('');
@@ -92,6 +103,7 @@ export default function SalaryComponentsPage() {
         display_order: component.display_order,
         component_type: component.component_type,
         payment_type: component.payment_type,
+        owner_billing_basis: component.owner_billing_basis || 'monthly',
         skip_deduction_on_partial_month: component.skip_deduction_on_partial_month || false,
       });
       setFormView({ id: component.id });
@@ -103,6 +115,7 @@ export default function SalaryComponentsPage() {
         display_order: typeComponents.length + 1,
         component_type: activeTab,
         payment_type: 'monthly',
+        owner_billing_basis: 'monthly',
         skip_deduction_on_partial_month: false,
       });
       setFormView({});
@@ -240,7 +253,7 @@ export default function SalaryComponentsPage() {
               </div>
               {activeTab === 'earning' && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">지급 방식</Label>
+                  <Label className="text-xs">지급 방식 (선원 기준)</Label>
                   <div className="flex gap-2">
                     {(['monthly', 'deferred'] as const).map(type => (
                       <button
@@ -258,6 +271,31 @@ export default function SalaryComponentsPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+              {activeTab === 'earning' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">선주 청구 시점</Label>
+                  <div className="flex gap-2">
+                    {(['monthly', 'on_disembark'] as const).map(basis => (
+                      <button
+                        key={basis}
+                        onClick={() => setFormData({ ...formData, owner_billing_basis: basis })}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                          formData.owner_billing_basis === basis
+                            ? basis === 'monthly'
+                              ? 'bg-teal-600 text-white border-teal-600'
+                              : 'bg-orange-500 text-white border-orange-500'
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        {OWNER_BILLING_LABEL[basis]}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    선원 지급 방식과 독립적인 설정입니다. 예: L/P는 선원에게는 하선 후 지급(후불성)이지만 선주에게는 매달 적립분을 청구합니다.
+                  </p>
                 </div>
               )}
               {activeTab === 'deduction' && (
@@ -316,13 +354,17 @@ export default function SalaryComponentsPage() {
                   : '등록된 공제 항목이 없습니다. (예: 본선불, 노조비)'}
               </div>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12 text-xs"></TableHead>
                     <TableHead className="text-xs">항목명</TableHead>
                     {activeTab === 'earning' && (
-                      <TableHead className="text-xs w-28">지급 방식</TableHead>
+                      <TableHead className="text-xs w-24 whitespace-nowrap">지급 방식</TableHead>
+                    )}
+                    {activeTab === 'earning' && (
+                      <TableHead className="text-xs w-24 whitespace-nowrap">선주 청구</TableHead>
                     )}
                     {activeTab === 'deduction' && (
                       <TableHead className="text-xs w-32">부분월 처리</TableHead>
@@ -341,8 +383,15 @@ export default function SalaryComponentsPage() {
                           <TableCell className="font-medium text-sm">{component.name}</TableCell>
                           {activeTab === 'earning' && (
                             <TableCell>
-                              <span className={`text-xs px-2 py-0.5 rounded border ${PAYMENT_TYPE_COLOR[component.payment_type]}`}>
+                              <span className={`text-xs px-2 py-0.5 rounded border whitespace-nowrap ${PAYMENT_TYPE_COLOR[component.payment_type]}`}>
                                 {PAYMENT_TYPE_LABEL[component.payment_type]}
+                              </span>
+                            </TableCell>
+                          )}
+                          {activeTab === 'earning' && (
+                            <TableCell>
+                              <span className={`text-xs px-2 py-0.5 rounded border whitespace-nowrap ${OWNER_BILLING_COLOR[component.owner_billing_basis || 'monthly']}`}>
+                                {OWNER_BILLING_LABEL[component.owner_billing_basis || 'monthly']}
                               </span>
                             </TableCell>
                           )}
@@ -376,6 +425,7 @@ export default function SalaryComponentsPage() {
                   </DndContext>
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

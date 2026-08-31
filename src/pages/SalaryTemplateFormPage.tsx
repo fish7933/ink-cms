@@ -96,7 +96,7 @@ export default function SalaryTemplateFormPage() {
 
             const ships = await getShips();
             const templateMap = await getEffectiveTemplateMapForShips(ships);
-            setAssignedShips(ships.filter(s => templateMap[s.id]?.id === id).map(s => s.name));
+            setAssignedShips(ships.filter(s => templateMap[s.id]?.id === id && s.is_active !== false).map(s => s.name));
 
             const hist = await getSalaryTemplateHistory(id);
             setHistory(hist.filter(h => h.id !== id));

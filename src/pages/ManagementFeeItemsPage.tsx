@@ -24,12 +24,14 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 
 const BILLING_BASIS_LABEL: Record<string, string> = {
   monthly: '월정기(일할계산)',
+  monthly_flat: '월정기(전액)',
   one_time: '1회성(승선월 전액)',
   actual_cost: '실비(수기입력)',
 };
 
 const BILLING_BASIS_COLOR: Record<string, string> = {
   monthly: 'bg-blue-50 text-blue-700 border-blue-200',
+  monthly_flat: 'bg-cyan-50 text-cyan-700 border-cyan-200',
   one_time: 'bg-purple-50 text-purple-700 border-purple-200',
   actual_cost: 'bg-gray-50 text-gray-600 border-gray-200',
 };
@@ -44,7 +46,7 @@ export default function ManagementFeeItemsPage() {
     name: '',
     description: '',
     display_order: 0,
-    default_billing_basis: 'monthly' as 'monthly' | 'one_time' | 'actual_cost',
+    default_billing_basis: 'monthly' as 'monthly' | 'monthly_flat' | 'one_time' | 'actual_cost',
   });
   const [error, setError] = useState('');
 
@@ -192,7 +194,7 @@ export default function ManagementFeeItemsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs">기본 과금 방식</Label>
                 <div className="flex gap-2">
-                  {(['monthly', 'one_time', 'actual_cost'] as const).map(basis => (
+                  {(['monthly', 'monthly_flat', 'one_time', 'actual_cost'] as const).map(basis => (
                     <button
                       key={basis}
                       onClick={() => setFormData({ ...formData, default_billing_basis: basis })}

@@ -8,7 +8,7 @@ export interface ManagementFeeItem {
   description?: string;
   display_order: number;
   is_active: boolean;
-  default_billing_basis: 'monthly' | 'one_time' | 'actual_cost';
+  default_billing_basis: 'monthly' | 'monthly_flat' | 'one_time' | 'actual_cost';
   created_at: string;
   updated_at: string;
 }
@@ -34,10 +34,11 @@ export interface ManagementFeeTemplateItem {
   rank_category?: 'officer' | 'rating' | null; // null = 직급구분 무관
   nationality_code?: string | null; // null = 국적 무관
   ship_type?: string | null; // null = 선종 무관
-  billing_basis: 'monthly' | 'one_time' | 'actual_cost';
+  billing_basis: 'monthly' | 'monthly_flat' | 'one_time' | 'actual_cost';
   amount: number;
   currency: string;
   ship_cap_amount?: number | null; // 선박×월 합계 상한 (같은 fee_item_id의 모든 행이 동일해야 함)
+  is_vat_applicable: boolean; // 부가세 과세 대상 항목 여부 (같은 fee_item_id의 모든 행이 동일해야 함)
   created_at: string;
   updated_at: string;
 }
@@ -94,10 +95,11 @@ export type ManagementFeeTemplateItemInput = {
   rank_category?: 'officer' | 'rating' | null;
   nationality_code?: string | null;
   ship_type?: string | null;
-  billing_basis: 'monthly' | 'one_time' | 'actual_cost';
+  billing_basis: 'monthly' | 'monthly_flat' | 'one_time' | 'actual_cost';
   amount: number;
   currency: string;
   ship_cap_amount?: number | null;
+  is_vat_applicable: boolean;
 };
 
 // 같은 fee_item_id에 상한(ship_cap_amount)이 설정된 행이 여러 개면 반드시 같은 금액+통화여야 한다.
@@ -135,7 +137,7 @@ export async function getManagementFeeItems(): Promise<ManagementFeeItem[]> {
   return (data || []).map(item => ({
     ...item,
     id: String(item.id),
-    default_billing_basis: (item.default_billing_basis ?? 'monthly') as 'monthly' | 'one_time' | 'actual_cost',
+    default_billing_basis: (item.default_billing_basis ?? 'monthly') as 'monthly' | 'monthly_flat' | 'one_time' | 'actual_cost',
   })) as ManagementFeeItem[];
 }
 
@@ -298,6 +300,7 @@ export async function addManagementFeeTemplate(
       amount: item.amount,
       currency: item.currency,
       ship_cap_amount: item.ship_cap_amount ?? null,
+      is_vat_applicable: item.is_vat_applicable ?? false,
     }));
 
     const { error: itemsError } = await supabase
@@ -409,6 +412,7 @@ export async function updateManagementFeeTemplate(
         amount: item.amount,
         currency: item.currency,
         ship_cap_amount: item.ship_cap_amount ?? null,
+        is_vat_applicable: item.is_vat_applicable ?? false,
       }));
 
       const { error: itemsError } = await supabase
@@ -603,6 +607,7 @@ export async function renewManagementFeeTemplate(templateId: string, newEffectiv
       amount: i.amount,
       currency: i.currency,
       ship_cap_amount: i.ship_cap_amount,
+      is_vat_applicable: i.is_vat_applicable,
     })),
   );
 
@@ -663,6 +668,7 @@ export async function copyManagementFeeTemplate(templateId: string, newName: str
       amount: i.amount,
       currency: i.currency,
       ship_cap_amount: i.ship_cap_amount,
+      is_vat_applicable: i.is_vat_applicable,
     })),
   );
 }

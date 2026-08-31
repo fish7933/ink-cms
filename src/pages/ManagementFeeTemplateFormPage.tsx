@@ -25,10 +25,8 @@ import {
   type ManagementFeeTemplateWithItems,
 } from '@/lib/management-fee-store';
 import { getNationalities } from '@/services/nationality.service';
-import { getShipTypes } from '@/services/ship-classification.service';
 import { getShips } from '@/services/ship.service';
 import type { Nationality } from '@/types/nationality';
-import type { ShipType } from '@/types/ship-classification';
 import ManagementFeeTemplateItemRows, { newClientId, type EditableManagementFeeTemplateItem } from '@/components/management-fee/ManagementFeeTemplateItemRows';
 import ManagementFeeTemplateItemsSummary from '@/components/management-fee/ManagementFeeTemplateItemsSummary';
 
@@ -45,7 +43,6 @@ export default function ManagementFeeTemplateFormPage() {
   const [saving, setSaving] = useState(false);
   const [feeItems, setFeeItems] = useState<ManagementFeeItem[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
-  const [shipTypes, setShipTypes] = useState<ShipType[]>([]);
 
   const [formData, setFormData] = useState({ name: '', description: '', currency: 'USD' });
   const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 10));
@@ -61,12 +58,11 @@ export default function ManagementFeeTemplateFormPage() {
   useEffect(() => {
     const init = async () => {
       try {
-        const [itemsData, nationalitiesData, shipTypesData] = await Promise.all([
-          getManagementFeeItems(), getNationalities(), getShipTypes(),
+        const [itemsData, nationalitiesData] = await Promise.all([
+          getManagementFeeItems(), getNationalities(),
         ]);
         setFeeItems(itemsData);
         setNationalities(nationalitiesData);
-        setShipTypes(shipTypesData);
 
         if (isEdit && id) {
           const tmpl = await getManagementFeeTemplateWithItems(id);
@@ -84,12 +80,13 @@ export default function ManagementFeeTemplateFormPage() {
               amount: Number(i.amount),
               currency: i.currency,
               ship_cap_amount: i.ship_cap_amount != null ? Number(i.ship_cap_amount) : null,
+              is_vat_applicable: i.is_vat_applicable ?? false,
             })));
             if (activeTabId) updateTab(activeTabId, { title: `템플릿 수정: ${tmpl.name}` });
 
             const ships = await getShips();
             const templateMap = await getEffectiveTemplateMapForShips(ships);
-            setAssignedShips(ships.filter(s => templateMap[s.id]?.id === id).map(s => s.name));
+            setAssignedShips(ships.filter(s => templateMap[s.id]?.id === id && s.is_active !== false).map(s => s.name));
 
             const hist = await getManagementFeeTemplateHistory(id);
             setHistory(hist.filter(h => h.id !== id));
@@ -178,9 +175,16 @@ export default function ManagementFeeTemplateFormPage() {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                {isEdit ? '관리비 템플릿 수정' : '관리비 템플릿 추가'}
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base">
+                  {isEdit ? (formData.name || '템플릿 수정') : '관리비 템플릿 추가'}
+                </CardTitle>
+                {isEdit && (
+                  <Badge variant={!effectiveUntil ? 'default' : 'secondary'} className="text-xs">
+                    {!effectiveUntil ? '활성' : '종료된 버전'}
+                  </Badge>
+                )}
+              </div>
               <Button type="submit" size="sm" className="gap-1.5 h-8" disabled={saving || (isEdit && !!effectiveUntil)}>
                 <Save className="h-4 w-4" />
                 {saving ? '저장 중...' : '저장'}
@@ -230,13 +234,24 @@ export default function ManagementFeeTemplateFormPage() {
               </p>
             )}
 
+            {/* 설명 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">설명</Label>
+              <Textarea
+                value={formData.description}
+                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                rows={2}
+                className="text-sm"
+                placeholder="템플릿에 대한 설명을 입력하세요"
+              />
+            </div>
+
             {/* 청구 항목 조건부 행 편집 */}
             <div className="space-y-1.5">
               <Label className="text-sm">청구 항목 구성</Label>
               <ManagementFeeTemplateItemRows
                 feeItems={feeItems}
                 nationalities={nationalities}
-                shipTypes={shipTypes}
                 rows={rows}
                 onChange={setRows}
                 templateCurrency={formData.currency}
@@ -248,18 +263,6 @@ export default function ManagementFeeTemplateFormPage() {
                 <AlertDescription className="text-xs whitespace-pre-line">{error}</AlertDescription>
               </Alert>
             )}
-
-            {/* 설명 (맨 아래) */}
-            <div className="space-y-1.5">
-              <Label className="text-sm">설명</Label>
-              <Textarea
-                value={formData.description}
-                onChange={e => setFormData({ ...formData, description: e.target.value })}
-                rows={2}
-                className="text-sm"
-                placeholder="템플릿에 대한 설명을 입력하세요"
-              />
-            </div>
 
             {/* 할당된 선박 */}
             {isEdit && (

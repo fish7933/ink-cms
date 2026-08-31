@@ -58,7 +58,7 @@ interface BuiltLine {
   rank_id: string | null;
   fee_item_id: string;
   template_item_id: string;
-  billing_basis: 'monthly' | 'one_time' | 'actual_cost';
+  billing_basis: 'monthly' | 'monthly_flat' | 'one_time' | 'actual_cost';
   period_start_date: string | null;
   period_end_date: string | null;
   days_served: number | null;
@@ -158,6 +158,28 @@ function buildShipManagementFeeLines(input: {
           days_in_month: totalDays,
           standard_amount: rate,
           amount: Math.round(rate * ratio * 100) / 100,
+          currency: matched.currency,
+          ship_cap_amount: matched.ship_cap_amount ?? null,
+        });
+      } else if (matched.billing_basis === 'monthly_flat') {
+        // 일할계산 없이, 그 달에 하루라도 승선 기간과 겹치면 월 기준액 전액을 청구한다.
+        const overlapStart = rec.embark_date > start ? rec.embark_date : start;
+        const overlapEnd = rec.disembark_date && rec.disembark_date < end ? rec.disembark_date : end;
+        if (overlapStart > overlapEnd) continue;
+        const daysServed = Math.max(0, Math.min(daysBetweenInclusive(overlapStart, overlapEnd), totalDays));
+        results.push({
+          embarkation_record_id: rec.id,
+          crew_member_id: rec.crew_member_id,
+          rank_id: rec.rank_id,
+          fee_item_id: feeItemId,
+          template_item_id: matched.id,
+          billing_basis: 'monthly_flat',
+          period_start_date: overlapStart,
+          period_end_date: overlapEnd,
+          days_served: daysServed,
+          days_in_month: totalDays,
+          standard_amount: rate,
+          amount: rate,
           currency: matched.currency,
           ship_cap_amount: matched.ship_cap_amount ?? null,
         });
@@ -322,11 +344,16 @@ export const managementFeeCalcService = {
       const { start, end } = monthRange(yearMonth);
       const { data: records } = await supabase
         .from('crew_embarkation_records')
-        .select('ship_id')
+        .select('ship_id, crew_member_id')
         .in('ship_id', shipIdsWithoutPeriod)
         .lte('embark_date', end)
         .or(`disembark_date.is.null,disembark_date.gte.${start}`);
-      shipIdsWithCrewThisMonth = new Set((records || []).map(r => r.ship_id));
+      const candidateCrewIds = [...new Set((records || []).map(r => r.crew_member_id))];
+      const { data: deletedCrewRaw } = candidateCrewIds.length > 0
+        ? await supabase.from('crew_members').select('id').in('id', candidateCrewIds).not('deleted_at', 'is', null)
+        : { data: [] as { id: string }[] };
+      const deletedCrewIds = new Set((deletedCrewRaw || []).map(c => c.id));
+      shipIdsWithCrewThisMonth = new Set((records || []).filter(r => !deletedCrewIds.has(r.crew_member_id)).map(r => r.ship_id));
     }
 
     return ships
@@ -381,7 +408,15 @@ export const managementFeeCalcService = {
       .lte('embark_date', end)
       .or(`disembark_date.is.null,disembark_date.gte.${start}`);
     if (recError) { targetShipIds.forEach(id => result.failed.push({ shipId: id, error: recError.message })); return result; }
-    const records = (recordsRaw || []) as EmbarkRecord[];
+    // 승선 중이라도 관리자가 선원 목록에서 삭제(소프트삭제)한 선원은 그 이후 생성되는
+    // 관리비/급여/청구서 등에 나오면 안 된다.
+    const rawRecords = (recordsRaw || []) as EmbarkRecord[];
+    const candidateCrewIds = [...new Set(rawRecords.map(r => r.crew_member_id))];
+    const { data: deletedCrewRaw } = candidateCrewIds.length > 0
+      ? await supabase.from('crew_members').select('id').in('id', candidateCrewIds).not('deleted_at', 'is', null)
+      : { data: [] as { id: string }[] };
+    const deletedCrewIds = new Set((deletedCrewRaw || []).map(c => c.id));
+    const records = rawRecords.filter(r => !deletedCrewIds.has(r.crew_member_id));
 
     const recordsByShip = new Map<string, EmbarkRecord[]>();
     for (const r of records) {
@@ -517,7 +552,14 @@ export const managementFeeCalcService = {
       .lte('embark_date', end)
       .or(`disembark_date.is.null,disembark_date.gte.${start}`);
     if (recError) throw recError;
-    const records = (recordsRaw || []) as EmbarkRecord[];
+    // 승선 중이라도 관리자가 선원 목록에서 삭제(소프트삭제)한 선원은 재계산 결과에도 빠져야 한다.
+    const rawRecords = (recordsRaw || []) as EmbarkRecord[];
+    const candidateCrewIds = [...new Set(rawRecords.map(r => r.crew_member_id))];
+    const { data: deletedCrewRaw } = candidateCrewIds.length > 0
+      ? await supabase.from('crew_members').select('id').in('id', candidateCrewIds).not('deleted_at', 'is', null)
+      : { data: [] as { id: string }[] };
+    const deletedCrewIds = new Set((deletedCrewRaw || []).map(c => c.id));
+    const records = rawRecords.filter(r => !deletedCrewIds.has(r.crew_member_id));
 
     const rankIds = [...new Set(records.map(r => r.rank_id).filter((v): v is string => !!v))];
     const { data: ranks } = rankIds.length > 0 ? await supabase.from('ranks').select('id, rank_category').in('id', rankIds) : { data: [] as { id: string; rank_category: string }[] };

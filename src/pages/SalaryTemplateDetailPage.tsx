@@ -72,7 +72,7 @@ export default function SalaryTemplateDetailPage() {
 
       const templateMap = await getEffectiveTemplateMapForShips(ships);
       setAssignedShips(
-        ships.filter(s => templateMap[s.id]?.id === resolvedId).map(s => s.name)
+        ships.filter(s => templateMap[s.id]?.id === resolvedId && s.is_active !== false).map(s => s.name)
       );
 
       // 현재 버전을 제외한 과거 버전만 히스토리로 표시

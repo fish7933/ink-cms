@@ -164,9 +164,13 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
       }));
 
       // 선박 > 플릿 > 선주 우선순위를 반영한, 각 템플릿이 실제로 최종 적용되는 선박 목록
+      // (플릿/선주 단위로 배정되면 그 안의 비활성화 선박까지 계산상으로는 딸려오므로, 목록
+      // 표시에서는 비활성화 선박을 제외한다 — 지금 선원이 타지 않는 배는 급여 청구 대상이
+      // 아니므로 "적용 선박"에 보일 필요가 없음)
       const effectiveMap = await getEffectiveTemplateMapForShips(shipsData);
       const byTemplate: Record<string, Ship[]> = {};
       for (const ship of shipsData) {
+        if (ship.is_active === false) continue;
         const tmpl = effectiveMap[ship.id];
         if (!tmpl) continue;
         const key = String(tmpl.id);

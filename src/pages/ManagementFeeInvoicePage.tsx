@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { FileSpreadsheet, AlertTriangle, Landmark } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { FileSpreadsheet, AlertTriangle, Landmark, ChevronDown, ChevronRight } from 'lucide-react';
+import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -69,12 +70,16 @@ export default function ManagementFeeInvoicePage() {
         </p>
       </div>
 
-      <Tabs defaultValue="single">
+      <Tabs defaultValue="list">
         <TabsList className="h-9">
+          <TabsTrigger value="list" className="text-xs">청구서 목록</TabsTrigger>
           <TabsTrigger value="single" className="text-xs">단일 작성</TabsTrigger>
           <TabsTrigger value="bulk" className="text-xs">일괄 작성</TabsTrigger>
-          <TabsTrigger value="list" className="text-xs">청구서 목록</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="list" className="mt-3">
+          <InvoiceListTab />
+        </TabsContent>
 
         <TabsContent value="single" className="mt-3">
           <SingleInvoiceTab owners={owners} bankAccounts={bankAccounts} />
@@ -82,10 +87,6 @@ export default function ManagementFeeInvoicePage() {
 
         <TabsContent value="bulk" className="mt-3">
           <BulkInvoiceTab ships={ships} owners={owners} fleets={fleets} bankAccounts={bankAccounts} />
-        </TabsContent>
-
-        <TabsContent value="list" className="mt-3">
-          <InvoiceListTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -287,7 +288,7 @@ function InvoiceShipTable({ data }: { data: ManagementFeeInvoiceData }) {
               <TableHead className="text-xs text-right">재고용수당</TableHead>
               <TableHead className="text-xs text-right">관리비/실비 합</TableHead>
               <TableHead className="text-xs text-right">USD 합계</TableHead>
-              <TableHead className="text-xs text-right">KRW 합계</TableHead>
+              <TableHead className="text-xs text-right">부가세(KRW)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -305,7 +306,7 @@ function InvoiceShipTable({ data }: { data: ManagementFeeInvoiceData }) {
                   <TableCell className="text-xs text-right font-mono">{fmt(s.reemployment_allowance_total)}</TableCell>
                   <TableCell className="text-xs text-right font-mono">{fmt(feeAndActualSum)}</TableCell>
                   <TableCell className="text-xs text-right font-mono font-semibold">{fmt(s.usd_total)}</TableCell>
-                  <TableCell className="text-xs text-right font-mono font-semibold">{fmt(s.krw_total)}</TableCell>
+                  <TableCell className="text-xs text-right font-mono font-semibold text-teal-700">{fmt(s.krw_total)}</TableCell>
                 </TableRow>
               );
             })}
@@ -314,7 +315,7 @@ function InvoiceShipTable({ data }: { data: ManagementFeeInvoiceData }) {
       </div>
       <div className="flex justify-end gap-6 text-sm font-semibold pt-1">
         <span>USD 총합계: {fmt(data.grand_total_usd)}</span>
-        <span>KRW 총합계: {fmt(data.grand_total_krw)}</span>
+        <span className="text-teal-700">부가세 총합계(KRW): {fmt(data.grand_total_krw)}</span>
       </div>
     </>
   );
@@ -416,55 +417,112 @@ function BulkInvoiceTab({ ships, owners, fleets, bankAccounts }: { ships: Ship[]
 }
 
 // ── 청구서 목록 ─────────────────────────────────────────────
+// 년/월 단위로 묶어서 보여준다 — 월을 클릭하면 그 달에 작성된 청구서들이 펼쳐진다.
+// 나중에 자금일보처럼 결재 단계(임시저장 → 결재중 → 확정)를 태울 것을 염두에 두고,
+// "그 달의 청구서 묶음"을 다루는 단위 자체를 화면 구조의 기본으로 삼는다.
 function InvoiceListTab() {
+  const { openNewTab } = useTabContext();
   const [rows, setRows] = useState<ManagementFeeInvoiceListRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        setRows(await managementFeeInvoiceService.listInvoices());
+        const data = await managementFeeInvoiceService.listInvoices();
+        setRows(data);
+        // 가장 최근 월은 기본으로 펼쳐서 바로 보이게 한다.
+        if (data.length > 0) setExpandedMonths(new Set([data[0].year_month]));
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
+  const monthGroups = useMemo(() => {
+    const byMonth = new Map<string, ManagementFeeInvoiceListRow[]>();
+    for (const r of rows) {
+      const arr = byMonth.get(r.year_month) || [];
+      arr.push(r);
+      byMonth.set(r.year_month, arr);
+    }
+    return [...byMonth.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [rows]);
+
+  const toggleMonth = (ym: string) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      if (next.has(ym)) next.delete(ym); else next.add(ym);
+      return next;
+    });
+  };
+
+  const goToCalculation = (r: ManagementFeeInvoiceListRow) => {
+    openNewTab(`/management-fee-calculation?owner=${r.owner_id}&month=${r.year_month}`, `관리비 계산: ${r.owner_name} ${r.year_month}`, true);
+  };
+
   if (loading) return <div className="text-center py-8 text-sm text-gray-400">불러오는 중...</div>;
 
   return (
     <Card>
       <CardContent className="pt-4">
-        {rows.length === 0 ? (
+        {monthGroups.length === 0 ? (
           <div className="text-center py-8 text-sm text-gray-400">작성된 청구서가 없습니다.</div>
         ) : (
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">문서번호</TableHead>
-                  <TableHead className="text-xs">선주</TableHead>
-                  <TableHead className="text-xs">청구 월</TableHead>
-                  <TableHead className="text-xs">상태</TableHead>
-                  <TableHead className="text-xs">발행일</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(r => (
-                  <TableRow key={r.id}>
-                    <TableCell className="text-xs font-mono">{r.doc_number}</TableCell>
-                    <TableCell className="text-xs font-medium">{r.owner_name}</TableCell>
-                    <TableCell className="text-xs">{r.year_month}</TableCell>
-                    <TableCell><Badge variant={r.status === 'issued' ? 'default' : 'secondary'} className="text-xs">{r.status === 'issued' ? '발행됨' : '임시저장'}</Badge></TableCell>
-                    <TableCell className="text-xs text-gray-500">{r.issued_at ? new Date(r.issued_at).toLocaleString('ko-KR') : '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="space-y-2">
+            {monthGroups.map(([ym, monthRows]) => {
+              const issuedCount = monthRows.filter(r => r.status === 'issued').length;
+              const expanded = expandedMonths.has(ym);
+              return (
+                <div key={ym} className="border rounded-md overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleMonth(ym)}
+                    className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                      <span className="text-sm font-semibold">{ym}</span>
+                      <span className="text-xs text-gray-400">청구서 {monthRows.length}건</span>
+                    </div>
+                    <Badge variant="secondary" className="text-[10px]">발행 {issuedCount}/{monthRows.length}</Badge>
+                  </button>
+                  {expanded && (
+                    <div className="border-t overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">문서번호</TableHead>
+                            <TableHead className="text-xs">선주</TableHead>
+                            <TableHead className="text-xs">상태</TableHead>
+                            <TableHead className="text-xs">발행일</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {monthRows.map(r => (
+                            <TableRow
+                              key={r.id}
+                              className="cursor-pointer hover:bg-gray-50"
+                              onClick={() => goToCalculation(r)}
+                              title="클릭하면 이 선주의 관리비 계산 화면으로 이동합니다."
+                            >
+                              <TableCell className="text-xs font-mono">{r.doc_number}</TableCell>
+                              <TableCell className="text-xs font-medium">{r.owner_name}</TableCell>
+                              <TableCell><Badge variant={r.status === 'issued' ? 'default' : 'secondary'} className="text-xs">{r.status === 'issued' ? '발행됨' : '임시저장'}</Badge></TableCell>
+                              <TableCell className="text-xs text-gray-500">{r.issued_at ? new Date(r.issued_at).toLocaleString('ko-KR') : '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
-        <p className="text-xs text-gray-400 mt-2">이어서 작성하려면 "단일 작성" 탭에서 같은 선주/월을 다시 선택하세요.</p>
+        <p className="text-xs text-gray-400 mt-3">청구서 행을 클릭하면 해당 선주의 관리비 계산 화면으로 이동합니다. 이어서 작성하려면 "단일 작성" 탭에서 같은 선주/월을 다시 선택하세요.</p>
       </CardContent>
     </Card>
   );

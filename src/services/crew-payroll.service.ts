@@ -642,7 +642,15 @@ export const crewPayrollService = {
       .lte('embark_date', end)
       .or(`disembark_date.is.null,disembark_date.gte.${start}`);
     if (recError) { targetShipIds.forEach(id => result.failed.push({ shipId: id, error: recError.message })); return result; }
-    const records = (recordsRaw || []) as EmbarkRecord[];
+    // 승선 중이라도 관리자가 선원 목록에서 삭제(소프트삭제)한 선원은 그 이후 생성되는
+    // 급여명세서에 나오면 안 된다.
+    const rawRecords = (recordsRaw || []) as EmbarkRecord[];
+    const candidateCrewIds = [...new Set(rawRecords.map(r => r.crew_member_id))];
+    const { data: deletedCrewRaw } = candidateCrewIds.length > 0
+      ? await supabase.from('crew_members').select('id').in('id', candidateCrewIds).not('deleted_at', 'is', null)
+      : { data: [] as { id: string }[] };
+    const deletedCrewIds = new Set((deletedCrewRaw || []).map(c => c.id));
+    const records = rawRecords.filter(r => !deletedCrewIds.has(r.crew_member_id));
 
     const recordsByShip = new Map<string, EmbarkRecord[]>();
     for (const r of records) {

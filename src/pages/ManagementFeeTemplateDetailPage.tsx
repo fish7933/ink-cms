@@ -61,7 +61,7 @@ export default function ManagementFeeTemplateDetailPage() {
 
       const templateMap = await getEffectiveTemplateMapForShips(ships);
       setAssignedShips(
-        ships.filter(s => templateMap[s.id]?.id === resolvedId).map(s => s.name)
+        ships.filter(s => templateMap[s.id]?.id === resolvedId && s.is_active !== false).map(s => s.name)
       );
 
       setHistory(hist.filter(h => h.id !== resolvedId));

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Receipt, RefreshCw, Trash2, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,17 +38,18 @@ const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 // 회차 상태는 'draft' 하나뿐이라 급여 대시보드와 달리 확정/승인 단계는 없다.
 export default function ManagementFeeCalculationPage() {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [ships, setShips] = useState<Ship[]>([]);
   const [owners, setOwners] = useState<Company[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [showQuickSelect, setShowQuickSelect] = useState(false);
-  const [yearMonth, setYearMonth] = useState(currentYearMonth());
+  const [yearMonth, setYearMonth] = useState(() => searchParams.get('month') || currentYearMonth());
   const [rows, setRows] = useState<ManagementFeeDashboardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
 
-  const [ownerFilter, setOwnerFilter] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get('owner') || '');
   const [fleetFilter, setFleetFilter] = useState('');
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);

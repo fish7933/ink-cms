@@ -76,7 +76,7 @@ export default function ManagementFeeTemplatesPage() {
     }
   };
 
-  const openView = (t: ManagementFeeTemplate) => openNewTab(`/management-fee/templates/${t.id}`, `관리비 템플릿 상세: ${t.name}`);
+  const openEdit = (t: ManagementFeeTemplate) => openNewTab(`/management-fee/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`);
 
   const openAssign = (t: ManagementFeeTemplate) => {
     setPrefillAssignId(t.id);
@@ -248,7 +248,7 @@ export default function ManagementFeeTemplatesPage() {
                     </TableHeader>
                     <TableBody>
                       {pageTemplates.map(t => (
-                        <TableRow key={t.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openView(t)}>
+                        <TableRow key={t.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openEdit(t)}>
                           {permissions.canDelete && (
                             <TableCell onClick={e => e.stopPropagation()}>
                               <Checkbox
@@ -271,19 +271,11 @@ export default function ManagementFeeTemplatesPage() {
                               <Button
                                 variant="ghost" size="sm"
                                 className="gap-1 h-7 px-2"
-                                onClick={() => openView(t)}
+                                onClick={() => openEdit(t)}
                               >
-                                <Eye className="h-3.5 w-3.5" /><span className="text-xs">보기</span>
+                                {permissions.canEdit ? <Edit2 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                <span className="text-xs">{permissions.canEdit ? '수정' : '보기'}</span>
                               </Button>
-                              {permissions.canEdit && (
-                                <Button
-                                  variant="ghost" size="sm"
-                                  className="gap-1 h-7 px-2"
-                                  onClick={() => openNewTab(`/management-fee/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`)}
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" /><span className="text-xs">수정</span>
-                                </Button>
-                              )}
                               {permissions.canEdit && (
                                 <Button
                                   variant="ghost" size="sm"
