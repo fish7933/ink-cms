@@ -53,7 +53,7 @@ export interface ManagementFeeActualCostEntry {
   id: string;
   period_id: string;
   fee_item_id: string;
-  crew_member_id?: string | null;
+  crew_member_ids: string[];
   currency: string;
   unit_price?: number | null;
   quantity?: number | null;
@@ -1082,7 +1082,7 @@ export async function getActualCostEntries(periodId: string): Promise<Management
     id: String(item.id),
     period_id: String(item.period_id),
     fee_item_id: String(item.fee_item_id),
-    crew_member_id: item.crew_member_id ? String(item.crew_member_id) : null,
+    crew_member_ids: ((item.crew_member_ids || []) as string[]).map(String),
     amount_usd: Number(item.amount_usd),
   })) as ManagementFeeActualCostEntry[];
 }
@@ -1090,7 +1090,7 @@ export async function getActualCostEntries(periodId: string): Promise<Management
 export async function addActualCostEntry(entry: {
   period_id: string;
   fee_item_id: string;
-  crew_member_id?: string | null;
+  crew_member_ids?: string[];
   currency: string;
   unit_price?: number | null;
   quantity?: number | null;
@@ -1101,7 +1101,7 @@ export async function addActualCostEntry(entry: {
 
   const { data, error } = await supabase
     .from('management_fee_actual_cost_entries')
-    .insert([{ ...entry, created_by: currentUser?.id }])
+    .insert([{ ...entry, crew_member_ids: entry.crew_member_ids || [], created_by: currentUser?.id }])
     .select()
     .single();
 
@@ -1115,7 +1115,7 @@ export async function addActualCostEntry(entry: {
 
 export async function updateActualCostEntry(
   id: string,
-  updates: Partial<Pick<ManagementFeeActualCostEntry, 'fee_item_id' | 'crew_member_id' | 'currency' | 'unit_price' | 'quantity' | 'amount_usd' | 'remark'>>,
+  updates: Partial<Pick<ManagementFeeActualCostEntry, 'fee_item_id' | 'crew_member_ids' | 'currency' | 'unit_price' | 'quantity' | 'amount_usd' | 'remark'>>,
 ): Promise<ManagementFeeActualCostEntry | null> {
   const { data, error } = await supabase
     .from('management_fee_actual_cost_entries')

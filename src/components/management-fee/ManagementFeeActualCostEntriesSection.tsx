@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import BadgeSelect from '@/components/ui/BadgeSelect';
 import { supabase } from '@/lib/supabase';
 import { crewDisplayName } from '@/lib/utils';
 import {
@@ -21,6 +22,7 @@ const CURRENCIES = ['USD', 'EUR', 'KRW', 'JPY', 'IDR', 'MMK', 'PHP', 'CNY'];
 interface CrewOption {
   id: string;
   name: string;
+  rankCode: string;
 }
 
 interface ManagementFeeActualCostEntriesSectionProps {
@@ -42,7 +44,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [feeItemId, setFeeItemId] = useState('');
-  const [crewMemberId, setCrewMemberId] = useState('none');
+  const [crewMemberIds, setCrewMemberIds] = useState<string[]>([]);
   const [currency, setCurrency] = useState('USD');
   const [unitPrice, setUnitPrice] = useState('');
   const [quantity, setQuantity] = useState('1');
@@ -51,7 +53,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFeeItemId, setEditFeeItemId] = useState('');
-  const [editCrewMemberId, setEditCrewMemberId] = useState('none');
+  const [editCrewMemberIds, setEditCrewMemberIds] = useState<string[]>([]);
   const [editCurrency, setEditCurrency] = useState('USD');
   const [editUnitPrice, setEditUnitPrice] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
@@ -67,7 +69,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
           getEffectiveTemplateForShip(shipId),
           supabase
             .from('crew_embarkation_records')
-            .select('crew_member_id, crew_members!crew_member_id(name, name_english)')
+            .select('crew_member_id, crew_members!crew_member_id(name, name_english), ranks!crew_embarkation_records_rank_id_fkey(rank_code)')
             .eq('ship_id', shipId)
             .is('disembark_date', null),
         ]);
@@ -80,7 +82,8 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
 
         const crew = (crewRows || []).map(r => {
           const c = r.crew_members as { name?: string; name_english?: string } | null;
-          return { id: String(r.crew_member_id), name: c ? crewDisplayName(c) : '' };
+          const rank = r.ranks as { rank_code?: string } | null;
+          return { id: String(r.crew_member_id), name: c ? crewDisplayName(c) : '', rankCode: rank?.rank_code || '' };
         });
         setCrewOptions(crew);
       } finally {
@@ -92,7 +95,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
 
   const resetForm = () => {
     setFeeItemId('');
-    setCrewMemberId('none');
+    setCrewMemberIds([]);
     setCurrency('USD');
     setUnitPrice('');
     setQuantity('1');
@@ -109,7 +112,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
       const added = await addActualCostEntry({
         period_id: periodId,
         fee_item_id: feeItemId,
-        crew_member_id: crewMemberId === 'none' ? null : crewMemberId,
+        crew_member_ids: crewMemberIds,
         currency,
         unit_price: unitPrice ? parseFloat(unitPrice) : null,
         quantity: quantity ? parseFloat(quantity) : null,
@@ -138,7 +141,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
   const startEdit = (e: ManagementFeeLedgerActualCostEntry) => {
     setEditingId(e.id);
     setEditFeeItemId(e.fee_item_id);
-    setEditCrewMemberId(e.crew_member_id || 'none');
+    setEditCrewMemberIds(e.crew.map(c => c.id));
     setEditCurrency(e.currency);
     setEditUnitPrice(e.unit_price != null ? String(e.unit_price) : '');
     setEditQuantity(e.quantity != null ? String(e.quantity) : '');
@@ -156,7 +159,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
     try {
       const updated = await updateActualCostEntry(editingId, {
         fee_item_id: editFeeItemId,
-        crew_member_id: editCrewMemberId === 'none' ? null : editCrewMemberId,
+        crew_member_ids: editCrewMemberIds,
         currency: editCurrency,
         unit_price: editUnitPrice ? parseFloat(editUnitPrice) : null,
         quantity: editQuantity ? parseFloat(editQuantity) : null,
@@ -179,23 +182,14 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
       {availableFeeItems.length === 0 ? (
         <p className="text-xs text-gray-400">이 선박의 관리비 템플릿에 실비(수기입력) 항목이 배정되어 있지 않습니다.</p>
       ) : (
-        <div className="flex flex-wrap items-end gap-2 p-3 bg-gray-50 rounded-md border">
+        <div className="p-3 bg-gray-50 rounded-md border space-y-2.5">
+        <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-0.5">
             <Label className="text-[10px] text-gray-400">청구 항목</Label>
             <Select value={feeItemId} onValueChange={setFeeItemId}>
               <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="항목 선택" /></SelectTrigger>
               <SelectContent>
                 {availableFeeItems.map(f => <SelectItem key={f.id} value={f.id} className="text-xs">{f.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-0.5">
-            <Label className="text-[10px] text-gray-400">관련 선원</Label>
-            <Select value={crewMemberId} onValueChange={setCrewMemberId}>
-              <SelectTrigger className="h-8 text-xs w-36"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none" className="text-xs">선택 안 함</SelectItem>
-                {crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -220,11 +214,20 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
           </div>
           <div className="space-y-0.5 flex-1 min-w-32">
             <Label className="text-[10px] text-gray-400">비고</Label>
-            <Input value={remark} onChange={e => setRemark(e.target.value)} placeholder="관련 선원명 등" className="h-8 text-xs" />
+            <Input value={remark} onChange={e => setRemark(e.target.value)} className="h-8 text-xs" />
           </div>
           <Button size="sm" className="h-8 gap-1 text-xs" onClick={handleAdd} disabled={saving}>
             <Plus className="w-3.5 h-3.5" />{saving ? '추가 중...' : '추가'}
           </Button>
+        </div>
+        {crewOptions.length > 0 && (
+          <BadgeSelect
+            label="관련 선원"
+            items={crewOptions.map(c => ({ value: c.id, label: c.name, sublabel: c.rankCode }))}
+            selected={crewMemberIds}
+            onChange={setCrewMemberIds}
+          />
+        )}
         </div>
       )}
 
@@ -255,14 +258,12 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="p-1.5">
-                    <Select value={editCrewMemberId} onValueChange={setEditCrewMemberId}>
-                      <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" className="text-xs">선택 안 함</SelectItem>
-                        {crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                  <TableCell className="p-1.5 align-top min-w-48">
+                    <BadgeSelect
+                      items={crewOptions.map(c => ({ value: c.id, label: c.name, sublabel: c.rankCode }))}
+                      selected={editCrewMemberIds}
+                      onChange={setEditCrewMemberIds}
+                    />
                   </TableCell>
                   <TableCell className="p-1.5">
                     <div className="flex items-center gap-1 justify-end">
@@ -296,7 +297,17 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
               ) : (
                 <TableRow key={e.id}>
                   <TableCell className="text-xs font-medium">{e.fee_item_name}</TableCell>
-                  <TableCell className="text-xs">{e.crew_name || '-'}</TableCell>
+                  <TableCell className="text-xs">
+                    {e.crew.length === 0 ? '-' : (
+                      <div className="flex flex-wrap gap-1">
+                        {e.crew.map(c => (
+                          <span key={c.id} className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                            {c.rank_code && <span className="text-gray-400 mr-1">{c.rank_code}</span>}{c.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs text-right font-mono">{e.unit_price != null ? `${fmt(e.unit_price)} ${e.currency}` : '-'}</TableCell>
                   <TableCell className="text-xs text-center">{e.quantity ?? '-'}</TableCell>
                   <TableCell className="text-xs text-right font-mono font-semibold">{fmt(e.amount_usd)}</TableCell>

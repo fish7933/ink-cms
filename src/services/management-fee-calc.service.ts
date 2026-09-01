@@ -239,12 +239,17 @@ export interface ManagementFeeLedgerItemTotal {
   was_capped: boolean;
 }
 
+export interface ManagementFeeLedgerActualCostCrew {
+  id: string;
+  name: string;
+  rank_code: string;
+}
+
 export interface ManagementFeeLedgerActualCostEntry {
   id: string;
   fee_item_id: string;
   fee_item_name: string;
-  crew_member_id: string | null;
-  crew_name: string | null;
+  crew: ManagementFeeLedgerActualCostCrew[];
   currency: string;
   unit_price: number | null;
   quantity: number | null;
@@ -656,12 +661,31 @@ export const managementFeeCalcService = {
     const { data: caps } = await supabase.from('management_fee_ship_item_caps').select('*').eq('period_id', periodId);
     const { data: actualCostEntriesRaw } = await supabase.from('management_fee_actual_cost_entries').select('*').eq('period_id', periodId).order('created_at', { ascending: false });
 
+    const actualCostCrewIds = [...new Set((actualCostEntriesRaw || []).flatMap(e => ((e.crew_member_ids || []) as string[])))];
     const crewMemberIds = [...new Set([
       ...(lines || []).map(l => l.crew_member_id),
-      ...(actualCostEntriesRaw || []).map(e => e.crew_member_id).filter((v): v is string => !!v),
+      ...actualCostCrewIds,
     ])];
     const embarkationRecordIds = [...new Set((lines || []).map(l => l.embarkation_record_id))];
-    const rankIds = [...new Set((lines || []).map(l => l.rank_id).filter((v): v is string => !!v))];
+
+    // 실비 기록의 관련 선원은 rank_id를 직접 갖고 있지 않으므로, 이 선박에서의 승선기록으로
+    // 직급을 역으로 찾는다(이미 하선했을 수도 있어 disembark_date 조건 없이 최신 기록 기준).
+    const { data: actualCostEmbarks } = actualCostCrewIds.length > 0
+      ? await supabase.from('crew_embarkation_records')
+          .select('crew_member_id, rank_id, embark_date')
+          .eq('ship_id', period.ship_id)
+          .in('crew_member_id', actualCostCrewIds)
+          .order('embark_date', { ascending: false })
+      : { data: [] as { crew_member_id: string; rank_id: string | null; embark_date: string }[] };
+    const rankIdByActualCostCrew = new Map<string, string>();
+    for (const r of actualCostEmbarks || []) {
+      if (!rankIdByActualCostCrew.has(r.crew_member_id) && r.rank_id) rankIdByActualCostCrew.set(r.crew_member_id, r.rank_id);
+    }
+
+    const rankIds = [...new Set([
+      ...(lines || []).map(l => l.rank_id).filter((v): v is string => !!v),
+      ...rankIdByActualCostCrew.values(),
+    ])];
     const feeItemIds = [...new Set([
       ...(lines || []).map(l => l.fee_item_id),
       ...(actualCostEntriesRaw || []).map(e => e.fee_item_id),
@@ -679,13 +703,16 @@ export const managementFeeCalcService = {
     const feeItemById = new Map((feeItems || []).map(f => [String(f.id), f as ManagementFeeItem]));
 
     const actualCostEntries: ManagementFeeLedgerActualCostEntry[] = (actualCostEntriesRaw || []).map(e => {
-      const crew = e.crew_member_id ? crewById.get(e.crew_member_id) : undefined;
+      const crewIds = (e.crew_member_ids || []) as string[];
       return {
         id: String(e.id),
         fee_item_id: String(e.fee_item_id),
         fee_item_name: feeItemById.get(String(e.fee_item_id))?.name || 'Unknown',
-        crew_member_id: e.crew_member_id ? String(e.crew_member_id) : null,
-        crew_name: crew ? crewDisplayName(crew) : null,
+        crew: crewIds.map(id => {
+          const crew = crewById.get(id);
+          const rankId = rankIdByActualCostCrew.get(id);
+          return { id, name: crew ? crewDisplayName(crew) : '', rank_code: rankId ? (rankCodeById.get(rankId) || '') : '' };
+        }),
         currency: e.currency,
         unit_price: e.unit_price == null ? null : Number(e.unit_price),
         quantity: e.quantity == null ? null : Number(e.quantity),

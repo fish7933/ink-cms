@@ -33,6 +33,14 @@ const STATUS_COLORS: Record<string, string> = {
 const fmt = (n: number) => n.toLocaleString('en-US');
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
+// 'YYYY-MM' 한 달의 시작/끝 날짜 문자열 — Date.toISOString()은 UTC라 자정 근처에 하루
+// 어긋날 수 있어, 달력 계산만으로 로컬 날짜 문자열을 직접 만든다.
+function monthRangeLocal(yearMonth: string): { start: string; end: string } {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return { start: `${yearMonth}-01`, end: `${yearMonth}-${String(lastDay).padStart(2, '0')}` };
+}
+
 // 관리비 계산 대시보드 — 담당 선박 전체를 한 화면에서 보고, 아직 계산되지 않은 달은
 // 선택해서 일괄 계산할 수 있다. 실제 청구서 발행 이전 검증/미리보기 화면이며,
 // 회차 상태는 'draft' 하나뿐이라 급여 대시보드와 달리 확정/승인 단계는 없다.
@@ -159,6 +167,17 @@ export default function ManagementFeeCalculationPage() {
   const openShip = (row: ManagementFeeDashboardRow) => {
     if (row.period_id) loadLedger(row.period_id);
   };
+
+  // 이번 달에 승선/하선한 선원 — 항공권 등 승·하선 비용을 실비 항목에 입력할 때 빠뜨리기
+  // 쉬우므로, 입력란 바로 위에 눈에 띄게 배지로 짚어준다.
+  const { embarkedThisMonth, disembarkedThisMonth } = useMemo(() => {
+    if (!ledgerData) return { embarkedThisMonth: [], disembarkedThisMonth: [] };
+    const { start, end } = monthRangeLocal(yearMonth);
+    return {
+      embarkedThisMonth: ledgerData.rows.filter(r => r.embark_date >= start && r.embark_date <= end),
+      disembarkedThisMonth: ledgerData.rows.filter(r => r.disembark_date && r.disembark_date >= start && r.disembark_date <= end),
+    };
+  }, [ledgerData, yearMonth]);
 
   const handleRegenerate = async () => {
     if (!ledgerPeriodId) return;
@@ -418,6 +437,33 @@ export default function ManagementFeeCalculationPage() {
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* 이번 달 승선/하선 선원 — 승·하선 비용(항공권 등)을 실비 항목에 빠짐없이 입력하도록 */}
+                {(embarkedThisMonth.length > 0 || disembarkedThisMonth.length > 0) && (
+                  <div className="rounded-md border bg-blue-50/30 p-3 space-y-1.5">
+                    <p className="text-[11px] text-gray-500">이번 달 승선/하선 선원입니다 — 승·하선 비용(항공권 등)이 아래 실비 항목에 빠짐없이 입력됐는지 확인하세요.</p>
+                    {embarkedThisMonth.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-medium text-blue-700 w-9 shrink-0">승선</span>
+                        {embarkedThisMonth.map(r => (
+                          <Badge key={`emb-${r.crew_member_id}-${r.embark_date}`} className="text-[11px] bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-100">
+                            {r.rank_code} {r.crew_name} ({r.embark_date})
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {disembarkedThisMonth.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-medium text-amber-700 w-9 shrink-0">하선</span>
+                        {disembarkedThisMonth.map(r => (
+                          <Badge key={`dis-${r.crew_member_id}-${r.disembark_date}`} className="text-[11px] bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">
+                            {r.rank_code} {r.crew_name} ({r.disembark_date})
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* 실비(수기입력) 항목 기록 — 승·하선 비용상세와 1:1 대응 */}
                 <div>
