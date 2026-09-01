@@ -33,6 +33,8 @@ interface ManagementFeeActualCostEntriesSectionProps {
 }
 
 const fmt = (n: number) => n.toLocaleString('en-US');
+// 선원 표시는 항상 "직급 이름" 순서 — 직급이 이름 뒤로 가면 안 된다.
+const crewOptionLabel = (c: CrewOption) => (c.rankCode ? `${c.rankCode} ${c.name}` : c.name);
 
 // "승하선 비용상세" 시트와 1:1 대응 — actual_cost(실비) 청구항목은 승선기록마다 자동으로
 // 라인이 생기지 않으므로, 그 달에 실제로 발생한 건만 여기서 직접 기록한다.
@@ -223,7 +225,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
         {crewOptions.length > 0 && (
           <BadgeSelect
             label="관련 선원"
-            items={crewOptions.map(c => ({ value: c.id, label: c.name, sublabel: c.rankCode }))}
+            items={crewOptions.map(c => ({ value: c.id, label: crewOptionLabel(c) }))}
             selected={crewMemberIds}
             onChange={setCrewMemberIds}
           />
@@ -260,7 +262,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                   </TableCell>
                   <TableCell className="p-1.5 align-top min-w-48">
                     <BadgeSelect
-                      items={crewOptions.map(c => ({ value: c.id, label: c.name, sublabel: c.rankCode }))}
+                      items={crewOptions.map(c => ({ value: c.id, label: crewOptionLabel(c) }))}
                       selected={editCrewMemberIds}
                       onChange={setEditCrewMemberIds}
                     />
