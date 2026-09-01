@@ -1,35 +1,31 @@
 import { useState, useEffect, useMemo } from 'react';
-import { FileSpreadsheet, AlertTriangle, Landmark, ChevronDown, ChevronRight } from 'lucide-react';
+import { FileSpreadsheet, ChevronDown, ChevronRight, RefreshCw, Trash2 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { getCompanies, getShips } from '@/lib/store';
 import type { Ship } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
-import { getCompanyInfo } from '@/services/company-info.service';
 import { getBankAccounts } from '@/services/accounting-bank-account.service';
 import { managementFeeCalcService, type ManagementFeeLedgerActualCostEntry } from '@/services/management-fee-calc.service';
 import {
   managementFeeInvoiceService,
   type ManagementFeeInvoiceData,
-  type ManagementFeeInvoiceSettings,
   type ManagementFeeInvoiceListRow,
 } from '@/services/management-fee-invoice.service';
-import { exportManagementFeeInvoiceToExcel } from '@/utils/management-fee-invoice-export';
 import OwnerFleetShipCheckTree from '@/components/management-fee/OwnerFleetShipCheckTree';
 import type { Company, Fleet } from '@/types/models';
 import type { BankAccountWithBalance } from '@/types/accounting';
 
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
-const fmt = (n: number) => n.toLocaleString('en-US');
 
 // 선택된 선박 id 집합에서 선주 id들만 뽑아낸다(청구서는 선박이 아니라 선주 단위이므로,
 // 일괄 작성 화면에서 트리로 선박/플릿/선주를 고르면 그 소속 선주들의 청구서를 전부 만든다).
@@ -73,27 +69,22 @@ export default function ManagementFeeInvoicePage() {
       <Tabs defaultValue="list">
         <TabsList className="h-9">
           <TabsTrigger value="list" className="text-xs">청구서 목록</TabsTrigger>
-          <TabsTrigger value="single" className="text-xs">단일 작성</TabsTrigger>
-          <TabsTrigger value="bulk" className="text-xs">일괄 작성</TabsTrigger>
+          <TabsTrigger value="create" className="text-xs">청구서 작성</TabsTrigger>
         </TabsList>
 
         <TabsContent value="list" className="mt-3">
           <InvoiceListTab />
         </TabsContent>
 
-        <TabsContent value="single" className="mt-3">
-          <SingleInvoiceTab owners={owners} bankAccounts={bankAccounts} />
-        </TabsContent>
-
-        <TabsContent value="bulk" className="mt-3">
-          <BulkInvoiceTab ships={ships} owners={owners} fleets={fleets} bankAccounts={bankAccounts} />
+        <TabsContent value="create" className="mt-3">
+          <InvoiceCreateTab ships={ships} owners={owners} fleets={fleets} bankAccounts={bankAccounts} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-async function buildActualCostEntriesByShip(invoiceData: ManagementFeeInvoiceData): Promise<Record<string, ManagementFeeLedgerActualCostEntry[]>> {
+export async function buildActualCostEntriesByShip(invoiceData: ManagementFeeInvoiceData): Promise<Record<string, ManagementFeeLedgerActualCostEntry[]>> {
   const lists = await Promise.all(invoiceData.ships.map(async s => ({
     shipId: s.ship_id,
     entries: s.period_id ? (await managementFeeCalcService.getLedgerForPeriod(s.period_id))?.actual_cost_entries || [] : [] as ManagementFeeLedgerActualCostEntry[],
@@ -103,260 +94,82 @@ async function buildActualCostEntriesByShip(invoiceData: ManagementFeeInvoiceDat
   return result;
 }
 
-// ── 단일 작성 ─────────────────────────────────────────────
-function SingleInvoiceTab({ owners, bankAccounts }: { owners: Company[]; bankAccounts: BankAccountWithBalance[] }) {
-  const { toast } = useToast();
-  const [ownerId, setOwnerId] = useState('');
-  const [yearMonth, setYearMonth] = useState(currentYearMonth());
-  const [settings, setSettings] = useState<ManagementFeeInvoiceSettings | null>(null);
-  const [usdBankAccountId, setUsdBankAccountId] = useState('');
-  const [krwBankAccountId, setKrwBankAccountId] = useState('');
-
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [invoiceData, setInvoiceData] = useState<ManagementFeeInvoiceData | null>(null);
-  const [exporting, setExporting] = useState(false);
-
-  useEffect(() => {
-    if (!ownerId) { setSettings(null); setUsdBankAccountId(''); setKrwBankAccountId(''); setInvoiceData(null); return; }
-    (async () => {
-      const s = await managementFeeInvoiceService.getOrCreateDraftInvoice(ownerId, yearMonth);
-      setSettings(s);
-      setUsdBankAccountId(s?.usd_bank_account_id || '');
-      setKrwBankAccountId(s?.krw_bank_account_id || '');
-      setInvoiceData(null);
-    })();
-  }, [ownerId, yearMonth]);
-
-  const handleSaveDraft = async () => {
-    if (!settings) return;
-    setSaving(true);
-    try {
-      const updated = await managementFeeInvoiceService.updateInvoiceSettings(settings.id, {
-        usd_bank_account_id: usdBankAccountId || null,
-        krw_bank_account_id: krwBankAccountId || null,
-      });
-      if (updated) { setSettings(updated); toast({ title: '임시저장 완료' }); }
-      else toast({ title: '저장 실패', variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePreview = async () => {
-    if (!ownerId) { toast({ title: '선주를 선택하세요.', variant: 'destructive' }); return; }
-    setLoading(true);
-    try {
-      const data = await managementFeeInvoiceService.getInvoiceData(ownerId, yearMonth);
-      if (!data) { toast({ title: '데이터를 불러오지 못했습니다.', variant: 'destructive' }); return; }
-      setInvoiceData(data);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleExport = async () => {
-    if (!invoiceData || !settings) return;
-    if (!invoiceData.krw_rate_to_usd) { toast({ title: '환율 관리에서 이 달의 KRW 환율을 먼저 입력하세요.', variant: 'destructive' }); return; }
-    setExporting(true);
-    try {
-      const [companyInfo, actualCostEntriesByShip] = await Promise.all([
-        getCompanyInfo(),
-        buildActualCostEntriesByShip(invoiceData),
-      ]);
-      const usdAccount = bankAccounts.find(a => a.id === usdBankAccountId) || null;
-      const krwAccount = bankAccounts.find(a => a.id === krwBankAccountId) || null;
-
-      await exportManagementFeeInvoiceToExcel({
-        data: invoiceData,
-        docNumber: settings.doc_number,
-        exchangeRate: invoiceData.krw_rate_to_usd,
-        usdBankAccount: usdAccount,
-        krwBankAccount: krwAccount,
-        companyInfo: companyInfo || { name: '' },
-        actualCostEntriesByShip,
-      });
-      await managementFeeInvoiceService.markIssued(settings.id, invoiceData.krw_rate_to_usd);
-      toast({ title: '엑셀 다운로드 완료' });
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">청구서 설정</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">선주</Label>
-              <Select value={ownerId} onValueChange={setOwnerId}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주 선택" /></SelectTrigger>
-                <SelectContent>
-                  {owners.map(o => <SelectItem key={o.id} value={o.id} className="text-sm">{o.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">청구 월</Label>
-              <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-9 text-sm" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">문서번호</Label>
-              <div className="h-9 flex items-center text-sm font-medium text-gray-700">{settings?.doc_number || '- (선주/월 선택 시 자동 발급)'}</div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">상태</Label>
-              <div className="h-9 flex items-center">
-                {settings && <Badge variant={settings.status === 'issued' ? 'default' : 'secondary'} className="text-xs">{settings.status === 'issued' ? '발행됨' : '임시저장'}</Badge>}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">외화계좌</Label>
-              <Select value={usdBankAccountId || 'none'} onValueChange={v => setUsdBankAccountId(v === 'none' ? '' : v)}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="계좌 선택" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none" className="text-sm text-gray-400">선택 안 함</SelectItem>
-                  {bankAccounts.map(a => <SelectItem key={a.id} value={a.id} className="text-sm">{a.bank_name} {a.account_name} ({a.currency})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">원화계좌</Label>
-              <Select value={krwBankAccountId || 'none'} onValueChange={v => setKrwBankAccountId(v === 'none' ? '' : v)}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="계좌 선택" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none" className="text-sm text-gray-400">선택 안 함</SelectItem>
-                  {bankAccounts.map(a => <SelectItem key={a.id} value={a.id} className="text-sm">{a.bank_name} {a.account_name} ({a.currency})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={handleSaveDraft} disabled={saving || !settings}>{saving ? '저장 중...' : '임시저장'}</Button>
-            <Button size="sm" onClick={handlePreview} disabled={loading || !ownerId}>{loading ? '불러오는 중...' : '미리보기'}</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {invoiceData && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">{invoiceData.owner_name} — {invoiceData.year_month}</CardTitle>
-              <Button size="sm" className="gap-1.5" onClick={handleExport} disabled={exporting || !invoiceData.krw_rate_to_usd}>
-                <FileSpreadsheet className="h-4 w-4" />{exporting ? '생성 중...' : '엑셀 다운로드'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {!invoiceData.krw_rate_to_usd && (
-              <Alert variant="destructive">
-                <Landmark className="h-4 w-4" />
-                <AlertDescription className="text-xs">이 달의 KRW 환율이 환율 관리에 등록되어 있지 않습니다 — 먼저 입력해야 엑셀을 다운로드할 수 있습니다.</AlertDescription>
-              </Alert>
-            )}
-            {invoiceData.ships_missing_calc.length > 0 && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-xs">
-                  아직 관리비 계산이 안 된 선박 {invoiceData.ships_missing_calc.length}척은 이번 청구서에서 0원으로 표시됩니다 — 관리비 계산 화면에서 먼저 계산하세요:
-                  {' '}{invoiceData.ships_missing_calc.map(s => s.ship_name).join(', ')}
-                </AlertDescription>
-              </Alert>
-            )}
-            <InvoiceShipTable data={invoiceData} />
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function InvoiceShipTable({ data }: { data: ManagementFeeInvoiceData }) {
-  return (
-    <>
-      <div className="rounded-md border overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">선박</TableHead>
-              <TableHead className="text-xs text-center">선원수</TableHead>
-              <TableHead className="text-xs text-right">급여(총급여-OBP)</TableHead>
-              <TableHead className="text-xs text-right">상병수당</TableHead>
-              <TableHead className="text-xs text-right">재고용수당</TableHead>
-              <TableHead className="text-xs text-right">관리비/실비 합</TableHead>
-              <TableHead className="text-xs text-right">USD 합계</TableHead>
-              <TableHead className="text-xs text-right">부가세(KRW)</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.ships.map(s => {
-              const feeAndActualSum = Object.values(s.fee_item_totals).reduce((a, b) => a + b, 0) + Object.values(s.actual_cost_totals).reduce((a, b) => a + b, 0);
-              return (
-                <TableRow key={s.ship_id}>
-                  <TableCell className="text-xs font-medium">
-                    {s.ship_name}{!s.period_id && <span className="ml-1 text-amber-600">(계산 필요)</span>}
-                    {s.warnings.length > 0 && <span className="ml-1 text-red-600" title={s.warnings.join(', ')}>⚠</span>}
-                  </TableCell>
-                  <TableCell className="text-xs text-center">{s.crew_count}</TableCell>
-                  <TableCell className="text-xs text-right font-mono">{fmt(s.payroll_gross_minus_obp)}</TableCell>
-                  <TableCell className="text-xs text-right font-mono">{fmt(s.sick_pay_total)}</TableCell>
-                  <TableCell className="text-xs text-right font-mono">{fmt(s.reemployment_allowance_total)}</TableCell>
-                  <TableCell className="text-xs text-right font-mono">{fmt(feeAndActualSum)}</TableCell>
-                  <TableCell className="text-xs text-right font-mono font-semibold">{fmt(s.usd_total)}</TableCell>
-                  <TableCell className="text-xs text-right font-mono font-semibold text-teal-700">{fmt(s.krw_total)}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="flex justify-end gap-6 text-sm font-semibold pt-1">
-        <span>USD 총합계: {fmt(data.grand_total_usd)}</span>
-        <span className="text-teal-700">부가세 총합계(KRW): {fmt(data.grand_total_krw)}</span>
-      </div>
-    </>
-  );
-}
-
-// ── 일괄 작성 ─────────────────────────────────────────────
-function BulkInvoiceTab({ ships, owners, fleets, bankAccounts }: { ships: Ship[]; owners: Company[]; fleets: Fleet[]; bankAccounts: BankAccountWithBalance[] }) {
+// ── 청구서 작성 ─────────────────────────────────────────────
+function InvoiceCreateTab({ ships, owners, fleets, bankAccounts }: { ships: Ship[]; owners: Company[]; fleets: Fleet[]; bankAccounts: BankAccountWithBalance[] }) {
   const { toast } = useToast();
   const [yearMonth, setYearMonth] = useState(currentYearMonth());
   const [selectedShipIds, setSelectedShipIds] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
-  const [results, setResults] = useState<{ ownerId: string; ownerName: string; status: 'ok' | 'no_rate' | 'error'; message?: string }[] | null>(null);
+  const [results, setResults] = useState<{ ownerId: string; ownerName: string; status: 'ok' | 'no_rate' | 'no_calc' | 'error'; message?: string }[] | null>(null);
+  const [calculatedShipIds, setCalculatedShipIds] = useState<Set<string> | null>(null);
+  // 선주별 외화/원화 계좌 선택 — 선주가 처음 선택되면 그 선주가 예전 청구서에 마지막으로
+  // 지정해뒀던 계좌를 자동으로 채워준다(한 번 지정해두면 계속 이어서 쓰임). 아직 한 번도
+  // 지정한 적 없으면 빈 채로 두고, 필요할 때만 골라 넣으면 된다.
+  const [ownerAccounts, setOwnerAccounts] = useState<Record<string, { usd: string; krw: string }>>({});
+
+  // 청구서는 그 달 관리비 계산이 된 선박에서만 만들 수 있으므로, 선택 목록도 계산 안 된
+  // 선박은 아예 빼고 보여준다.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCalculatedShipIds(null);
+      const shipIds = ships.map(s => s.id);
+      if (shipIds.length === 0) { if (!cancelled) setCalculatedShipIds(new Set()); return; }
+      const { data } = await supabase.from('management_fee_periods').select('ship_id').eq('year_month', yearMonth).in('ship_id', shipIds);
+      if (!cancelled) setCalculatedShipIds(new Set((data || []).map(r => String(r.ship_id))));
+    })();
+    return () => { cancelled = true; };
+  }, [ships, yearMonth]);
 
   const targetOwnerIds = resolveOwnerIds(selectedShipIds, ships);
 
-  const handleBulkRun = async () => {
+  // 선택된 선주 중 아직 계좌 상태를 안 채운 선주가 있으면, 그 선주의 마지막 저장 계좌를 불러와 채운다.
+  useEffect(() => {
+    const missing = targetOwnerIds.filter(id => !(id in ownerAccounts));
+    if (missing.length === 0) return;
+    (async () => {
+      const fetched = await Promise.all(missing.map(async ownerId => {
+        const latest = await managementFeeInvoiceService.getLatestBankAccounts(ownerId);
+        return [ownerId, { usd: latest.usd_bank_account_id || '', krw: latest.krw_bank_account_id || '' }] as const;
+      }));
+      setOwnerAccounts(prev => {
+        const next = { ...prev };
+        for (const [ownerId, acc] of fetched) next[ownerId] = acc;
+        return next;
+      });
+    })();
+  }, [targetOwnerIds, ownerAccounts]);
+
+  const setOwnerAccount = (ownerId: string, field: 'usd' | 'krw', value: string) => {
+    setOwnerAccounts(prev => ({ ...prev, [ownerId]: { ...(prev[ownerId] || { usd: '', krw: '' }), [field]: value } }));
+  };
+
+  // 청구서 작성은 청구서(임시저장 + 문서번호 발급 + 선주별 계좌 지정)까지만 한다 — 엑셀은
+  // "청구서 목록"에서 각 청구서를 열어(청구서 확인 화면) 확인한 뒤 필요할 때만 개별적으로 받는다.
+  const handleCreate = async () => {
     if (targetOwnerIds.length === 0) { toast({ title: '선주/플릿/선박을 하나 이상 선택하세요.', variant: 'destructive' }); return; }
     setProcessing(true);
     setResults(null);
-    const rows: { ownerId: string; ownerName: string; status: 'ok' | 'no_rate' | 'error'; message?: string }[] = [];
+    const rows: { ownerId: string; ownerName: string; status: 'ok' | 'no_rate' | 'no_calc' | 'error'; message?: string }[] = [];
     try {
-      const companyInfo = await getCompanyInfo();
       for (const ownerId of targetOwnerIds) {
         const ownerName = owners.find(o => o.id === ownerId)?.name || ownerId;
         try {
+          const hasCalc = await managementFeeInvoiceService.hasAnyManagementFeeCalc(ownerId, yearMonth);
+          if (!hasCalc) { rows.push({ ownerId, ownerName, status: 'no_calc', message: '이 달 관리비 계산이 하나도 안 됨 — 건너뜀' }); continue; }
           const settings = await managementFeeInvoiceService.getOrCreateDraftInvoice(ownerId, yearMonth);
           if (!settings) { rows.push({ ownerId, ownerName, status: 'error', message: '청구서 생성 실패' }); continue; }
+          const acc = ownerAccounts[ownerId];
+          if (acc && (acc.usd || acc.krw)) {
+            await managementFeeInvoiceService.updateInvoiceSettings(settings.id, {
+              usd_bank_account_id: acc.usd || null,
+              krw_bank_account_id: acc.krw || null,
+            });
+          }
           const data = await managementFeeInvoiceService.getInvoiceData(ownerId, yearMonth);
           if (!data) { rows.push({ ownerId, ownerName, status: 'error', message: '데이터 조회 실패' }); continue; }
-          if (!data.krw_rate_to_usd) { rows.push({ ownerId, ownerName, status: 'no_rate', message: 'KRW 환율 미등록 — 임시저장만 됨' }); continue; }
-
-          const actualCostEntriesByShip = await buildActualCostEntriesByShip(data);
-          const usdAccount = bankAccounts.find(a => a.id === settings.usd_bank_account_id) || null;
-          const krwAccount = bankAccounts.find(a => a.id === settings.krw_bank_account_id) || null;
-          await exportManagementFeeInvoiceToExcel({
-            data, docNumber: settings.doc_number, exchangeRate: data.krw_rate_to_usd,
-            usdBankAccount: usdAccount, krwBankAccount: krwAccount,
-            companyInfo: companyInfo || { name: '' }, actualCostEntriesByShip,
-          });
-          await managementFeeInvoiceService.markIssued(settings.id, data.krw_rate_to_usd);
-          rows.push({ ownerId, ownerName, status: 'ok' });
+          if (!data.krw_rate_to_usd) { rows.push({ ownerId, ownerName, status: 'no_rate', message: '임시저장됨 — KRW 환율 미등록으로 청구서 확인 화면에서 엑셀 다운로드는 아직 안 됨' }); continue; }
+          rows.push({ ownerId, ownerName, status: 'ok', message: '임시저장됨 — 청구서 목록에서 확인 후 엑셀 다운로드하세요' });
         } catch (e) {
           rows.push({ ownerId, ownerName, status: 'error', message: e instanceof Error ? e.message : String(e) });
         }
@@ -370,25 +183,64 @@ function BulkInvoiceTab({ ships, owners, fleets, bankAccounts }: { ships: Ship[]
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">청구서 일괄 작성</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="text-base">청구서 작성</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-gray-500">
-            선주/플릿/선박을 선택하면 선박이 속한 선주들의 청구서를 한 번에 만듭니다(문서번호 자동 발급 + 임시저장 → 그 달 KRW 환율이 등록돼 있으면 바로 엑셀 다운로드까지, 없으면 임시저장만 진행).
+            선주/플릿/선박을 선택하면 선박이 속한 선주들의 청구서를 한 번에 임시저장합니다(문서번호 자동 발급). 엑셀 다운로드는 여기서 바로 하지 않으며, "청구서 목록"에서 각 청구서를 열어 확인한 뒤 필요할 때 개별적으로 받으세요.
           </p>
           <div className="space-y-1.5">
             <Label className="text-xs">청구 월</Label>
             <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-9 text-sm w-40" />
           </div>
-          <OwnerFleetShipCheckTree
-            ships={ships}
-            companies={owners}
-            fleets={fleets}
-            selectedShipIds={selectedShipIds}
-            onChange={setSelectedShipIds}
-          />
+          {calculatedShipIds === null ? (
+            <div className="text-xs text-gray-400 py-4 text-center">불러오는 중...</div>
+          ) : calculatedShipIds.size === 0 ? (
+            <div className="text-xs text-gray-400 py-4 text-center border rounded-md">{yearMonth}에 관리비 계산이 된 선박이 없습니다. 관리비 계산 화면에서 먼저 계산하세요.</div>
+          ) : (
+            <OwnerFleetShipCheckTree
+              ships={ships}
+              companies={owners}
+              fleets={fleets}
+              onlyShipIds={calculatedShipIds}
+              selectedShipIds={selectedShipIds}
+              onChange={setSelectedShipIds}
+            />
+          )}
+
+          {targetOwnerIds.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">선주별 계좌 (선택된 선주 {targetOwnerIds.length}곳 — 지정해두면 다음부터 자동으로 이어서 쓰입니다)</Label>
+              <div className="rounded-md border divide-y">
+                {targetOwnerIds.map(ownerId => {
+                  const ownerName = owners.find(o => o.id === ownerId)?.name || ownerId;
+                  const acc = ownerAccounts[ownerId] || { usd: '', krw: '' };
+                  return (
+                    <div key={ownerId} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                      <span className="text-xs font-medium w-32 shrink-0 truncate" title={ownerName}>{ownerName}</span>
+                      <Select value={acc.usd || 'none'} onValueChange={v => setOwnerAccount(ownerId, 'usd', v === 'none' ? '' : v)}>
+                        <SelectTrigger className="h-7 text-xs w-48"><SelectValue placeholder="외화계좌" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" className="text-xs text-gray-400">외화계좌 선택 안 함</SelectItem>
+                          {bankAccounts.map(a => <SelectItem key={a.id} value={a.id} className="text-xs">{a.bank_name} {a.account_name} ({a.currency})</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={acc.krw || 'none'} onValueChange={v => setOwnerAccount(ownerId, 'krw', v === 'none' ? '' : v)}>
+                        <SelectTrigger className="h-7 text-xs w-48"><SelectValue placeholder="원화계좌" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none" className="text-xs text-gray-400">원화계좌 선택 안 함</SelectItem>
+                          {bankAccounts.map(a => <SelectItem key={a.id} value={a.id} className="text-xs">{a.bank_name} {a.account_name} ({a.currency})</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end">
-            <Button size="sm" className="gap-1.5" onClick={handleBulkRun} disabled={processing || targetOwnerIds.length === 0}>
-              <FileSpreadsheet className="h-4 w-4" />{processing ? '처리 중...' : `일괄 작성 (${targetOwnerIds.length}개 선주)`}
+            <Button size="sm" className="gap-1.5" onClick={handleCreate} disabled={processing || targetOwnerIds.length === 0}>
+              <FileSpreadsheet className="h-4 w-4" />{processing ? '처리 중...' : `청구서 작성 (${targetOwnerIds.length}개 선주)`}
             </Button>
           </div>
         </CardContent>
@@ -401,8 +253,8 @@ function BulkInvoiceTab({ ships, owners, fleets, bankAccounts }: { ships: Ship[]
             <ul className="text-xs space-y-1">
               {results.map(r => (
                 <li key={r.ownerId} className="flex items-center gap-2">
-                  <Badge variant={r.status === 'ok' ? 'default' : r.status === 'no_rate' ? 'secondary' : 'destructive'} className="text-[10px]">
-                    {r.status === 'ok' ? '완료' : r.status === 'no_rate' ? '환율 없음' : '실패'}
+                  <Badge variant={r.status === 'ok' ? 'default' : r.status === 'no_rate' || r.status === 'no_calc' ? 'secondary' : 'destructive'} className="text-[10px]">
+                    {r.status === 'ok' ? '임시저장' : r.status === 'no_rate' ? '환율 없음' : r.status === 'no_calc' ? '계산 없음' : '실패'}
                   </Badge>
                   <span className="font-medium">{r.ownerName}</span>
                   {r.message && <span className="text-gray-400">— {r.message}</span>}
@@ -422,23 +274,97 @@ function BulkInvoiceTab({ ships, owners, fleets, bankAccounts }: { ships: Ship[]
 // "그 달의 청구서 묶음"을 다루는 단위 자체를 화면 구조의 기본으로 삼는다.
 function InvoiceListTab() {
   const { openNewTab } = useTabContext();
+  const { toast } = useToast();
   const [rows, setRows] = useState<ManagementFeeInvoiceListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set());
+  const [bulkRewriting, setBulkRewriting] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await managementFeeInvoiceService.listInvoices();
-        setRows(data);
-        // 가장 최근 월은 기본으로 펼쳐서 바로 보이게 한다.
-        if (data.length > 0) setExpandedMonths(new Set([data[0].year_month]));
-      } finally {
-        setLoading(false);
+  const loadRows = async () => {
+    setLoading(true);
+    try {
+      const data = await managementFeeInvoiceService.listInvoices();
+      setRows(data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadRows(); }, []);
+
+  const toggleInvoiceSelected = (id: string) => {
+    setSelectedInvoiceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleMonthSelected = (monthRows: ManagementFeeInvoiceListRow[], checked: boolean) => {
+    setSelectedInvoiceIds(prev => {
+      const next = new Set(prev);
+      monthRows.forEach(r => checked ? next.add(r.id) : next.delete(r.id));
+      return next;
+    });
+  };
+
+  // 청구서 재작성 — 발행됨 상태를 임시저장으로 되돌린다. 실제 금액은 매번 새로 계산해서
+  // 보여주므로(관리비 일괄 재계산 등으로 바뀐 수치도 자동 반영), 상태만 되돌리면 된다.
+  const handleBulkRewrite = async () => {
+    if (selectedInvoiceIds.size === 0) return;
+    if (!confirm(`선택한 ${selectedInvoiceIds.size}건의 청구서를 재작성(임시저장으로 되돌리기) 하시겠습니까?`)) return;
+    setBulkRewriting(true);
+    let succeeded = 0;
+    const failed: string[] = [];
+    try {
+      for (const id of selectedInvoiceIds) {
+        try {
+          await managementFeeInvoiceService.resetToDraft(id);
+          succeeded++;
+        } catch {
+          failed.push(rows.find(r => r.id === id)?.doc_number || id);
+        }
       }
-    })();
-  }, []);
+      toast({
+        title: `일괄 재작성 완료 — 성공 ${succeeded} / 실패 ${failed.length}`,
+        description: failed.length > 0 ? `실패: ${failed.join(', ')}` : undefined,
+        variant: failed.length > 0 ? 'destructive' : undefined,
+      });
+      setSelectedInvoiceIds(new Set());
+      await loadRows();
+    } finally {
+      setBulkRewriting(false);
+    }
+  };
+
+  const handleBulkDeleteInvoices = async () => {
+    if (selectedInvoiceIds.size === 0) return;
+    if (!confirm(`선택한 ${selectedInvoiceIds.size}건의 청구서를 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    setBulkDeleting(true);
+    let succeeded = 0;
+    const failed: string[] = [];
+    try {
+      for (const id of selectedInvoiceIds) {
+        try {
+          await managementFeeInvoiceService.deleteInvoice(id);
+          succeeded++;
+        } catch {
+          failed.push(rows.find(r => r.id === id)?.doc_number || id);
+        }
+      }
+      toast({
+        title: `일괄 삭제 완료 — 성공 ${succeeded} / 실패 ${failed.length}`,
+        description: failed.length > 0 ? `실패: ${failed.join(', ')}` : undefined,
+        variant: failed.length > 0 ? 'destructive' : undefined,
+      });
+      setSelectedInvoiceIds(new Set());
+      await loadRows();
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const monthGroups = useMemo(() => {
     const byMonth = new Map<string, ManagementFeeInvoiceListRow[]>();
@@ -458,15 +384,28 @@ function InvoiceListTab() {
     });
   };
 
-  const goToCalculation = (r: ManagementFeeInvoiceListRow) => {
-    openNewTab(`/management-fee-calculation?owner=${r.owner_id}&month=${r.year_month}`, `관리비 계산: ${r.owner_name} ${r.year_month}`, true);
+  const goToInvoiceView = (r: ManagementFeeInvoiceListRow) => {
+    openNewTab(`/management-fee-invoice/${r.owner_id}/${r.year_month}`, `청구서: ${r.owner_name} ${r.year_month}`, true);
   };
 
   if (loading) return <div className="text-center py-8 text-sm text-gray-400">불러오는 중...</div>;
 
   return (
     <Card>
-      <CardContent className="pt-4">
+      <CardContent className="pt-4 space-y-3">
+        {selectedInvoiceIds.size > 0 && (
+          <div className="flex items-center justify-between gap-2 flex-wrap bg-blue-50 border border-blue-200 rounded-md px-4 py-2">
+            <span className="text-xs font-medium text-blue-800">{selectedInvoiceIds.size}건 선택됨</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleBulkRewrite} disabled={bulkRewriting || bulkDeleting}>
+                <RefreshCw className="w-3.5 h-3.5" />{bulkRewriting ? '재작성 중...' : `일괄 재작성 (${selectedInvoiceIds.size})`}
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDeleteInvoices} disabled={bulkRewriting || bulkDeleting}>
+                <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? '삭제 중...' : `일괄 삭제 (${selectedInvoiceIds.size})`}
+              </Button>
+            </div>
+          </div>
+        )}
         {monthGroups.length === 0 ? (
           <div className="text-center py-8 text-sm text-gray-400">작성된 청구서가 없습니다.</div>
         ) : (
@@ -474,25 +413,32 @@ function InvoiceListTab() {
             {monthGroups.map(([ym, monthRows]) => {
               const issuedCount = monthRows.filter(r => r.status === 'issued').length;
               const expanded = expandedMonths.has(ym);
+              const allMonthSelected = monthRows.every(r => selectedInvoiceIds.has(r.id));
               return (
                 <div key={ym} className="border rounded-md overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleMonth(ym)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                  >
+                  <div className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-2">
-                      {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
-                      <span className="text-sm font-semibold">{ym}</span>
-                      <span className="text-xs text-gray-400">청구서 {monthRows.length}건</span>
+                      <Checkbox
+                        checked={allMonthSelected}
+                        onCheckedChange={checked => toggleMonthSelected(monthRows, !!checked)}
+                        onClick={e => e.stopPropagation()}
+                      />
+                      <button type="button" onClick={() => toggleMonth(ym)} className="flex items-center gap-2 text-left">
+                        {expanded ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                        <span className="text-sm font-semibold">{ym}</span>
+                        <span className="text-xs text-gray-400">청구서 {monthRows.length}건</span>
+                      </button>
                     </div>
-                    <Badge variant="secondary" className="text-[10px]">발행 {issuedCount}/{monthRows.length}</Badge>
-                  </button>
+                    <button type="button" onClick={() => toggleMonth(ym)}>
+                      <Badge variant="secondary" className="text-[10px]">발행 {issuedCount}/{monthRows.length}</Badge>
+                    </button>
+                  </div>
                   {expanded && (
                     <div className="border-t overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="text-xs w-8"></TableHead>
                             <TableHead className="text-xs">문서번호</TableHead>
                             <TableHead className="text-xs">선주</TableHead>
                             <TableHead className="text-xs">상태</TableHead>
@@ -504,9 +450,12 @@ function InvoiceListTab() {
                             <TableRow
                               key={r.id}
                               className="cursor-pointer hover:bg-gray-50"
-                              onClick={() => goToCalculation(r)}
-                              title="클릭하면 이 선주의 관리비 계산 화면으로 이동합니다."
+                              onClick={() => goToInvoiceView(r)}
+                              title="클릭하면 이 청구서를 확인할 수 있습니다."
                             >
+                              <TableCell onClick={e => e.stopPropagation()}>
+                                <Checkbox checked={selectedInvoiceIds.has(r.id)} onCheckedChange={() => toggleInvoiceSelected(r.id)} />
+                              </TableCell>
                               <TableCell className="text-xs font-mono">{r.doc_number}</TableCell>
                               <TableCell className="text-xs font-medium">{r.owner_name}</TableCell>
                               <TableCell><Badge variant={r.status === 'issued' ? 'default' : 'secondary'} className="text-xs">{r.status === 'issued' ? '발행됨' : '임시저장'}</Badge></TableCell>
@@ -522,7 +471,7 @@ function InvoiceListTab() {
             })}
           </div>
         )}
-        <p className="text-xs text-gray-400 mt-3">청구서 행을 클릭하면 해당 선주의 관리비 계산 화면으로 이동합니다. 이어서 작성하려면 "단일 작성" 탭에서 같은 선주/월을 다시 선택하세요.</p>
+        <p className="text-xs text-gray-400">청구서 행을 클릭하면 청구서 확인 화면으로 이동합니다. 이어서 작성하려면 "단일 작성" 탭에서 같은 선주/월을 다시 선택하세요. 일괄 재작성은 발행됨 상태를 임시저장으로 되돌려 최신 관리비 계산 결과를 다시 반영할 수 있게 합니다.</p>
       </CardContent>
     </Card>
   );

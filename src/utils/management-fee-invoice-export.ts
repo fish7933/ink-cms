@@ -3,13 +3,13 @@ import { cell, border, HEADER, RESULT_HEADER, TOTAL_ROW_BG, BASE_SZ, autoColWidt
 import type { ManagementFeeInvoiceData, ManagementFeeInvoiceShipData } from '@/services/management-fee-invoice.service';
 import type { ManagementFeeLedgerActualCostEntry } from '@/services/management-fee-calc.service';
 
-interface BankAccountInfo {
+export interface BankAccountInfo {
   bank_name: string;
   account_number: string;
   account_holder: string;
 }
 
-interface CompanyLetterhead {
+export interface CompanyLetterhead {
   name: string;
   address?: string;
   phone?: string;
@@ -34,19 +34,19 @@ const fmt = (n: number) => n.toLocaleString('en-US');
 // 사진 현상비 단독 발생분과 정확히 일치, 다른 인지대류는 그 달엔 0이었음).
 const BOARDING_STAMP_DUTY_BUNDLE = ['승선공인 인지대', '위험물 적재 인지대', '구명정수 인지대', '당직부원증 인지대', 'IGF Code 인지대', '사진 현상비'];
 
-interface DetailRow {
+export interface DetailRow {
   label: string;
   getValue: (s: ManagementFeeInvoiceShipData) => number;
 }
 
-interface DetailGroup {
+export interface DetailGroup {
   label: string;
   rows: DetailRow[];
 }
 
 const sumActualCost = (s: ManagementFeeInvoiceShipData, names: string[]) => names.reduce((sum, n) => sum + (s.actual_cost_totals[n] || 0), 0);
 
-const DETAIL_GROUPS: DetailGroup[] = [
+export const DETAIL_GROUPS: DetailGroup[] = [
   { label: '인원', rows: [{ label: '총 선원수', getValue: s => s.crew_count }] },
   {
     label: '급여',

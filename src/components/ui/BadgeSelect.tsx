@@ -4,6 +4,8 @@ export interface BadgeSelectItem {
   value: string;
   label: string;
   sublabel?: string;
+  /** sublabel에 별도 배경색을 줄 때 사용 (예: 승선/하선 표시) — 생략하면 기존처럼 옅은 텍스트로만 표시 */
+  sublabelColor?: 'blue' | 'red' | 'amber' | 'gray';
   color?: 'blue' | 'red' | 'amber' | 'gray';
 }
 
@@ -21,6 +23,8 @@ interface BadgeSelectProps {
   selected: string[];
   onChange: (selected: string[]) => void;
   className?: string;
+  /** 선원처럼 배지 수가 많은 목록에서 글자를 더 작게 표시 */
+  compact?: boolean;
 }
 
 const COLOR_SELECTED: Record<string, string> = {
@@ -37,28 +41,50 @@ const COLOR_UNSELECTED: Record<string, string> = {
   gray:  'text-gray-600 border-gray-300 hover:border-gray-500',
 };
 
+// sublabelColor가 있으면(예: 승선/하선 표시) sublabel만 칠하지 않고 배지 전체를 그 색으로
+// 칠한다 — 선택 여부와 무관하게 한눈에 상태를 알아볼 수 있어야 하므로, 선택 안 된(옅은) 배경도
+// 색을 갖는다는 점이 일반 color(선택 시에만 칠해지는)와 다르다.
+const STATUS_BG_UNSELECTED: Record<string, string> = {
+  blue:  'bg-blue-50 text-blue-700 border-blue-300 hover:border-blue-400',
+  red:   'bg-red-50 text-red-700 border-red-300 hover:border-red-400',
+  amber: 'bg-amber-50 text-amber-700 border-amber-300 hover:border-amber-400',
+  gray:  'bg-gray-100 text-gray-700 border-gray-300',
+};
+
 function BadgeItem({
   item,
   selected,
   onToggle,
+  compact,
 }: {
   item: BadgeSelectItem;
   selected: boolean;
   onToggle: (v: string) => void;
+  compact?: boolean;
 }) {
   const color = item.color ?? 'blue';
+  const badgeColorClasses = item.sublabelColor
+    ? (selected ? COLOR_SELECTED[item.sublabelColor] : STATUS_BG_UNSELECTED[item.sublabelColor])
+    : (selected ? COLOR_SELECTED[color] : COLOR_UNSELECTED[color]);
   return (
     <button
       type="button"
       onClick={() => onToggle(item.value)}
       className={cn(
-        'inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium transition-colors',
-        selected ? COLOR_SELECTED[color] : COLOR_UNSELECTED[color],
+        'inline-flex items-center gap-1 rounded-full border font-medium transition-colors',
+        compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs',
+        badgeColorClasses,
       )}
     >
       {item.label}
       {item.sublabel && (
-        <span className={cn('text-[10px]', selected ? 'opacity-75' : 'opacity-60')}>
+        <span
+          className={cn(
+            compact ? 'text-[9px]' : 'text-[10px]',
+            'font-semibold',
+            item.sublabelColor ? '' : (selected ? 'opacity-75' : 'opacity-60'),
+          )}
+        >
           {item.sublabel}
         </span>
       )}
@@ -73,6 +99,7 @@ export default function BadgeSelect({
   selected,
   onChange,
   className,
+  compact,
 }: BadgeSelectProps) {
   const allValues = groups
     ? groups.flatMap(g => g.items.map(i => i.value))
@@ -138,6 +165,7 @@ export default function BadgeSelect({
                       item={{ ...item, color: item.color ?? group.color ?? 'blue' }}
                       selected={selected.includes(item.value)}
                       onToggle={toggle}
+                      compact={compact}
                     />
                   ))}
                 </div>
@@ -151,6 +179,7 @@ export default function BadgeSelect({
                     item={item}
                     selected={selected.includes(item.value)}
                     onToggle={toggle}
+                    compact={compact}
                   />
                 ))}
               </div>

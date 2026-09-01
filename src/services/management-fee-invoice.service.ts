@@ -79,11 +79,28 @@ export const managementFeeInvoiceService = {
     return data;
   },
 
+  // 그 선주 소속 선박 중 이 달에 관리비 계산 회차가 하나라도 있는지 — 없으면 청구서 자체를
+  // 새로 만들 근거가 없다(청구서 금액은 그 계산 결과에서 매번 다시 뽑아오는 구조이므로).
+  async hasAnyManagementFeeCalc(ownerId: string, yearMonth: string): Promise<boolean> {
+    const { data: shipsRaw } = await supabase.from('ships').select('id').eq('owner_id', ownerId);
+    const shipIds = (shipsRaw || []).map(s => String(s.id));
+    if (shipIds.length === 0) return false;
+    const { count } = await supabase
+      .from('management_fee_periods')
+      .select('id', { count: 'exact', head: true })
+      .eq('year_month', yearMonth)
+      .in('ship_id', shipIds);
+    return (count || 0) > 0;
+  },
+
   // 그 선주+월 조합의 청구서 임시저장 행을 가져오거나, 없으면 문서번호를 자동 채번해 새로 만든다.
-  // 문서번호는 여기서 딱 한 번만 발급되고 이후 절대 재채번하지 않는다.
+  // 문서번호는 여기서 딱 한 번만 발급되고 이후 절대 재채번하지 않는다. 관리비 계산이 하나도
+  // 안 된 선주+월은 애초에 새 청구서를 만들 수 없다(근거 없는 빈 청구서가 남는 걸 막기 위함).
   async getOrCreateDraftInvoice(ownerId: string, yearMonth: string): Promise<ManagementFeeInvoiceSettings | null> {
     const existing = await this.getInvoiceSettings(ownerId, yearMonth);
     if (existing) return existing;
+
+    if (!(await this.hasAnyManagementFeeCalc(ownerId, yearMonth))) return null;
 
     const currentUser = await getCurrentUser();
     const docNumber = await getNextDocNumber(yearMonth);
@@ -105,6 +122,22 @@ export const managementFeeInvoiceService = {
     return data;
   },
 
+  // 그 선주가 가장 최근에 청구서에 지정했던 외화/원화 계좌를 찾는다(월이 달라도 상관없이
+  // 최신순으로 계좌가 채워진 청구서를 찾음) — 청구서 작성 화면에서 선주별 계좌 입력란의
+  // 기본값으로 쓰기 위함. 한 번 지정해두면 이후 그 선주 청구서를 새로 만들 때마다 자동으로
+  // 이어서 채워지고, 매번 다시 고를 필요는 없다(그래도 그때그때 바꿀 수는 있음).
+  async getLatestBankAccounts(ownerId: string): Promise<{ usd_bank_account_id: string | null; krw_bank_account_id: string | null }> {
+    const { data } = await supabase
+      .from('management_fee_invoices')
+      .select('usd_bank_account_id, krw_bank_account_id')
+      .eq('owner_id', ownerId)
+      .or('usd_bank_account_id.not.is.null,krw_bank_account_id.not.is.null')
+      .order('year_month', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return { usd_bank_account_id: data?.usd_bank_account_id ?? null, krw_bank_account_id: data?.krw_bank_account_id ?? null };
+  },
+
   // 임시저장 — 문서번호/상태는 건드리지 않고 계좌 선택 등 편집 가능한 필드만 갱신한다.
   async updateInvoiceSettings(id: string, updates: { usd_bank_account_id?: string | null; krw_bank_account_id?: string | null }): Promise<ManagementFeeInvoiceSettings | null> {
     const { data, error } = await supabase
@@ -123,6 +156,46 @@ export const managementFeeInvoiceService = {
       .from('management_fee_invoices')
       .update({ status: 'issued', issued_at: new Date().toISOString(), exchange_rate: appliedKrwRate })
       .eq('id', id);
+    if (error) throw error;
+  },
+
+  // 청구서 재작성 — 발행됨 상태를 임시저장으로 되돌린다(문서번호는 그대로 유지). 관리비를
+  // 일괄 재계산한 뒤, 이미 발행된 청구서의 금액이 최신 계산과 어긋나는 걸 막기 위해 쓴다.
+  // 실제 금액/항목은 이 테이블에 저장돼 있지 않고 매번 getInvoiceData로 그때그때 다시
+  // 계산하므로, 여기서는 상태만 되돌리면 그다음부터 자동으로 최신 수치가 반영된다.
+  async resetToDraft(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('management_fee_invoices')
+      .update({ status: 'draft', issued_at: null })
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  // 관리비 계산 회차가 삭제된 뒤 호출 — 그 선주+월에 남은 관리비 계산 회차가 하나도 없는데
+  // 청구서가 이미 "발행됨" 상태로 남아있으면 임시저장으로 되돌린다. 청구서 금액은 저장돼
+  // 있지 않고 매번 다시 계산해서 보여주므로, 근거 데이터가 사라진 채로 발행됨 상태만 남으면
+  // 실제로는 존재하지 않는 계산 결과가 발행된 것처럼 보이는 모순이 생긴다.
+  async syncStatusAfterCalcDeleted(ownerId: string, yearMonth: string): Promise<void> {
+    const { data: shipsRaw } = await supabase.from('ships').select('id').eq('owner_id', ownerId);
+    const shipIds = (shipsRaw || []).map(s => String(s.id));
+    if (shipIds.length === 0) return;
+    const { count } = await supabase
+      .from('management_fee_periods')
+      .select('id', { count: 'exact', head: true })
+      .eq('year_month', yearMonth)
+      .in('ship_id', shipIds);
+    if ((count || 0) > 0) return;
+    const { data: inv } = await supabase
+      .from('management_fee_invoices')
+      .select('id, status')
+      .eq('owner_id', ownerId)
+      .eq('year_month', yearMonth)
+      .maybeSingle();
+    if (inv && inv.status === 'issued') await this.resetToDraft(inv.id);
+  },
+
+  async deleteInvoice(id: string): Promise<void> {
+    const { error } = await supabase.from('management_fee_invoices').delete().eq('id', id);
     if (error) throw error;
   },
 
@@ -150,19 +223,37 @@ export const managementFeeInvoiceService = {
     const krwRate = savedRates['KRW'] ?? await exchangeRateService.getLatestRate('KRW', yearMonth);
 
     const { data: shipsRaw } = await supabase.from('ships').select('id, name').eq('owner_id', ownerId).order('name');
-    const ships = (shipsRaw || []).map(s => ({ id: String(s.id), name: s.name as string }));
-    if (ships.length === 0) {
+    const allOwnerShips = (shipsRaw || []).map(s => ({ id: String(s.id), name: s.name as string }));
+    if (allOwnerShips.length === 0) {
       return { owner_id: ownerId, owner_name: owner.name, year_month: yearMonth, krw_rate_to_usd: krwRate, ships: [], ships_missing_calc: [], grand_total_usd: 0, grand_total_krw: 0 };
     }
 
-    const shipIds = ships.map(s => s.id);
+    const allOwnerShipIds = allOwnerShips.map(s => s.id);
 
     const { data: periodsRaw } = await supabase
       .from('management_fee_periods')
       .select('id, ship_id')
       .eq('year_month', yearMonth)
-      .in('ship_id', shipIds);
+      .in('ship_id', allOwnerShipIds);
     const periodByShip = new Map((periodsRaw || []).map(p => [String(p.ship_id), String(p.id)]));
+
+    // 그 달에 관리비/급여를 계산할 선원이 아예 없는 선박(이번 달 승선기록이 하나도 없고, 계산된
+    // 회차도 없는 선박)은 청구서 작성 대상에서 제외한다 — 계류 중인 배 등이 매번 "계산 필요"
+    // 경고로 잡히는 걸 막기 위함.
+    const { start, end } = monthRange(yearMonth);
+    const { data: crewRecordsRaw } = await supabase
+      .from('crew_embarkation_records')
+      .select('ship_id')
+      .in('ship_id', allOwnerShipIds)
+      .lte('embark_date', end)
+      .or(`disembark_date.is.null,disembark_date.gte.${start}`);
+    const shipIdsWithCrew = new Set((crewRecordsRaw || []).map(r => String(r.ship_id)));
+    const ships = allOwnerShips.filter(s => periodByShip.has(s.id) || shipIdsWithCrew.has(s.id));
+    if (ships.length === 0) {
+      return { owner_id: ownerId, owner_name: owner.name, year_month: yearMonth, krw_rate_to_usd: krwRate, ships: [], ships_missing_calc: [], grand_total_usd: 0, grand_total_krw: 0 };
+    }
+
+    const shipIds = ships.map(s => s.id);
 
     const periodIds = [...periodByShip.values()];
     const [{ data: linesRaw }, { data: capsRaw }, { data: actualCostRaw }, { data: feeItemsRaw }] = await Promise.all([

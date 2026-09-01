@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { getEffectiveTemplateMapForShips, getEffectiveTemplateForShip } from '@/lib/management-fee-store';
 import type { ManagementFeeTemplate, ManagementFeeTemplateItem, ManagementFeeItem } from '@/lib/management-fee-store';
 import { crewDisplayName } from '@/lib/utils';
+import { exchangeRateService } from '@/services/exchange-rate.service';
 
 function daysInMonth(yearMonth: string): number {
   const [y, m] = yearMonth.split('-').map(Number);
@@ -222,6 +223,7 @@ export interface ManagementFeeLedgerRow {
   crew_member_id: string;
   crew_name: string;
   rank_code: string;
+  rank_grade: string | null;
   nationality?: string;
   embark_date: string;
   disembark_date: string | null;
@@ -237,6 +239,8 @@ export interface ManagementFeeLedgerItemTotal {
   cap_amount: number | null;
   billed_total: number;
   was_capped: boolean;
+  is_vat_applicable: boolean;
+  vat_amount_krw: number | null; // 부가세 대상 항목만 값이 있음(그 항목 청구금액 × 그 달 환율 × 10%)
 }
 
 export interface ManagementFeeLedgerActualCostCrew {
@@ -268,6 +272,9 @@ export interface ManagementFeeLedgerData {
   rows: ManagementFeeLedgerRow[];
   item_totals: ManagementFeeLedgerItemTotal[];
   actual_cost_entries: ManagementFeeLedgerActualCostEntry[];
+  vat_base_usd: number; // 부가세 과세 대상 항목의 USD 합계
+  vat_amount_krw: number; // 부가세(원화) = vat_base_usd × 그 달 KRW 환율 × 10%
+  krw_rate_to_usd: number | null; // 부가세 계산에 쓰인 그 달 환율(없으면 null — 부가세 계산 불가)
 }
 
 export const managementFeeCalcService = {
@@ -661,6 +668,17 @@ export const managementFeeCalcService = {
     const { data: caps } = await supabase.from('management_fee_ship_item_caps').select('*').eq('period_id', periodId);
     const { data: actualCostEntriesRaw } = await supabase.from('management_fee_actual_cost_entries').select('*').eq('period_id', periodId).order('created_at', { ascending: false });
 
+    // 부가세(VAT) 대상 항목 판정 — 같은 fee_item_id의 모든 조건행이 동일한 값을 갖도록 UI에서
+    // 강제하므로, 그 fee_item에 속한 라인 중 하나만 확인해도 충분하다.
+    const templateItemIds = [...new Set((lines || []).map(l => l.template_item_id).filter((v): v is string => !!v))];
+    const { data: vatFlagsRaw } = templateItemIds.length > 0
+      ? await supabase.from('management_fee_template_items').select('id, is_vat_applicable').in('id', templateItemIds)
+      : { data: [] as { id: string; is_vat_applicable: boolean }[] };
+    const vatApplicableByTemplateItemId = new Map((vatFlagsRaw || []).map(t => [String(t.id), !!t.is_vat_applicable]));
+    const vatApplicableFeeItemIds = new Set(
+      (lines || []).filter(l => l.template_item_id && vatApplicableByTemplateItemId.get(String(l.template_item_id))).map(l => l.fee_item_id)
+    );
+
     const actualCostCrewIds = [...new Set((actualCostEntriesRaw || []).flatMap(e => ((e.crew_member_ids || []) as string[])))];
     const crewMemberIds = [...new Set([
       ...(lines || []).map(l => l.crew_member_id),
@@ -669,17 +687,22 @@ export const managementFeeCalcService = {
     const embarkationRecordIds = [...new Set((lines || []).map(l => l.embarkation_record_id))];
 
     // 실비 기록의 관련 선원은 rank_id를 직접 갖고 있지 않으므로, 이 선박에서의 승선기록으로
-    // 직급을 역으로 찾는다(이미 하선했을 수도 있어 disembark_date 조건 없이 최신 기록 기준).
+    // 직급을 역으로 찾는다(이미 하선했을 수도 있어 disembark_date 조건 없이 최신 기록 기준). 계약
+    // 기반 라인이 하나도 없는(=실비만 있는) 선원의 행을 새로 만들 때도 이 정보를 그대로 쓴다.
     const { data: actualCostEmbarks } = actualCostCrewIds.length > 0
       ? await supabase.from('crew_embarkation_records')
-          .select('crew_member_id, rank_id, embark_date')
+          .select('crew_member_id, rank_id, rank_grade, embark_date, disembark_date')
           .eq('ship_id', period.ship_id)
           .in('crew_member_id', actualCostCrewIds)
           .order('embark_date', { ascending: false })
-      : { data: [] as { crew_member_id: string; rank_id: string | null; embark_date: string }[] };
+      : { data: [] as { crew_member_id: string; rank_id: string | null; rank_grade: string | null; embark_date: string; disembark_date: string | null }[] };
     const rankIdByActualCostCrew = new Map<string, string>();
+    const embarkInfoByActualCostCrew = new Map<string, { rank_grade: string | null; embark_date: string; disembark_date: string | null }>();
     for (const r of actualCostEmbarks || []) {
       if (!rankIdByActualCostCrew.has(r.crew_member_id) && r.rank_id) rankIdByActualCostCrew.set(r.crew_member_id, r.rank_id);
+      if (!embarkInfoByActualCostCrew.has(r.crew_member_id)) {
+        embarkInfoByActualCostCrew.set(r.crew_member_id, { rank_grade: r.rank_grade, embark_date: r.embark_date, disembark_date: r.disembark_date });
+      }
     }
 
     const rankIds = [...new Set([
@@ -693,13 +716,14 @@ export const managementFeeCalcService = {
 
     const [{ data: crewMembers }, { data: embarkRecords }, { data: ranks }, { data: feeItems }] = await Promise.all([
       crewMemberIds.length > 0 ? supabase.from('crew_members').select('id, name, name_english, nationality').in('id', crewMemberIds) : Promise.resolve({ data: [] as { id: string; name: string; name_english?: string; nationality?: string }[] }),
-      embarkationRecordIds.length > 0 ? supabase.from('crew_embarkation_records').select('id, embark_date, disembark_date').in('id', embarkationRecordIds) : Promise.resolve({ data: [] as { id: string; embark_date: string; disembark_date: string | null }[] }),
-      rankIds.length > 0 ? supabase.from('ranks').select('id, rank_code').in('id', rankIds) : Promise.resolve({ data: [] as { id: string; rank_code: string }[] }),
+      embarkationRecordIds.length > 0 ? supabase.from('crew_embarkation_records').select('id, embark_date, disembark_date, rank_grade').in('id', embarkationRecordIds) : Promise.resolve({ data: [] as { id: string; embark_date: string; disembark_date: string | null; rank_grade: string | null }[] }),
+      rankIds.length > 0 ? supabase.from('ranks').select('id, rank_code, display_order').in('id', rankIds) : Promise.resolve({ data: [] as { id: string; rank_code: string; display_order: number }[] }),
       feeItemIds.length > 0 ? supabase.from('management_fee_items').select('*').in('id', feeItemIds) : Promise.resolve({ data: [] as ManagementFeeItem[] }),
     ]);
     const crewById = new Map<string, { id: string; name: string; name_english?: string; nationality?: string }>((crewMembers || []).map(c => [c.id, c] as [string, typeof c]));
     const embarkById = new Map((embarkRecords || []).map(r => [r.id, r]));
     const rankCodeById = new Map((ranks || []).map(r => [r.id, r.rank_code]));
+    const rankOrderById = new Map((ranks || []).map(r => [r.id, r.display_order]));
     const feeItemById = new Map((feeItems || []).map(f => [String(f.id), f as ManagementFeeItem]));
 
     const actualCostEntries: ManagementFeeLedgerActualCostEntry[] = (actualCostEntriesRaw || []).map(e => {
@@ -725,7 +749,9 @@ export const managementFeeCalcService = {
       .sort((a, b) => (feeItemById.get(a)?.display_order ?? 0) - (feeItemById.get(b)?.display_order ?? 0))
       .map(id => feeItemById.get(id)?.name || 'Unknown');
 
+    // 선원 목록은 항상 직급 순(선원직급관리의 표시 순서)으로 정렬한다 — 프로그램 전반의 기본 규칙.
     const rowsByCrewRecord = new Map<string, ManagementFeeLedgerRow>();
+    const rowRankOrder = new Map<string, number>();
     for (const line of lines || []) {
       const key = line.embarkation_record_id;
       const crew = crewById.get(line.crew_member_id);
@@ -735,6 +761,7 @@ export const managementFeeCalcService = {
         crew_member_id: line.crew_member_id,
         crew_name: crew ? crewDisplayName(crew) : '',
         rank_code: line.rank_id ? (rankCodeById.get(line.rank_id) || '') : '',
+        rank_grade: embark?.rank_grade ?? null,
         nationality: crew?.nationality,
         embark_date: embark?.embark_date || '',
         disembark_date: embark?.disembark_date ?? null,
@@ -744,7 +771,53 @@ export const managementFeeCalcService = {
       row.item_amounts[feeItemName] = line.amount == null ? null : Number(line.amount);
       if (line.amount != null) row.total_amount += Number(line.amount);
       rowsByCrewRecord.set(key, row);
+      rowRankOrder.set(key, line.rank_id ? (rankOrderById.get(line.rank_id) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER);
     }
+
+    // 실비 청구 항목도 선원별 청구 항목 표에 반영한다 — 여러 선원이 걸린 건은 인원수로 나눠
+    // 합산해서, 항목별 합계(실비 부분)와 선원별 합계 합이 서로 어긋나지 않게 한다. 계약 기반
+    // 라인이 하나도 없는 선원(실비만 발생)은 이 표에 행이 아예 없었으므로 새로 만든다.
+    const rowByCrewMemberId = new Map<string, { key: string; row: ManagementFeeLedgerRow }>();
+    for (const [key, row] of rowsByCrewRecord) {
+      if (!rowByCrewMemberId.has(row.crew_member_id)) rowByCrewMemberId.set(row.crew_member_id, { key, row });
+    }
+    for (const ace of actualCostEntriesRaw || []) {
+      const crewIds = (ace.crew_member_ids || []) as string[];
+      if (crewIds.length === 0) continue;
+      const feeItemName = feeItemById.get(ace.fee_item_id)?.name || 'Unknown';
+      const perCrewAmount = Number(ace.amount_usd) / crewIds.length;
+      for (const cid of crewIds) {
+        let entry = rowByCrewMemberId.get(cid);
+        if (!entry) {
+          const crew = crewById.get(cid);
+          const rankId = rankIdByActualCostCrew.get(cid);
+          const info = embarkInfoByActualCostCrew.get(cid);
+          const newRow: ManagementFeeLedgerRow = {
+            crew_member_id: cid,
+            crew_name: crew ? crewDisplayName(crew) : '',
+            rank_code: rankId ? (rankCodeById.get(rankId) || '') : '',
+            rank_grade: info?.rank_grade ?? null,
+            nationality: crew?.nationality,
+            embark_date: info?.embark_date || '',
+            disembark_date: info?.disembark_date ?? null,
+            item_amounts: {},
+            total_amount: 0,
+          };
+          const key = `actual-only-${cid}`;
+          rowsByCrewRecord.set(key, newRow);
+          rowRankOrder.set(key, rankId ? (rankOrderById.get(rankId) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER);
+          entry = { key, row: newRow };
+          rowByCrewMemberId.set(cid, entry);
+        }
+        const row = entry.row;
+        row.item_amounts[feeItemName] = (typeof row.item_amounts[feeItemName] === 'number' ? row.item_amounts[feeItemName]! : 0) + perCrewAmount;
+        row.total_amount += perCrewAmount;
+      }
+    }
+
+    const sortedRows = [...rowsByCrewRecord.entries()]
+      .sort((a, b) => (rowRankOrder.get(a[0]) ?? Number.MAX_SAFE_INTEGER) - (rowRankOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER))
+      .map(([, row]) => row);
 
     const itemTotals: ManagementFeeLedgerItemTotal[] = (caps || []).map(c => ({
       fee_item_id: c.fee_item_id,
@@ -754,6 +827,8 @@ export const managementFeeCalcService = {
       cap_amount: Number(c.cap_amount),
       billed_total: Number(c.billed_total),
       was_capped: c.was_capped,
+      is_vat_applicable: vatApplicableFeeItemIds.has(c.fee_item_id),
+      vat_amount_krw: null,
     }));
     // 캡이 없는 항목도 합계 참고용으로 함께 보여준다 (raw_total == billed_total, was_capped=false)
     const cappedFeeItemIds = new Set(itemTotals.map(t => t.fee_item_id));
@@ -775,10 +850,14 @@ export const managementFeeCalcService = {
         cap_amount: null,
         billed_total: g.total,
         was_capped: false,
+        is_vat_applicable: vatApplicableFeeItemIds.has(feeItemId),
+        vat_amount_krw: null,
       });
     }
 
-    // 실비 항목 기록도 항목별 합계에 반영 (전부 USD 환산 금액이라 상한 개념 없이 그대로 합산)
+    // 실비 항목 기록도 항목별 합계에 반영 (전부 USD 환산 금액이라 상한 개념 없이 그대로 합산) —
+    // 실비는 템플릿 조건행(template_item_id)에서 나오는 게 아니라 건별 수기 기록이라 부가세
+    // 대상 여부를 판단할 근거가 없다(항상 false).
     const actualCostTotalsByFeeItem = new Map<string, number>();
     for (const e of actualCostEntries) {
       actualCostTotalsByFeeItem.set(e.fee_item_id, (actualCostTotalsByFeeItem.get(e.fee_item_id) || 0) + e.amount_usd);
@@ -792,20 +871,45 @@ export const managementFeeCalcService = {
         cap_amount: null,
         billed_total: total,
         was_capped: false,
+        is_vat_applicable: false,
+        vat_amount_krw: null,
       });
     }
 
     itemTotals.sort((a, b) => (feeItemById.get(a.fee_item_id)?.display_order ?? 0) - (feeItemById.get(b.fee_item_id)?.display_order ?? 0));
+
+    // 부가세 = 부가세 대상 항목별로 그 항목의 청구금액(USD 환산) × 그 달 KRW 환율 × 10% — 청구서와
+    // 같은 계산식이되, 항목별 금액을 각각 보여줄 수 있도록 항목 단위로 계산한 뒤 합산한다.
+    const savedRates = await exchangeRateService.getExchangeRates(period.year_month);
+    const krwRate = savedRates['KRW'] ?? await exchangeRateService.getLatestRate('KRW', period.year_month);
+    let vatBaseUsd = 0;
+    let vatAmountKrw = 0;
+    for (const t of itemTotals) {
+      if (!t.is_vat_applicable) continue;
+      let usdAmount = t.billed_total;
+      if (t.currency !== 'USD') {
+        const rate = savedRates[t.currency] ?? await exchangeRateService.getLatestRate(t.currency, period.year_month);
+        usdAmount = rate ? t.billed_total / rate : 0;
+      }
+      vatBaseUsd += usdAmount;
+      if (krwRate) {
+        t.vat_amount_krw = Math.round(usdAmount * krwRate * 0.1);
+        vatAmountKrw += t.vat_amount_krw;
+      }
+    }
 
     return {
       period,
       ship_name: ship?.name || '',
       owner_name: owner?.name,
       fleet_name: fleet?.name,
+      vat_base_usd: vatBaseUsd,
+      vat_amount_krw: vatAmountKrw,
+      krw_rate_to_usd: krwRate,
       template_name: template?.name,
       currency: template?.currency || 'USD',
       fee_item_columns: feeItemColumns,
-      rows: [...rowsByCrewRecord.values()],
+      rows: sortedRows,
       item_totals: itemTotals,
       actual_cost_entries: actualCostEntries,
     };

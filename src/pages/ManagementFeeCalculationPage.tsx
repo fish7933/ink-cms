@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
+import { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser, getShips } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import { supervisorService } from '@/services/supervisor.service';
+import { managementFeeInvoiceService } from '@/services/management-fee-invoice.service';
 import {
   managementFeeCalcService,
   type ManagementFeeDashboardRow,
@@ -59,6 +60,21 @@ export default function ManagementFeeCalculationPage() {
 
   const [ownerFilter, setOwnerFilter] = useState(() => searchParams.get('owner') || '');
   const [fleetFilter, setFleetFilter] = useState('');
+  // 선주별로 한 줄만 보이고, 클릭하면 그 선주의 선박들이 펼쳐진다 — 선원이 승선 중인 관리
+  // 선박이 많은 선주라면 기본으로 전부 펼쳐두면 화면이 감당 안 되므로 접어둔다. 다만 특정
+  // 선주로 필터링해 들어온 경우(청구서 확인 화면에서 링크로 들어온 경우 등)는 바로 볼 대상이
+  // 명확하니 그 선주만 펼쳐서 보여준다.
+  const [expandedOwners, setExpandedOwners] = useState<Set<string>>(() => {
+    const initialOwner = searchParams.get('owner');
+    return initialOwner ? new Set([initialOwner]) : new Set();
+  });
+  const toggleOwnerExpanded = (ownerId: string) => {
+    setExpandedOwners(prev => {
+      const next = new Set(prev);
+      if (next.has(ownerId)) next.delete(ownerId); else next.add(ownerId);
+      return next;
+    });
+  };
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [genResult, setGenResult] = useState<GenerateManagementFeeResult | null>(null);
@@ -67,6 +83,8 @@ export default function ManagementFeeCalculationPage() {
   const [ledgerData, setLedgerData] = useState<ManagementFeeLedgerData | null>(null);
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [bulkRegenerating, setBulkRegenerating] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -92,16 +110,18 @@ export default function ManagementFeeCalculationPage() {
     })();
   }, []);
 
-  const loadRows = useCallback(async (ym: string, shipList: Ship[]) => {
-    if (shipList.length === 0) { setRows([]); setLoading(false); return; }
-    setLoading(true);
+  // silent=true는 재계산/삭제 등 액션 뒤에 수치만 조용히 갱신할 때 쓴다 — 전체 로딩
+  // 스피너로 테이블을 통째로 갈아치우면 화면이 깜빡이므로, 그 경우는 loading을 건드리지 않는다.
+  const loadRows = useCallback(async (ym: string, shipList: Ship[], silent = false) => {
+    if (shipList.length === 0) { setRows([]); if (!silent) setLoading(false); return; }
+    if (!silent) setLoading(true);
     try {
       const data = await managementFeeCalcService.getDashboardRows(ym, shipList.map(s => ({ id: s.id, name: s.name, owner_id: s.owner_id, fleet_id: s.fleet_id })));
       setRows(data);
     } catch (e) {
       toast({ title: '불러오기 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [toast]);
 
@@ -130,6 +150,9 @@ export default function ManagementFeeCalculationPage() {
   }, [filteredRows]);
 
   const generatableIds = rows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'none').map(r => r.ship_id);
+  // 이미 계산된(status='draft') 선박은 재계산/삭제 대상 — 청구서가 이미 발행됐는지 여부와
+  // 무관하게 동작한다(발행된 청구서도 그 뒤 관리비 계산이 바뀌면 다시 계산할 수 있어야 함).
+  const regeneratablePeriods = rows.filter(r => selectedIds.includes(r.ship_id) && r.status === 'draft' && r.period_id).map(r => ({ shipId: r.ship_id, periodId: r.period_id as string }));
   const allSelectableIds = filteredRows.map(r => r.ship_id);
 
   const toggleSelect = (shipId: string) => setSelectedIds(prev => prev.includes(shipId) ? prev.filter(id => id !== shipId) : [...prev, shipId]);
@@ -145,11 +168,73 @@ export default function ManagementFeeCalculationPage() {
       setGenResult(result);
       toast({ title: `일괄 계산 완료 — 성공 ${result.succeeded.length} / 건너뜀 ${result.skipped.length} / 실패 ${result.failed.length}` });
       setSelectedIds([]);
-      await loadRows(yearMonth, ships);
+      await loadRows(yearMonth, ships, true);
     } catch (e) {
       toast({ title: '일괄 계산 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleBulkRegenerate = async () => {
+    if (regeneratablePeriods.length === 0) return;
+    if (!confirm(`선택한 ${regeneratablePeriods.length}척의 관리비를 다시 계산하시겠습니까? 이미 발행된 청구서가 있는 선박도 포함됩니다.`)) return;
+    setBulkRegenerating(true);
+    let succeeded = 0;
+    const failed: string[] = [];
+    try {
+      const CHUNK = 12;
+      for (let i = 0; i < regeneratablePeriods.length; i += CHUNK) {
+        const chunk = regeneratablePeriods.slice(i, i + CHUNK);
+        const results = await Promise.allSettled(chunk.map(p => managementFeeCalcService.regeneratePeriod(p.periodId)));
+        results.forEach((r, idx) => {
+          if (r.status === 'fulfilled') succeeded++;
+          else failed.push(rows.find(row => row.period_id === chunk[idx].periodId)?.ship_name || chunk[idx].shipId);
+        });
+      }
+      toast({
+        title: `일괄 재계산 완료 — 성공 ${succeeded} / 실패 ${failed.length}`,
+        description: failed.length > 0 ? `실패: ${failed.join(', ')}` : undefined,
+        variant: failed.length > 0 ? 'destructive' : undefined,
+      });
+      setSelectedIds([]);
+      await loadRows(yearMonth, ships, true);
+    } finally {
+      setBulkRegenerating(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (regeneratablePeriods.length === 0) return;
+    if (!confirm(`선택한 ${regeneratablePeriods.length}척의 관리비 계산 회차를 삭제하시겠습니까? 이미 발행된 청구서가 있는 선박도 포함되며, 되돌릴 수 없습니다.`)) return;
+    setBulkDeleting(true);
+    let succeeded = 0;
+    const failed: string[] = [];
+    const affectedOwnerIds = new Set(
+      regeneratablePeriods.map(p => rows.find(r => r.period_id === p.periodId)?.owner_id).filter((id): id is string => !!id)
+    );
+    try {
+      const CHUNK = 12;
+      for (let i = 0; i < regeneratablePeriods.length; i += CHUNK) {
+        const chunk = regeneratablePeriods.slice(i, i + CHUNK);
+        const results = await Promise.allSettled(chunk.map(p => managementFeeCalcService.deletePeriod(p.periodId)));
+        results.forEach((r, idx) => {
+          if (r.status === 'fulfilled') succeeded++;
+          else failed.push(rows.find(row => row.period_id === chunk[idx].periodId)?.ship_name || chunk[idx].shipId);
+        });
+      }
+      // 삭제 후 남은 계산 회차가 없는 선주+월인데 청구서가 "발행됨"으로 남아있으면 임시저장으로 되돌린다.
+      await Promise.all([...affectedOwnerIds].map(ownerId => managementFeeInvoiceService.syncStatusAfterCalcDeleted(ownerId, yearMonth)));
+      toast({
+        title: `일괄 삭제 완료 — 성공 ${succeeded} / 실패 ${failed.length}`,
+        description: failed.length > 0 ? `실패: ${failed.join(', ')}` : undefined,
+        variant: failed.length > 0 ? 'destructive' : undefined,
+      });
+      setSelectedIds([]);
+      if (ledgerPeriodId && regeneratablePeriods.some(p => p.periodId === ledgerPeriodId)) { setLedgerPeriodId(null); setLedgerData(null); }
+      await loadRows(yearMonth, ships, true);
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -169,13 +254,13 @@ export default function ManagementFeeCalculationPage() {
   };
 
   // 이번 달에 승선/하선한 선원 — 항공권 등 승·하선 비용을 실비 항목에 입력할 때 빠뜨리기
-  // 쉬우므로, 입력란 바로 위에 눈에 띄게 배지로 짚어준다.
-  const { embarkedThisMonth, disembarkedThisMonth } = useMemo(() => {
-    if (!ledgerData) return { embarkedThisMonth: [], disembarkedThisMonth: [] };
+  // 쉬우므로, 선원별 상세 표의 해당 줄에 배지 + 배경색으로 눈에 띄게 짚어준다.
+  const { embarkedKeySet, disembarkedKeySet } = useMemo(() => {
+    if (!ledgerData) return { embarkedKeySet: new Set<string>(), disembarkedKeySet: new Set<string>() };
     const { start, end } = monthRangeLocal(yearMonth);
     return {
-      embarkedThisMonth: ledgerData.rows.filter(r => r.embark_date >= start && r.embark_date <= end),
-      disembarkedThisMonth: ledgerData.rows.filter(r => r.disembark_date && r.disembark_date >= start && r.disembark_date <= end),
+      embarkedKeySet: new Set(ledgerData.rows.filter(r => r.embark_date >= start && r.embark_date <= end).map(r => r.crew_member_id + r.embark_date)),
+      disembarkedKeySet: new Set(ledgerData.rows.filter(r => r.disembark_date && r.disembark_date >= start && r.disembark_date <= end).map(r => r.crew_member_id + r.embark_date)),
     };
   }, [ledgerData, yearMonth]);
 
@@ -185,7 +270,7 @@ export default function ManagementFeeCalculationPage() {
     try {
       await managementFeeCalcService.regeneratePeriod(ledgerPeriodId);
       toast({ title: '재계산 완료' });
-      await loadRows(yearMonth, ships);
+      await loadRows(yearMonth, ships, true);
       const updatedRow = rows.find(r => r.period_id === ledgerPeriodId);
       if (updatedRow) {
         const fresh = await managementFeeCalcService.getDashboardRows(yearMonth, [{ id: updatedRow.ship_id, name: updatedRow.ship_name, owner_id: updatedRow.owner_id, fleet_id: updatedRow.fleet_id }]);
@@ -203,18 +288,22 @@ export default function ManagementFeeCalculationPage() {
     if (!confirm('이 관리비 계산 회차를 삭제하시겠습니까?')) return;
     setDeleting(true);
     try {
+      const ownerId = rows.find(r => r.period_id === ledgerPeriodId)?.owner_id;
       await managementFeeCalcService.deletePeriod(ledgerPeriodId);
+      // 삭제 후 그 선주+월에 남은 계산 회차가 없는데 청구서가 "발행됨"으로 남아있으면
+      // 임시저장으로 되돌린다 — 근거 없는 발행 상태가 남지 않도록.
+      if (ownerId) await managementFeeInvoiceService.syncStatusAfterCalcDeleted(ownerId, yearMonth);
       toast({ title: '삭제 완료' });
       setLedgerPeriodId(null);
       setLedgerData(null);
-      await loadRows(yearMonth, ships);
+      await loadRows(yearMonth, ships, true);
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
+    <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-3 space-y-2.5">
       <div>
         <h1 className="text-xl font-bold flex items-center gap-2"><Receipt className="w-5 h-5 text-muted-foreground" />관리비 계산</h1>
         <p className="text-xs text-muted-foreground mt-1">
@@ -260,13 +349,13 @@ export default function ManagementFeeCalculationPage() {
         <button
           type="button"
           onClick={() => setShowQuickSelect(v => !v)}
-          className="w-full flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+          className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
         >
           {showQuickSelect ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           전체 / 선주 / 플릿 / 선박 단위로 빠르게 선택
         </button>
         {showQuickSelect && (
-          <div className="px-3 pb-3 pt-1 border-t">
+          <div className="px-3 pb-2 pt-1 border-t">
             <OwnerFleetShipCheckTree
               ships={ships}
               companies={owners}
@@ -279,13 +368,23 @@ export default function ManagementFeeCalculationPage() {
       </div>
 
       {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between gap-2 flex-wrap bg-blue-50 border border-blue-200 rounded-md px-4 py-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5">
           <span className="text-xs font-medium text-blue-800">{selectedIds.length}척 선택됨</span>
           <div className="flex items-center gap-1.5 flex-wrap">
             {generatableIds.length > 0 && (
               <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkGenerate} disabled={generating}>
                 <RefreshCw className="w-3.5 h-3.5" />{generating ? '계산 중...' : `일괄 계산 (${generatableIds.length})`}
               </Button>
+            )}
+            {regeneratablePeriods.length > 0 && (
+              <>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleBulkRegenerate} disabled={bulkRegenerating || bulkDeleting}>
+                  <RefreshCw className="w-3.5 h-3.5" />{bulkRegenerating ? '재계산 중...' : `일괄 재계산 (${regeneratablePeriods.length})`}
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete} disabled={bulkRegenerating || bulkDeleting}>
+                  <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? '삭제 중...' : `일괄 삭제 (${regeneratablePeriods.length})`}
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -315,9 +414,10 @@ export default function ManagementFeeCalculationPage() {
             <TableBody>
               {ownerGroups.map(group => {
                 const groupIds = group.rows.map(r => r.ship_id);
+                const expanded = expandedOwners.has(group.ownerId);
                 return (
                   <Fragment key={group.ownerId}>
-                    <TableRow className="bg-slate-50 hover:bg-slate-50">
+                    <TableRow className="bg-slate-50 hover:bg-slate-100 cursor-pointer" onClick={() => toggleOwnerExpanded(group.ownerId)}>
                       <TableCell className="py-1 px-2" onClick={e => e.stopPropagation()}>
                         <Checkbox
                           checked={groupIds.length > 0 && groupIds.every(id => selectedIds.includes(id))}
@@ -325,20 +425,190 @@ export default function ManagementFeeCalculationPage() {
                         />
                       </TableCell>
                       <TableCell colSpan={4} className="py-1 px-2 text-xs font-semibold text-slate-700">
-                        {group.ownerName}
-                        <span className="ml-2 font-normal text-slate-500">({group.rows.length}척)</span>
+                        <span className="inline-flex items-center gap-1">
+                          {expanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+                          {group.ownerName}
+                          <span className="font-normal text-slate-500">({group.rows.length}척)</span>
+                        </span>
                       </TableCell>
                     </TableRow>
-                    {group.rows.map(row => (
-                      <TableRow key={row.ship_id} className={`cursor-pointer ${ledgerPeriodId === row.period_id ? 'bg-blue-50/60' : ''}`} onClick={() => openShip(row)}>
-                        <TableCell className="py-1 px-2" onClick={e => e.stopPropagation()}>
-                          <Checkbox checked={selectedIds.includes(row.ship_id)} onCheckedChange={() => toggleSelect(row.ship_id)} />
-                        </TableCell>
-                        <TableCell className="py-1 px-2 text-xs text-muted-foreground">{row.fleet_name || '-'}</TableCell>
-                        <TableCell className="py-1 px-2 text-xs font-medium">{row.ship_name}</TableCell>
-                        <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
-                        <TableCell className="py-1 px-2 text-xs text-center">{row.line_count > 0 ? row.line_count : '-'}</TableCell>
-                      </TableRow>
+                    {expanded && group.rows.map(row => (
+                      <Fragment key={row.ship_id}>
+                        <TableRow className={`cursor-pointer ${ledgerPeriodId === row.period_id ? 'bg-blue-50/60' : ''}`} onClick={() => openShip(row)}>
+                          <TableCell className="py-1 px-2" onClick={e => e.stopPropagation()}>
+                            <Checkbox checked={selectedIds.includes(row.ship_id)} onCheckedChange={() => toggleSelect(row.ship_id)} />
+                          </TableCell>
+                          <TableCell className="py-1 px-2 text-xs text-muted-foreground">{row.fleet_name || '-'}</TableCell>
+                          <TableCell className="py-1 px-2 text-xs font-medium">{row.ship_name}</TableCell>
+                          <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
+                          <TableCell className="py-1 px-2 text-xs text-center">{row.line_count > 0 ? row.line_count : '-'}</TableCell>
+                        </TableRow>
+                        {/* 선택된 선박의 선원×항목 상세 내역 — 클릭한 선박 바로 아래에 펼쳐진다 */}
+                        {ledgerPeriodId === row.period_id && (
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell colSpan={5} className="p-0 bg-slate-50/70 border-t-0">
+                              <div className="p-2.5 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-sm font-semibold">
+                                    {ledgerData ? `${[ledgerData.owner_name, ledgerData.fleet_name, ledgerData.ship_name].filter(Boolean).join(' > ')} — ${yearMonth}` : '불러오는 중...'}
+                                  </h3>
+                                  <div className="flex gap-2">
+                                    <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs bg-white" onClick={handleRegenerate} disabled={regenerating}>
+                                      <RefreshCw className="w-3.5 h-3.5" />{regenerating ? '재계산 중...' : '재계산'}
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs text-red-600 border-red-300 hover:bg-red-50 bg-white" onClick={handleDelete} disabled={deleting}>
+                                      <Trash2 className="w-3.5 h-3.5" />삭제
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setLedgerPeriodId(null); setLedgerData(null); }}>
+                                      <X className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                {ledgerLoading || !ledgerData ? (
+                                  <div className="text-center py-8 text-sm text-gray-400">불러오는 중...</div>
+                                ) : (
+                                  <>
+                                    {/* 선원별 상세 (피벗) — 이번 달 승선/하선 선원은 배지 + 배경색으로 표시해
+                                        승·하선 비용(항공권 등)을 실비 항목에 빠짐없이 입력했는지 바로 확인할 수 있게 한다. */}
+                                    <div>
+                                    <h3 className="text-sm font-semibold mb-2">선원별 청구 항목</h3>
+                                    <div className="rounded-md border bg-white overflow-x-auto">
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">이름</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">국적</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">승선일</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">하선일</TableHead>
+                                            {ledgerData.fee_item_columns.map(col => (
+                                              <TableHead key={col} className="py-1 px-2 text-xs text-right whitespace-nowrap">{col}</TableHead>
+                                            ))}
+                                            <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">합계</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {ledgerData.rows.length === 0 ? (
+                                            <TableRow><TableCell colSpan={6 + ledgerData.fee_item_columns.length} className="text-center py-6 text-xs text-gray-400">계산된 라인이 없습니다.</TableCell></TableRow>
+                                          ) : ledgerData.rows.map(r => {
+                                            const rowKey = r.crew_member_id + r.embark_date;
+                                            const isEmbarked = embarkedKeySet.has(rowKey);
+                                            const isDisembarked = disembarkedKeySet.has(rowKey);
+                                            return (
+                                              <TableRow key={rowKey} className={isDisembarked ? 'bg-amber-50/60 hover:bg-amber-50' : isEmbarked ? 'bg-blue-50/60 hover:bg-blue-50' : ''}>
+                                                <TableCell className="py-1 px-2 text-xs whitespace-nowrap">{r.rank_code}{r.rank_grade ? `(${r.rank_grade})` : ''}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs font-medium whitespace-nowrap">
+                                                  <span className="inline-flex items-center gap-1">
+                                                    {r.crew_name}
+                                                    {isEmbarked && <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-100">승선</Badge>}
+                                                    {isDisembarked && <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">하선</Badge>}
+                                                  </span>
+                                                </TableCell>
+                                                <TableCell className="py-1 px-2 text-xs">{r.nationality || '-'}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs whitespace-nowrap">{r.embark_date}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs whitespace-nowrap">{r.disembark_date || '-'}</TableCell>
+                                                {ledgerData.fee_item_columns.map(col => (
+                                                  <TableCell key={col} className="py-1 px-2 text-xs text-right font-mono">
+                                                    {r.item_amounts[col] == null ? (col in r.item_amounts ? '수기입력' : '-') : fmt(r.item_amounts[col]!)}
+                                                  </TableCell>
+                                                ))}
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(r.total_amount)}</TableCell>
+                                              </TableRow>
+                                            );
+                                          })}
+                                        </TableBody>
+                                        {ledgerData.rows.length > 0 && (
+                                          <TableFooter>
+                                            <TableRow>
+                                              <TableCell colSpan={5} className="py-1 px-2 text-xs text-right font-semibold">
+                                                합계 <span className="font-normal text-gray-400">(아래 항목별 합계와 비교)</span>
+                                              </TableCell>
+                                              {ledgerData.fee_item_columns.map(col => (
+                                                <TableCell key={`sum-${col}`} className="py-1 px-2 text-xs text-right font-mono font-semibold">
+                                                  {fmt(ledgerData.rows.reduce((sum, r) => sum + (typeof r.item_amounts[col] === 'number' ? r.item_amounts[col]! : 0), 0))}
+                                                </TableCell>
+                                              ))}
+                                              <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">
+                                                {fmt(ledgerData.rows.reduce((sum, r) => sum + r.total_amount, 0))}
+                                              </TableCell>
+                                            </TableRow>
+                                          </TableFooter>
+                                        )}
+                                      </Table>
+                                    </div>
+                                    </div>
+
+                                    {/* 항목별 합계 (상한 적용 여부 / 부가세 대상 여부) */}
+                                    {ledgerData.item_totals.length > 0 && (
+                                      <div>
+                                      <h3 className="text-sm font-semibold mb-2">항목별 청구금액</h3>
+                                      <div className="rounded-md border bg-white overflow-x-auto">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead className="py-1 px-2 text-xs">청구 항목</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right">전 선원 합계</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right">상한</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right">청구 금액</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right text-teal-700">부가세</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs">비고</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {ledgerData.item_totals.map(t => (
+                                              <TableRow key={`${t.fee_item_id}-${t.currency}`}>
+                                                <TableCell className="py-1 px-2 text-xs font-medium">{t.fee_item_name}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(t.raw_total)} {t.currency}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono">{t.cap_amount != null ? `${fmt(t.cap_amount)} ${t.currency}` : '-'}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(t.billed_total)} {t.currency}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono text-teal-700">
+                                                  {!t.is_vat_applicable ? '-' : t.vat_amount_krw != null ? `${fmt(t.vat_amount_krw)} KRW` : '환율 없음'}
+                                                </TableCell>
+                                                <TableCell className="py-1 px-2 text-xs">
+                                                  {t.was_capped && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50">상한 적용됨</Badge>}
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                          {ledgerData.item_totals.some(t => t.is_vat_applicable) && (
+                                            <TableFooter>
+                                              <TableRow>
+                                                <TableCell colSpan={4} className="py-1 px-2 text-xs text-right font-semibold text-teal-700">부가세 합계</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold text-teal-700">
+                                                  {ledgerData.krw_rate_to_usd ? `${fmt(ledgerData.vat_amount_krw)} KRW` : '환율 없음'}
+                                                </TableCell>
+                                                <TableCell className="py-1 px-2" />
+                                              </TableRow>
+                                            </TableFooter>
+                                          )}
+                                        </Table>
+                                        {ledgerData.item_totals.some(t => t.is_vat_applicable) && !ledgerData.krw_rate_to_usd && (
+                                          <div className="px-3 py-1.5 border-t text-xs text-amber-600">
+                                            환율 관리에 이 달 KRW 환율이 없어 부가세를 계산할 수 없습니다.
+                                          </div>
+                                        )}
+                                      </div>
+                                      </div>
+                                    )}
+
+                                    {/* 실비(수기입력) 항목 기록 — 승·하선 비용상세와 1:1 대응 */}
+                                    <div>
+                                      <h3 className="text-sm font-semibold mb-2">실비 청구 항목</h3>
+                                      <ManagementFeeActualCostEntriesSection
+                                        periodId={ledgerPeriodId}
+                                        shipId={ledgerData.period.ship_id}
+                                        yearMonth={ledgerData.period.year_month}
+                                        entries={ledgerData.actual_cost_entries}
+                                        onChanged={() => loadLedger(ledgerPeriodId)}
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
                     ))}
                   </Fragment>
                 );
@@ -346,139 +616,6 @@ export default function ManagementFeeCalculationPage() {
             </TableBody>
           </Table>
         </div>
-      )}
-
-      {/* 선택된 선박의 선원×항목 상세 내역 (미리보기) */}
-      {ledgerPeriodId && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                {ledgerData ? `${[ledgerData.owner_name, ledgerData.fleet_name, ledgerData.ship_name].filter(Boolean).join(' > ')} — ${yearMonth}` : '불러오는 중...'}
-              </CardTitle>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={handleRegenerate} disabled={regenerating}>
-                  <RefreshCw className="w-3.5 h-3.5" />{regenerating ? '재계산 중...' : '재계산'}
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={handleDelete} disabled={deleting}>
-                  <Trash2 className="w-3.5 h-3.5" />삭제
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setLedgerPeriodId(null); setLedgerData(null); }}>
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {ledgerLoading || !ledgerData ? (
-              <div className="text-center py-8 text-sm text-gray-400">불러오는 중...</div>
-            ) : (
-              <>
-                {/* 항목별 합계 (상한 적용 여부) */}
-                {ledgerData.item_totals.length > 0 && (
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">청구 항목</TableHead>
-                          <TableHead className="text-xs text-right">전 선원 합계</TableHead>
-                          <TableHead className="text-xs text-right">상한</TableHead>
-                          <TableHead className="text-xs text-right">청구 금액</TableHead>
-                          <TableHead className="text-xs">비고</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {ledgerData.item_totals.map(t => (
-                          <TableRow key={`${t.fee_item_id}-${t.currency}`}>
-                            <TableCell className="text-xs font-medium">{t.fee_item_name}</TableCell>
-                            <TableCell className="text-xs text-right font-mono">{fmt(t.raw_total)} {t.currency}</TableCell>
-                            <TableCell className="text-xs text-right font-mono">{t.cap_amount != null ? `${fmt(t.cap_amount)} ${t.currency}` : '-'}</TableCell>
-                            <TableCell className="text-xs text-right font-mono font-semibold">{fmt(t.billed_total)} {t.currency}</TableCell>
-                            <TableCell className="text-xs">{t.was_capped && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50">상한 적용됨</Badge>}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-
-                {/* 선원별 상세 (피벗) */}
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs whitespace-nowrap">직급</TableHead>
-                        <TableHead className="text-xs whitespace-nowrap">이름</TableHead>
-                        <TableHead className="text-xs whitespace-nowrap">국적</TableHead>
-                        <TableHead className="text-xs whitespace-nowrap">승선일</TableHead>
-                        {ledgerData.fee_item_columns.map(col => (
-                          <TableHead key={col} className="text-xs text-right whitespace-nowrap">{col}</TableHead>
-                        ))}
-                        <TableHead className="text-xs text-right whitespace-nowrap">합계</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ledgerData.rows.length === 0 ? (
-                        <TableRow><TableCell colSpan={5 + ledgerData.fee_item_columns.length} className="text-center py-6 text-xs text-gray-400">계산된 라인이 없습니다.</TableCell></TableRow>
-                      ) : ledgerData.rows.map(row => (
-                        <TableRow key={row.crew_member_id + row.embark_date}>
-                          <TableCell className="text-xs">{row.rank_code}</TableCell>
-                          <TableCell className="text-xs font-medium">{row.crew_name}</TableCell>
-                          <TableCell className="text-xs">{row.nationality || '-'}</TableCell>
-                          <TableCell className="text-xs">{row.embark_date}{row.disembark_date ? ` ~ ${row.disembark_date}` : ''}</TableCell>
-                          {ledgerData.fee_item_columns.map(col => (
-                            <TableCell key={col} className="text-xs text-right font-mono">
-                              {row.item_amounts[col] == null ? (col in row.item_amounts ? '수기입력' : '-') : fmt(row.item_amounts[col]!)}
-                            </TableCell>
-                          ))}
-                          <TableCell className="text-xs text-right font-mono font-semibold">{fmt(row.total_amount)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* 이번 달 승선/하선 선원 — 승·하선 비용(항공권 등)을 실비 항목에 빠짐없이 입력하도록 */}
-                {(embarkedThisMonth.length > 0 || disembarkedThisMonth.length > 0) && (
-                  <div className="rounded-md border bg-blue-50/30 p-3 space-y-1.5">
-                    <p className="text-[11px] text-gray-500">이번 달 승선/하선 선원입니다 — 승·하선 비용(항공권 등)이 아래 실비 항목에 빠짐없이 입력됐는지 확인하세요.</p>
-                    {embarkedThisMonth.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-medium text-blue-700 w-9 shrink-0">승선</span>
-                        {embarkedThisMonth.map(r => (
-                          <Badge key={`emb-${r.crew_member_id}-${r.embark_date}`} className="text-[11px] bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-100">
-                            {r.rank_code} {r.crew_name} ({r.embark_date})
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    {disembarkedThisMonth.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-medium text-amber-700 w-9 shrink-0">하선</span>
-                        {disembarkedThisMonth.map(r => (
-                          <Badge key={`dis-${r.crew_member_id}-${r.disembark_date}`} className="text-[11px] bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">
-                            {r.rank_code} {r.crew_name} ({r.disembark_date})
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 실비(수기입력) 항목 기록 — 승·하선 비용상세와 1:1 대응 */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">실비 항목 기록</h3>
-                  <ManagementFeeActualCostEntriesSection
-                    periodId={ledgerPeriodId}
-                    shipId={ledgerData.period.ship_id}
-                    entries={ledgerData.actual_cost_entries}
-                    onChanged={() => loadLedger(ledgerPeriodId)}
-                  />
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
       )}
 
       <Dialog open={!!genResult} onOpenChange={o => !o && setGenResult(null)}>
