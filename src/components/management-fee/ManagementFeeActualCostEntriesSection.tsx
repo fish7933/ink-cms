@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { crewDisplayName } from '@/lib/utils';
 import {
   getEffectiveTemplateForShip,
   addActualCostEntry,
+  updateActualCostEntry,
   deleteActualCostEntry,
   type ManagementFeeItem,
 } from '@/lib/management-fee-store';
@@ -47,6 +48,16 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
   const [quantity, setQuantity] = useState('1');
   const [amountUsd, setAmountUsd] = useState('');
   const [remark, setRemark] = useState('');
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFeeItemId, setEditFeeItemId] = useState('');
+  const [editCrewMemberId, setEditCrewMemberId] = useState('none');
+  const [editCurrency, setEditCurrency] = useState('USD');
+  const [editUnitPrice, setEditUnitPrice] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
+  const [editAmountUsd, setEditAmountUsd] = useState('');
+  const [editRemark, setEditRemark] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -121,6 +132,41 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
       else alert('삭제에 실패했습니다.');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const startEdit = (e: ManagementFeeLedgerActualCostEntry) => {
+    setEditingId(e.id);
+    setEditFeeItemId(e.fee_item_id);
+    setEditCrewMemberId(e.crew_member_id || 'none');
+    setEditCurrency(e.currency);
+    setEditUnitPrice(e.unit_price != null ? String(e.unit_price) : '');
+    setEditQuantity(e.quantity != null ? String(e.quantity) : '');
+    setEditAmountUsd(String(e.amount_usd));
+    setEditRemark(e.remark || '');
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    const amount = parseFloat(editAmountUsd);
+    if (!amount || amount <= 0) { alert('USD 청구 금액을 입력하세요.'); return; }
+    setEditSaving(true);
+    try {
+      const updated = await updateActualCostEntry(editingId, {
+        fee_item_id: editFeeItemId,
+        crew_member_id: editCrewMemberId === 'none' ? null : editCrewMemberId,
+        currency: editCurrency,
+        unit_price: editUnitPrice ? parseFloat(editUnitPrice) : null,
+        quantity: editQuantity ? parseFloat(editQuantity) : null,
+        amount_usd: amount,
+        remark: editRemark || null,
+      });
+      if (updated) { setEditingId(null); onChanged(); }
+      else alert('수정에 실패했습니다.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -199,7 +245,55 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
               </TableRow>
             </TableHeader>
             <TableBody>
-              {entries.map(e => (
+              {entries.map(e => editingId === e.id ? (
+                <TableRow key={e.id} className="bg-blue-50/40">
+                  <TableCell className="p-1.5">
+                    <Select value={editFeeItemId} onValueChange={setEditFeeItemId}>
+                      <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {availableFeeItems.map(f => <SelectItem key={f.id} value={f.id} className="text-xs">{f.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="p-1.5">
+                    <Select value={editCrewMemberId} onValueChange={setEditCrewMemberId}>
+                      <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" className="text-xs">선택 안 함</SelectItem>
+                        {crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="p-1.5">
+                    <div className="flex items-center gap-1 justify-end">
+                      <Input type="number" min={0} value={editUnitPrice} onChange={ev => setEditUnitPrice(ev.target.value)} className="h-8 text-xs w-20" />
+                      <Select value={editCurrency} onValueChange={setEditCurrency}>
+                        <SelectTrigger className="h-8 text-xs w-16"><SelectValue /></SelectTrigger>
+                        <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </TableCell>
+                  <TableCell className="p-1.5">
+                    <Input type="number" min={0} value={editQuantity} onChange={ev => setEditQuantity(ev.target.value)} className="h-8 text-xs w-14 mx-auto" />
+                  </TableCell>
+                  <TableCell className="p-1.5">
+                    <Input type="number" min={0} value={editAmountUsd} onChange={ev => setEditAmountUsd(ev.target.value)} className="h-8 text-xs w-24 ml-auto" />
+                  </TableCell>
+                  <TableCell className="p-1.5">
+                    <Input value={editRemark} onChange={ev => setEditRemark(ev.target.value)} className="h-8 text-xs" />
+                  </TableCell>
+                  <TableCell className="p-1.5">
+                    <div className="flex items-center gap-0.5">
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-green-600 hover:text-green-700 hover:bg-green-50" onClick={handleSaveEdit} disabled={editSaving}>
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600" onClick={cancelEdit} disabled={editSaving}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
                 <TableRow key={e.id}>
                   <TableCell className="text-xs font-medium">{e.fee_item_name}</TableCell>
                   <TableCell className="text-xs">{e.crew_name || '-'}</TableCell>
@@ -208,14 +302,24 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                   <TableCell className="text-xs text-right font-mono font-semibold">{fmt(e.amount_usd)}</TableCell>
                   <TableCell className="text-xs text-gray-500">{e.remark || '-'}</TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost" size="sm"
-                      className="h-6 w-6 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                      onClick={() => handleDelete(e.id)}
-                      disabled={deletingId === e.id}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-blue-600 hover:bg-blue-50"
+                        onClick={() => startEdit(e)}
+                        disabled={editingId !== null || deletingId === e.id}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-6 w-6 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => handleDelete(e.id)}
+                        disabled={editingId !== null || deletingId === e.id}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
