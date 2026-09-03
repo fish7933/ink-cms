@@ -557,8 +557,10 @@ export default function ManagementFeeCalculationPage() {
                                               <TableHead className="py-1 px-2 text-xs">비고</TableHead>
                                             </TableRow>
                                           </TableHeader>
-                                          <TableBody>
-                                            {ledgerData.item_totals.map(t => (
+                                          {(() => {
+                                            const autoItems = ledgerData.item_totals.filter(t => !t.is_actual_cost);
+                                            const actualItems = ledgerData.item_totals.filter(t => t.is_actual_cost);
+                                            const renderRow = (t: typeof ledgerData.item_totals[number]) => (
                                               <TableRow key={`${t.fee_item_id}-${t.currency}`}>
                                                 <TableCell className="py-1 px-2 text-xs font-medium">{t.fee_item_name}</TableCell>
                                                 <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(t.raw_total)} {t.currency}</TableCell>
@@ -571,8 +573,30 @@ export default function ManagementFeeCalculationPage() {
                                                   {t.was_capped && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50">상한 적용됨</Badge>}
                                                 </TableCell>
                                               </TableRow>
-                                            ))}
-                                          </TableBody>
+                                            );
+                                            return (
+                                              <>
+                                                {autoItems.length > 0 && (
+                                                  <TableBody>
+                                                    {actualItems.length > 0 && (
+                                                      <TableRow className="bg-gray-50 hover:bg-gray-50">
+                                                        <TableCell colSpan={6} className="py-1 px-2 text-[11px] font-semibold text-gray-500">자동 계산 항목</TableCell>
+                                                      </TableRow>
+                                                    )}
+                                                    {autoItems.map(renderRow)}
+                                                  </TableBody>
+                                                )}
+                                                {actualItems.length > 0 && (
+                                                  <TableBody>
+                                                    <TableRow className="bg-gray-50 hover:bg-gray-50">
+                                                      <TableCell colSpan={6} className="py-1 px-2 text-[11px] font-semibold text-gray-500">실비 항목</TableCell>
+                                                    </TableRow>
+                                                    {actualItems.map(renderRow)}
+                                                  </TableBody>
+                                                )}
+                                              </>
+                                            );
+                                          })()}
                                           {ledgerData.item_totals.some(t => t.is_vat_applicable) && (
                                             <TableFooter>
                                               <TableRow>

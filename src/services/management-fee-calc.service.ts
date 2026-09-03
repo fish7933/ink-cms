@@ -241,6 +241,7 @@ export interface ManagementFeeLedgerItemTotal {
   was_capped: boolean;
   is_vat_applicable: boolean;
   vat_amount_krw: number | null; // 부가세 대상 항목만 값이 있음(그 항목 청구금액 × 그 달 환율 × 10%)
+  is_actual_cost: boolean; // true면 대리점비 등 자동 계산 항목이 아니라 실비 기록에서 합산된 값
 }
 
 export interface ManagementFeeLedgerActualCostCrew {
@@ -829,6 +830,7 @@ export const managementFeeCalcService = {
       was_capped: c.was_capped,
       is_vat_applicable: vatApplicableFeeItemIds.has(c.fee_item_id),
       vat_amount_krw: null,
+      is_actual_cost: false,
     }));
     // 캡이 없는 항목도 합계 참고용으로 함께 보여준다 (raw_total == billed_total, was_capped=false)
     const cappedFeeItemIds = new Set(itemTotals.map(t => t.fee_item_id));
@@ -852,6 +854,7 @@ export const managementFeeCalcService = {
         was_capped: false,
         is_vat_applicable: vatApplicableFeeItemIds.has(feeItemId),
         vat_amount_krw: null,
+        is_actual_cost: false,
       });
     }
 
@@ -873,10 +876,16 @@ export const managementFeeCalcService = {
         was_capped: false,
         is_vat_applicable: false,
         vat_amount_krw: null,
+        is_actual_cost: true,
       });
     }
 
-    itemTotals.sort((a, b) => (feeItemById.get(a.fee_item_id)?.display_order ?? 0) - (feeItemById.get(b.fee_item_id)?.display_order ?? 0));
+    // 자동 계산 항목(대리점비 등)을 먼저, 실비 항목을 뒤로 묶어서 정렬 — 계산식 기반 금액과
+    // 건별 실비 기록을 섞지 않고 표에서 구분해 보여줄 수 있게 한다.
+    itemTotals.sort((a, b) =>
+      Number(a.is_actual_cost) - Number(b.is_actual_cost) ||
+      (feeItemById.get(a.fee_item_id)?.display_order ?? 0) - (feeItemById.get(b.fee_item_id)?.display_order ?? 0)
+    );
 
     // 부가세 = 부가세 대상 항목별로 그 항목의 청구금액(USD 환산) × 그 달 KRW 환율 × 10% — 청구서와
     // 같은 계산식이되, 항목별 금액을 각각 보여줄 수 있도록 항목 단위로 계산한 뒤 합산한다.
