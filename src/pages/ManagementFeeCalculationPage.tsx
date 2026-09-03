@@ -645,6 +645,7 @@ export default function ManagementFeeCalculationPage() {
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">선주 청구 급여</TableHead>
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">제수당</TableHead>
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">OBP</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">FKSU</TableHead>
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">재고용수당</TableHead>
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">상병수당</TableHead>
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">합계</TableHead>
@@ -658,6 +659,7 @@ export default function ManagementFeeCalculationPage() {
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(s.owner_billed_salary)}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(s.total_allowance)}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.obp > 0 ? `-${fmt(s.obp)}` : '-'}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.fksu > 0 ? `-${fmt(s.fksu)}` : '-'}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.reemployment_allowance > 0 ? fmt(s.reemployment_allowance) : '-'}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.sick_pay > 0 ? fmt(s.sick_pay) : '-'}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(s.net_total)}</TableCell>
@@ -666,7 +668,7 @@ export default function ManagementFeeCalculationPage() {
                                             </TableBody>
                                             <TableFooter>
                                               <TableRow>
-                                                <TableCell colSpan={7} className="py-1 px-2 text-xs text-right font-semibold">급여 합계 (USD)</TableCell>
+                                                <TableCell colSpan={8} className="py-1 px-2 text-xs text-right font-semibold">급여 합계 (USD)</TableCell>
                                                 <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(ledgerData.salary_total)}</TableCell>
                                               </TableRow>
                                             </TableFooter>

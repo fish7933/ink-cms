@@ -363,13 +363,16 @@ export const managementFeeInvoiceService = {
     const { data: ownerBillingComponentsRaw } = await supabase.from('salary_components').select('name, owner_billing_basis').eq('component_type', 'earning');
     const ownerBillingBasisByComponentName = new Map((ownerBillingComponentsRaw || []).map(c => [c.name as string, (c.owner_billing_basis as 'monthly' | 'on_disembark') || 'monthly']));
 
+    // OBP/FKSU는 선주가 선원 급여에서 매달 공제하는 항목이라 선주 청구 급여에서도 그대로 공제한다.
     const { data: itemsRaw } = payslipIds.length > 0
-      ? await supabase.from('crew_payslip_items').select('payslip_id, name, category, source, payment_type, amount').in('payslip_id', payslipIds).in('name', ['OBP', '재고용수당'])
+      ? await supabase.from('crew_payslip_items').select('payslip_id, name, category, source, payment_type, amount').in('payslip_id', payslipIds).in('name', ['OBP', 'FKSU', '재고용수당'])
       : { data: [] as { payslip_id: string; name: string; category: string; source: string; payment_type: string; amount: number }[] };
     const obpByPayslip = new Map<string, number>();
+    const fksuByPayslip = new Map<string, number>();
     const reemploymentByPayslip = new Map<string, number>();
     for (const it of itemsRaw || []) {
       if (it.name === 'OBP' && it.category === 'deduction') obpByPayslip.set(it.payslip_id, (obpByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
+      if (it.name === 'FKSU' && it.category === 'deduction') fksuByPayslip.set(it.payslip_id, (fksuByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
       if (it.name === '재고용수당') reemploymentByPayslip.set(it.payslip_id, (reemploymentByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
     }
 
@@ -394,7 +397,7 @@ export const managementFeeInvoiceService = {
       let gross = 0;
       let reemployment = 0;
       for (const p of shipPayslips) {
-        gross += (ownerBilledSalaryByPayslip.get(p.id) || 0) + Number(p.total_allowance) - (obpByPayslip.get(p.id) || 0);
+        gross += (ownerBilledSalaryByPayslip.get(p.id) || 0) + Number(p.total_allowance) - (obpByPayslip.get(p.id) || 0) - (fksuByPayslip.get(p.id) || 0);
         reemployment += reemploymentByPayslip.get(p.id) || 0;
       }
       payrollByShip.set(shipId, { gross, reemployment, crewCount: shipPayslips.length });

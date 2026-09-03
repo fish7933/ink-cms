@@ -273,10 +273,11 @@ export interface ManagementFeeLedgerSalaryRow {
   rank_grade: string | null;
   owner_billed_salary: number; // 선주 청구 기준 급여 템플릿 항목 합(owner_billing_basis에 따라 판단)
   total_allowance: number;
-  obp: number;
+  obp: number; // 선주 공제 항목 — 선주 청구액에서 차감
+  fksu: number; // 선주 공제 항목 — 선주 청구액에서 차감
   reemployment_allowance: number;
   sick_pay: number;
-  net_total: number; // owner_billed_salary + total_allowance - obp + reemployment_allowance + sick_pay
+  net_total: number; // owner_billed_salary + total_allowance - obp - fksu + reemployment_allowance + sick_pay
 }
 
 export interface ManagementFeeLedgerData {
@@ -963,13 +964,17 @@ export const managementFeeCalcService = {
     const { data: ownerBillingComponentsRaw } = await supabase.from('salary_components').select('name, owner_billing_basis').eq('component_type', 'earning');
     const ownerBillingBasisByComponentName = new Map((ownerBillingComponentsRaw || []).map(c => [c.name as string, (c.owner_billing_basis as 'monthly' | 'on_disembark') || 'monthly']));
 
+    // OBP/FKSU는 선주가 선원 급여에서 매달 공제하는 항목이라(salary_components에 이미
+    // component_type='deduction'로 등록됨) 선주 청구 급여에서도 그대로 공제해야 한다.
     const { data: obpReemployItemsRaw } = payslipIds.length > 0
-      ? await supabase.from('crew_payslip_items').select('payslip_id, name, category, amount').in('payslip_id', payslipIds).in('name', ['OBP', '재고용수당'])
+      ? await supabase.from('crew_payslip_items').select('payslip_id, name, category, amount').in('payslip_id', payslipIds).in('name', ['OBP', 'FKSU', '재고용수당'])
       : { data: [] as { payslip_id: string; name: string; category: string; amount: number }[] };
     const obpByPayslip = new Map<string, number>();
+    const fksuByPayslip = new Map<string, number>();
     const reemploymentByPayslip = new Map<string, number>();
     for (const it of obpReemployItemsRaw || []) {
       if (it.name === 'OBP' && it.category === 'deduction') obpByPayslip.set(it.payslip_id, (obpByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
+      if (it.name === 'FKSU' && it.category === 'deduction') fksuByPayslip.set(it.payslip_id, (fksuByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
       if (it.name === '재고용수당') reemploymentByPayslip.set(it.payslip_id, (reemploymentByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
     }
 
@@ -1011,6 +1016,7 @@ export const managementFeeCalcService = {
       const crew = crewById.get(p.crew_member_id);
       const ownerBilled = ownerBilledSalaryByPayslip.get(p.id) || 0;
       const obp = obpByPayslip.get(p.id) || 0;
+      const fksu = fksuByPayslip.get(p.id) || 0;
       const reemployment = reemploymentByPayslip.get(p.id) || 0;
       const sickPay = sickPayByCrew.get(p.crew_member_id) || 0;
       const totalAllowance = Number(p.total_allowance);
@@ -1022,9 +1028,10 @@ export const managementFeeCalcService = {
         owner_billed_salary: ownerBilled,
         total_allowance: totalAllowance,
         obp,
+        fksu,
         reemployment_allowance: reemployment,
         sick_pay: sickPay,
-        net_total: ownerBilled + totalAllowance - obp + reemployment + sickPay,
+        net_total: ownerBilled + totalAllowance - obp - fksu + reemployment + sickPay,
       });
       salaryRowRankOrder.set(p.crew_member_id, p.rank_id ? (rankOrderById.get(p.rank_id) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER);
     }
@@ -1039,6 +1046,7 @@ export const managementFeeCalcService = {
         owner_billed_salary: 0,
         total_allowance: 0,
         obp: 0,
+        fksu: 0,
         reemployment_allowance: 0,
         sick_pay: r.this_month_amount,
         net_total: r.this_month_amount,
