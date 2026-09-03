@@ -118,10 +118,13 @@ function buildShipManagementFeeLines(input: {
   records: EmbarkRecord[];
   rankCategoryByRankId: Map<string, string>;
   nationalityByCrewMemberId: Map<string, string | undefined>;
+  // 선주별 관리비 일할계산 기준 — '30'이면 그 달과 무관하게 항상 30일 기준으로, 'actual'이면
+  // (기본값) 그 달 실제 일수 기준으로 나눈다. 급여의 month_days_basis와는 별개 설정이다.
+  daysBasis?: '30' | 'actual';
 }): BuiltLine[] {
-  const { yearMonth, shipType, templateItems, records, rankCategoryByRankId, nationalityByCrewMemberId } = input;
+  const { yearMonth, shipType, templateItems, records, rankCategoryByRankId, nationalityByCrewMemberId, daysBasis = 'actual' } = input;
   const { start, end } = monthRange(yearMonth);
-  const totalDays = daysInMonth(yearMonth);
+  const totalDays = daysBasis === '30' ? 30 : daysInMonth(yearMonth);
   const results: BuiltLine[] = [];
 
   const itemsByFeeItem = new Map<string, ManagementFeeTemplateItem[]>();
@@ -418,6 +421,13 @@ export const managementFeeCalcService = {
     const ships = (shipsRaw || []).map(s => ({ id: String(s.id), fleet_id: s.fleet_id ? String(s.fleet_id) : null, owner_id: s.owner_id ? String(s.owner_id) : null, ship_type: s.ship_type as string | undefined }));
     const shipById = new Map(ships.map(s => [s.id, s]));
 
+    // 선주별 관리비 일할계산 기준(30일 고정/실제 일수) — 선주사 수정 화면에서 설정.
+    const ownerIds = [...new Set(ships.map(s => s.owner_id).filter((v): v is string => !!v))];
+    const { data: ownersRaw } = ownerIds.length > 0
+      ? await supabase.from('companies').select('id, management_fee_days_basis').in('id', ownerIds)
+      : { data: [] as { id: string; management_fee_days_basis: '30' | 'actual' }[] };
+    const daysBasisByOwnerId = new Map((ownersRaw || []).map(o => [String(o.id), o.management_fee_days_basis]));
+
     const { data: existingPeriods } = await supabase
       .from('management_fee_periods').select('ship_id').eq('year_month', yearMonth).in('ship_id', shipIds);
     const existingShipIds = new Set((existingPeriods || []).map(p => p.ship_id));
@@ -490,6 +500,7 @@ export const managementFeeCalcService = {
           const template = templateMap[shipId];
           const templateItems = template ? (templateItemsByTemplateId.get(template.id) || []) : [];
           const shipRecords = recordsByShip.get(shipId) || [];
+          const ownerId = shipById.get(shipId)?.owner_id;
           const built = buildShipManagementFeeLines({
             yearMonth,
             shipType: shipById.get(shipId)?.ship_type,
@@ -497,6 +508,7 @@ export const managementFeeCalcService = {
             records: shipRecords,
             rankCategoryByRankId,
             nationalityByCrewMemberId,
+            daysBasis: (ownerId && daysBasisByOwnerId.get(ownerId)) || 'actual',
           });
 
           const { data: period, error: periodError } = await supabase
@@ -573,6 +585,13 @@ export const managementFeeCalcService = {
     const { data: shipRaw, error: shipError } = await supabase.from('ships').select('id, fleet_id, owner_id, ship_type').eq('id', shipId).single();
     if (shipError || !shipRaw) throw shipError || new Error('선박을 찾을 수 없습니다.');
     const shipType = shipRaw.ship_type as string | undefined;
+    const ownerId = shipRaw.owner_id ? String(shipRaw.owner_id) : null;
+
+    // 선주별 관리비 일할계산 기준(30일 고정/실제 일수) — 선주사 수정 화면에서 설정.
+    const { data: ownerRaw } = ownerId
+      ? await supabase.from('companies').select('management_fee_days_basis').eq('id', ownerId).maybeSingle()
+      : { data: null as { management_fee_days_basis: '30' | 'actual' } | null };
+    const daysBasis: '30' | 'actual' = ownerRaw?.management_fee_days_basis || 'actual';
 
     const template = await getEffectiveTemplateForShip(shipId);
 
@@ -611,7 +630,7 @@ export const managementFeeCalcService = {
     }
 
     const built = buildShipManagementFeeLines({
-      yearMonth, shipType, templateItems, records, rankCategoryByRankId, nationalityByCrewMemberId,
+      yearMonth, shipType, templateItems, records, rankCategoryByRankId, nationalityByCrewMemberId, daysBasis,
     });
 
     await supabase.from('management_fee_lines').delete().eq('period_id', periodId);

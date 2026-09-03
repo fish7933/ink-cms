@@ -25,6 +25,7 @@ interface Company {
   officer_contract_months: number | null;
   rating_contract_months: number | null;
   month_days_basis: '30' | 'actual';
+  management_fee_days_basis: '30' | 'actual';
 }
 
 interface FormState {
@@ -32,10 +33,11 @@ interface FormState {
   email: string; phone: string;
   officer_contract_months: number | null; rating_contract_months: number | null;
   month_days_basis: '30' | 'actual';
+  management_fee_days_basis: '30' | 'actual';
   is_ship_manager: boolean;
 }
 
-const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null, month_days_basis: '30', is_ship_manager: false };
+const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', officer_contract_months: null, rating_contract_months: null, month_days_basis: '30', management_fee_days_basis: 'actual', is_ship_manager: false };
 
 const MONTH_BASIS_LABELS: Record<string, string> = { '30': '30일 고정', 'actual': '실제 일수' };
 
@@ -87,7 +89,7 @@ export default function CompanyManagementPage() {
   useEffect(() => {
     if (editId && companies.length > 0) {
       const c = companies.find(c => c.id === editId);
-      if (c) setForm({ name: c.name, country: c.country || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months, month_days_basis: c.month_days_basis || '30', is_ship_manager: c.company_type === '선박관리사' });
+      if (c) setForm({ name: c.name, country: c.country || '', email: c.email || '', phone: c.phone || '', officer_contract_months: c.officer_contract_months, rating_contract_months: c.rating_contract_months, month_days_basis: c.month_days_basis || '30', management_fee_days_basis: c.management_fee_days_basis || 'actual', is_ship_manager: c.company_type === '선박관리사' });
     }
     if (isNew) setForm(EMPTY_FORM);
   }, [editId, isNew, companies]);
@@ -96,7 +98,7 @@ export default function CompanyManagementPage() {
     setLoading(true);
     try {
       const [{ data: cd, error }, natData] = await Promise.all([
-        supabase.from('companies').select('id,name,type,company_type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis').eq('type', companyType).order('name'),
+        supabase.from('companies').select('id,name,type,company_type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis,management_fee_days_basis').eq('type', companyType).order('name'),
         getNationalities(),
       ]);
       if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
@@ -113,7 +115,7 @@ export default function CompanyManagementPage() {
   async function handleSave() {
     if (!form.name.trim()) { toast({ title: '회사명을 입력하세요', variant: 'destructive' }); return; }
     setSaving(true);
-    const payload = { name: form.name.trim(), type: companyType, company_type: form.is_ship_manager ? '선박관리사' : '일반', country: form.country || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, updated_at: new Date().toISOString() };
+    const payload = { name: form.name.trim(), type: companyType, company_type: form.is_ship_manager ? '선박관리사' : '일반', country: form.country || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, management_fee_days_basis: form.management_fee_days_basis, updated_at: new Date().toISOString() };
     let error;
     if (editId) {
       ({ error } = await supabase.from('companies').update(payload).eq('id', editId));
@@ -211,6 +213,21 @@ export default function CompanyManagementPage() {
                     </div>
                   )}
                 </div>
+                {companyType === 'owner' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">관리비 계산 기준</Label>
+                      <Select value={form.management_fee_days_basis} onValueChange={v => setForm(f => ({ ...f, management_fee_days_basis: v as '30' | 'actual' }))}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="30">30일 고정</SelectItem>
+                          <SelectItem value="actual">실제 일수</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-gray-400">급여는 30일 고정이어도 관리비는 실제 일수로 계산하는 등, 급여 기준과 별도로 적용됩니다.</p>
+                    </div>
+                  </div>
+                )}
                 <label className="flex items-center gap-2 text-xs pt-1 cursor-pointer">
                   <input type="checkbox" checked={form.is_ship_manager} onChange={e => setForm(f => ({ ...f, is_ship_manager: e.target.checked }))} className="h-3.5 w-3.5" />
                   <span>우리 회사(선박관리사)로 지정 <span className="text-gray-400">— 승선경력 회사배치 시 선박관리사 정보로 자동 사용됩니다</span></span>
@@ -239,13 +256,14 @@ export default function CompanyManagementPage() {
                           <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">연락처</th>
                           <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">사관(월)</th>
                           <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">부원(월)</th>
-                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">월 계산</th>}
+                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">급여 월 계산</th>}
+                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">관리비 계산</th>}
                           <th className="px-3 py-2"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {filtered.length === 0 ? (
-                          <tr><td colSpan={companyType === 'owner' ? 9 : 8} className="text-center py-10 text-sm text-gray-400">등록된 회사가 없습니다</td></tr>
+                          <tr><td colSpan={companyType === 'owner' ? 10 : 8} className="text-center py-10 text-sm text-gray-400">등록된 회사가 없습니다</td></tr>
                         ) : filtered.map((c, i) => (
                           <tr key={c.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
                             <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
@@ -262,6 +280,13 @@ export default function CompanyManagementPage() {
                               <td className="px-3 py-2 text-center">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${c.month_days_basis === 'actual' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                                   {MONTH_BASIS_LABELS[c.month_days_basis] || '30일 고정'}
+                                </span>
+                              </td>
+                            )}
+                            {companyType === 'owner' && (
+                              <td className="px-3 py-2 text-center">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${c.management_fee_days_basis === '30' ? 'bg-gray-100 text-gray-600' : 'bg-teal-100 text-teal-700'}`}>
+                                  {MONTH_BASIS_LABELS[c.management_fee_days_basis] || '실제 일수'}
                                 </span>
                               </td>
                             )}
