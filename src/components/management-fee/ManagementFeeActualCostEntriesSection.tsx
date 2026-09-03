@@ -47,6 +47,15 @@ const crewOptionLabel = (c: CrewOption) => (crewRank(c) ? `${crewRank(c)} ${c.na
 const buildRemarkFromCrew = (ids: string[], options: CrewOption[]) =>
   ids.map(id => options.find(c => c.id === id)).filter((c): c is CrewOption => !!c).map(crewOptionLabel).join(', ');
 
+// 청구 금액은 기본으로 단가 × 개수를 넣어주되, 사용자가 직접 고친 값은 그대로 존중한다 —
+// 단가/개수를 다시 바꿀 때만 새로 계산해서 덮어쓴다.
+const computeAmount = (unitPrice: string, quantity: string): string | null => {
+  const p = parseFloat(unitPrice);
+  const q = parseFloat(quantity);
+  if (isNaN(p) || isNaN(q)) return null;
+  return String(Math.round(p * q * 100) / 100);
+};
+
 function monthRange(yearMonth: string): { start: string; end: string } {
   const [y, m] = yearMonth.split('-').map(Number);
   const lastDay = new Date(y, m, 0).getDate();
@@ -251,11 +260,11 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
           </div>
           <div className="space-y-0.5">
             <Label className="text-[10px] text-gray-400">단가(원 화폐, 참고용)</Label>
-            <Input type="number" min={0} value={unitPrice} onChange={e => setUnitPrice(e.target.value)} className="h-8 text-xs w-28" />
+            <Input type="number" min={0} value={unitPrice} onChange={e => { setUnitPrice(e.target.value); const a = computeAmount(e.target.value, quantity); if (a != null) setAmountUsd(a); }} className="h-8 text-xs w-28" />
           </div>
           <div className="space-y-0.5">
             <Label className="text-[10px] text-gray-400">개수/인원</Label>
-            <Input type="number" min={0} value={quantity} onChange={e => setQuantity(e.target.value)} className="h-8 text-xs w-16" />
+            <Input type="number" min={0} value={quantity} onChange={e => { setQuantity(e.target.value); const a = computeAmount(unitPrice, e.target.value); if (a != null) setAmountUsd(a); }} className="h-8 text-xs w-16" />
           </div>
           <div className="space-y-0.5">
             <Label className="text-[10px] text-gray-400">청구 금액(USD) *</Label>
@@ -322,11 +331,11 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-gray-400">단가(원 화폐, 참고용)</Label>
-                          <Input type="number" min={0} value={editUnitPrice} onChange={ev => setEditUnitPrice(ev.target.value)} className="h-8 text-xs w-28" />
+                          <Input type="number" min={0} value={editUnitPrice} onChange={ev => { setEditUnitPrice(ev.target.value); const a = computeAmount(ev.target.value, editQuantity); if (a != null) setEditAmountUsd(a); }} className="h-8 text-xs w-28" />
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-gray-400">개수/인원</Label>
-                          <Input type="number" min={0} value={editQuantity} onChange={ev => setEditQuantity(ev.target.value)} className="h-8 text-xs w-16" />
+                          <Input type="number" min={0} value={editQuantity} onChange={ev => { setEditQuantity(ev.target.value); const a = computeAmount(editUnitPrice, ev.target.value); if (a != null) setEditAmountUsd(a); }} className="h-8 text-xs w-16" />
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-gray-400">청구 금액(USD) *</Label>
