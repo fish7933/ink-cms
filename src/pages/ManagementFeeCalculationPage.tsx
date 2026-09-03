@@ -629,6 +629,51 @@ export default function ManagementFeeCalculationPage() {
                                         onChanged={() => loadLedger(ledgerPeriodId)}
                                       />
                                     </div>
+
+                                    {/* 선원 급여 — 청구서에서 선주에게 청구하는 급여 총액과 같은 계산식(owner_billing_basis
+                                        기준)을 선원별로 펼쳐서 참고용으로 보여준다. 위 항목별 청구금액/부가세 계산에는
+                                        아직 포함되지 않는다(급여는 청구서에서 별도 섹션으로 이미 다뤄짐). */}
+                                    {ledgerData.salary_rows.length > 0 && (
+                                      <div>
+                                        <h3 className="text-sm font-semibold mb-2">선원 급여 <span className="font-normal text-gray-400 text-xs">(참고용 — 청구서 급여 섹션과 동일 계산)</span></h3>
+                                        <div className="rounded-md border bg-white overflow-x-auto">
+                                          <Table>
+                                            <TableHeader>
+                                              <TableRow>
+                                                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">이름</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">선주 청구 급여</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">제수당</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">OBP</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">재고용수당</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">상병수당</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">합계</TableHead>
+                                              </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                              {ledgerData.salary_rows.map(s => (
+                                                <TableRow key={s.crew_member_id}>
+                                                  <TableCell className="py-1 px-2 text-xs whitespace-nowrap">{s.rank_code}{s.rank_grade ? `(${s.rank_grade})` : ''}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs font-medium whitespace-nowrap">{s.crew_name}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(s.owner_billed_salary)}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(s.total_allowance)}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.obp > 0 ? `-${fmt(s.obp)}` : '-'}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.reemployment_allowance > 0 ? fmt(s.reemployment_allowance) : '-'}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.sick_pay > 0 ? fmt(s.sick_pay) : '-'}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(s.net_total)}</TableCell>
+                                                </TableRow>
+                                              ))}
+                                            </TableBody>
+                                            <TableFooter>
+                                              <TableRow>
+                                                <TableCell colSpan={7} className="py-1 px-2 text-xs text-right font-semibold">급여 합계 (USD)</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(ledgerData.salary_total)}</TableCell>
+                                              </TableRow>
+                                            </TableFooter>
+                                          </Table>
+                                        </div>
+                                      </div>
+                                    )}
                                   </>
                                 )}
                               </div>

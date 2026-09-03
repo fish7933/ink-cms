@@ -3,6 +3,7 @@ import { getEffectiveTemplateMapForShips, getEffectiveTemplateForShip } from '@/
 import type { ManagementFeeTemplate, ManagementFeeTemplateItem, ManagementFeeItem } from '@/lib/management-fee-store';
 import { crewDisplayName } from '@/lib/utils';
 import { exchangeRateService } from '@/services/exchange-rate.service';
+import { sickPayService } from '@/services/sick-pay.service';
 
 function daysInMonth(yearMonth: string): number {
   const [y, m] = yearMonth.split('-').map(Number);
@@ -262,6 +263,19 @@ export interface ManagementFeeLedgerActualCostEntry {
   remark: string | null;
 }
 
+export interface ManagementFeeLedgerSalaryRow {
+  crew_member_id: string;
+  crew_name: string;
+  rank_code: string;
+  rank_grade: string | null;
+  owner_billed_salary: number; // 선주 청구 기준 급여 템플릿 항목 합(owner_billing_basis에 따라 판단)
+  total_allowance: number;
+  obp: number;
+  reemployment_allowance: number;
+  sick_pay: number;
+  net_total: number; // owner_billed_salary + total_allowance - obp + reemployment_allowance + sick_pay
+}
+
 export interface ManagementFeeLedgerData {
   period: ManagementFeePeriod;
   ship_name: string;
@@ -273,6 +287,10 @@ export interface ManagementFeeLedgerData {
   rows: ManagementFeeLedgerRow[];
   item_totals: ManagementFeeLedgerItemTotal[];
   actual_cost_entries: ManagementFeeLedgerActualCostEntry[];
+  // 선원 급여 — 관리비 청구서에서 이미 선주에게 청구하는 급여 총액과 같은 계산식을 그대로
+  // 선원별로 펼쳐서 보여준다(참고용 표시. 관리비 항목별 합계/부가세 계산에는 아직 포함하지 않음).
+  salary_rows: ManagementFeeLedgerSalaryRow[];
+  salary_total: number;
   vat_base_usd: number; // 부가세 과세 대상 항목의 USD 합계
   vat_amount_krw: number; // 부가세(원화) = vat_base_usd × 그 달 KRW 환율 × 10%
   krw_rate_to_usd: number | null; // 부가세 계산에 쓰인 그 달 환율(없으면 null — 부가세 계산 불가)
@@ -907,6 +925,112 @@ export const managementFeeCalcService = {
       }
     }
 
+    // 선원 급여 — 관리비 청구서에서 선주에게 청구하는 급여 총액과 같은 계산식(owner_billing_basis
+    // 기준)을 그대로 선원별로 펼쳐서 보여준다. 아직 참고용 표시일 뿐, 항목별 합계/부가세 계산에는
+    // 포함하지 않는다(급여는 관리비 청구 항목이 아니라 청구서에서 별도 섹션으로 이미 다뤄짐).
+    const { data: payrollPeriodRow } = await supabase
+      .from('crew_payroll_periods')
+      .select('id')
+      .eq('ship_id', period.ship_id)
+      .eq('year_month', period.year_month)
+      .maybeSingle();
+    const payrollPeriodId = payrollPeriodRow?.id ? String(payrollPeriodRow.id) : null;
+
+    const { data: payslipsRaw } = payrollPeriodId
+      ? await supabase.from('crew_payslips').select('id, crew_member_id, rank_id, rank_grade, total_allowance').eq('period_id', payrollPeriodId)
+      : { data: [] as { id: string; crew_member_id: string; rank_id: string | null; rank_grade: string | null; total_allowance: number }[] };
+    const payslipIds = (payslipsRaw || []).map(p => p.id);
+
+    const { data: ownerBillingComponentsRaw } = await supabase.from('salary_components').select('name, owner_billing_basis').eq('component_type', 'earning');
+    const ownerBillingBasisByComponentName = new Map((ownerBillingComponentsRaw || []).map(c => [c.name as string, (c.owner_billing_basis as 'monthly' | 'on_disembark') || 'monthly']));
+
+    const { data: obpReemployItemsRaw } = payslipIds.length > 0
+      ? await supabase.from('crew_payslip_items').select('payslip_id, name, category, amount').in('payslip_id', payslipIds).in('name', ['OBP', '재고용수당'])
+      : { data: [] as { payslip_id: string; name: string; category: string; amount: number }[] };
+    const obpByPayslip = new Map<string, number>();
+    const reemploymentByPayslip = new Map<string, number>();
+    for (const it of obpReemployItemsRaw || []) {
+      if (it.name === 'OBP' && it.category === 'deduction') obpByPayslip.set(it.payslip_id, (obpByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
+      if (it.name === '재고용수당') reemploymentByPayslip.set(it.payslip_id, (reemploymentByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
+    }
+
+    const { data: templateEarningItemsRaw } = payslipIds.length > 0
+      ? await supabase.from('crew_payslip_items').select('payslip_id, name, payment_type, amount').in('payslip_id', payslipIds).eq('source', 'template').eq('category', 'earning').in('payment_type', ['immediate', 'deferred_payout'])
+      : { data: [] as { payslip_id: string; name: string; payment_type: string; amount: number }[] };
+    const ownerBilledSalaryByPayslip = new Map<string, number>();
+    for (const it of templateEarningItemsRaw || []) {
+      const lumpMatch = it.name.match(/^(.+) \(Lump Sum\)$/);
+      const isLumpSum = it.payment_type === 'deferred_payout' && !!lumpMatch;
+      const baseName = isLumpSum ? lumpMatch![1] : it.name;
+      const basis = ownerBillingBasisByComponentName.get(baseName) || 'monthly';
+      const include = isLumpSum ? basis === 'on_disembark' : basis === 'monthly';
+      if (!include) continue;
+      ownerBilledSalaryByPayslip.set(it.payslip_id, (ownerBilledSalaryByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
+    }
+
+    const sickPayRows = await sickPayService.getSickPayForShipMonth(period.ship_id, period.year_month);
+    const sickPayByCrew = new Map<string, number>();
+    for (const r of sickPayRows) sickPayByCrew.set(r.crew_member_id, (sickPayByCrew.get(r.crew_member_id) || 0) + r.this_month_amount);
+
+    // 급여 선원의 이름/직급이 앞서 조회한 crewById/rankCodeById/rankOrderById에 없을 수 있으므로
+    // (관리비 라인·실비 기록에 안 걸린 선원도 급여는 있을 수 있음) 빠진 것만 보강해서 채운다.
+    const payrollRankIds = [...new Set([
+      ...(payslipsRaw || []).map(p => p.rank_id).filter((v): v is string => !!v),
+      ...sickPayRows.map(r => r.rank_id).filter((v): v is string => !!v),
+    ])].filter(id => !rankCodeById.has(id));
+    const payrollCrewIds = (payslipsRaw || []).map(p => p.crew_member_id).filter(id => !crewById.has(id));
+    const [{ data: extraRanks }, { data: extraCrewMembers }] = await Promise.all([
+      payrollRankIds.length > 0 ? supabase.from('ranks').select('id, rank_code, display_order').in('id', payrollRankIds) : Promise.resolve({ data: [] as { id: string; rank_code: string; display_order: number }[] }),
+      payrollCrewIds.length > 0 ? supabase.from('crew_members').select('id, name, name_english, nationality').in('id', payrollCrewIds) : Promise.resolve({ data: [] as { id: string; name: string; name_english?: string; nationality?: string }[] }),
+    ]);
+    for (const r of extraRanks || []) { rankCodeById.set(r.id, r.rank_code); rankOrderById.set(r.id, r.display_order); }
+    for (const c of extraCrewMembers || []) crewById.set(c.id, c);
+
+    const salaryRowByCrew = new Map<string, ManagementFeeLedgerSalaryRow>();
+    const salaryRowRankOrder = new Map<string, number>();
+    for (const p of payslipsRaw || []) {
+      const crew = crewById.get(p.crew_member_id);
+      const ownerBilled = ownerBilledSalaryByPayslip.get(p.id) || 0;
+      const obp = obpByPayslip.get(p.id) || 0;
+      const reemployment = reemploymentByPayslip.get(p.id) || 0;
+      const sickPay = sickPayByCrew.get(p.crew_member_id) || 0;
+      const totalAllowance = Number(p.total_allowance);
+      salaryRowByCrew.set(p.crew_member_id, {
+        crew_member_id: p.crew_member_id,
+        crew_name: crew ? crewDisplayName(crew) : '',
+        rank_code: p.rank_id ? (rankCodeById.get(p.rank_id) || '') : '',
+        rank_grade: p.rank_grade,
+        owner_billed_salary: ownerBilled,
+        total_allowance: totalAllowance,
+        obp,
+        reemployment_allowance: reemployment,
+        sick_pay: sickPay,
+        net_total: ownerBilled + totalAllowance - obp + reemployment + sickPay,
+      });
+      salaryRowRankOrder.set(p.crew_member_id, p.rank_id ? (rankOrderById.get(p.rank_id) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER);
+    }
+    // 상병으로 이미 하선해 이번 달 급여명세서가 없는 선원도 상병수당만으로 행을 만든다.
+    for (const r of sickPayRows) {
+      if (salaryRowByCrew.has(r.crew_member_id)) continue;
+      salaryRowByCrew.set(r.crew_member_id, {
+        crew_member_id: r.crew_member_id,
+        crew_name: r.crew_name,
+        rank_code: r.rank_code,
+        rank_grade: null,
+        owner_billed_salary: 0,
+        total_allowance: 0,
+        obp: 0,
+        reemployment_allowance: 0,
+        sick_pay: r.this_month_amount,
+        net_total: r.this_month_amount,
+      });
+      salaryRowRankOrder.set(r.crew_member_id, r.rank_id ? (rankOrderById.get(r.rank_id) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER);
+    }
+    const salaryRows = [...salaryRowByCrew.entries()]
+      .sort((a, b) => (salaryRowRankOrder.get(a[0]) ?? Number.MAX_SAFE_INTEGER) - (salaryRowRankOrder.get(b[0]) ?? Number.MAX_SAFE_INTEGER))
+      .map(([, row]) => row);
+    const salaryTotal = salaryRows.reduce((s, r) => s + r.net_total, 0);
+
     return {
       period,
       ship_name: ship?.name || '',
@@ -921,6 +1045,8 @@ export const managementFeeCalcService = {
       rows: sortedRows,
       item_totals: itemTotals,
       actual_cost_entries: actualCostEntries,
+      salary_rows: salaryRows,
+      salary_total: salaryTotal,
     };
   },
 };
