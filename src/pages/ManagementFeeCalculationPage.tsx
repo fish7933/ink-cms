@@ -434,7 +434,7 @@ export default function ManagementFeeCalculationPage() {
                     </TableRow>
                     {expanded && group.rows.map(row => (
                       <Fragment key={row.ship_id}>
-                        <TableRow className={`cursor-pointer ${ledgerPeriodId === row.period_id ? 'bg-blue-50/60' : ''}`} onClick={() => openShip(row)}>
+                        <TableRow className={`cursor-pointer ${ledgerPeriodId && ledgerPeriodId === row.period_id ? 'bg-blue-50/60' : ''}`} onClick={() => openShip(row)}>
                           <TableCell className="py-1 px-2" onClick={e => e.stopPropagation()}>
                             <Checkbox checked={selectedIds.includes(row.ship_id)} onCheckedChange={() => toggleSelect(row.ship_id)} />
                           </TableCell>
@@ -443,8 +443,11 @@ export default function ManagementFeeCalculationPage() {
                           <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
                           <TableCell className="py-1 px-2 text-xs text-center">{row.line_count > 0 ? row.line_count : '-'}</TableCell>
                         </TableRow>
-                        {/* 선택된 선박의 선원×항목 상세 내역 — 클릭한 선박 바로 아래에 펼쳐진다 */}
-                        {ledgerPeriodId === row.period_id && (
+                        {/* 선택된 선박의 선원×항목 상세 내역 — 클릭한 선박 바로 아래에 펼쳐진다.
+                            ledgerPeriodId가 null일 때(아무것도 선택 안 함) row.period_id도 null인
+                            계산 미생성 선박과 비교하면 둘 다 null이라 항상 true가 되어 버리므로,
+                            ledgerPeriodId가 실제로 선택된 경우에만 비교한다. */}
+                        {!!ledgerPeriodId && ledgerPeriodId === row.period_id && (
                           <TableRow className="hover:bg-transparent">
                             <TableCell colSpan={5} className="p-0 bg-slate-50/70 border-t-0">
                               <div className="p-2.5 space-y-2.5">
