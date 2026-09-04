@@ -347,14 +347,12 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
     (effectiveShipsByTemplate[String(a.template_id)] || []).filter(s => String(s.fleet_id) === String(a.fleet_id));
 
   // 특정 범위(선주/플릿 전체)에서 이 템플릿으로 최종 귀결되는 선박만 뽑아 뱃지로 표시 (다른 곳에 더 구체적으로 할당돼 제외된 선박은 자동으로 빠짐)
-  const renderShipBadges = (shipList: Ship[], max = 5) => {
+  // 할당된 선박은 일부만 보여주고 "외 N척"으로 생략하지 않고 전부 보여준다.
+  const renderShipBadges = (shipList: Ship[]) => {
     if (shipList.length === 0) return <span className="text-xs text-gray-400">해당 선박 없음</span>;
-    const shown = shipList.slice(0, max);
-    const rest = shipList.length - shown.length;
     return (
-      <div className="flex flex-wrap gap-1 max-w-xs">
-        {shown.map(s => <Badge key={s.id} variant="outline" className="text-[10px] px-1.5 py-0">{s.name}</Badge>)}
-        {rest > 0 && <span className="text-[10px] text-gray-400">외 {rest}척</span>}
+      <div className="flex flex-wrap gap-1 max-w-md">
+        {shipList.map(s => <Badge key={s.id} variant="outline" className="text-[10px] px-1.5 py-0">{s.name}</Badge>)}
       </div>
     );
   };
@@ -715,7 +713,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
                             <span className="text-xs font-semibold text-gray-500 shrink-0 flex items-center gap-1 pt-0.5">
                               <ShipIcon className="h-3.5 w-3.5" />최종 적용 선박 ({(effectiveShipsByTemplate[String(t.id)] || []).length})
                             </span>
-                            {renderShipBadges(effectiveShipsByTemplate[String(t.id)] || [], 10)}
+                            {renderShipBadges(effectiveShipsByTemplate[String(t.id)] || [])}
                           </div>
 
                           {tTotal === 0 ? (
@@ -738,7 +736,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
                                           <span className="text-sm font-medium">{a.owner_name}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          {renderShipBadges(ownerEffectiveShips(a), 3)}
+                                          {renderShipBadges(ownerEffectiveShips(a))}
                                           <span className="text-xs text-gray-400">{formatDate(a.assigned_at)}</span>
                                           {unassignBtn(() => handleUnassignOwner(String(a.owner_id), String(a.template_id)))}
                                         </div>
@@ -766,7 +764,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
                                           <span className="text-sm font-medium">{a.fleet_name}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                          {renderShipBadges(fleetEffectiveShips(a), 3)}
+                                          {renderShipBadges(fleetEffectiveShips(a))}
                                           <span className="text-xs text-gray-400">{formatDate(a.assigned_at)}</span>
                                           {unassignBtn(() => handleUnassignFleet(String(a.fleet_id), String(a.template_id)))}
                                         </div>
