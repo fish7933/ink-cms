@@ -506,6 +506,28 @@ export default function CrewPayrollManagementPage() {
     p.items.filter(i => i.payment_type === 'deferred_payout').map(item => ({ payslip: p, item }))
   );
 
+  // Deferred Pay 표는 선원 1명당 한 줄로 펼치고, 항목명(LP/C/C/B 등)을 헤더 컬럼으로 삼는다 —
+  // (payslip, item) 쌍 하나가 한 줄이던 것을 선원별로 묶고 항목명별 열로 피벗한다.
+  const deferredPayColumns: string[] = [];
+  for (const { item } of deferredPayoutRows) {
+    const base = item.name.replace(/\s*\(Lump Sum\)\s*$/, '');
+    if (!deferredPayColumns.includes(base)) deferredPayColumns.push(base);
+  }
+  const deferredPayByCrew = (() => {
+    const map = new Map<string, { payslip: typeof payslips[number]; itemsByColumn: Record<string, typeof deferredPayoutRows[number]['item']> }>();
+    for (const { payslip, item } of deferredPayoutRows) {
+      const base = item.name.replace(/\s*\(Lump Sum\)\s*$/, '');
+      const entry = map.get(payslip.id) || { payslip, itemsByColumn: {} };
+      entry.itemsByColumn[base] = item;
+      map.set(payslip.id, entry);
+    }
+    return [...map.values()];
+  })();
+  const deferredPayColumnTotals = deferredPayColumns.map(col =>
+    deferredPayByCrew.reduce((sum, r) => sum + (r.itemsByColumn[col]?.amount || 0), 0)
+  );
+  const deferredPayGrandTotal = deferredPayColumnTotals.reduce((s, v) => s + v, 0);
+
   // 이력 다이얼로그도 급여대장과 동일하게 항목명별 열을 펼친다 — 월마다 적용 템플릿이
   // 달라질 수 있어 전체 이력에 등장한 항목명의 합집합을 열로 만든다.
   const historyAllowanceColumns = useMemo(() => {
@@ -712,20 +734,45 @@ export default function CrewPayrollManagementPage() {
                     <tr>
                       <th className="text-left py-1 px-2 font-medium text-amber-700">Rank</th>
                       <th className="text-left py-1 px-2 font-medium text-amber-700">Name</th>
-                      <th className="text-left py-1 px-2 font-medium text-amber-700">Item</th>
-                      <th className="text-right py-1 px-2 font-medium text-amber-700">Settlement Amount</th>
+                      {deferredPayColumns.map(col => (
+                        <th key={col} className="text-right py-1 px-2 font-medium text-amber-700">{col}</th>
+                      ))}
+                      <th className="text-right py-1 px-2 font-medium text-amber-700">Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {deferredPayoutRows.map(({ payslip, item }) => (
-                      <tr key={item.id} className="border-b border-amber-100 cursor-pointer hover:bg-amber-50" onClick={() => openDeferredPayoutHistory(payslip, item)}>
-                        <td className="py-1 px-2 text-gray-600">{payslip.rank_code}</td>
-                        <td className="py-1 px-2 font-medium">{payslip.crew_name}</td>
-                        <td className="py-1 px-2 text-gray-600">{item.name.replace(/\s*\(Lump Sum\)\s*$/, '')}</td>
-                        <td className="py-1 px-2 text-right font-mono font-semibold">{fmt(item.amount)}</td>
-                      </tr>
-                    ))}
+                    {deferredPayByCrew.map(({ payslip, itemsByColumn }) => {
+                      const rowTotal = deferredPayColumns.reduce((s, col) => s + (itemsByColumn[col]?.amount || 0), 0);
+                      return (
+                        <tr key={payslip.id} className="border-b border-amber-100">
+                          <td className="py-1 px-2 text-gray-600">{payslip.rank_code}</td>
+                          <td className="py-1 px-2 font-medium">{payslip.crew_name}</td>
+                          {deferredPayColumns.map(col => {
+                            const item = itemsByColumn[col];
+                            return (
+                              <td
+                                key={col}
+                                className={`py-1 px-2 text-right font-mono ${item ? 'cursor-pointer hover:bg-amber-50' : 'text-gray-300'}`}
+                                onClick={() => item && openDeferredPayoutHistory(payslip, item)}
+                              >
+                                {item ? fmt(item.amount) : '-'}
+                              </td>
+                            );
+                          })}
+                          <td className="py-1 px-2 text-right font-mono font-semibold">{fmt(rowTotal)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
+                  <tfoot className="bg-amber-50 border-t border-amber-200">
+                    <tr>
+                      <td colSpan={2} className="py-1 px-2 text-right font-semibold text-amber-700">Total</td>
+                      {deferredPayColumnTotals.map((total, i) => (
+                        <td key={deferredPayColumns[i]} className="py-1 px-2 text-right font-mono font-semibold text-amber-700">{fmt(total)}</td>
+                      ))}
+                      <td className="py-1 px-2 text-right font-mono font-semibold text-amber-700">{fmt(deferredPayGrandTotal)}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>
