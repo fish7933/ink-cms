@@ -351,8 +351,8 @@ export default function TemplateAssignmentsSection({ prefillTemplateId, onPrefil
   const renderShipBadges = (shipList: Ship[]) => {
     if (shipList.length === 0) return <span className="text-xs text-gray-400">해당 선박 없음</span>;
     return (
-      <div className="flex flex-wrap gap-1 max-w-md">
-        {shipList.map(s => <Badge key={s.id} variant="outline" className="text-[10px] px-1.5 py-0">{s.name}</Badge>)}
+      <div className="flex flex-wrap gap-1">
+        {shipList.map(s => <Badge key={s.id} variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 whitespace-nowrap">{s.name}</Badge>)}
       </div>
     );
   };
