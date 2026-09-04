@@ -699,9 +699,19 @@ export const crewPayrollService = {
     }
 
     const templateIds = [...new Set(Object.values(templateMap).filter((t): t is SalaryTemplate => !!t).map(t => t.id))];
-    const { data: templateItemsRaw } = templateIds.length > 0
-      ? await supabase.from('salary_template_items').select('*').in('template_id', templateIds)
-      : { data: [] as { template_id: string; component_id: string; rank?: string; rank_grade?: string | null; amount: number }[] };
+    // PostgREST 기본 조회 상한(1000행)에 걸리지 않도록 다 받을 때까지 이어붙인다 — 여러 선박을
+    // 한 번에 급여 생성할 때 관련 템플릿의 전체 항목 수가 1000행을 넘으면, 뒤로 밀린 템플릿(특히
+    // 나중에 추가된 직급 행)이 통째로 누락되어 그 선원들 급여가 0으로 계산되는 사고가 있었다.
+    const templateItemsRaw: { template_id: string; component_id: string; rank?: string; rank_grade?: string | null; amount: number }[] = [];
+    if (templateIds.length > 0) {
+      const PAGE_SIZE = 1000;
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data: page } = await supabase.from('salary_template_items').select('*').in('template_id', templateIds).range(from, from + PAGE_SIZE - 1);
+        if (!page || page.length === 0) break;
+        templateItemsRaw.push(...page);
+        if (page.length < PAGE_SIZE) break;
+      }
+    }
     const { data: allComponents } = await supabase.from('salary_components').select('*');
     const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean; description?: string | null; skip_deduction_on_partial_month?: boolean }]));
     const templateItemsByTemplateId = new Map<string, TemplateItemWithComponent[]>();
