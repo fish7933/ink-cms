@@ -88,6 +88,8 @@ interface EmbarkRecord {
   rank_grade: string | null;
   embark_date: string;
   disembark_date: string | null;
+  departure_date: string | null; // 출국일 — 급여 계산 기준일(있으면 embark_date 대신 이 날짜부터 지급)
+  return_date: string | null; // 귀국일 — 급여 계산 기준일(있으면 disembark_date 대신 이 날짜까지 지급)
 }
 
 interface ContractRow {
@@ -134,8 +136,12 @@ function buildShipPayslips(input: {
   const results: BuiltPayslip[] = [];
 
   for (const rec of records) {
-    const overlapStart = rec.embark_date > start ? rec.embark_date : start;
-    const overlapEnd = rec.disembark_date && rec.disembark_date < end ? rec.disembark_date : end;
+    // 급여 계산 기준일은 승선일/하선일이 아니라 출국일/귀국일이다 — 입력이 안 된 경우에만
+    // 승선일/하선일로 대체한다(대부분의 기존 기록에는 출국일/귀국일이 없음).
+    const payStart = rec.departure_date || rec.embark_date;
+    const payEnd = rec.return_date || rec.disembark_date;
+    const overlapStart = payStart > start ? payStart : start;
+    const overlapEnd = payEnd && payEnd < end ? payEnd : end;
     const daysServed = Math.max(0, Math.min(daysBetweenInclusive(overlapStart, overlapEnd), totalDays));
     const ratio = totalDays > 0 ? daysServed / totalDays : 0;
 
@@ -179,9 +185,9 @@ function buildShipPayslips(input: {
         // 중복 노출 방지). 하선월에는 추가로 그동안 쌓인 전체 누적액을 "(Lump Sum)" 항목으로
         // 별도 남긴다 — 이 항목은 net_amount 계산에서 제외되며(급여와는 별도로 정산), 급여대장의
         // 별도 "Deferred Pay" 구간(상병급여와 비슷한 형태)에서 하선 선원별로 표기된다.
-        const isDisembarkMonth = !!rec.disembark_date && rec.disembark_date >= start && rec.disembark_date <= end;
+        const isDisembarkMonth = !!payEnd && payEnd >= start && payEnd <= end;
         const thisMonthAmount = Math.round(standard * ratio);
-        const cumulativeToDate = sumDeferredAccrualThroughDate(rec.embark_date, overlapEnd, standard);
+        const cumulativeToDate = sumDeferredAccrualThroughDate(payStart, overlapEnd, standard);
 
         items.push({
           source: 'template',
@@ -637,10 +643,12 @@ export const crewPayrollService = {
 
     const { data: recordsRaw, error: recError } = await supabase
       .from('crew_embarkation_records')
-      .select('id, ship_id, crew_member_id, rank_id, rank_grade, embark_date, disembark_date')
+      .select('id, ship_id, crew_member_id, rank_id, rank_grade, embark_date, disembark_date, departure_date, return_date')
       .in('ship_id', targetShipIds)
-      .lte('embark_date', end)
-      .or(`disembark_date.is.null,disembark_date.gte.${start}`);
+      // 이 달과 조금이라도 겹칠 가능성이 있는 기록을 전부 가져온다 — 급여 계산 기준일이
+      // 출국일/귀국일이라, 승선일/하선일만 보면 월 경계에 걸친 기록을 놓칠 수 있다.
+      .or(`embark_date.lte.${end},departure_date.lte.${end}`)
+      .or(`disembark_date.is.null,disembark_date.gte.${start},return_date.gte.${start}`);
     if (recError) { targetShipIds.forEach(id => result.failed.push({ shipId: id, error: recError.message })); return result; }
     // 승선 중이라도 관리자가 선원 목록에서 삭제(소프트삭제)한 선원은 그 이후 생성되는
     // 급여명세서에 나오면 안 된다.
