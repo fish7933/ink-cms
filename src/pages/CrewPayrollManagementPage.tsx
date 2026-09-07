@@ -789,6 +789,7 @@ export default function CrewPayrollManagementPage() {
                       <th className="text-left py-1 px-2 font-medium text-red-700">Rank</th>
                       <th className="text-left py-1 px-2 font-medium text-red-700">Name</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700">Sign-Off Date</th>
+                      <th className="text-center py-1 px-2 font-medium text-red-700">Return Date</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700">Sick Pay Since</th>
                       <th className="text-center py-1 px-2 font-medium text-red-700">Status</th>
                       <th className="text-right py-1 px-2 font-medium text-red-700">This Month Amount</th>
@@ -802,6 +803,7 @@ export default function CrewPayrollManagementPage() {
                         <td className="py-1 px-2 text-gray-600">{row.rank_code}</td>
                         <td className="py-1 px-2 font-medium">{row.crew_name}</td>
                         <td className="py-1 px-2 text-center text-gray-500">{row.disembark_date}</td>
+                        <td className="py-1 px-2 text-center text-gray-500">{row.return_date || '-'}</td>
                         <td className="py-1 px-2 text-center text-gray-500">{row.start_date}</td>
                         <td className="py-1 px-2 text-center">
                           {row.status === 'closed'
