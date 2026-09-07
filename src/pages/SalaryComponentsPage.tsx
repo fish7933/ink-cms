@@ -162,13 +162,17 @@ export default function SalaryComponentsPage() {
     if (oldIndex === -1 || newIndex === -1) return;
 
     const orderValues = tabComponents.map(c => c.display_order);
-    const reordered = arrayMove(tabComponents, oldIndex, newIndex);
-    const updates = reordered.map((c, i) => ({ id: c.id, display_order: orderValues[i] }));
+    const reordered = arrayMove(tabComponents, oldIndex, newIndex).map((c, i) => ({ ...c, display_order: orderValues[i] }));
+    const updates = reordered.map(c => ({ id: c.id, display_order: c.display_order }));
 
-    setComponents(prev => prev.map(c => {
-      const u = updates.find(u => u.id === c.id);
-      return u ? { ...c, display_order: u.display_order } : c;
-    }));
+    // prev.map()은 배열 내 원래 위치를 그대로 유지하므로, filter()로 탭별 화면을 그리는 이
+    // 페이지에서는 display_order 값만 바꿔봤자 화면상 행 순서가 안 바뀌어 드래그가 "제자리로
+    // 돌아오는" 것처럼 보인다. 이 탭에 속한 항목들을 실제로 새 순서(reordered)로 재배치해서
+    // 배열 자체를 갱신해야 한다.
+    setComponents(prev => {
+      const others = prev.filter(c => c.component_type !== activeTab);
+      return [...others, ...reordered].sort((a, b) => a.display_order - b.display_order);
+    });
 
     try {
       await Promise.all(updates.map(u => updateSalaryComponent(u.id, { display_order: u.display_order })));

@@ -77,7 +77,7 @@ interface TemplateItemWithComponent {
   rank?: string;
   rank_grade?: string | null;
   amount: number;
-  component: { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; description?: string | null; skip_deduction_on_partial_month?: boolean };
+  component: { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; description?: string | null; skip_deduction_on_partial_month?: boolean; display_order: number };
 }
 
 interface EmbarkRecord {
@@ -731,7 +731,7 @@ export const crewPayrollService = {
       }
     }
     const { data: allComponents } = await supabase.from('salary_components').select('*');
-    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean; description?: string | null; skip_deduction_on_partial_month?: boolean }]));
+    const componentById = new Map((allComponents || []).map(c => [String(c.id), c as { name: string; component_type: 'earning' | 'deduction'; payment_type: 'monthly' | 'deferred'; is_active: boolean; description?: string | null; skip_deduction_on_partial_month?: boolean; display_order: number }]));
     const templateItemsByTemplateId = new Map<string, TemplateItemWithComponent[]>();
     for (const item of templateItemsRaw || []) {
       const component = componentById.get(String(item.component_id));
@@ -742,6 +742,11 @@ export const crewPayrollService = {
       const arr = templateItemsByTemplateId.get(String(item.template_id)) || [];
       arr.push({ rank: item.rank, rank_grade: item.rank_grade, amount: Number(item.amount), component });
       templateItemsByTemplateId.set(String(item.template_id), arr);
+    }
+    // 급여명세서 항목 순서는 "급여 구성항목" 관리 화면에서 정한 순서(display_order)를 그대로
+    // 따라야 한다 — salary_template_items를 그냥 불러온 순서(사실상 임의)가 아니라.
+    for (const arr of templateItemsByTemplateId.values()) {
+      arr.sort((a, b) => a.component.display_order - b.component.display_order);
     }
 
     const CHUNK = 12;
