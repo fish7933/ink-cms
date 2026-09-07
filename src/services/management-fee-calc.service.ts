@@ -785,8 +785,15 @@ export const managementFeeCalcService = {
       };
     });
 
+    // 실비(actual_cost) 항목은 승선기록으로 자동 라인이 안 생기므로(위 주석 참고), lines에 한
+    // 번이라도 나온 fee_item_id는 전부 자동 계산 항목이다 — 이 구분으로 자동 계산 항목을 먼저,
+    // 실비 항목을 뒤로 묶어서 열을 정렬한다("항목별 청구금액" 표와 같은 원칙).
+    const autoCalcFeeItemIds = new Set((lines || []).map(l => l.fee_item_id));
     const feeItemColumns = [...feeItemIds]
-      .sort((a, b) => (feeItemById.get(a)?.display_order ?? 0) - (feeItemById.get(b)?.display_order ?? 0))
+      .sort((a, b) =>
+        Number(!autoCalcFeeItemIds.has(a)) - Number(!autoCalcFeeItemIds.has(b)) ||
+        (feeItemById.get(a)?.display_order ?? 0) - (feeItemById.get(b)?.display_order ?? 0)
+      )
       .map(id => feeItemById.get(id)?.name || 'Unknown');
 
     // 선원 목록은 항상 직급 순(선원직급관리의 표시 순서)으로 정렬한다 — 프로그램 전반의 기본 규칙.
