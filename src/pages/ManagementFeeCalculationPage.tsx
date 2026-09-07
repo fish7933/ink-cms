@@ -656,7 +656,12 @@ export default function ManagementFeeCalculationPage() {
                                                 <TableRow key={s.crew_member_id}>
                                                   <TableCell className="py-1 px-2 text-xs whitespace-nowrap">{s.rank_code}{s.rank_grade ? `(${s.rank_grade})` : ''}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs font-medium whitespace-nowrap">{s.crew_name}</TableCell>
-                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(s.owner_billed_salary)}</TableCell>
+                                                  <TableCell className="py-1 px-2 text-xs text-right font-mono">
+                                                    <div>{fmt(s.owner_billed_salary)}</div>
+                                                    {s.disembark_lump_sum > 0 && (
+                                                      <div className="text-[10px] text-amber-600 font-normal whitespace-nowrap">(하선정산 {fmt(s.disembark_lump_sum)} 포함)</div>
+                                                    )}
+                                                  </TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(s.total_allowance)}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.obp > 0 ? `-${fmt(s.obp)}` : '-'}</TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{s.fksu > 0 ? `-${fmt(s.fksu)}` : '-'}</TableCell>

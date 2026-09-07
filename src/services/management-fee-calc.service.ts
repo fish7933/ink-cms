@@ -271,7 +271,8 @@ export interface ManagementFeeLedgerSalaryRow {
   crew_name: string;
   rank_code: string;
   rank_grade: string | null;
-  owner_billed_salary: number; // 선주 청구 기준 급여 템플릿 항목 합(owner_billing_basis에 따라 판단)
+  owner_billed_salary: number; // 선주 청구 기준 급여 템플릿 항목 합(owner_billing_basis에 따라 판단) — 하선월 일괄정산(CCB 등)도 포함된 금액
+  disembark_lump_sum: number; // owner_billed_salary 중 이번 달 하선 정산(예: CCB Lump Sum)으로 포함된 부분만 별도 표시(참고용, owner_billed_salary에서 이미 더해져 있으므로 별도로 더하지 않음)
   total_allowance: number;
   obp: number; // 선주 공제 항목 — 선주 청구액에서 차감
   fksu: number; // 선주 공제 항목 — 선주 청구액에서 차감
@@ -982,6 +983,9 @@ export const managementFeeCalcService = {
       ? await supabase.from('crew_payslip_items').select('payslip_id, name, payment_type, amount').in('payslip_id', payslipIds).eq('source', 'template').eq('category', 'earning').in('payment_type', ['immediate', 'deferred_payout'])
       : { data: [] as { payslip_id: string; name: string; payment_type: string; amount: number }[] };
     const ownerBilledSalaryByPayslip = new Map<string, number>();
+    // owner_billed_salary 중 이번 달 하선 정산분(예: CCB Lump Sum)만 따로 뽑아서 화면에 별도
+    // 표시할 수 있게 한다 — 합계 자체는 위 owner_billed_salary에 이미 포함되어 있다.
+    const disembarkLumpSumByPayslip = new Map<string, number>();
     for (const it of templateEarningItemsRaw || []) {
       const lumpMatch = it.name.match(/^(.+) \(Lump Sum\)$/);
       const isLumpSum = it.payment_type === 'deferred_payout' && !!lumpMatch;
@@ -990,6 +994,7 @@ export const managementFeeCalcService = {
       const include = isLumpSum ? basis === 'on_disembark' : basis === 'monthly';
       if (!include) continue;
       ownerBilledSalaryByPayslip.set(it.payslip_id, (ownerBilledSalaryByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
+      if (isLumpSum) disembarkLumpSumByPayslip.set(it.payslip_id, (disembarkLumpSumByPayslip.get(it.payslip_id) || 0) + Number(it.amount));
     }
 
     const sickPayRows = await sickPayService.getSickPayForShipMonth(period.ship_id, period.year_month);
@@ -1015,6 +1020,7 @@ export const managementFeeCalcService = {
     for (const p of payslipsRaw || []) {
       const crew = crewById.get(p.crew_member_id);
       const ownerBilled = ownerBilledSalaryByPayslip.get(p.id) || 0;
+      const disembarkLumpSum = disembarkLumpSumByPayslip.get(p.id) || 0;
       const obp = obpByPayslip.get(p.id) || 0;
       const fksu = fksuByPayslip.get(p.id) || 0;
       const reemployment = reemploymentByPayslip.get(p.id) || 0;
@@ -1026,6 +1032,7 @@ export const managementFeeCalcService = {
         rank_code: p.rank_id ? (rankCodeById.get(p.rank_id) || '') : '',
         rank_grade: p.rank_grade,
         owner_billed_salary: ownerBilled,
+        disembark_lump_sum: disembarkLumpSum,
         total_allowance: totalAllowance,
         obp,
         fksu,
@@ -1044,6 +1051,7 @@ export const managementFeeCalcService = {
         rank_code: r.rank_code,
         rank_grade: null,
         owner_billed_salary: 0,
+        disembark_lump_sum: 0,
         total_allowance: 0,
         obp: 0,
         fksu: 0,
