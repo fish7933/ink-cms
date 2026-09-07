@@ -40,13 +40,13 @@ function daysBetweenInclusive(a: string, b: string): number {
 // 달을 실제 달력 기준으로 훑어, 각 달의 일할계산(기존 월별 계산과 동일한 공식)을 더한 게
 // 그 시점까지의 누적액이다. 등급/직급이 계약 기간 중 안 바뀐다는 전제(승선기록 1건=고정
 // rank_grade)로, 현재 유효한 월 기준액(monthlyRate)을 전 기간에 동일 적용한다.
-function sumDeferredAccrualThroughDate(embarkDate: string, throughDate: string, monthlyRate: number): number {
+function sumDeferredAccrualThroughDate(embarkDate: string, throughDate: string, monthlyRate: number, daysBasis: '30' | 'actual' = 'actual'): number {
   let total = 0;
   let cursor = embarkDate.slice(0, 7);
   const lastMonth = throughDate.slice(0, 7);
   while (cursor <= lastMonth) {
     const { start, end } = monthRange(cursor);
-    const totalDays = daysInMonth(cursor);
+    const totalDays = daysBasis === '30' ? 30 : daysInMonth(cursor);
     const overlapStart = embarkDate > start ? embarkDate : start;
     const overlapEnd = throughDate < end ? throughDate : end;
     if (overlapStart <= overlapEnd) {
@@ -129,10 +129,13 @@ function buildShipPayslips(input: {
   rankNameById: Map<string, string>;
   contractsByCrewMember: Map<string, ContractRow[]>;
   allowanceItemsByContractId: Map<string, CrewContractAllowanceWithDetails[]>;
+  // 선주별 급여 일할계산 기준(선주사 수정 화면의 "급여 월 계산 기준") — '30'이면 그 달과
+  // 무관하게 항상 30일 기준으로, 기본값 'actual'이면 그 달 실제 일수 기준으로 나눈다.
+  daysBasis?: '30' | 'actual';
 }): BuiltPayslip[] {
-  const { shipId, yearMonth, templateCurrency, templateItems, records, rankNameById, contractsByCrewMember, allowanceItemsByContractId } = input;
+  const { shipId, yearMonth, templateCurrency, templateItems, records, rankNameById, contractsByCrewMember, allowanceItemsByContractId, daysBasis = 'actual' } = input;
   const { start, end } = monthRange(yearMonth);
-  const totalDays = daysInMonth(yearMonth);
+  const totalDays = daysBasis === '30' ? 30 : daysInMonth(yearMonth);
   const results: BuiltPayslip[] = [];
 
   for (const rec of records) {
@@ -187,7 +190,7 @@ function buildShipPayslips(input: {
         // 별도 "Deferred Pay" 구간(상병급여와 비슷한 형태)에서 하선 선원별로 표기된다.
         const isDisembarkMonth = !!payEnd && payEnd >= start && payEnd <= end;
         const thisMonthAmount = Math.round(standard * ratio);
-        const cumulativeToDate = sumDeferredAccrualThroughDate(payStart, overlapEnd, standard);
+        const cumulativeToDate = sumDeferredAccrualThroughDate(payStart, overlapEnd, standard, daysBasis);
 
         items.push({
           source: 'template',
@@ -632,6 +635,13 @@ export const crewPayrollService = {
     if (shipsError) { shipIds.forEach(id => result.failed.push({ shipId: id, error: shipsError.message })); return result; }
     const ships = (shipsRaw || []).map(s => ({ id: String(s.id), fleet_id: s.fleet_id ? String(s.fleet_id) : null, owner_id: s.owner_id ? String(s.owner_id) : null }));
 
+    // 선주별 급여 일할계산 기준(30일 고정/실제 일수) — 선주사 수정 화면에서 설정.
+    const ownerIdsForBasis = [...new Set(ships.map(s => s.owner_id).filter((v): v is string => !!v))];
+    const { data: ownersForBasisRaw } = ownerIdsForBasis.length > 0
+      ? await supabase.from('companies').select('id, month_days_basis').in('id', ownerIdsForBasis)
+      : { data: [] as { id: string; month_days_basis: '30' | 'actual' }[] };
+    const daysBasisByOwnerId = new Map((ownersForBasisRaw || []).map(o => [String(o.id), o.month_days_basis]));
+
     const { data: existingPeriods } = await supabase
       .from('crew_payroll_periods').select('ship_id').eq('year_month', yearMonth).in('ship_id', shipIds);
     const existingShipIds = new Set((existingPeriods || []).map(p => p.ship_id));
@@ -742,9 +752,11 @@ export const crewPayrollService = {
           const template = templateMap[shipId];
           const templateItems = template ? (templateItemsByTemplateId.get(template.id) || []) : [];
           const shipRecords = recordsByShip.get(shipId) || [];
+          const ownerId = ships.find(s => s.id === shipId)?.owner_id;
+          const daysBasis: '30' | 'actual' = (ownerId && daysBasisByOwnerId.get(ownerId)) || 'actual';
           const built = buildShipPayslips({
             shipId, yearMonth, templateCurrency: template?.currency, templateItems,
-            records: shipRecords, rankNameById, contractsByCrewMember, allowanceItemsByContractId,
+            records: shipRecords, rankNameById, contractsByCrewMember, allowanceItemsByContractId, daysBasis,
           });
 
           const { data: period, error: periodError } = await supabase
