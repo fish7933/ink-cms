@@ -34,6 +34,7 @@ export default function AllowanceTemplateItemsSummary({ items, ranks = [] }: All
             <TableHead className="text-xs">지급방식</TableHead>
             <TableHead className="text-xs">지급주체</TableHead>
             <TableHead className="text-xs text-right">금액</TableHead>
+            <TableHead className="text-xs">지급 조건</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -41,6 +42,10 @@ export default function AllowanceTemplateItemsSummary({ items, ranks = [] }: All
             const isNewGroup = row.allowance_item_id !== prevItemId;
             prevItemId = row.allowance_item_id;
             const rank = row.rank_id ? rankById.get(row.rank_id) : null;
+            const conditionBadges: string[] = [];
+            if (row.max_payout_count != null) conditionBadges.push(`최대 ${row.max_payout_count}회`);
+            if (row.min_prior_contract_months != null) conditionBadges.push(`직전계약 ${row.min_prior_contract_months}개월+`);
+            if (row.max_gap_months != null) conditionBadges.push(`재승선 ${row.max_gap_months}개월 이내`);
             return (
               <TableRow key={row.id} className={isNewGroup ? 'border-t-2' : ''}>
                 <TableCell className="text-xs font-semibold">{isNewGroup ? row.allowance_item.name : ''}</TableCell>
@@ -49,6 +54,15 @@ export default function AllowanceTemplateItemsSummary({ items, ranks = [] }: All
                 <TableCell className="text-xs text-gray-400">{BASIS_LABEL[row.payment_basis]}</TableCell>
                 <TableCell className="text-xs text-gray-400">{row.kind === 'allowance' ? METHOD_LABEL[row.payment_method] : '-'}</TableCell>
                 <TableCell className="text-xs text-right font-medium">{Number(row.amount).toLocaleString()} {row.currency}</TableCell>
+                <TableCell className="text-xs">
+                  {conditionBadges.length === 0 ? (
+                    <span className="text-gray-300">-</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {conditionBadges.map(b => <Badge key={b} variant="outline" className="text-[10px] px-1.5 py-0 text-blue-700 border-blue-200 bg-blue-50">{b}</Badge>)}
+                    </div>
+                  )}
+                </TableCell>
               </TableRow>
             );
           })}

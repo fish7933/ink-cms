@@ -103,6 +103,10 @@ export const allowanceService = {
         payment_basis: item.payment_basis,
         payment_method: item.payment_method,
         notes: item.notes || null,
+        max_payout_count: item.max_payout_count ?? null,
+        min_prior_contract_months: item.min_prior_contract_months ?? null,
+        max_gap_months: item.max_gap_months ?? null,
+        reset_on_owner_change: item.reset_on_owner_change,
       }));
       const { error: itemsError } = await supabase.from('allowance_template_items').insert(templateItems);
       if (itemsError) {
@@ -167,6 +171,10 @@ export const allowanceService = {
           payment_basis: item.payment_basis,
           payment_method: item.payment_method,
           notes: item.notes || null,
+          max_payout_count: item.max_payout_count ?? null,
+          min_prior_contract_months: item.min_prior_contract_months ?? null,
+          max_gap_months: item.max_gap_months ?? null,
+          reset_on_owner_change: item.reset_on_owner_change,
         }));
         const { error: itemsError } = await supabase.from('allowance_template_items').insert(templateItems);
         if (itemsError) { console.error('Error updating allowance template items:', itemsError); return null; }
@@ -266,6 +274,8 @@ export const allowanceService = {
         allowance_item_id: i.allowance_item_id, rank_id: i.rank_id, kind: i.kind,
         amount: i.amount, currency: i.currency, payment_basis: i.payment_basis,
         payment_method: i.payment_method, notes: i.notes,
+        max_payout_count: i.max_payout_count, min_prior_contract_months: i.min_prior_contract_months,
+        max_gap_months: i.max_gap_months, reset_on_owner_change: i.reset_on_owner_change,
       })),
     );
     if (!newTemplate) { console.error('Error renewing allowance template: failed to create new version'); return null; }
@@ -298,6 +308,8 @@ export const allowanceService = {
         allowance_item_id: i.allowance_item_id, rank_id: i.rank_id, kind: i.kind,
         amount: i.amount, currency: i.currency, payment_basis: i.payment_basis,
         payment_method: i.payment_method, notes: i.notes,
+        max_payout_count: i.max_payout_count, min_prior_contract_months: i.min_prior_contract_months,
+        max_gap_months: i.max_gap_months, reset_on_owner_change: i.reset_on_owner_change,
       })),
     );
   },

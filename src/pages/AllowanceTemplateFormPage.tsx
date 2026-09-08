@@ -64,6 +64,10 @@ export default function AllowanceTemplateFormPage() {
               currency: i.currency,
               payment_basis: i.payment_basis,
               payment_method: i.payment_method,
+              max_payout_count: i.max_payout_count ?? null,
+              min_prior_contract_months: i.min_prior_contract_months ?? null,
+              max_gap_months: i.max_gap_months ?? null,
+              reset_on_owner_change: i.reset_on_owner_change,
             })));
             if (activeTabId) updateTab(activeTabId, { title: `템플릿 수정: ${tmpl.name}` });
 

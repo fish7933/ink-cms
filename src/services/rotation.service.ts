@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/store';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
 import { sickPayService } from '@/services/sick-pay.service';
 import { allowanceService } from '@/services/allowance.service';
+import { allowanceEligibilityService } from '@/services/allowance-eligibility.service';
 import { crewDisplayName } from '@/lib/utils';
 import type {
   CrewRotationPlan,
@@ -664,7 +665,13 @@ export const rotationService = {
    * Execute approved rotation plan
    * 승선자 → onboard, 하선자 → standby, 계획 → executed
    */
-  async executeRotationPlan(planId: string): Promise<boolean> {
+  async executeRotationPlan(
+    planId: string,
+    // 승선 배정별로 실제 적용할 수당 항목(allowance_item_id) 목록 — 발령 상세 화면에서
+    // 발령자가 지급대상 체크리스트를 보고 명시적으로 선택해 넘긴다. 넘기지 않으면(목록
+    // 페이지의 즉시 실행 등) 조건 판정 결과 중 eligible=true인 항목만 기본으로 적용한다.
+    allowanceSelections?: Record<string, string[]>,
+  ): Promise<boolean> {
     // 계획 + 전체 배정 상세 조회
     const [{ data: plan }, { data: assignments, error: fetchErr }] = await Promise.all([
       supabase.from('crew_rotation_plans').select('*').eq('id', planId).single(),
@@ -714,6 +721,16 @@ export const rotationService = {
     // 상병하선 여부 판정용 — 시스템 기본 하선사유 이름으로 매칭한다.
     const { data: sickReason } = await supabase.from('sign_off_reasons').select('id').eq('name', '상병하선').maybeSingle();
     const executedByUser = await getCurrentUser();
+
+    // 수당 지급 조건 판정 — 발령자가 명시적으로 선택(allowanceSelections)하지 않은 배정에는
+    // 이 결과 중 eligible=true인 항목만 기본으로 적용한다(목록 페이지의 즉시 실행 등).
+    const defaultEligibility = await allowanceEligibilityService.evaluateForShipAssignments({
+      shipId: plan.ship_id,
+      ownerId: plan.owner_id,
+      assignments: (assignments || [])
+        .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
+        .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date })),
+    });
 
     for (const a of (assignments || [])) {
       // ── 하선자: 기존 승선 기록 완료 처리 + crew_members 초기화 ──
@@ -856,11 +873,15 @@ export const rotationService = {
         }).select('id').single();
 
         // 직급별 수당 기준(재고용수당 등)은 이 선박에 배정된(선박>플릿>선주 우선순위) 수당
-        // 템플릿에서 가져와 계약에 자동으로 붙여준다.
+        // 템플릿에서 가져와 계약에 자동으로 붙여준다 — 단, 지급 조건이 걸린 항목은 발령자가
+        // 명시적으로 선택한 것만(allowanceSelections), 선택이 없으면 조건 충족(eligible) 항목만.
         if (newContract && a.on_rank_id) {
           const templateItems = await allowanceService.getEffectiveTemplateItemsForShipAndRank(plan.ship_id, a.on_rank_id);
-          if (templateItems.length > 0) {
-            await supabase.from('crew_contract_allowances').insert(templateItems.map(ti => ({
+          const itemIdsToInclude = allowanceSelections?.[a.id]
+            ?? (defaultEligibility.get(a.id) || []).filter(e => e.eligible).map(e => e.allowanceItemId);
+          const itemsToInclude = templateItems.filter(ti => itemIdsToInclude.includes(ti.allowance_item_id));
+          if (itemsToInclude.length > 0) {
+            await supabase.from('crew_contract_allowances').insert(itemsToInclude.map(ti => ({
               contract_id: newContract.id,
               allowance_item_id: ti.allowance_item_id,
               amount: ti.amount,

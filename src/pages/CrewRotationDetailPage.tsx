@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { rotationService } from '@/services/rotation.service';
+import { allowanceEligibilityService, type AllowanceEligibilityItem } from '@/services/allowance-eligibility.service';
 import { approvalService } from '@/services/approval.service';
 import { getPorts } from '@/services/port.service';
 import { exportRotationPlanToExcel } from '@/utils/rotation-plan-export';
@@ -56,6 +57,11 @@ export default function CrewRotationDetailPage() {
   const [newNoteText, setNewNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
+  // 발령 실행 전 수당 지급 조건 판정 결과 — assignment.id별 후보 항목 목록. 발령자가
+  // 체크박스로 최종 적용 여부를 조정하며, 기본값은 조건 충족(eligible) 항목만 체크된 상태.
+  const [eligibilityByAssignment, setEligibilityByAssignment] = useState<Map<string, AllowanceEligibilityItem[]>>(new Map());
+  const [allowanceSelections, setAllowanceSelections] = useState<Record<string, Set<string>>>({});
+
   const loadPlan = async () => {
     if (!id) return;
     setLoading(true);
@@ -67,6 +73,33 @@ export default function CrewRotationDetailPage() {
     }
     if (activeTabId && data) updateTab(activeTabId, { title: data.plan_name || '교대계획' });
     setLoading(false);
+
+    // 발령 실행 버튼이 뜨는 상태(승인됨)일 때만 지급 조건을 판정 — 실행 시점 이력 기준으로
+    // 최신 상태를 봐야 하므로 승인 직후가 아니라 이 화면에 진입할 때마다 다시 계산한다.
+    if (data && data.status === 'approved') {
+      const boardingAssignments = data.assignments
+        .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
+        .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date }));
+      if (boardingAssignments.length > 0) {
+        const evalResult = await allowanceEligibilityService.evaluateForShipAssignments({
+          shipId: data.ship_id, ownerId: data.owner_id, assignments: boardingAssignments,
+        });
+        setEligibilityByAssignment(evalResult);
+        const initialSelections: Record<string, Set<string>> = {};
+        for (const [assignmentId, items] of evalResult) {
+          initialSelections[assignmentId] = new Set(items.filter(i => i.eligible).map(i => i.allowanceItemId));
+        }
+        setAllowanceSelections(initialSelections);
+      }
+    }
+  };
+
+  const toggleAllowanceSelection = (assignmentId: string, allowanceItemId: string) => {
+    setAllowanceSelections(prev => {
+      const current = new Set(prev[assignmentId] || []);
+      if (current.has(allowanceItemId)) current.delete(allowanceItemId); else current.add(allowanceItemId);
+      return { ...prev, [assignmentId]: current };
+    });
   };
 
   const handleExportExcel = async () => {
@@ -138,7 +171,9 @@ export default function CrewRotationDetailPage() {
 
   const handleExecute = async () => {
     if (!plan || !confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
-    const ok = await rotationService.executeRotationPlan(plan.id);
+    const selections: Record<string, string[]> = {};
+    for (const [assignmentId, itemIds] of Object.entries(allowanceSelections)) selections[assignmentId] = [...itemIds];
+    const ok = await rotationService.executeRotationPlan(plan.id, selections);
     if (ok) { toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' }); loadPlan(); window.dispatchEvent(new CustomEvent('rotation-plan-data-changed')); }
     else toast({ title: '실행 중 오류가 발생했습니다', variant: 'destructive' });
   };
@@ -267,6 +302,28 @@ export default function CrewRotationDetailPage() {
                         <div className="text-xs text-gray-500 mt-0.5">출국 {a.on_departure_date || '-'} · 승선 {a.embark_date}</div>
                       </>
                     ) : <div className="text-gray-400 text-xs">없음</div>}
+                    {(eligibilityByAssignment.get(a.id) || []).length > 0 && (
+                      <div className="mt-2 pt-2 border-t space-y-1">
+                        <div className="text-[11px] font-medium text-gray-500">수당/공제 지급대상</div>
+                        {(eligibilityByAssignment.get(a.id) || []).map(item => (
+                          <label key={item.allowanceItemId} className="flex items-start gap-1.5 text-xs cursor-pointer">
+                            <Checkbox
+                              className="mt-0.5"
+                              checked={(allowanceSelections[a.id] || new Set()).has(item.allowanceItemId)}
+                              onCheckedChange={() => toggleAllowanceSelection(a.id, item.allowanceItemId)}
+                            />
+                            <span>
+                              <span className={item.eligible ? '' : 'text-gray-500'}>
+                                {item.allowanceItemName} ({Number(item.amount).toLocaleString()} {item.currency})
+                              </span>
+                              {!item.eligible && (
+                                <span className="block text-amber-600">{item.reasons.join(', ')}</span>
+                              )}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-[11px] font-medium text-orange-700 mb-1">하선자</div>

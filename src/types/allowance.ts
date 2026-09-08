@@ -47,6 +47,12 @@ export interface AllowanceTemplateItem {
   payment_basis: AllowancePaymentBasis;
   payment_method: AllowancePaymentMethod;
   notes?: string;
+  // 지급 조건 — 전부 null/기본값이면 조건 없이 무조건 지급. 시스템은 이 조건으로 지급
+  // 대상 여부를 판정해 발령 화면에 보여줄 뿐, 최종 적용 여부는 발령자가 결정한다.
+  max_payout_count?: number | null; // 같은 선원에게 지급 가능한 최대 횟수
+  min_prior_contract_months?: number | null; // 직전 승선기록이 이 개월수 이상이어야 지급 대상
+  max_gap_months?: number | null; // 직전 하선(귀국)일로부터 이 개월수 이내 재승선해야 지급 대상
+  reset_on_owner_change: boolean; // 직전 계약과 선주가 다르면 max_payout_count 카운트 리셋
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +66,10 @@ export type AllowanceTemplateItemInput = {
   payment_basis: AllowancePaymentBasis;
   payment_method: AllowancePaymentMethod;
   notes?: string;
+  max_payout_count?: number | null;
+  min_prior_contract_months?: number | null;
+  max_gap_months?: number | null;
+  reset_on_owner_change: boolean;
 };
 
 export interface AllowanceTemplateWithItems extends AllowanceTemplate {
