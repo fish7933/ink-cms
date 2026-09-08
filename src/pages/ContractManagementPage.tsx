@@ -21,7 +21,7 @@ import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
 import { getCurrentUser } from '@/lib/store';
 import type { CrewContractWithDetails } from '@/types/contract';
-import type { AllowanceType, AllowanceKind, AllowancePaymentBasis, AllowancePaymentMethod, CrewContractAllowanceWithDetails } from '@/types/allowance';
+import type { AllowanceItem, AllowanceKind, AllowancePaymentBasis, AllowancePaymentMethod, CrewContractAllowanceWithDetails } from '@/types/allowance';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import { buildContractChains, getEffectiveStatus, EFFECTIVE_STATUS_CONFIG, DISEMBARK_NEEDED_THRESHOLD_MONTHS, type ContractChain, type EffectiveStatus } from '@/utils/contract-chain';
 import { supabase } from '@/lib/supabase';
@@ -32,7 +32,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 // 기존 데이터에 renewal로 저장된 값도 그대로 '연장'으로 표시하고, extension은 신규 선택지에서 제외한다.
 const TYPE_LABELS: Record<string, string> = { initial: '최초', renewal: '연장', transfer: '이적' };
 const CURRENCIES = ['USD', 'KRW', 'EUR', 'JPY', 'SGD'];
-const BASIS_LABELS: Record<AllowancePaymentBasis, string> = { monthly: '매월 지급', lump_sum: '일시불' };
+const BASIS_LABELS: Record<AllowancePaymentBasis, string> = { monthly: '매월 지급', on_embark_once: '승선월 1회', disembark_settlement: '하선 시 정산' };
 const METHOD_LABELS: Record<AllowancePaymentMethod, string> = { ship_direct: '본선 직접지급', owner_billed: '선주 청구' };
 const KIND_LABELS: Record<AllowanceKind, string> = { allowance: '수당', deduction: '공제' };
 interface CrewOption { id: string; name: string; rank: string; rank_id: string; }
@@ -54,9 +54,9 @@ export default function ContractManagementPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ crew_member_id: '', ship_id: '', contract_number: '', contract_type: 'initial', rank: '', start_date: '', end_date: '', duration_months: '', salary_amount: '', salary_currency: 'USD', overtime_rate: '', leave_pay: '', terms_and_conditions: '', notes: '' });
 
-  const [allowanceTypes, setAllowanceTypes] = useState<AllowanceType[]>([]);
+  const [allowanceItems, setAllowanceItems] = useState<AllowanceItem[]>([]);
   const [contractAllowances, setContractAllowances] = useState<CrewContractAllowanceWithDetails[]>([]);
-  const [newAllowance, setNewAllowance] = useState({ kind: 'allowance' as AllowanceKind, allowance_type_id: '', amount: '', currency: 'USD', payment_basis: 'monthly' as AllowancePaymentBasis, payment_method: 'owner_billed' as AllowancePaymentMethod, notes: '' });
+  const [newAllowance, setNewAllowance] = useState({ kind: 'allowance' as AllowanceKind, allowance_item_id: '', amount: '', currency: 'USD', payment_basis: 'monthly' as AllowancePaymentBasis, payment_method: 'owner_billed' as AllowancePaymentMethod, notes: '' });
 
   // 갱신 진행 중이면 저장 시 root_contract_id를 넣고, 저장 성공 후 이전 계약을 renewed로 표시
   const [renewContext, setRenewContext] = useState<{ rootId: string; previousId: string } | null>(null);
@@ -76,7 +76,7 @@ export default function ContractManagementPage() {
       if (crew.data) setCrewOptions(crew.data.map(c => ({ id: c.id, name: c.name || '', rank: c.rank || '', rank_id: c.rank_id || '' })));
       if (ships.data) setShipOptions(ships.data);
     });
-    allowanceService.getTypes().then(setAllowanceTypes);
+    allowanceService.getItems().then(setAllowanceItems);
     getCurrentUser().then(u => { if (u) approvalService.getApprovalLines(u.company_id ?? null).then(setApprovalLines); });
     loadData();
   }, []);
@@ -243,30 +243,32 @@ export default function ContractManagementPage() {
   const toggleSelectAll = (checked: boolean, rows: ContractChain[]) => setSelectedIds(checked ? rows.map(c => c.latest.id) : []);
 
   const handleAllowanceKindSelect = (kind: AllowanceKind) => {
-    setNewAllowance(p => ({ ...p, kind, allowance_type_id: '', amount: '', payment_basis: 'monthly', payment_method: 'owner_billed' }));
+    setNewAllowance(p => ({ ...p, kind, allowance_item_id: '', amount: '', payment_basis: 'monthly', payment_method: 'owner_billed' }));
   };
 
-  const handleAllowanceTypeSelect = async (typeId: string) => {
+  const handleAllowanceTypeSelect = async (itemId: string) => {
     const crew = crewOptions.find(c => c.id === form.crew_member_id);
-    const rate = crew?.rank_id ? await allowanceService.getRankRateFor(typeId, crew.rank_id) : null;
-    const type = allowanceTypes.find(t => t.id === typeId);
+    // 이 계약의 선박에 배정된(선박>플릿>선주 우선순위) 템플릿에서 해당 항목/직급에 맞는 기준을 프리필한다.
+    const templateItems = crew?.rank_id && form.ship_id ? await allowanceService.getEffectiveTemplateItemsForShipAndRank(form.ship_id, crew.rank_id) : [];
+    const matched = templateItems.find(ti => ti.allowance_item_id === itemId);
+    const item = allowanceItems.find(i => i.id === itemId);
     setNewAllowance(p => ({
       ...p,
-      allowance_type_id: typeId,
-      amount: rate ? String(rate.amount) : '',
-      currency: rate?.currency || 'USD',
-      payment_basis: type?.payment_basis || 'monthly',
-      payment_method: type?.payment_method || 'owner_billed',
+      allowance_item_id: itemId,
+      amount: matched ? String(matched.amount) : '',
+      currency: matched?.currency || 'USD',
+      payment_basis: matched?.payment_basis || item?.payment_basis || 'monthly',
+      payment_method: matched?.payment_method || item?.payment_method || 'owner_billed',
       notes: '',
     }));
   };
 
   const handleAddAllowance = async () => {
     if (!formView?.record) return;
-    if (!newAllowance.allowance_type_id || !newAllowance.amount) { toast({ title: '유형과 금액을 입력하세요', variant: 'destructive' }); return; }
+    if (!newAllowance.allowance_item_id || !newAllowance.amount) { toast({ title: '유형과 금액을 입력하세요', variant: 'destructive' }); return; }
     const created = await allowanceService.addContractAllowance({
       contract_id: formView.record.id,
-      allowance_type_id: newAllowance.allowance_type_id,
+      allowance_item_id: newAllowance.allowance_item_id,
       amount: parseFloat(newAllowance.amount),
       currency: newAllowance.currency,
       kind: newAllowance.kind,
@@ -276,7 +278,7 @@ export default function ContractManagementPage() {
     });
     if (!created) { toast({ title: '추가 실패', variant: 'destructive' }); return; }
     toast({ title: `${KIND_LABELS[newAllowance.kind]}이(가) 추가되었습니다` });
-    setNewAllowance({ kind: newAllowance.kind, allowance_type_id: '', amount: '', currency: 'USD', payment_basis: 'monthly', payment_method: 'owner_billed', notes: '' });
+    setNewAllowance({ kind: newAllowance.kind, allowance_item_id: '', amount: '', currency: 'USD', payment_basis: 'monthly', payment_method: 'owner_billed', notes: '' });
     await loadContractAllowances(formView.record.id);
   };
 
@@ -379,7 +381,7 @@ export default function ContractManagementPage() {
                             <td className="p-1.5">
                               <span className={a.kind === 'deduction' ? 'text-red-600' : 'text-emerald-600'}>{KIND_LABELS[a.kind]}</span>
                             </td>
-                            <td className="p-1.5 font-medium">{a.allowance_type_name}</td>
+                            <td className="p-1.5 font-medium">{a.allowance_item_name}</td>
                             <td className="p-1.5 text-right font-mono">{a.amount.toLocaleString()} {a.currency}</td>
                             <td className="p-1.5">{BASIS_LABELS[a.payment_basis]}</td>
                             <td className="p-1.5">{a.kind === 'deduction' ? '-' : METHOD_LABELS[a.payment_method]}</td>
@@ -400,9 +402,9 @@ export default function ContractManagementPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">유형</Label>
-                      <Select value={newAllowance.allowance_type_id} onValueChange={handleAllowanceTypeSelect}>
+                      <Select value={newAllowance.allowance_item_id} onValueChange={handleAllowanceTypeSelect}>
                         <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
-                        <SelectContent>{allowanceTypes.filter(t => t.kind === newAllowance.kind).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{allowanceItems.filter(t => t.kind === newAllowance.kind).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1.5"><Label className="text-xs">금액</Label><Input type="number" value={newAllowance.amount} onChange={e => setNewAllowance(p => ({ ...p, amount: e.target.value }))} className="h-9 text-sm" /></div>

@@ -69,11 +69,11 @@ export default function CrewPayslipDetailView({ payslip, shipName, showTitle = t
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [components, allowanceTypes] = await Promise.all([getSalaryComponents(), allowanceService.getTypes(true)]);
+      const [components, allowanceItems] = await Promise.all([getSalaryComponents(), allowanceService.getItems(true)]);
       if (cancelled) return;
       const map = new Map<string, string>();
       for (const c of components) if (c.description) map.set(c.name, c.description);
-      for (const t of allowanceTypes) if (t.description) map.set(t.name, t.description);
+      for (const t of allowanceItems) if (t.description) map.set(t.name, t.description);
       setLiveDescriptions(map);
     })();
     return () => { cancelled = true; };

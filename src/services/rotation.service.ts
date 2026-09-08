@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
 import { sickPayService } from '@/services/sick-pay.service';
+import { allowanceService } from '@/services/allowance.service';
 import { crewDisplayName } from '@/lib/utils';
 import type {
   CrewRotationPlan,
@@ -854,20 +855,19 @@ export const rotationService = {
           status: 'draft',
         }).select('id').single();
 
-        // 직급별 수당 기준(재고용수당 등)이 있으면 계약에 자동으로 붙여준다
+        // 직급별 수당 기준(재고용수당 등)은 이 선박에 배정된(선박>플릿>선주 우선순위) 수당
+        // 템플릿에서 가져와 계약에 자동으로 붙여준다.
         if (newContract && a.on_rank_id) {
-          const { data: rates } = await supabase
-            .from('allowance_rank_rates')
-            .select('allowance_type_id, amount, currency, default_payment_basis, default_payment_method')
-            .eq('rank_id', a.on_rank_id);
-          if (rates && rates.length > 0) {
-            await supabase.from('crew_contract_allowances').insert(rates.map(r => ({
+          const templateItems = await allowanceService.getEffectiveTemplateItemsForShipAndRank(plan.ship_id, a.on_rank_id);
+          if (templateItems.length > 0) {
+            await supabase.from('crew_contract_allowances').insert(templateItems.map(ti => ({
               contract_id: newContract.id,
-              allowance_type_id: r.allowance_type_id,
-              amount: r.amount,
-              currency: r.currency,
-              payment_basis: r.default_payment_basis,
-              payment_method: r.default_payment_method,
+              allowance_item_id: ti.allowance_item_id,
+              amount: ti.amount,
+              currency: ti.currency,
+              kind: ti.kind,
+              payment_basis: ti.payment_basis,
+              payment_method: ti.payment_method,
             })));
           }
         }

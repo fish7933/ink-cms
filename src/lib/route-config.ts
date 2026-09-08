@@ -43,7 +43,10 @@ const ManagementFeeInvoicePage = lazy(() => import('@/pages/ManagementFeeInvoice
 const ManagementFeeInvoiceViewPage = lazy(() => import('@/pages/ManagementFeeInvoiceViewPage'));
 const ExchangeRateManagementPage = lazy(() => import('@/pages/ExchangeRateManagementPage'));
 const ShorePositionsPage = lazy(() => import('@/pages/ShorePositionsPage'));
-const AllowanceTypesManagementPage = lazy(() => import('@/pages/AllowanceTypesManagementPage'));
+const AllowanceItemsPage = lazy(() => import('@/pages/AllowanceItemsPage'));
+const AllowanceTemplatesPage = lazy(() => import('@/pages/AllowanceTemplatesPage'));
+const AllowanceTemplateFormPage = lazy(() => import('@/pages/AllowanceTemplateFormPage'));
+const AllowanceTemplateDetailPage = lazy(() => import('@/pages/AllowanceTemplateDetailPage'));
 const CrewPayrollManagementPage = lazy(() => import('@/pages/CrewPayrollManagementPage'));
 const CrewPayrollDashboardPage = lazy(() => import('@/pages/CrewPayrollDashboardPage'));
 const CrewDeferredPayReportPage = lazy(() => import('@/pages/CrewDeferredPayReportPage'));
@@ -176,7 +179,11 @@ export const routeConfig: RouteEntry[] = [
   { path: '/employee-salary', component: EmployeeSalaryManagementPage },
   { path: '/my-payslips', component: EmployeeMyPayslipsPage },
   { path: '/contract-management', component: ContractManagementPage },
-  { path: '/allowance-types', component: AllowanceTypesManagementPage },
+  { path: '/allowance-items', component: AllowanceItemsPage },
+  { path: '/allowance-templates/new', component: AllowanceTemplateFormPage },
+  { path: '/allowance-templates/:id/edit', component: AllowanceTemplateFormPage },
+  { path: '/allowance-templates/:id', component: AllowanceTemplateDetailPage },
+  { path: '/allowance-templates', component: AllowanceTemplatesPage },
   { path: '/crew-payroll/ship', component: CrewPayrollManagementPage },
   { path: '/crew-payroll', component: CrewPayrollDashboardPage },
   { path: '/crew-deferred-pay', component: CrewDeferredPayReportPage },

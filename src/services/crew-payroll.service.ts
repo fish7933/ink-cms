@@ -9,7 +9,7 @@ import { crewDisplayName } from '@/lib/utils';
 import { buildCrewPayrollLedgerWorkbook } from '@/utils/crew-payroll-export';
 import * as XLSX from 'xlsx-js-style';
 import type { SalaryTemplate } from '@/lib/salary-store';
-import type { CrewContractAllowanceWithDetails } from '@/types/allowance';
+import type { AllowancePaymentBasis, CrewContractAllowanceWithDetails } from '@/types/allowance';
 import type {
   CrewPayrollPeriod,
   CrewPayrollPeriodSummary,
@@ -58,6 +58,47 @@ function sumDeferredAccrualThroughDate(embarkDate: string, throughDate: string, 
     cursor = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
   }
   return total;
+}
+
+interface AllowanceMonthResult {
+  include: boolean; // false면 이번 달 명세서에 이 항목을 아예 올리지 않는다
+  amount: number; // include=true일 때 이번 달 지급액
+  accruedToDate: number; // disembark_settlement의 누적 현황 표시용(승선 중인 달에도 채워짐)
+}
+
+// 계약 수당/공제 항목(payment_basis)이 이번 달 급여명세에 어떻게 반영되는지 결정하는 유일한
+// 통로 — 이 해석 로직이 여러 곳에 흩어지면, rotation.service.ts가 이미 삭제된 컬럼을 계속
+// 참조하던 것과 같은 "한쪽만 고치고 잊는" 사고가 재발한다.
+function resolveAllowanceForMonth(params: {
+  paymentBasis: AllowancePaymentBasis;
+  standardAmount: number;
+  embarkDate: string; // rec.embark_date — 승선월 판정은 계약이 아니라 실제 승선기록 기준
+  payStart: string;
+  payEnd: string | null;
+  yearMonth: string;
+  overlapEnd: string;
+  ratio: number;
+  daysBasis: '30' | 'actual';
+}): AllowanceMonthResult {
+  const { paymentBasis, standardAmount, embarkDate, payStart, payEnd, yearMonth, overlapEnd, ratio, daysBasis } = params;
+
+  if (paymentBasis === 'monthly') {
+    // 매 활성월 일할계산 (기존 동작 그대로)
+    return { include: true, amount: Math.round(standardAmount * ratio), accruedToDate: 0 };
+  }
+
+  if (paymentBasis === 'on_embark_once') {
+    // 승선월(embark_date가 속한 달)에만 일할계산 없이 전액 1회. 다른 달은 완전히 제외한다.
+    if (embarkDate.slice(0, 7) !== yearMonth) return { include: false, amount: 0, accruedToDate: 0 };
+    return { include: true, amount: standardAmount, accruedToDate: 0 };
+  }
+
+  // 'disembark_settlement': 급여 후불성(deferred) 항목과 동일한 방식 — 승선 중에는 누적만
+  // 되다가(그 달엔 지급 안 함) 하선월에 그동안 쌓인 전액을 지급한다.
+  const cumulativeToDate = sumDeferredAccrualThroughDate(payStart, overlapEnd, standardAmount, daysBasis);
+  const isDisembarkMonth = !!payEnd && payEnd.slice(0, 7) === yearMonth;
+  if (isDisembarkMonth) return { include: true, amount: cumulativeToDate, accruedToDate: cumulativeToDate };
+  return { include: false, amount: 0, accruedToDate: cumulativeToDate };
 }
 
 interface GeneratedItem {
@@ -254,16 +295,28 @@ function buildShipPayslips(input: {
       const contractItems = allowanceItemsByContractId.get(contract.id) || [];
       contractItems.forEach((a, idx) => {
         const standard = Number(a.amount);
+        const monthResult = resolveAllowanceForMonth({
+          paymentBasis: a.payment_basis,
+          standardAmount: standard,
+          embarkDate: rec.embark_date,
+          payStart,
+          payEnd,
+          yearMonth,
+          overlapEnd,
+          ratio,
+          daysBasis,
+        });
+        if (!monthResult.include) return; // on_embark_once의 다른 달, disembark_settlement의 승선 중인 달 등
         items.push({
           source: 'contract',
           category: a.kind === 'deduction' ? 'deduction' : 'earning',
-          name: a.allowance_type_name,
+          name: a.allowance_item_name,
           payment_method: a.kind === 'allowance' ? a.payment_method : null,
-          payment_type: 'immediate',
+          payment_type: a.payment_basis === 'disembark_settlement' ? 'deferred_payout' : 'immediate',
           standard_amount: standard,
-          amount: Math.round(standard * ratio),
-          accrued_to_date: null,
-          description: a.allowance_type_description || null,
+          amount: monthResult.amount,
+          accrued_to_date: a.payment_basis === 'disembark_settlement' ? monthResult.accruedToDate : null,
+          description: a.allowance_item_description || null,
           display_order: 100 + idx,
         });
       });
@@ -701,18 +754,18 @@ export const crewPayrollService = {
     const contractIds = [...new Set(contracts.map(c => c.id))];
     const { data: contractAllowancesRaw } = contractIds.length > 0
       ? await supabase.from('crew_contract_allowances').select('*').in('contract_id', contractIds)
-      : { data: [] as (CrewContractAllowanceWithDetails & { allowance_type_id: string; contract_id: string })[] };
-    const allowanceTypeIds = [...new Set((contractAllowancesRaw || []).map(a => a.allowance_type_id))];
-    const { data: allowanceTypes } = allowanceTypeIds.length > 0
-      ? await supabase.from('allowance_types').select('id, name, description').in('id', allowanceTypeIds)
+      : { data: [] as (CrewContractAllowanceWithDetails & { allowance_item_id: string; contract_id: string })[] };
+    const allowanceItemIds = [...new Set((contractAllowancesRaw || []).map(a => a.allowance_item_id))];
+    const { data: allowanceItems } = allowanceItemIds.length > 0
+      ? await supabase.from('allowance_items').select('id, name, description').in('id', allowanceItemIds)
       : { data: [] as { id: string; name: string; description?: string | null }[] };
-    const allowanceTypeList: { id: string; name: string; description?: string | null }[] = allowanceTypes || [];
-    const allowanceTypeNameById = new Map(allowanceTypeList.map(t => [t.id, t.name] as [string, string]));
-    const allowanceTypeDescById = new Map(allowanceTypeList.map(t => [t.id, t.description] as [string, string | null | undefined]));
+    const allowanceItemList: { id: string; name: string; description?: string | null }[] = allowanceItems || [];
+    const allowanceItemNameById = new Map(allowanceItemList.map(t => [t.id, t.name] as [string, string]));
+    const allowanceItemDescById = new Map(allowanceItemList.map(t => [t.id, t.description] as [string, string | null | undefined]));
     const allowanceItemsByContractId = new Map<string, CrewContractAllowanceWithDetails[]>();
     for (const a of contractAllowancesRaw || []) {
       const arr = allowanceItemsByContractId.get(a.contract_id) || [];
-      arr.push({ ...a, allowance_type_name: allowanceTypeNameById.get(a.allowance_type_id) || '', allowance_type_description: allowanceTypeDescById.get(a.allowance_type_id) || undefined });
+      arr.push({ ...a, allowance_item_name: allowanceItemNameById.get(a.allowance_item_id) || '', allowance_item_description: allowanceItemDescById.get(a.allowance_item_id) || undefined });
       allowanceItemsByContractId.set(a.contract_id, arr);
     }
 
