@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { getFileUrl } from '@/lib/upload';
 import { sanitizeTableHtml } from '@/utils/table-field';
 import { sanitizeRichTextHtml, renderRichTextReadOnlyHtml } from '@/utils/rich-text-field';
@@ -59,6 +60,14 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   const senderName = company?.name_en || company?.name || '-';
   // 국제표준(ISO 8601) 날짜만 표기 — 시각은 대외 문서에 불필요.
   const toIsoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // 문서정보 표의 라벨(문서번호/Doc.No./수신/To 등) 길이가 제각각이라 값의 시작 위치가 줄마다
+  // 달라지던 것을 — 라벨을 고정폭 칸으로 따로 빼 모든 값이 같은 위치에서 시작하게 한다.
+  const infoRow = (label: string, value: ReactNode) => (
+    <tr key={label}>
+      <td style={{ padding: '3px 6px 3px 0', width: 80, whiteSpace: 'nowrap', verticalAlign: 'top' }}><b>{label}</b></td>
+      <td style={{ padding: '3px 0', verticalAlign: 'top' }}>{value}</td>
+    </tr>
+  );
 
   // 결재란에 표시되는 approver_label은 "부서명 · 직급명" 형태로 저장되어 있어, 그 중 직급(직책)만 뽑아 쓴다.
   const positionOf = (label?: string | null) => label?.split(' · ').pop()?.trim() || '';
@@ -190,27 +199,26 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                   결재란 오른쪽 테두리가 잘린다. min-width: 0으로 필요하면 줄어들 수 있게 한다. */}
               <table style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
                 <tbody>
-                  <tr><td style={{ padding: '3px 0' }}><b>{isExternal ? 'Doc. No.' : '문서번호'}</b>&nbsp;&nbsp;{docNumber}</td></tr>
-                  {!isExternal && (
-                    <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
+                  {infoRow(isExternal ? 'Doc. No.' : '문서번호', docNumber)}
+                  {!isExternal && infoRow('기안일시', `${draftedDate.toLocaleDateString('ko-KR')} ${draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`)}
+                  {infoRow(
+                    isExternal ? 'Date' : '시행일시',
+                    isExternal
+                      ? (issuedDate ? toIsoDate(issuedDate) : 'In progress')
+                      : (issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중')
                   )}
-                  <tr><td style={{ padding: '3px 0' }}><b>{isExternal ? 'Date' : '시행일시'}</b>&nbsp;&nbsp;{isExternal ? (issuedDate ? toIsoDate(issuedDate) : 'In progress') : (issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중')}</td></tr>
                   {isExternal ? (
                     <>
-                      <tr><td style={{ padding: '3px 0' }}><b>To</b>&nbsp;&nbsp;{doc.external_recipient_text || '-'}</td></tr>
-                      {doc.external_reference_text && (
-                        <tr><td style={{ padding: '3px 0' }}><b>Cc</b>&nbsp;&nbsp;{doc.external_reference_text}</td></tr>
-                      )}
-                      <tr><td style={{ padding: '3px 0' }}><b>From</b>&nbsp;&nbsp;{senderName}</td></tr>
-                      <tr><td style={{ padding: '3px 0' }}><b>Subject</b>&nbsp;&nbsp;{doc.title}</td></tr>
+                      {infoRow('To', doc.external_recipient_text || '-')}
+                      {doc.external_reference_text && infoRow('Cc', doc.external_reference_text)}
+                      {infoRow('From', senderName)}
+                      {infoRow('Subject', doc.title)}
                     </>
                   ) : (
                     <>
-                      <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
-                      {referenceLabels.length > 0 && (
-                        <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
-                      )}
-                      <tr><td style={{ padding: '3px 0' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td></tr>
+                      {infoRow('수신', doc.recipient_org_unit_name || '총무팀 (보존)')}
+                      {referenceLabels.length > 0 && infoRow('참조', referenceLabels.join(', '))}
+                      {infoRow('기안부서', doc.org_unit_name || '-')}
                     </>
                   )}
                 </tbody>

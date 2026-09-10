@@ -21,7 +21,14 @@ const ALLOWED_ATTR = ['style', 'href', 'target', 'rel', 'colspan', 'rowspan', 'a
 // 남긴다. 표 안에서는 테두리/폭/배경이 표 모양 자체에 필요하므로 그대로 둔다.
 const TABLE_TAGS = new Set(['table', 'tr', 'td', 'th', 'colgroup', 'col', 'thead', 'tbody']);
 const SAFE_STYLE_PROPS = ['font-weight', 'font-style', 'text-decoration', 'text-align', 'color'];
-const SAFE_STYLE_PROPS_TABLE = [...SAFE_STYLE_PROPS, 'border', 'border-collapse', 'vertical-align', 'width', 'background-color'];
+const SAFE_STYLE_PROPS_TABLE = [
+  ...SAFE_STYLE_PROPS,
+  // 워드 표는 보통 상/하/좌/우 테두리를 각각 따로(border-top 등) 내보낸다 — 'border'
+  // 축약형만 허용하면 이 개별 지정들이 전부 걸러져 표 줄이 사라져 보인다.
+  'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+  'border-color', 'border-width', 'border-style', 'border-collapse', 'border-spacing',
+  'vertical-align', 'width', 'background-color',
+];
 
 function sanitizeInlineStyles(doc: Document): void {
   doc.querySelectorAll<HTMLElement>('[style]').forEach(el => {
