@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PasteableTableField from '@/components/document/PasteableTableField';
 import LineItemsField from '@/components/document/LineItemsField';
+import RichTextField from '@/components/document/RichTextField';
 import type { DocumentFormField, FormFieldValue, LineItemRow, ApprovalDocumentAttachment } from '@/types/approval-document';
 
 interface DynamicDocumentFormProps {
@@ -20,12 +21,14 @@ export default function DynamicDocumentForm({ fields, values, onChange, disabled
     <div className="grid grid-cols-2 gap-3">
       {fields.map(field => {
         const value = values[field.key] ?? (field.type === 'line_items' ? [] : '');
-        const span = field.type === 'textarea' || field.type === 'table' || field.type === 'line_items' ? 'col-span-2' : 'col-span-1';
+        const span = field.type === 'textarea' || field.type === 'table' || field.type === 'line_items' || field.type === 'rich_text' ? 'col-span-2' : 'col-span-1';
         return (
           <div key={field.key} className={`space-y-1.5 min-w-0 ${span}`}>
             {field.type !== 'table' && <Label className="text-xs">{field.label}{field.required && ' *'}</Label>}
             {field.type === 'textarea' ? (
               <Textarea value={String(value)} onChange={e => onChange(field.key, e.target.value)} rows={3} disabled={disabled} />
+            ) : field.type === 'rich_text' ? (
+              <RichTextField value={String(value)} onChange={v => onChange(field.key, v)} disabled={disabled} />
             ) : field.type === 'table' ? (
               <PasteableTableField value={String(value)} onChange={v => onChange(field.key, v)} disabled={disabled} />
             ) : field.type === 'line_items' ? (

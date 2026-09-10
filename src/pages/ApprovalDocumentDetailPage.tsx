@@ -13,7 +13,7 @@ import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
-import { approvalDocumentService, getLeaveDetail, getReferenceDocumentIds, type LeaveDetail } from '@/services/approval-document.service';
+import { approvalDocumentService, getLeaveDetail, getReferenceDocumentIds, SELF_APPROVE_COMMENT, type LeaveDetail } from '@/services/approval-document.service';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
@@ -271,11 +271,12 @@ export default function ApprovalDocumentDetailPage() {
         <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">비고:</p><p className="text-sm text-gray-700">{doc.requester_comment}</p></div>
       )}
 
-      {/* 결재권자가 승인/반려 시 남긴 의견 — 문서가 최종 완료된 뒤에도(상태와 무관하게) 계속 보여야 한다 */}
-      {doc.steps.some(s => s.comment) && (
+      {/* 결재권자가 승인/반려 시 남긴 의견 — 문서가 최종 완료된 뒤에도(상태와 무관하게) 계속 보여야
+          한다. 기안자 본인 자동승인 시스템 문구(SELF_APPROVE_COMMENT)는 실제 의견이 아니므로 제외. */}
+      {doc.steps.some(s => s.comment && s.comment !== SELF_APPROVE_COMMENT) && (
         <div className="bg-blue-50/60 border border-blue-100 p-3 rounded space-y-2">
           <p className="text-sm font-semibold text-blue-800">결재 의견</p>
-          {doc.steps.filter(s => s.comment).map(s => (
+          {doc.steps.filter(s => s.comment && s.comment !== SELF_APPROVE_COMMENT).map(s => (
             <div key={s.id} className="text-sm bg-white rounded border border-blue-100 p-2">
               <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
                 <span className="font-medium text-blue-700">{s.approver_label ? `${s.approver_label} ` : ''}{s.approver_name}</span>

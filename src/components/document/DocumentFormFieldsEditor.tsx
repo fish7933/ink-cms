@@ -18,7 +18,15 @@ const FIELD_TYPE_LABELS: Record<DocumentFormFieldType, string> = {
   date: '날짜',
   select: '선택 목록',
   table: '표 (엑셀 붙여넣기)',
+  rich_text: '서식 있는 텍스트 (워드 붙여넣기 가능)',
+  // 'line_items'/'file'은 이 화면에 아직 구성 UI(항목의 열 구성 편집기 등)가 없어 지금 고르면
+  // 빈 필드만 생겨 쓸 수 없다 — 선택지로는 노출하지 않되, Record 타입의 exhaustiveness를
+  // 만족시키기 위해(DocumentFormFieldType 전체 키 필요) 값 자체는 채워둔다.
+  line_items: '항목 추가 (표 형태 반복 입력) — 구성 UI 없음, 선택지 미노출',
+  file: '파일 첨부 — 구성 UI 없음, 선택지 미노출',
 };
+
+const SELECTABLE_FIELD_TYPES = (Object.keys(FIELD_TYPE_LABELS) as DocumentFormFieldType[]).filter(t => t !== 'file' && t !== 'line_items');
 
 const newField = (): DocumentFormField => ({ key: `field_${Date.now()}`, label: '', type: 'text', required: false });
 
@@ -57,8 +65,8 @@ export default function DocumentFormFieldsEditor({ fields, onChange, disabled }:
                   <Select value={field.type} onValueChange={v => update(i, { type: v as DocumentFormFieldType })} disabled={disabled}>
                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {(Object.entries(FIELD_TYPE_LABELS) as [DocumentFormFieldType, string][]).map(([v, label]) => (
-                        <SelectItem key={v} value={v} className="text-sm">{label}</SelectItem>
+                      {SELECTABLE_FIELD_TYPES.map(v => (
+                        <SelectItem key={v} value={v} className="text-sm">{FIELD_TYPE_LABELS[v]}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

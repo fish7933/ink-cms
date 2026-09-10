@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
+import RichTextField from '@/components/document/RichTextField';
 import { msg } from '@/lib/messages';
 import { Checkbox } from '@/components/ui/checkbox';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
@@ -88,6 +89,9 @@ export default function DocumentDraftPage() {
   const [documentTypeId, setDocumentTypeId] = useState('');
   const [orgUnitId, setOrgUnitId] = useState('');
   const [recipientOrgUnitId, setRecipientOrgUnitId] = useState('');
+  const [recipientType, setRecipientType] = useState<'internal' | 'external'>('internal');
+  const [externalRecipientText, setExternalRecipientText] = useState('');
+  const [externalReferenceText, setExternalReferenceText] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [formValues, setFormValues] = useState<Record<string, FormFieldValue>>({});
@@ -257,9 +261,13 @@ export default function DocumentDraftPage() {
   useEffect(() => {
     if (skipFormResetRef.current) { skipFormResetRef.current = false; return; }
     setFormValues({});
-    // 문서유형에 기본 참조부서/수신부서가 설정되어 있으면 자동으로 반영 (기안 화면에서 개별 조정 가능)
+    // 문서유형에 기본 참조부서/수신처가 설정되어 있으면 자동으로 반영 (기안 화면에서 개별 조정 가능)
     setCcOrgUnitIds(selectedType?.default_cc_org_unit_ids || []);
     setRecipientOrgUnitId(selectedType?.default_recipient_org_unit_id || '');
+    // 문서유형 기본값은 항상 내부 조직 참조이므로, 유형을 바꾸면 외부 수신처 입력은 초기화한다.
+    setRecipientType('internal');
+    setExternalRecipientText('');
+    setExternalReferenceText('');
   }, [documentTypeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedManualLine = approvalLines.find(l => l.id === manualLineId) || null;
@@ -342,6 +350,9 @@ export default function DocumentDraftPage() {
       resubmit_count: 0,
       manual_line_id: null,
       recipient_org_unit_id: recipientOrgUnitId || null,
+      recipient_type: recipientType,
+      external_recipient_text: recipientType === 'external' ? (externalRecipientText || null) : null,
+      external_reference_text: recipientType === 'external' ? (externalReferenceText || null) : null,
       created_at: nowIso,
       updated_at: nowIso,
       completed_at: null,
@@ -351,7 +362,7 @@ export default function DocumentDraftPage() {
       recipient_org_unit_name: units.find(u => u.id === recipientOrgUnitId)?.name || null,
       steps,
     };
-  }, [isSystemLinkedDraft, currentUser, effectiveChain, draftId, documentTypeId, title, content, existingAttachments, loadedReferenceType, loadedReferenceId, orgUnitId, requesterComment, recipientOrgUnitId, types, units]);
+  }, [isSystemLinkedDraft, currentUser, effectiveChain, draftId, documentTypeId, title, content, existingAttachments, loadedReferenceType, loadedReferenceId, orgUnitId, requesterComment, recipientOrgUnitId, recipientType, externalRecipientText, externalReferenceText, types, units]);
 
   const selfStepIndexes = useMemo(
     () => effectiveChain.map((c, i) => (c.approver_id === currentUser?.id ? i : -1)).filter(i => i >= 0),
@@ -420,6 +431,9 @@ export default function DocumentDraftPage() {
     setExistingAttachments([]);
     setOrgUnitId(myOrgUnitIds[0] || '');
     setRecipientOrgUnitId('');
+    setRecipientType('internal');
+    setExternalRecipientText('');
+    setExternalReferenceText('');
     setUseManualLine(false);
     setManualLineId('');
   };
@@ -444,6 +458,9 @@ export default function DocumentDraftPage() {
     setDocumentTypeId(doc.document_type_id);
     setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
     setRecipientOrgUnitId(doc.recipient_org_unit_id || '');
+    setRecipientType(doc.recipient_type || 'internal');
+    setExternalRecipientText(doc.external_recipient_text || '');
+    setExternalReferenceText(doc.external_reference_text || '');
     setTitle(doc.title);
     setContent(doc.content || '');
     setFormValues(doc.form_data || {});
@@ -466,6 +483,9 @@ export default function DocumentDraftPage() {
     setDocumentTypeId(doc.document_type_id);
     setOrgUnitId(doc.org_unit_id || myOrgUnitIds[0] || '');
     setRecipientOrgUnitId(doc.recipient_org_unit_id || '');
+    setRecipientType(doc.recipient_type || 'internal');
+    setExternalRecipientText(doc.external_recipient_text || '');
+    setExternalReferenceText(doc.external_reference_text || '');
     setTitle(doc.title);
     setContent(doc.content || '');
     setFormValues(doc.form_data || {});
@@ -549,6 +569,9 @@ export default function DocumentDraftPage() {
         created_by: currentUser.id,
         requester_comment: requesterComment.trim() || undefined,
         recipientOrgUnitId: recipientOrgUnitId || undefined,
+        recipientType,
+        externalRecipientText: recipientType === 'external' ? (externalRecipientText.trim() || undefined) : undefined,
+        externalReferenceText: recipientType === 'external' ? (externalReferenceText.trim() || undefined) : undefined,
         reference_type: loadedReferenceType || undefined,
         reference_id: loadedReferenceId || undefined,
       });
@@ -622,6 +645,7 @@ export default function DocumentDraftPage() {
     };
     const missingField = formFields.find(f => f.required && isFieldMissing(f));
     if (missingField) { toast({ title: `${missingField.label}을(를) 입력해주세요.`, variant: 'destructive' }); return; }
+    if (recipientType === 'external' && !externalRecipientText.trim()) { toast({ title: '수신처를 입력해주세요.', variant: 'destructive' }); return; }
 
     try {
       setSubmitting(true);
@@ -637,6 +661,9 @@ export default function DocumentDraftPage() {
           org_unit_id: orgUnitId,
           requester_comment: requesterComment.trim() || undefined,
           recipientOrgUnitId: recipientOrgUnitId || undefined,
+          recipientType,
+          externalRecipientText: recipientType === 'external' ? (externalRecipientText.trim() || undefined) : undefined,
+          externalReferenceText: recipientType === 'external' ? (externalReferenceText.trim() || undefined) : undefined,
           ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
           ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
           manualChain: useManualLine ? manualChain : undefined,
@@ -654,6 +681,9 @@ export default function DocumentDraftPage() {
           created_by: currentUser.id,
           requester_comment: requesterComment.trim() || undefined,
           recipientOrgUnitId: recipientOrgUnitId || undefined,
+          recipientType,
+          externalRecipientText: recipientType === 'external' ? (externalRecipientText.trim() || undefined) : undefined,
+          externalReferenceText: recipientType === 'external' ? (externalReferenceText.trim() || undefined) : undefined,
           ccOrgUnitIds: ccOrgUnitIds.length > 0 ? ccOrgUnitIds : undefined,
           ccUserIds: ccUserIds.length > 0 ? ccUserIds : undefined,
           draftId: draftId || undefined,
@@ -811,16 +841,42 @@ export default function DocumentDraftPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">수신 부서 <span className="text-gray-400 font-normal">(결재선/참조와 별개)</span></Label>
-                  <Select value={recipientOrgUnitId || '_none'} onValueChange={v => setRecipientOrgUnitId(v === '_none' ? '' : v)} disabled={submitting}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="수신부서 선택" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">지정 안 함 (총무팀(보존) 기본 표기)</SelectItem>
-                      {units.map(u => <SelectItem key={u.id} value={u.id} className="text-sm">{u.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label className="text-xs">수신처 <span className="text-gray-400 font-normal">(결재선/참조와 별개)</span></Label>
+                  <div className="flex gap-1 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => { setRecipientType('internal'); setExternalRecipientText(''); setExternalReferenceText(''); }}
+                      disabled={submitting}
+                      className={`px-2.5 py-1 rounded-md text-xs border ${recipientType === 'internal' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    >내부</button>
+                    <button
+                      type="button"
+                      onClick={() => { setRecipientType('external'); setRecipientOrgUnitId(''); }}
+                      disabled={submitting}
+                      className={`px-2.5 py-1 rounded-md text-xs border ${recipientType === 'external' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    >외부</button>
+                  </div>
+                  {recipientType === 'internal' ? (
+                    <Select value={recipientOrgUnitId || '_none'} onValueChange={v => setRecipientOrgUnitId(v === '_none' ? '' : v)} disabled={submitting}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="수신처 선택" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">지정 안 함 (총무팀(보존) 기본 표기)</SelectItem>
+                        {units.map(u => <SelectItem key={u.id} value={u.id} className="text-sm">{u.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Input value={externalRecipientText} onChange={e => setExternalRecipientText(e.target.value)} placeholder="수신처 (예: OO해운(주) 귀중)" className="h-9 text-sm" disabled={submitting} />
+                      <Input value={externalReferenceText} onChange={e => setExternalReferenceText(e.target.value)} placeholder="참조처 (선택)" className="h-9 text-sm" disabled={submitting} />
+                    </div>
+                  )}
                 </div>
               </div>
+              {recipientType === 'external' && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                  외부로 발송하는 문서입니다. 내부 결재는 그대로 진행되지만, 시행문 출력에는 내부 결재란이 표시되지 않습니다.
+                </p>
+              )}
 
               <div className="space-y-1.5">
                 <Label className="text-xs">제목 *</Label>
@@ -856,7 +912,7 @@ export default function DocumentDraftPage() {
               ) : (
                 <div className="space-y-1.5">
                   <Label className="text-xs">본문</Label>
-                  <Textarea value={content} onChange={e => setContent(e.target.value)} placeholder="기안 내용을 입력하세요" rows={8} disabled={submitting} />
+                  <RichTextField value={content} onChange={setContent} placeholder="기안 내용을 입력하세요" minRows={8} disabled={submitting} />
                 </div>
               )}
 

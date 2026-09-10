@@ -4,6 +4,8 @@ import { uploadFile } from '@/lib/storage';
 export interface CompanyInfo {
   id: string;
   name: string;
+  // 외부로 나가는 결재문서(시행문)의 "발신"란에 표기 — 미입력이면 name(국문)을 그대로 쓴다.
+  name_en: string | null;
   address: string | null;
   phone: string | null;
   fax: string | null;
@@ -15,7 +17,7 @@ export interface CompanyInfo {
 export async function getCompanyInfo(): Promise<CompanyInfo | null> {
   const { data, error } = await supabase
     .from('company_info')
-    .select('id, name, address, phone, fax, email, website, logo_url')
+    .select('id, name, name_en, address, phone, fax, email, website, logo_url')
     .order('created_at')
     .limit(1)
     .maybeSingle();
@@ -25,7 +27,7 @@ export async function getCompanyInfo(): Promise<CompanyInfo | null> {
 
 export async function saveCompanyInfo(
   id: string | null,
-  payload: { name: string; address: string | null; phone: string | null; fax: string | null; email: string | null; website: string | null; logo_url: string | null }
+  payload: { name: string; name_en: string | null; address: string | null; phone: string | null; fax: string | null; email: string | null; website: string | null; logo_url: string | null }
 ): Promise<void> {
   if (id) {
     const { error } = await supabase

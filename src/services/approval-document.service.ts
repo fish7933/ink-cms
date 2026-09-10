@@ -78,7 +78,9 @@ export async function approvalLineToChainSteps(line: ApprovalLineWithSteps): Pro
   });
 }
 
-const SELF_APPROVE_COMMENT = '본인 기안으로 자동 승인 처리됨';
+// 기안자 본인이 결재라인에 포함돼 자동승인될 때 붙는 시스템 문구 — 실제 결재자의 의견이
+// 아니므로 "결재 의견" 등 사람이 남긴 코멘트를 보여주는 화면에서는 항상 제외해야 한다.
+export const SELF_APPROVE_COMMENT = '본인 기안으로 자동 승인 처리됨';
 const ALREADY_PROCESSED_ERROR = '이미 처리되었거나 결재 순서가 아닙니다.';
 
 // 연차/질병휴가 신청 문서(reference_type이 shore_leave_request/sick_leave_request)는 자유서식
@@ -426,8 +428,13 @@ export const approvalDocumentService = {
     requester_comment?: string;
     reference_type?: string;
     reference_id?: string;
-    // 결재선/참조와 별개인 문서의 공식 수신부서
+    // 결재선/참조와 별개인 문서의 공식 수신처
     recipientOrgUnitId?: string;
+    // 'internal'(기본)이면 recipientOrgUnitId를 쓰고, 'external'이면 아래 자유텍스트를 쓴다
+    // (회사 밖으로 나가는 문서 — 시행문에서는 내부 결재란을 표시하지 않는다).
+    recipientType?: 'internal' | 'external';
+    externalRecipientText?: string;
+    externalReferenceText?: string;
     // 결재선과 별개로 통보만 받을 참조자(개인) / 참조 부서
     ccUserIds?: string[];
     ccOrgUnitIds?: string[];
@@ -483,7 +490,10 @@ export const approvalDocumentService = {
       reference_type: input.reference_type || null,
       reference_id: input.reference_id || null,
       manual_line_id: isAutoChain ? null : (input.manualLineId || null),
-      recipient_org_unit_id: input.recipientOrgUnitId || null,
+      recipient_org_unit_id: input.recipientType === 'external' ? null : (input.recipientOrgUnitId || null),
+      recipient_type: input.recipientType || 'internal',
+      external_recipient_text: input.recipientType === 'external' ? (input.externalRecipientText || null) : null,
+      external_reference_text: input.recipientType === 'external' ? (input.externalReferenceText || null) : null,
       status: allApproved ? 'approved' : 'pending',
       current_step: allApproved ? stepRows.length : firstPending!.step_order,
       completed_at: allApproved ? now : null,
@@ -505,10 +515,11 @@ export const approvalDocumentService = {
         .eq('id', doc.reference_id);
     }
 
-    // 수신부서는 "이 문서를 받아 보관하는 부서"이므로, 실제로 그 부서 소속 인원이 참조함에서
+    // 수신처는 "이 문서를 받아 보관하는 부서"이므로, 실제로 그 부서 소속 인원이 참조함에서
     // 볼 수 있도록 참조 대상에도 자동으로 포함시킨다 — 수신으로 지정만 하고 아무도 못 보는
-    // 상황을 막기 위함.
-    const ccOrgUnitIdsWithRecipient = [...new Set([...(input.ccOrgUnitIds || []), ...(input.recipientOrgUnitId ? [input.recipientOrgUnitId] : [])])];
+    // 상황을 막기 위함. 외부 수신처는 내부 조직이 아니므로 이 자동병합 대상이 아니다.
+    const recipientOrgUnitIdForCc = input.recipientType === 'external' ? undefined : input.recipientOrgUnitId;
+    const ccOrgUnitIdsWithRecipient = [...new Set([...(input.ccOrgUnitIds || []), ...(recipientOrgUnitIdForCc ? [recipientOrgUnitIdForCc] : [])])];
     const refRows = [
       ...(input.ccUserIds || []).map(user_id => ({ document_id: doc.id, user_id, org_unit_id: null })),
       ...ccOrgUnitIdsWithRecipient.map(org_unit_id => ({ document_id: doc.id, user_id: null, org_unit_id })),
@@ -544,6 +555,9 @@ export const approvalDocumentService = {
     created_by: string;
     requester_comment?: string;
     recipientOrgUnitId?: string;
+    recipientType?: 'internal' | 'external';
+    externalRecipientText?: string;
+    externalReferenceText?: string;
     // 자금일보처럼 결재문서 생성 이전부터 이미 원본 레코드가 있는 시스템 연동형 초안에서 씀 —
     // 정식 제출(createDocument에 draftId로 넘어갈 때)까지 이 연결이 유지되도록 초안에도 저장해둔다.
     reference_type?: string;
@@ -558,7 +572,10 @@ export const approvalDocumentService = {
       org_unit_id: input.org_unit_id || null,
       created_by: input.created_by,
       requester_comment: input.requester_comment || null,
-      recipient_org_unit_id: input.recipientOrgUnitId || null,
+      recipient_org_unit_id: input.recipientType === 'external' ? null : (input.recipientOrgUnitId || null),
+      recipient_type: input.recipientType || 'internal',
+      external_recipient_text: input.recipientType === 'external' ? (input.externalRecipientText || null) : null,
+      external_reference_text: input.recipientType === 'external' ? (input.externalReferenceText || null) : null,
       reference_type: input.reference_type || null,
       reference_id: input.reference_id || null,
       status: 'draft',
@@ -904,6 +921,9 @@ export const approvalDocumentService = {
     org_unit_id: string;
     requester_comment?: string;
     recipientOrgUnitId?: string;
+    recipientType?: 'internal' | 'external';
+    externalRecipientText?: string;
+    externalReferenceText?: string;
     ccUserIds?: string[];
     ccOrgUnitIds?: string[];
     manualChain?: ApprovalChainStep[];
@@ -982,7 +1002,10 @@ export const approvalDocumentService = {
       org_unit_id: input.org_unit_id,
       requester_comment: input.requester_comment || null,
       manual_line_id: manualLineIdForPayload,
-      recipient_org_unit_id: input.recipientOrgUnitId || null,
+      recipient_org_unit_id: input.recipientType === 'external' ? null : (input.recipientOrgUnitId || null),
+      recipient_type: input.recipientType || 'internal',
+      external_recipient_text: input.recipientType === 'external' ? (input.externalRecipientText || null) : null,
+      external_reference_text: input.recipientType === 'external' ? (input.externalReferenceText || null) : null,
       status: allApproved ? 'approved' : 'pending',
       current_step: allApproved ? stepRows.length : firstPending!.step_order,
       completed_at: allApproved ? now : null,
@@ -1011,7 +1034,8 @@ export const approvalDocumentService = {
     // 참조(통보) 대상도 이번 상신에서 새로 지정한 값으로 교체 — 수신부서는 실제로 그 부서
     // 소속 인원이 참조함에서 볼 수 있도록 참조 대상에도 자동으로 포함시킨다.
     await supabase.from('approval_document_references').delete().eq('document_id', documentId);
-    const resubmitCcOrgUnitIdsWithRecipient = [...new Set([...(input.ccOrgUnitIds || []), ...(input.recipientOrgUnitId ? [input.recipientOrgUnitId] : [])])];
+    const resubmitRecipientOrgUnitIdForCc = input.recipientType === 'external' ? undefined : input.recipientOrgUnitId;
+    const resubmitCcOrgUnitIdsWithRecipient = [...new Set([...(input.ccOrgUnitIds || []), ...(resubmitRecipientOrgUnitIdForCc ? [resubmitRecipientOrgUnitIdForCc] : [])])];
     const refRows = [
       ...(input.ccUserIds || []).map(user_id => ({ document_id: documentId, user_id, org_unit_id: null })),
       ...resubmitCcOrgUnitIdsWithRecipient.map(org_unit_id => ({ document_id: documentId, user_id: null, org_unit_id })),

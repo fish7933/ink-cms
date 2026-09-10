@@ -11,6 +11,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 interface FormState {
   name: string;
+  name_en: string;
   address: string;
   phone: string;
   fax: string;
@@ -19,7 +20,7 @@ interface FormState {
   logo_url: string;
 }
 
-const EMPTY_FORM: FormState = { name: '', address: '', phone: '', fax: '', email: '', website: '', logo_url: '' };
+const EMPTY_FORM: FormState = { name: '', name_en: '', address: '', phone: '', fax: '', email: '', website: '', logo_url: '' };
 
 export default function CompanyInfoPage() {
   const navigate = useNavigate();
@@ -47,7 +48,7 @@ export default function CompanyInfoPage() {
       const data = await getCompanyInfo();
       if (data) {
         setId(data.id);
-        setForm({ name: data.name, address: data.address || '', phone: data.phone || '', fax: data.fax || '', email: data.email || '', website: data.website || '', logo_url: data.logo_url || '' });
+        setForm({ name: data.name, name_en: data.name_en || '', address: data.address || '', phone: data.phone || '', fax: data.fax || '', email: data.email || '', website: data.website || '', logo_url: data.logo_url || '' });
         setPreviewUrl(data.logo_url || '');
       }
     } catch (e) {
@@ -92,6 +93,7 @@ export default function CompanyInfoPage() {
       }
       await saveCompanyInfo(id, {
         name: form.name.trim(),
+        name_en: form.name_en.trim() || null,
         address: form.address || null,
         phone: form.phone || null,
         fax: form.fax || null,
@@ -153,6 +155,11 @@ export default function CompanyInfoPage() {
               <div className="space-y-1">
                 <Label className="text-xs">회사명 *</Label>
                 <Input className="h-8 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="회사명 입력" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">회사명 (영문)</Label>
+                <Input className="h-8 text-sm" value={form.name_en} onChange={e => setForm(f => ({ ...f, name_en: e.target.value }))} placeholder="예: Ink Marine Co., Ltd." />
+                <p className="text-[11px] text-gray-400">외부로 나가는 결재문서(시행문)의 "발신"란에 사용됩니다. 미입력 시 국문 회사명이 대신 쓰입니다.</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">주소</Label>

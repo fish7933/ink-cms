@@ -1,5 +1,6 @@
 import { getFileUrl } from '@/lib/upload';
 import { sanitizeTableHtml } from '@/utils/table-field';
+import { sanitizeRichTextHtml, renderRichTextReadOnlyHtml } from '@/utils/rich-text-field';
 import type { CompanyInfo } from '@/services/company-info.service';
 import type { LeaveDetail } from '@/services/approval-document.service';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType, DocumentFormField, LineItemRow } from '@/types/approval-document';
@@ -8,9 +9,10 @@ import type { DailyCashReport } from '@/types/accounting';
 
 const DAILY_REPORT_KIND_LABEL: Record<string, string> = { bank_account: '통장', cash_register: '현금' };
 
-// 표(table)/항목추가(line_items) 필드는 다른 필드처럼 "왼쪽 라벨 + 오른쪽 내용" 한 줄에 넣으면
-// 폭이 좁아져 보기 나쁘므로, 연속된 일반 필드는 한 표로 묶고 이 둘은 전체 폭 블록으로 따로 뺀다.
-type FieldGroup = { kind: 'rows'; fields: DocumentFormField[] } | { kind: 'table'; field: DocumentFormField } | { kind: 'line_items'; field: DocumentFormField };
+// 표(table)/항목추가(line_items)/서식텍스트(rich_text) 필드는 다른 필드처럼 "왼쪽 라벨 + 오른쪽
+// 내용" 한 줄에 넣으면 폭이 좁아져 보기 나쁘므로, 연속된 일반 필드는 한 표로 묶고 이들은 전체
+// 폭 블록으로 따로 뺀다.
+type FieldGroup = { kind: 'rows'; fields: DocumentFormField[] } | { kind: 'table'; field: DocumentFormField } | { kind: 'line_items'; field: DocumentFormField } | { kind: 'rich_text'; field: DocumentFormField };
 function groupFields(fields: DocumentFormField[]): FieldGroup[] {
   const groups: FieldGroup[] = [];
   for (const f of fields) {
@@ -18,6 +20,8 @@ function groupFields(fields: DocumentFormField[]): FieldGroup[] {
       groups.push({ kind: 'table', field: f });
     } else if (f.type === 'line_items') {
       groups.push({ kind: 'line_items', field: f });
+    } else if (f.type === 'rich_text') {
+      groups.push({ kind: 'rich_text', field: f });
     } else {
       const last = groups[groups.length - 1];
       if (last && last.kind === 'rows') last.fields.push(f);
@@ -49,6 +53,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   const draftedDate = new Date(doc.created_at);
   const issuedDate = doc.completed_at ? new Date(doc.completed_at) : null;
   const fields = documentType?.field_schema || [];
+  // 외부로 나가는 문서는 내부 결재 절차는 그대로 거치되, 시행문에는 내부 결재란/기안일시/
+  // 기안부서를 노출하지 않고 발신(회사 영문명)·수신·참조·제목만 영문 형식으로 보여준다.
+  const isExternal = doc.recipient_type === 'external';
+  const senderName = company?.name_en || company?.name || '-';
+  // 국제표준(ISO 8601) 날짜만 표기 — 시각은 대외 문서에 불필요.
+  const toIsoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
   // 결재란에 표시되는 approver_label은 "부서명 · 직급명" 형태로 저장되어 있어, 그 중 직급(직책)만 뽑아 쓴다.
   const positionOf = (label?: string | null) => label?.split(' · ').pop()?.trim() || '';
@@ -101,6 +111,14 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         /* height(고정)로 두면 nowrap을 풀어 줄바꿈이 생겼을 때 2~3줄짜리 내용이 40px 안에 눌려
            겹쳐 보인다 — min-height로 바꿔 내용이 많으면 칸 자체가 늘어나게 한다. */
         table.approval-block td.sign-cell { min-height: 40px; vertical-align: middle; }
+        /* 자유서식 본문/rich_text 필드 — 워드/한글 붙여넣기로 들어온 문단/제목/목록 서식이
+           인쇄 시에도 촘촘한 시행문 밀도에 맞게 보이도록 여백만 압축한다. */
+        .rich-text-readonly p { margin: 0 0 8px; }
+        .rich-text-readonly ul, .rich-text-readonly ol { margin: 0 0 8px; padding-left: 1.5em; }
+        .rich-text-readonly h1 { font-size: 1.4em; font-weight: 700; margin: 0.4em 0; }
+        .rich-text-readonly h2 { font-size: 1.25em; font-weight: 700; margin: 0.4em 0; }
+        .rich-text-readonly h3, .rich-text-readonly h4, .rich-text-readonly h5, .rich-text-readonly h6 { font-size: 1.1em; font-weight: 700; margin: 0.4em 0; }
+        .rich-text-readonly table { width: 100% !important; }
         /* 본문 전체를 표 하나로 감싸고, 표 바깥 껍데기(.issued-page-table)는 셀 경계선 없이
            레이아웃 용도로만 쓴다 — 아래 tfoot(.issued-footer) 때문이다: 표가 인쇄 중 여러 페이지에
            걸쳐 나뉘면 브라우저(Chrome/Firefox 모두)가 tfoot 행을 나뉘는 매 페이지 하단에 자동으로
@@ -172,61 +190,85 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                   결재란 오른쪽 테두리가 잘린다. min-width: 0으로 필요하면 줄어들 수 있게 한다. */}
               <table style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
                 <tbody>
-                  <tr><td style={{ padding: '3px 0' }}><b>문서번호</b>&nbsp;&nbsp;{docNumber}</td></tr>
-                  <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
-                  <tr><td style={{ padding: '3px 0' }}><b>시행일시</b>&nbsp;&nbsp;{issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중'}</td></tr>
-                  <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
-                  {referenceLabels.length > 0 && (
-                    <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
+                  <tr><td style={{ padding: '3px 0' }}><b>{isExternal ? 'Doc. No.' : '문서번호'}</b>&nbsp;&nbsp;{docNumber}</td></tr>
+                  {!isExternal && (
+                    <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
                   )}
-                  <tr><td style={{ padding: '3px 0' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td></tr>
+                  <tr><td style={{ padding: '3px 0' }}>
+                    <b>{isExternal ? 'Date' : '시행일시'}</b>&nbsp;&nbsp;
+                    {isExternal
+                      ? (issuedDate ? toIsoDate(issuedDate) : 'In progress')
+                      : (issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중')}
+                  </td></tr>
+                  {isExternal ? (
+                    <>
+                      <tr><td style={{ padding: '3px 0' }}><b>To</b>&nbsp;&nbsp;{doc.external_recipient_text || '-'}</td></tr>
+                      {doc.external_reference_text && (
+                        <tr><td style={{ padding: '3px 0' }}><b>Cc</b>&nbsp;&nbsp;{doc.external_reference_text}</td></tr>
+                      )}
+                      <tr><td style={{ padding: '3px 0' }}><b>From</b>&nbsp;&nbsp;{senderName}</td></tr>
+                      <tr><td style={{ padding: '3px 0' }}><b>Subject</b>&nbsp;&nbsp;{doc.title}</td></tr>
+                    </>
+                  ) : (
+                    <>
+                      <tr><td style={{ padding: '3px 0' }}><b>수신</b>&nbsp;&nbsp;{doc.recipient_org_unit_name || '총무팀 (보존)'}</td></tr>
+                      {referenceLabels.length > 0 && (
+                        <tr><td style={{ padding: '3px 0' }}><b>참조</b>&nbsp;&nbsp;{referenceLabels.join(', ')}</td></tr>
+                      )}
+                      <tr><td style={{ padding: '3px 0' }}><b>기안부서</b>&nbsp;&nbsp;{doc.org_unit_name || '-'}</td></tr>
+                    </>
+                  )}
                 </tbody>
               </table>
 
-              <div style={{ flexShrink: 0 }}>
-                <div style={{ marginBottom: 4, fontSize: 11, color: '#555', textAlign: 'center' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 4 }}>({lastStepPositionName} 전결)</span>}</div>
-                <table className="approval-block">
-                  <thead>
-                    <tr>
-                      <th>기안</th>
-                      {doc.steps.map(s => <th key={s.id}>{positionOf(s.approver_label) || `${s.step_order}차 결재`}</th>)}
-                      {isDelegated && <th>{topPosition!.name}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="sign-cell">
-                        <div>{creatorPositionName ? `${creatorPositionName} ` : ''}{doc.creator_name}</div>
-                        <div style={{ fontSize: 10, color: '#777' }}>{new Date(doc.created_at).toLocaleDateString('ko-KR')}</div>
-                      </td>
-                      {doc.steps.map((s, i) => {
-                        const isLast = i === doc.steps.length - 1;
-                        return (
-                          <td key={s.id} className="sign-cell">
-                            <div>{positionOf(s.approver_label)} {s.approver_name}</div>
-                            <div style={{ fontSize: 10, color: s.status === 'approved' ? '#1e40af' : '#999' }}>
-                              {s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : '대기'}
-                              {isLast && isDelegated ? ' (전결)' : ''}
-                              {s.acted_at ? ` · ${new Date(s.acted_at).toLocaleDateString('ko-KR')}` : ''}
-                            </div>
-                          </td>
-                        );
-                      })}
-                      {isDelegated && (
+              {doc.recipient_type !== 'external' && (
+                <div style={{ flexShrink: 0 }}>
+                  <div style={{ marginBottom: 4, fontSize: 11, color: '#555', textAlign: 'center' }}>결재{isDelegated && <span style={{ color: '#b91c1c', marginLeft: 4 }}>({lastStepPositionName} 전결)</span>}</div>
+                  <table className="approval-block">
+                    <thead>
+                      <tr>
+                        <th>기안</th>
+                        {doc.steps.map(s => <th key={s.id}>{positionOf(s.approver_label) || `${s.step_order}차 결재`}</th>)}
+                        {isDelegated && <th>{topPosition!.name}</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
                         <td className="sign-cell">
-                          <div style={{ fontWeight: 700, color: '#b91c1c' }}>전결</div>
+                          <div>{creatorPositionName ? `${creatorPositionName} ` : ''}{doc.creator_name}</div>
+                          <div style={{ fontSize: 10, color: '#777' }}>{new Date(doc.created_at).toLocaleDateString('ko-KR')}</div>
                         </td>
-                      )}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                        {doc.steps.map((s, i) => {
+                          const isLast = i === doc.steps.length - 1;
+                          return (
+                            <td key={s.id} className="sign-cell">
+                              <div>{positionOf(s.approver_label)} {s.approver_name}</div>
+                              <div style={{ fontSize: 10, color: s.status === 'approved' ? '#1e40af' : '#999' }}>
+                                {s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : '대기'}
+                                {isLast && isDelegated ? ' (전결)' : ''}
+                                {s.acted_at ? ` · ${new Date(s.acted_at).toLocaleDateString('ko-KR')}` : ''}
+                              </div>
+                            </td>
+                          );
+                        })}
+                        {isDelegated && (
+                          <td className="sign-cell">
+                            <div style={{ fontWeight: 700, color: '#b91c1c' }}>전결</div>
+                          </td>
+                        )}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </td></tr>
 
-          <tr><td>
-            <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center' }}>{doc.title}</div>
-          </td></tr>
+          {!isExternal && (
+            <tr><td>
+              <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center' }}>{doc.title}</div>
+            </td></tr>
+          )}
 
           {leaveDetail ? (
             <tr><td>
@@ -324,6 +366,16 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                   </td></tr>
                 );
               }
+              if (g.kind === 'rich_text') {
+                const raw = doc.form_data?.[g.field.key];
+                const isEmpty = raw === null || raw === undefined || raw === '';
+                return isEmpty ? null : (
+                  <tr key={gi}><td>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{g.field.label}</div>
+                    <div className="rich-text-readonly" dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(String(raw)) }} />
+                  </td></tr>
+                );
+              }
               if (g.kind === 'line_items') {
                 const rows = (doc.form_data?.[g.field.key] as LineItemRow[] | undefined) || [];
                 const columns = g.field.columns || [];
@@ -401,7 +453,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
           ) : (
             doc.content && (
               <tr><td>
-                <div style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-wrap', padding: '10px 2px' }}>{doc.content}</div>
+                <div
+                  className="rich-text-readonly"
+                  style={{ fontSize: 13, lineHeight: 1.7, padding: '10px 2px' }}
+                  dangerouslySetInnerHTML={{ __html: renderRichTextReadOnlyHtml(doc.content) }}
+                />
               </td></tr>
             )
           )}
