@@ -678,10 +678,11 @@ export default function RecommendationReviewPage() {
                   <span className="text-sm font-medium">현재 상태</span>{sBadge(selectedRec.status)}
                 </div>
 
-                {selectedRec.status === 'reviewed' && ap && (
+                {selectedRec.status !== 'pending' && ap && (
                   <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                     <div className="text-sm font-semibold text-yellow-800 mb-3 flex items-center gap-2">
-                      <Clock className="w-4 h-4" />결재 진행 현황 — {ap.approval_line?.name}
+                      <Clock className="w-4 h-4" />
+                      {selectedRec.status === 'reviewed' ? `결재 진행 현황 — ${ap.approval_line?.name}` : `결재 이력 — ${ap.approval_line?.name}`}
                     </div>
                     <div className="flex items-start gap-3 flex-wrap">
                       {(ap.approval_line?.steps || []).map((step, idx) => {
