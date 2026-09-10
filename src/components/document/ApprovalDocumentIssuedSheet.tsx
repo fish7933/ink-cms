@@ -194,12 +194,7 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                   {!isExternal && (
                     <tr><td style={{ padding: '3px 0' }}><b>기안일시</b>&nbsp;&nbsp;{draftedDate.toLocaleDateString('ko-KR')} {draftedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</td></tr>
                   )}
-                  <tr><td style={{ padding: '3px 0' }}>
-                    <b>{isExternal ? 'Date' : '시행일시'}</b>&nbsp;&nbsp;
-                    {isExternal
-                      ? (issuedDate ? toIsoDate(issuedDate) : 'In progress')
-                      : (issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중')}
-                  </td></tr>
+                  <tr><td style={{ padding: '3px 0' }}><b>{isExternal ? 'Date' : '시행일시'}</b>&nbsp;&nbsp;{isExternal ? (issuedDate ? toIsoDate(issuedDate) : 'In progress') : (issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중')}</td></tr>
                   {isExternal ? (
                     <>
                       <tr><td style={{ padding: '3px 0' }}><b>To</b>&nbsp;&nbsp;{doc.external_recipient_text || '-'}</td></tr>

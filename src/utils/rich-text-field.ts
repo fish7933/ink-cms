@@ -38,6 +38,41 @@ function sanitizeInlineStyles(doc: Document): void {
   });
 }
 
+// 워드의 수동 글머리표는 실제 <ul><li>가 아니라, Symbol/Wingdings 같은 전용 글꼴의 특수
+// 코드포인트(유니코드 사설영역, Private Use Area)를 일반 텍스트로 박아넣는 방식으로도 많이
+// 내보내진다 — font-family를 지운(위 sanitizeInlineStyles) 뒤에는 그 글꼴이 없는 일반 폰트가
+// 이 코드를 대신 그리면서 세로 막대/네모 같은 엉뚱한 글자로 보인다("본문 중간중간의 이상한
+// 세로 줄"의 정체). 원래 무슨 기호였는지 알 수 없으므로 안전하게 제거한다(본문에 정상적으로
+// 쓰일 일이 없는 유니코드 범위). 이스케이프 표기 대신 숫자 코드포인트 비교로 판정한다.
+const PRIVATE_USE_AREA_RANGES: [number, number][] = [
+  [0xE000, 0xF8FF],
+  [0xF0000, 0xFFFFD],
+  [0x100000, 0x10FFFD],
+];
+
+function isPrivateUseCodePoint(codePoint: number): boolean {
+  return PRIVATE_USE_AREA_RANGES.some(([lo, hi]) => codePoint >= lo && codePoint <= hi);
+}
+
+function stripPrivateUseCharacters(doc: Document): void {
+  const walker = document.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+  const toFix: Text[] = [];
+  let node = walker.nextNode();
+  while (node) {
+    toFix.push(node as Text);
+    node = walker.nextNode();
+  }
+  for (const textNode of toFix) {
+    let changed = false;
+    let result = '';
+    for (const ch of textNode.data) {
+      if (isPrivateUseCodePoint(ch.codePointAt(0) || 0)) { changed = true; continue; }
+      result += ch;
+    }
+    if (changed) textNode.data = result;
+  }
+}
+
 // 워드/한글에서 표를 붙여넣으면 원본 문서의 고정 폭(pt/px)이 style="width:..."/width="..."로
 // 그대로 딸려와, 본문 폭보다 좁게(또는 넘치게) 보인다 — 화면 표는 항상 문서 전체 폭을 쓰도록
 // 표와 그 바로 아래 열(col/td/th)의 폭 지정을 제거하고 100%로 강제한다.
@@ -58,6 +93,7 @@ export function sanitizeRichTextHtml(html: string): string {
     a.setAttribute('target', '_blank');
   });
   sanitizeInlineStyles(doc);
+  stripPrivateUseCharacters(doc);
   forceFullWidthTables(doc);
   return doc.body.innerHTML;
 }
