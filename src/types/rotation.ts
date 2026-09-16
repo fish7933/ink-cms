@@ -70,6 +70,11 @@ export interface CrewRotationAssignment {
   embark_date: string;                // 승선일
   notes: string | null;
 
+  // 이 승선자에게 실제 적용할 수당 항목(allowance_item_id) 목록 — 결재 상신 시점에 발령자가
+  // 지급조건 체크리스트를 보고 결정해 저장한다. null이면 아직 결정된 적 없음(이 기능 이전에
+  // 만들어진 계획 포함) — 발령 실행 시 조건 충족 항목만 자동 반영하는 기본값으로 취급한다.
+  selected_allowance_item_ids: string[] | null;
+
   created_at: string;
   updated_at: string;
 }

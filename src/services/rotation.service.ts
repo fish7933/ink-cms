@@ -546,6 +546,22 @@ export const rotationService = {
   },
 
   /**
+   * 배정별 수당 지급 결정(재고용수당 등)을 저장한다 — 상신 전(draft) 화면에서 발령자가
+   * 지급조건 체크리스트를 확인/조정한 결과를 결재 상신 직전에 호출해 고정시킨다. 이후
+   * 결재자 화면·발령 실행 모두 여기 저장된 값을 그대로 따른다(재계산하지 않음).
+   */
+  async saveAssignmentAllowanceSelections(planId: string, selections: Record<string, string[]>): Promise<void> {
+    const entries = Object.entries(selections);
+    if (entries.length === 0) return;
+    await Promise.all(entries.map(([assignmentId, itemIds]) =>
+      supabase.from('crew_rotation_assignments')
+        .update({ selected_allowance_item_ids: itemIds })
+        .eq('id', assignmentId)
+        .eq('rotation_plan_id', planId) // 안전장치 — 실수로 다른 계획의 배정을 건드리지 않도록
+    ));
+  },
+
+  /**
    * 교대계획을 발령 결재(rotation_plan_approvals)로 상신한다 — 채용 결재와 동일하게
    * 결재선을 직접 선택하는 방식(조직도 소속 부서 기반 자동 구성은 더 이상 쓰지 않음).
    */
@@ -665,13 +681,7 @@ export const rotationService = {
    * Execute approved rotation plan
    * 승선자 → onboard, 하선자 → standby, 계획 → executed
    */
-  async executeRotationPlan(
-    planId: string,
-    // 승선 배정별로 실제 적용할 수당 항목(allowance_item_id) 목록 — 발령 상세 화면에서
-    // 발령자가 지급대상 체크리스트를 보고 명시적으로 선택해 넘긴다. 넘기지 않으면(목록
-    // 페이지의 즉시 실행 등) 조건 판정 결과 중 eligible=true인 항목만 기본으로 적용한다.
-    allowanceSelections?: Record<string, string[]>,
-  ): Promise<boolean> {
+  async executeRotationPlan(planId: string): Promise<boolean> {
     // 계획 + 전체 배정 상세 조회
     const [{ data: plan }, { data: assignments, error: fetchErr }] = await Promise.all([
       supabase.from('crew_rotation_plans').select('*').eq('id', planId).single(),
@@ -722,8 +732,9 @@ export const rotationService = {
     const { data: sickReason } = await supabase.from('sign_off_reasons').select('id').eq('name', '상병하선').maybeSingle();
     const executedByUser = await getCurrentUser();
 
-    // 수당 지급 조건 판정 — 발령자가 명시적으로 선택(allowanceSelections)하지 않은 배정에는
-    // 이 결과 중 eligible=true인 항목만 기본으로 적용한다(목록 페이지의 즉시 실행 등).
+    // 수당 지급 조건 판정 — 결재 상신 시점에 이미 저장된 배정이 대부분이라 보통은 아래
+    // a.selected_allowance_item_ids를 그대로 쓰지만, 그 값이 null인 배정(이 기능 이전에
+    // 만들어져 상신 단계를 거치지 않은 구 계획)을 위한 하위호환 기본값으로 계속 계산해둔다.
     const defaultEligibility = await allowanceEligibilityService.evaluateForShipAssignments({
       shipId: plan.ship_id,
       ownerId: plan.owner_id,
@@ -873,12 +884,14 @@ export const rotationService = {
         }).select('id').single();
 
         // 직급별 수당 기준(재고용수당 등)은 이 선박에 배정된(선박>플릿>선주 우선순위) 수당
-        // 템플릿에서 가져와 계약에 자동으로 붙여준다 — 단, 지급 조건이 걸린 항목은 발령자가
-        // 명시적으로 선택한 것만(allowanceSelections), 선택이 없으면 조건 충족(eligible) 항목만.
+        // 템플릿에서 가져와 계약에 자동으로 붙여준다 — 상신 시점에 이미 결정/저장된 항목
+        // (selected_allowance_item_ids)이 있으면 그대로 쓰고, 없으면(구 계획) 조건 충족
+        // (eligible) 항목만 기본으로 적용한다.
         if (newContract && a.on_rank_id) {
           const templateItems = await allowanceService.getEffectiveTemplateItemsForShipAndRank(plan.ship_id, a.on_rank_id);
-          const itemIdsToInclude = allowanceSelections?.[a.id]
-            ?? (defaultEligibility.get(a.id) || []).filter(e => e.eligible).map(e => e.allowanceItemId);
+          const itemIdsToInclude = a.selected_allowance_item_ids != null
+            ? a.selected_allowance_item_ids
+            : (defaultEligibility.get(a.id) || []).filter(e => e.eligible).map(e => e.allowanceItemId);
           const itemsToInclude = templateItems.filter(ti => itemIdsToInclude.includes(ti.allowance_item_id));
           if (itemsToInclude.length > 0) {
             await supabase.from('crew_contract_allowances').insert(itemsToInclude.map(ti => ({

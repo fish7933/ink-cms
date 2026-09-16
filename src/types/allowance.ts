@@ -121,3 +121,17 @@ export interface CrewContractAllowanceWithDetails extends CrewContractAllowance 
   allowance_item_name: string;
   allowance_item_description?: string;
 }
+
+// 수당 관리 화면(전체/활성 계약 횡단 조회)용 — 어느 선원/선박/선주 소속인지까지 포함.
+export interface CrewContractAllowanceWithFullDetails extends CrewContractAllowance {
+  allowance_item_name: string;
+  crew_name: string;
+  rank_code: string;
+  ship_id: string;
+  ship_name: string;
+  owner_id?: string;
+  owner_name: string;
+  fleet_id?: string;
+  fleet_name: string;
+  contract_status: string;
+}

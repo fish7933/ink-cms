@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
 import { rotationService } from '@/services/rotation.service';
 import type { ContractExpiryInfo } from '@/services/rotation.service';
-import { allowanceEligibilityService, type AllowanceEligibilityItem } from '@/services/allowance-eligibility.service';
+import { allowanceEligibilityService } from '@/services/allowance-eligibility.service';
 import { getPorts } from '@/services/port.service';
 import { exportRotationPlansLedgerToExcel } from '@/utils/rotation-plan-export';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
@@ -91,11 +91,6 @@ export function CrewRotationPage() {
 
   // 발령 실행 전 수당 지급대상 확인 다이얼로그 — 목록 페이지에서 바로 "발령실행"을 눌러도
   // (상세 화면에 들어가지 않고도) 지급 조건 판정 결과를 보고 최종 결정할 수 있게 한다.
-  const [executePlan, setExecutePlan] = useState<CrewRotationPlanWithDetails | null>(null);
-  const [executeEligibility, setExecuteEligibility] = useState<Map<string, AllowanceEligibilityItem[]>>(new Map());
-  const [executeSelections, setExecuteSelections] = useState<Record<string, Set<string>>>({});
-  const [executeChecking, setExecuteChecking] = useState(false);
-  const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
     loadPlans(); loadOwners();
@@ -354,6 +349,24 @@ export function CrewRotationPage() {
     setSaveLineDefault(false);
   };
 
+  // 상신 직전에 각 계획의 수당 지급 조건을 조용히 판정해 조건 충족 항목만 자동으로 결정/저장한다
+  // — 상세 화면에서 미리 검토하지 않고 목록에서 바로 상신하는 경우를 위한 안전한 기본값. 이
+  // 시점에 결정이 저장돼야 결재자가 승인 화면에서 수당 내역을 함께 볼 수 있다.
+  const persistDefaultAllowanceSelections = async (planId: string) => {
+    const plan = plans.find(p => p.id === planId);
+    if (!plan) return;
+    const boardingAssignments = plan.assignments
+      .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
+      .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date }));
+    if (boardingAssignments.length === 0) return;
+    const evalResult = await allowanceEligibilityService.evaluateForShipAssignments({
+      shipId: plan.ship_id, ownerId: plan.owner_id, assignments: boardingAssignments,
+    });
+    const selections: Record<string, string[]> = {};
+    for (const [assignmentId, items] of evalResult) selections[assignmentId] = items.filter(i => i.eligible).map(i => i.allowanceItemId);
+    if (Object.keys(selections).length > 0) await rotationService.saveAssignmentAllowanceSelections(planId, selections);
+  };
+
   const handleSubmitApproval = async () => {
     if (submitDialogPlanIds.length === 0 || !submitLineId || !currentUser) return;
     try {
@@ -362,6 +375,7 @@ export function CrewRotationPage() {
         await supabase.from('users').update({ default_approval_line_id: submitLineId }).eq('id', currentUser.id);
         setDefaultLineId(submitLineId);
       }
+      await Promise.all(submitDialogPlanIds.map(id => persistDefaultAllowanceSelections(id)));
       const results = await Promise.all(
         submitDialogPlanIds.map(id => rotationService.submitRotationPlanForApproval(id, submitLineId, submitComment || undefined))
       );
@@ -385,77 +399,14 @@ export function CrewRotationPage() {
     }
   };
 
-  // "발령실행" 클릭 시 — 지급 조건이 걸린 수당 후보가 있으면 확인 다이얼로그로 보여주고
-  // 발령자가 최종 결정하게 한다. 후보가 없으면(수당 템플릿 미배정 등) 기존처럼 바로 확인만 받는다.
+  // 수당 결정은 결재 상신 시점에 이미 저장돼 있으므로(발령자가 상세화면에서 미리 검토했거나,
+  // 상신 시 조건 충족분이 자동 저장됨) 실행 시점엔 다시 확인할 필요 없이 바로 실행한다.
   const handleExecute = async (planId: string) => {
-    const plan = plans.find(p => p.id === planId);
-    if (!plan) return;
-
-    const boardingAssignments = plan.assignments
-      .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
-      .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date }));
-
-    if (boardingAssignments.length === 0) {
-      if (!confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
-      if (await rotationService.executeRotationPlan(planId)) {
-        alert('발령이 실행되었습니다. 선원 상태가 업데이트되었습니다.');
-        loadPlans();
-      } else alert('실행 중 오류가 발생했습니다.');
-      return;
-    }
-
-    setExecuteChecking(true);
-    try {
-      const evalResult = await allowanceEligibilityService.evaluateForShipAssignments({
-        shipId: plan.ship_id, ownerId: plan.owner_id, assignments: boardingAssignments,
-      });
-      const hasCandidates = [...evalResult.values()].some(items => items.length > 0);
-      if (!hasCandidates) {
-        if (!confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
-        if (await rotationService.executeRotationPlan(planId)) {
-          alert('발령이 실행되었습니다. 선원 상태가 업데이트되었습니다.');
-          loadPlans();
-        } else alert('실행 중 오류가 발생했습니다.');
-        return;
-      }
-
-      setExecuteEligibility(evalResult);
-      const initialSelections: Record<string, Set<string>> = {};
-      for (const [assignmentId, items] of evalResult) {
-        initialSelections[assignmentId] = new Set(items.filter(i => i.eligible).map(i => i.allowanceItemId));
-      }
-      setExecuteSelections(initialSelections);
-      setExecutePlan(plan);
-    } finally {
-      setExecuteChecking(false);
-    }
-  };
-
-  const toggleExecuteSelection = (assignmentId: string, allowanceItemId: string) => {
-    setExecuteSelections(prev => {
-      const current = new Set(prev[assignmentId] || []);
-      if (current.has(allowanceItemId)) current.delete(allowanceItemId); else current.add(allowanceItemId);
-      return { ...prev, [assignmentId]: current };
-    });
-  };
-
-  const confirmExecuteWithSelections = async () => {
-    if (!executePlan) return;
-    setExecuting(true);
-    try {
-      const selections: Record<string, string[]> = {};
-      for (const [assignmentId, itemIds] of Object.entries(executeSelections)) selections[assignmentId] = [...itemIds];
-      const ok = await rotationService.executeRotationPlan(executePlan.id, selections);
-      if (ok) {
-        toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' });
-        setExecutePlan(null);
-        loadPlans();
-      } else {
-        toast({ title: '실행 중 오류가 발생했습니다', variant: 'destructive' });
-      }
-    } finally {
-      setExecuting(false);
-    }
+    if (!confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
+    if (await rotationService.executeRotationPlan(planId)) {
+      alert('발령이 실행되었습니다. 선원 상태가 업데이트되었습니다.');
+      loadPlans();
+    } else alert('실행 중 오류가 발생했습니다.');
   };
 
   const [bulkExecuting, setBulkExecuting] = useState(false);
@@ -873,9 +824,7 @@ export function CrewRotationPage() {
                               <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
                             )}
                             {plan.status === 'approved' && (
-                              <Button variant="default" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap" onClick={() => handleExecute(plan.id)} disabled={executeChecking}>
-                                {executeChecking ? '확인 중...' : '발령실행'}
-                              </Button>
+                              <Button variant="default" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap" onClick={() => handleExecute(plan.id)}>발령실행</Button>
                             )}
                           </div>
                         </TableCell>
@@ -1020,50 +969,6 @@ export function CrewRotationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 발령 실행 전 수당 지급대상 확인 — 지급 조건 판정 결과를 보여주고, 실제 적용 여부는
-          발령자가 체크박스로 최종 결정한다 */}
-      <Dialog open={executePlan !== null} onOpenChange={o => !executing && !o && setExecutePlan(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>발령 실행 — {executePlan?.plan_name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            <p className="text-xs text-gray-500">
-              실행하면 선원 상태가 즉시 변경됩니다. 아래 수당/공제 항목은 지급 조건 판정 결과이며, 실제 적용 여부는 체크박스로 직접 결정할 수 있습니다.
-            </p>
-            {(executePlan?.assignments || [])
-              .filter(a => (executeEligibility.get(a.id) || []).length > 0)
-              .map(a => (
-                <div key={a.id} className="border rounded-md p-2.5 text-sm">
-                  <div className="font-medium text-xs text-emerald-700 mb-1.5">{a.on_crew_name} ({a.on_rank_grade || a.on_rank_code || ''})</div>
-                  <div className="space-y-1">
-                    {(executeEligibility.get(a.id) || []).map(item => (
-                      <label key={item.allowanceItemId} className="flex items-start gap-1.5 text-xs cursor-pointer">
-                        <Checkbox
-                          className="mt-0.5"
-                          checked={(executeSelections[a.id] || new Set()).has(item.allowanceItemId)}
-                          onCheckedChange={() => toggleExecuteSelection(a.id, item.allowanceItemId)}
-                        />
-                        <span>
-                          <span className={item.eligible ? '' : 'text-gray-500'}>
-                            {item.allowanceItemName} ({Number(item.amount).toLocaleString()} {item.currency})
-                          </span>
-                          {!item.eligible && <span className="block text-amber-600">{item.reasons.join(', ')}</span>}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExecutePlan(null)} disabled={executing}>취소</Button>
-            <Button onClick={confirmExecuteWithSelections} disabled={executing}>
-              {executing ? '실행 중...' : '발령 실행'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

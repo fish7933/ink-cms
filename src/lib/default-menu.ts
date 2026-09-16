@@ -342,6 +342,15 @@ export const defaultMenuStructure: MenuCategory[] = [
         order: 8,
         is_active: true,
       },
+      {
+        id: 'crew-allowance-management',
+        label: '수당 관리',
+        path: '/crew-allowance-management',
+        icon: 'BadgeDollarSign',
+        roles: ['ship_manager'],
+        order: 9,
+        is_active: true,
+      },
     ],
   },
   {

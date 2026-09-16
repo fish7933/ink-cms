@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { approvalService } from '@/services/approval.service';
 import { rotationApprovalService } from '@/services/rotation-approval.service';
 import { rotationService } from '@/services/rotation.service';
+import { allowanceEligibilityService, type AllowanceEligibilityItem } from '@/services/allowance-eligibility.service';
 import { getRanks } from '@/services/rank.service';
 import { getPorts } from '@/services/port.service';
 import { contractApprovalService } from '@/services/contract-approval.service';
@@ -160,6 +161,9 @@ export default function DispatchApprovalInboxPage() {
   // 선택된 배승 결재 건의 실제 배정(승/하선 쌍)을 여기서 별도로 불러온다.
   const [rotationAssignments, setRotationAssignments] = useState<CrewRotationAssignmentWithDetails[]>([]);
   const [rotationAssignmentsLoading, setRotationAssignmentsLoading] = useState(false);
+  // 상신 시점에 발령자가 결정해 저장해둔 수당 항목의 이름/금액 표시용 — 결재자가 승인 여부를
+  // 판단할 때 어떤 수당이 적용될지 함께 볼 수 있게 한다(체크박스 아님, 읽기전용).
+  const [rotationAllowanceByAssignment, setRotationAllowanceByAssignment] = useState<Map<string, AllowanceEligibilityItem[]>>(new Map());
   const [ranks, setRanks] = useState<Rank[]>([]);
 
   // 계약
@@ -231,12 +235,34 @@ export default function DispatchApprovalInboxPage() {
   // 선택된 건이 바뀔 때마다 그 계획의 실제 배정 목록을 불러온다.
   useEffect(() => {
     const planId = selectedRotation?.crew_rotation_plan_id as string | undefined;
-    if (!planId) { setRotationAssignments([]); return; }
+    if (!planId) { setRotationAssignments([]); setRotationAllowanceByAssignment(new Map()); return; }
     setRotationAssignmentsLoading(true);
-    rotationService.getRotationAssignments(planId)
-      .then(setRotationAssignments)
-      .catch(e => { console.error(e); setRotationAssignments([]); })
-      .finally(() => setRotationAssignmentsLoading(false));
+    (async () => {
+      try {
+        const [assignments, plan] = await Promise.all([
+          rotationService.getRotationAssignments(planId),
+          rotationService.getRotationPlanById(planId),
+        ]);
+        setRotationAssignments(assignments);
+        const boardingAssignments = assignments
+          .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
+          .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date }));
+        if (plan && boardingAssignments.length > 0) {
+          const evalResult = await allowanceEligibilityService.evaluateForShipAssignments({
+            shipId: plan.ship_id, ownerId: plan.owner_id, assignments: boardingAssignments,
+          });
+          setRotationAllowanceByAssignment(evalResult);
+        } else {
+          setRotationAllowanceByAssignment(new Map());
+        }
+      } catch (e) {
+        console.error(e);
+        setRotationAssignments([]);
+        setRotationAllowanceByAssignment(new Map());
+      } finally {
+        setRotationAssignmentsLoading(false);
+      }
+    })();
   }, [selectedRotation]);
 
   // --- 삭제 이력함 ---
@@ -923,13 +949,21 @@ export default function DispatchApprovalInboxPage() {
               <tr>
                 <th className="text-left p-2 font-medium text-gray-600">On-Signer</th>
                 <th className="text-left p-2 font-medium text-gray-600">승선일</th>
+                <th className="text-left p-2 font-medium text-gray-600">수당/공제</th>
                 <th className="text-left p-2 font-medium text-gray-600">Off-Signer</th>
                 <th className="text-left p-2 font-medium text-gray-600">하선일</th>
                 <th className="text-left p-2 font-medium text-gray-600">하선사유</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(a => (
+              {rows.map(a => {
+                const candidateItems = rotationAllowanceByAssignment.get(a.id) || [];
+                const selectedIds = a.selected_allowance_item_ids;
+                // 상신 시 저장된 결정이 있으면 그대로, 없으면(구 계획) 조건 충족분을 "예정"으로 보여준다.
+                const appliedItems = selectedIds != null
+                  ? candidateItems.filter(i => selectedIds.includes(i.allowanceItemId))
+                  : candidateItems.filter(i => i.eligible);
+                return (
                 <tr key={a.id} className="border-b last:border-0">
                   <td className="p-2">
                     {a.on_crew_id ? (
@@ -937,6 +971,11 @@ export default function DispatchApprovalInboxPage() {
                     ) : <span className="text-gray-300">-</span>}
                   </td>
                   <td className="p-2 text-gray-600">{a.on_crew_id ? (a.embark_date || '-') : '-'}</td>
+                  <td className="p-2 text-gray-600 whitespace-normal">
+                    {appliedItems.length === 0 ? <span className="text-gray-300">-</span> : appliedItems.map(i => (
+                      <div key={i.allowanceItemId}>{i.allowanceItemName} ({Number(i.amount).toLocaleString()} {i.currency}){selectedIds == null && <span className="text-amber-600"> (예정)</span>}</div>
+                    ))}
+                  </td>
                   <td className="p-2">
                     {a.off_crew_id ? (
                       <span>{a.off_crew_name || ''}{a.off_rank_grade ? <span className="text-amber-700 font-medium ml-1">({a.off_rank_grade})</span> : ''}</span>
@@ -945,7 +984,8 @@ export default function DispatchApprovalInboxPage() {
                   <td className="p-2 text-gray-600">{a.off_crew_id ? (a.off_disembark_date || '-') : '-'}</td>
                   <td className="p-2 text-gray-600">{a.off_sign_off_reason_name || '-'}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

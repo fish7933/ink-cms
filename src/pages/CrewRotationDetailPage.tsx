@@ -74,9 +74,12 @@ export default function CrewRotationDetailPage() {
     if (activeTabId && data) updateTab(activeTabId, { title: data.plan_name || '교대계획' });
     setLoading(false);
 
-    // 발령 실행 버튼이 뜨는 상태(승인됨)일 때만 지급 조건을 판정 — 실행 시점 이력 기준으로
-    // 최신 상태를 봐야 하므로 승인 직후가 아니라 이 화면에 진입할 때마다 다시 계산한다.
-    if (data && data.status === 'approved') {
+    // 지급 조건 후보 목록은 상태와 무관하게 항상 계산해둔다(항목명/금액 표시용) — 실제로
+    // 체크되는 항목은 draft(상신 전)면 이 조건 판정 결과 중 eligible=true인 것을 기본값으로,
+    // 상신 이후(pending_approval/approved 등)면 상신 시점에 저장해둔
+    // selected_allowance_item_ids를 그대로 따른다(재계산하지 않음 — 결재자가 본 내용과
+    // 발령 실행 결과가 항상 같아야 하므로).
+    if (data) {
       const boardingAssignments = data.assignments
         .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
         .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date }));
@@ -86,8 +89,14 @@ export default function CrewRotationDetailPage() {
         });
         setEligibilityByAssignment(evalResult);
         const initialSelections: Record<string, Set<string>> = {};
-        for (const [assignmentId, items] of evalResult) {
-          initialSelections[assignmentId] = new Set(items.filter(i => i.eligible).map(i => i.allowanceItemId));
+        for (const assignment of data.assignments) {
+          const persisted = assignment.selected_allowance_item_ids;
+          if (persisted != null) {
+            initialSelections[assignment.id] = new Set(persisted);
+          } else {
+            const items = evalResult.get(assignment.id) || [];
+            initialSelections[assignment.id] = new Set(items.filter(i => i.eligible).map(i => i.allowanceItemId));
+          }
         }
         setAllowanceSelections(initialSelections);
       }
@@ -138,6 +147,10 @@ export default function CrewRotationDetailPage() {
         await supabase.from('users').update({ default_approval_line_id: submitLineId }).eq('id', currentUser.id);
         setDefaultLineId(submitLineId);
       }
+      // 결재자가 승인 화면에서 그대로 볼 수 있도록, 지금 체크된 수당 결정을 상신과 함께 고정한다.
+      const allowancePayload: Record<string, string[]> = {};
+      for (const [assignmentId, itemIds] of Object.entries(allowanceSelections)) allowancePayload[assignmentId] = [...itemIds];
+      if (Object.keys(allowancePayload).length > 0) await rotationService.saveAssignmentAllowanceSelections(plan.id, allowancePayload);
       const result = await rotationService.submitRotationPlanForApproval(plan.id, submitLineId, submitComment || undefined);
       if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
       toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
@@ -171,9 +184,8 @@ export default function CrewRotationDetailPage() {
 
   const handleExecute = async () => {
     if (!plan || !confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
-    const selections: Record<string, string[]> = {};
-    for (const [assignmentId, itemIds] of Object.entries(allowanceSelections)) selections[assignmentId] = [...itemIds];
-    const ok = await rotationService.executeRotationPlan(plan.id, selections);
+    // 수당 결정은 상신 시점에 이미 저장되어 있으므로 다시 넘길 필요가 없다.
+    const ok = await rotationService.executeRotationPlan(plan.id);
     if (ok) { toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' }); loadPlan(); window.dispatchEvent(new CustomEvent('rotation-plan-data-changed')); }
     else toast({ title: '실행 중 오류가 발생했습니다', variant: 'destructive' });
   };
@@ -304,11 +316,14 @@ export default function CrewRotationDetailPage() {
                     ) : <div className="text-gray-400 text-xs">없음</div>}
                     {(eligibilityByAssignment.get(a.id) || []).length > 0 && (
                       <div className="mt-2 pt-2 border-t space-y-1">
-                        <div className="text-[11px] font-medium text-gray-500">수당/공제 지급대상</div>
+                        <div className="text-[11px] font-medium text-gray-500">
+                          수당/공제 지급대상{plan.status !== 'draft' && <span className="text-gray-400 font-normal"> (상신 시 결정됨)</span>}
+                        </div>
                         {(eligibilityByAssignment.get(a.id) || []).map(item => (
-                          <label key={item.allowanceItemId} className="flex items-start gap-1.5 text-xs cursor-pointer">
+                          <label key={item.allowanceItemId} className={`flex items-start gap-1.5 text-xs ${plan.status === 'draft' ? 'cursor-pointer' : ''}`}>
                             <Checkbox
                               className="mt-0.5"
+                              disabled={plan.status !== 'draft'}
                               checked={(allowanceSelections[a.id] || new Set()).has(item.allowanceItemId)}
                               onCheckedChange={() => toggleAllowanceSelection(a.id, item.allowanceItemId)}
                             />

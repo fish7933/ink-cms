@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Trash2, ArrowLeft, Save, Coins, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ interface ShipOption { id: string; name: string; }
 export default function ContractManagementPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const permissions = usePermissions('contract_management');
   const [contracts, setContracts] = useState<CrewContractWithDetails[]>([]);
   const [contractApprovalMap, setContractApprovalMap] = useState<Map<string, ApprovalRequestWithDetails>>(new Map());
@@ -165,6 +166,15 @@ export default function ContractManagementPage() {
     if (c) loadContractAllowances(c.id);
     setFormView({ record: c });
   };
+
+  // 다른 화면(수당 관리 등)에서 ?contractId=로 특정 계약 편집 화면을 바로 열어주기 위한 딥링크.
+  useEffect(() => {
+    const contractId = searchParams.get('contractId');
+    if (!contractId || contracts.length === 0) return;
+    const target = contracts.find(c => c.id === contractId);
+    if (target) openForm(target);
+    setSearchParams(prev => { prev.delete('contractId'); return prev; }, { replace: true });
+  }, [contracts, searchParams]);
 
   // 만료된(또는 만료 예정인) 계약을 갱신 — 이전 계약 정보를 이어받아 새 계약 기간만 다시 입력받는다.
   const openRenewForm = (chain: ContractChain) => {

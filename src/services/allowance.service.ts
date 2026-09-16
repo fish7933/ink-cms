@@ -14,6 +14,7 @@ import type {
   OwnerAllowanceTemplateAssignment,
   CrewContractAllowance,
   CrewContractAllowanceWithDetails,
+  CrewContractAllowanceWithFullDetails,
 } from '@/types/allowance';
 
 export const allowanceService = {
@@ -526,6 +527,68 @@ export const allowanceService = {
       allowance_item_name: itemsById.get(a.allowance_item_id)?.name || '',
       allowance_item_description: itemsById.get(a.allowance_item_id)?.description || undefined,
     }));
+  },
+
+  // 수당 관리 화면(CrewAllowanceManagementPage.tsx)용 — 특정 계약이 아니라 전체(또는 활성
+  // 계약만) 현황을 한 번에 조회한다. sick-pay.service.ts의 getAllSickPayRecords/attachDetails와
+  // 동일한 "벌크 조회 후 Map으로 조인" 패턴.
+  async getAllContractAllowances(filters?: { activeOnly?: boolean }): Promise<CrewContractAllowanceWithFullDetails[]> {
+    const { data: allowanceRows, error } = await supabase.from('crew_contract_allowances').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('Error fetching all contract allowances:', error); return []; }
+    if (!allowanceRows || allowanceRows.length === 0) return [];
+
+    const contractIds = [...new Set(allowanceRows.map(a => a.contract_id))];
+    const { data: contractRows } = await supabase.from('crew_contracts').select('id, crew_member_id, ship_id, status').in('id', contractIds);
+    const contractById = new Map((contractRows || []).map(c => [c.id, c]));
+
+    const data = filters?.activeOnly
+      ? allowanceRows.filter(a => contractById.get(a.contract_id)?.status === 'active')
+      : allowanceRows;
+    if (data.length === 0) return [];
+
+    const crewIds = [...new Set(data.map(a => contractById.get(a.contract_id)?.crew_member_id).filter((v): v is string => !!v))];
+    const shipIds = [...new Set(data.map(a => contractById.get(a.contract_id)?.ship_id).filter((v): v is string => !!v))];
+    const itemIds = [...new Set(data.map(a => a.allowance_item_id))];
+
+    const [{ data: crewRows }, { data: shipRows }, { data: itemRows }] = await Promise.all([
+      crewIds.length > 0 ? supabase.from('crew_members').select('id, name, rank_id') .in('id', crewIds) : Promise.resolve({ data: [] as { id: string; name: string; rank_id: string | null }[] }),
+      shipIds.length > 0 ? supabase.from('ships').select('id, name, owner_id, fleet_id').in('id', shipIds) : Promise.resolve({ data: [] as { id: string; name: string; owner_id: string | null; fleet_id: string | null }[] }),
+      itemIds.length > 0 ? supabase.from('allowance_items').select('id, name').in('id', itemIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ]);
+    const crewById = new Map((crewRows || []).map(c => [c.id, c]));
+    const shipById = new Map((shipRows || []).map(s => [s.id, s]));
+    const itemById = new Map((itemRows || []).map(i => [i.id, i]));
+
+    const rankIds = [...new Set((crewRows || []).map(c => c.rank_id).filter((v): v is string => !!v))];
+    const ownerIds = [...new Set((shipRows || []).map(s => s.owner_id).filter((v): v is string => !!v))];
+    const fleetIds = [...new Set((shipRows || []).map(s => s.fleet_id).filter((v): v is string => !!v))];
+    const [{ data: rankRows }, { data: ownerRows }, { data: fleetRows }] = await Promise.all([
+      rankIds.length > 0 ? supabase.from('ranks').select('id, rank_code').in('id', rankIds) : Promise.resolve({ data: [] as { id: string; rank_code: string }[] }),
+      ownerIds.length > 0 ? supabase.from('companies').select('id, name').in('id', ownerIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      fleetIds.length > 0 ? supabase.from('fleets').select('id, name').in('id', fleetIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ]);
+    const rankCodeById = new Map((rankRows || []).map(r => [r.id, r.rank_code]));
+    const ownerNameById = new Map((ownerRows || []).map(o => [o.id, o.name]));
+    const fleetNameById = new Map((fleetRows || []).map(f => [f.id, f.name]));
+
+    return data.map(a => {
+      const contract = contractById.get(a.contract_id);
+      const crew = contract ? crewById.get(contract.crew_member_id) : undefined;
+      const ship = contract ? shipById.get(contract.ship_id) : undefined;
+      return {
+        ...a,
+        allowance_item_name: itemById.get(a.allowance_item_id)?.name || '',
+        crew_name: crew?.name || '',
+        rank_code: crew?.rank_id ? (rankCodeById.get(crew.rank_id) || '') : '',
+        ship_id: contract?.ship_id || '',
+        ship_name: ship?.name || '',
+        owner_id: ship?.owner_id || undefined,
+        owner_name: ship?.owner_id ? (ownerNameById.get(ship.owner_id) || '') : '',
+        fleet_id: ship?.fleet_id || undefined,
+        fleet_name: ship?.fleet_id ? (fleetNameById.get(ship.fleet_id) || '') : '',
+        contract_status: contract?.status || '',
+      } as CrewContractAllowanceWithFullDetails;
+    });
   },
 
   async addContractAllowance(data: Omit<CrewContractAllowance, 'id' | 'created_at' | 'updated_at'>): Promise<CrewContractAllowance | null> {
