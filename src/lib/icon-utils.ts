@@ -48,6 +48,7 @@ import {
   Receipt,
   HardDrive,
   FileSpreadsheet,
+  BadgeDollarSign,
   LucideIcon,
 } from 'lucide-react';
 
@@ -101,6 +102,7 @@ const iconMap: Record<string, LucideIcon> = {
   Receipt,
   HardDrive,
   FileSpreadsheet,
+  BadgeDollarSign,
 };
 
 export function getIconComponent(iconName?: string): LucideIcon | undefined {
