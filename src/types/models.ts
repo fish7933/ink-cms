@@ -26,8 +26,8 @@ export interface Company {
   contact_email?: string;
   contact_phone?: string;
   address?: string;
-  default_officer_contract_months?: number;
-  default_rating_contract_months?: number;
+  officer_contract_months?: number | null;
+  rating_contract_months?: number | null;
   created_at: string;
 }
 

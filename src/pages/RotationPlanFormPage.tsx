@@ -179,9 +179,7 @@ export default function RotationPlanFormPage() {
         if (!crew?.rank_id) return row;
         const rank = ranks.find(r => r.id === crew.rank_id);
         if (!rank) return row;
-        const ship = ships.find(s => s.id === shipId) || null;
-        const fleet = fleets.find(f => f.id === fleetId) || null;
-        const cm = calculateContractPeriod(rank.rank_category, ship, fleet, owner);
+        const cm = calculateContractPeriod(rank.rank_category, owner);
         if (cm != null && cm > 0) { changed = true; return { ...row, contractMonths: String(cm) }; }
         return row;
       });
@@ -291,7 +289,7 @@ export default function RotationPlanFormPage() {
       const rank = ranksById.get(crew.rank_id || '');
       let contractMonths = '';
       if (rank && ownerObj) {
-        const cm = calculateContractPeriod(rank.rank_category, shipObj || null, fleetObj || null, ownerObj);
+        const cm = calculateContractPeriod(rank.rank_category, ownerObj);
         if (cm != null && cm > 0) contractMonths = String(cm);
       }
       return { boardingRankId: rank?.id || crew.rank_id || '', boardingGrade: null, ...(contractMonths ? { contractMonths } : {}) };
@@ -448,9 +446,7 @@ export default function RotationPlanFormPage() {
     let contractMonths = '';
     const owner = owners.find(o => o.id === ownerId) || null;
     if (rank && owner) {
-      const ship = ships.find(s => s.id === shipId) || null;
-      const fleet = fleets.find(f => f.id === fleetId) || null;
-      const cm = calculateContractPeriod(rank.rank_category, ship, fleet, owner);
+      const cm = calculateContractPeriod(rank.rank_category, owner);
       if (cm) contractMonths = String(cm);
     }
     return { rankId, grade: null as RankGrade | null, contractMonths };

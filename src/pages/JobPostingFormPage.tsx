@@ -115,8 +115,8 @@ export default function JobPostingFormPage() {
         let contractMonths = 0;
         if (selectedCompany) {
           contractMonths = rank.rank_category === 'officer'
-            ? (selectedCompany.default_officer_contract_months || 0)
-            : (selectedCompany.default_rating_contract_months || 0);
+            ? (selectedCompany.officer_contract_months || 0)
+            : (selectedCompany.rating_contract_months || 0);
         }
         return [...prev, {
           rank_id: rank.id,
@@ -153,8 +153,8 @@ export default function JobPostingFormPage() {
     let contractMonths = 0;
     if (selectedCompany) {
       contractMonths = rank.rank_category === 'officer'
-        ? (selectedCompany.default_officer_contract_months || 0)
-        : (selectedCompany.default_rating_contract_months || 0);
+        ? (selectedCompany.officer_contract_months || 0)
+        : (selectedCompany.rating_contract_months || 0);
     }
     return {
       rank_id: rank.id,

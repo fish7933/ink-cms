@@ -1,35 +1,20 @@
-import type { Company, Fleet, Ship, Rank } from '@/types/models';
+import type { Company, Rank } from '@/types/models';
 
 /**
- * Calculate contract period based on priority: Ship > Fleet > Company
+ * 선주사 관리(CompanyManagementPage.tsx)에서 설정한 기본 계약기간을 가져온다. 선박/플릿별
+ * 개별 설정은 실제로 구현된 적이 없어(해당 컬럼도 없고 편집 UI도 없음) company 값만 사용한다.
  * @param rankCategory - 'officer' or 'rating'
- * @param ship - Ship object (optional)
- * @param fleet - Fleet object (optional)
  * @param company - Company object (required)
  * @returns Contract period in months
  */
 export function calculateContractPeriod(
   rankCategory: 'officer' | 'rating',
-  ship: Ship | null | undefined,
-  fleet: Fleet | null | undefined,
   company: Company
 ): number {
-  const field = rankCategory === 'officer' 
-    ? 'default_officer_contract_months' 
-    : 'default_rating_contract_months';
-
-  // Priority 1: Ship level
-  if (ship && ship[field] != null) {
-    return ship[field]!;
-  }
-
-  // Priority 2: Fleet level
-  if (fleet && fleet[field] != null) {
-    return fleet[field]!;
-  }
-
-  // Priority 3: Company level (default)
-  return company[field];
+  const field = rankCategory === 'officer'
+    ? 'officer_contract_months'
+    : 'rating_contract_months';
+  return company[field] ?? 0;
 }
 
 /**
