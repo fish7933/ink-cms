@@ -8,9 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { rotationService, type CrewReservation } from '@/services/rotation.service';
+import { allowanceEligibilityService, type AllowanceEligibilityItem } from '@/services/allowance-eligibility.service';
 import { getPorts, findOrCreatePort } from '@/services/port.service';
 import { getEffectiveTemplateForShip, type SalaryTemplateWithItems } from '@/lib/salary-store';
 import { calculateContractPeriod } from '@/utils/contract-period';
@@ -154,6 +156,12 @@ export default function RotationPlanFormPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const isReadOnly = isEditMode && planStatus !== 'draft';
 
+  // 승선자별 재고용수당 등 지급조건 체크리스트 — draft에서는 직접 조정 가능(토글 즉시 저장),
+  // 그 외 상태에서는 상신 시점에 고정된 값을 읽기전용으로 보여준다.
+  const [allowanceByAssignment, setAllowanceByAssignment] = useState<Map<string, AllowanceEligibilityItem[]>>(new Map());
+  const [allowanceSelections, setAllowanceSelections] = useState<Record<string, Set<string>>>({});
+  const [savingAllowanceId, setSavingAllowanceId] = useState<string | null>(null);
+
   const preBoarding = (searchParams.get('boarding') || '').split(',').filter(Boolean);
   const preDisembark = (searchParams.get('disembark') || '').split(',').filter(Boolean);
 
@@ -278,6 +286,25 @@ export default function RotationPlanFormPage() {
           })))
         : [makeRow()];
       setRows(loadedRows);
+
+      const boardingForAllowance = existing.assignments
+        .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
+        .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date }));
+      if (boardingForAllowance.length > 0) {
+        const evalResult = await allowanceEligibilityService.evaluateForShipAssignments({
+          shipId: existing.ship_id, ownerId: existing.owner_id, assignments: boardingForAllowance,
+        });
+        setAllowanceByAssignment(evalResult);
+        const initialSelections: Record<string, Set<string>> = {};
+        for (const a of existing.assignments) {
+          const persisted = a.selected_allowance_item_ids;
+          initialSelections[a.id] = persisted != null
+            ? new Set(persisted)
+            : new Set((evalResult.get(a.id) || []).filter(i => i.eligible).map(i => i.allowanceItemId));
+        }
+        setAllowanceSelections(initialSelections);
+      }
+
       setLoading(false);
       return;
     }
@@ -713,6 +740,23 @@ export default function RotationPlanFormPage() {
     } catch (e) {
       toast({ title: '비고 저장 중 오류가 발생했습니다.', description: String(e), variant: 'destructive' });
     } finally { setSavingNotes(false); }
+  };
+
+  // 체크 즉시 저장 — 이 화면엔 별도 "상신" 버튼이 없고(결재 상신은 목록에서 진행), draft를
+  // 벗어나기 전까지 여기서 조정한 값이 그대로 상신 시점의 결정으로 쓰인다.
+  const toggleAllowanceSelection = async (assignmentId: string, itemId: string) => {
+    if (!editPlanId) return;
+    const current = new Set(allowanceSelections[assignmentId] || []);
+    if (current.has(itemId)) current.delete(itemId); else current.add(itemId);
+    setAllowanceSelections(prev => ({ ...prev, [assignmentId]: current }));
+    setSavingAllowanceId(assignmentId);
+    try {
+      await rotationService.saveAssignmentAllowanceSelections(editPlanId, { [assignmentId]: [...current] });
+    } catch (e) {
+      toast({ title: '수당 선택 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+    } finally {
+      setSavingAllowanceId(null);
+    }
   };
 
   const handleDeleteDraft = async () => {
@@ -1225,6 +1269,44 @@ export default function RotationPlanFormPage() {
           )}
         </CardContent>
       </Card>
+
+      {rows.some(r => r.assignmentId && (allowanceByAssignment.get(r.assignmentId) || []).length > 0) && (
+        <Card className="bg-gray-50">
+          <CardContent className="py-3 px-4">
+            <p className="text-xs font-semibold text-gray-600 mb-2">
+              승선자별 수당/공제 확인
+              {planStatus !== 'draft' && <span className="text-gray-400 font-normal ml-1">(임시저장 단계에서 결정된 내용 — 읽기전용)</span>}
+            </p>
+            <div className="space-y-2">
+              {rows
+                .filter(r => r.assignmentId && (allowanceByAssignment.get(r.assignmentId) || []).length > 0)
+                .map(r => {
+                  const items = allowanceByAssignment.get(r.assignmentId!) || [];
+                  const selected = allowanceSelections[r.assignmentId!] || new Set<string>();
+                  const crew = getCrew(r.boardingCrewId);
+                  return (
+                    <div key={r.assignmentId} className="rounded-md border bg-white px-3 py-2">
+                      <p className="text-xs font-medium text-emerald-800 mb-1.5">{(crew ? crewDisplayName(crew) : '') || r.boardingCrewName || '이름 확인 불가'}</p>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                        {items.map(item => (
+                          <label key={item.allowanceItemId} className={`flex items-center gap-1.5 text-xs ${planStatus === 'draft' ? 'cursor-pointer' : ''}`}>
+                            <Checkbox
+                              checked={selected.has(item.allowanceItemId)}
+                              disabled={planStatus !== 'draft' || savingAllowanceId === r.assignmentId}
+                              onCheckedChange={() => toggleAllowanceSelection(r.assignmentId!, item.allowanceItemId)}
+                            />
+                            <span>{item.allowanceItemName} ({Number(item.amount).toLocaleString()} {item.currency})</span>
+                            {!item.eligible && <span className="text-amber-600">— {item.reasons.join(', ')}</span>}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <CrewCandidateSelectDialog
         open={boardingDialogOpen}

@@ -355,8 +355,11 @@ export function CrewRotationPage() {
   const persistDefaultAllowanceSelections = async (planId: string) => {
     const plan = plans.find(p => p.id === planId);
     if (!plan) return;
+    // 작성/수정 화면(RotationPlanFormPage)에서 이미 검토해 선택을 저장해둔 배정은 건드리지
+    // 않는다 — 한 번도 검토 안 된(selected_allowance_item_ids가 null인) 배정에만 안전한
+    // 기본값(조건 충족분만)을 채운다.
     const boardingAssignments = plan.assignments
-      .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id)
+      .filter((a): a is typeof a & { on_crew_id: string; on_rank_id: string } => !!a.on_crew_id && !!a.on_rank_id && a.selected_allowance_item_ids == null)
       .map(a => ({ assignmentId: a.id, crewMemberId: a.on_crew_id, rankId: a.on_rank_id, embarkDate: a.embark_date }));
     if (boardingAssignments.length === 0) return;
     const evalResult = await allowanceEligibilityService.evaluateForShipAssignments({
