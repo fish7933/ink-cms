@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, getUsers } from '@/lib/store';
-import { getPermissionsByUserId, updateUserPermissions } from '@/services/permission.service';
+import { getPermissionsByUserId, updateUserPermissions, getAllPermissions } from '@/services/permission.service';
 import { supabase } from '@/lib/supabase';
 import type { User } from '@/types/models';
 import type { Permission, PermissionUpdate } from '@/types/permissions';
 import { MENU_STRUCTURE } from '@/types/permissions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square, Lock, Crown, UserMinus, UserCog } from 'lucide-react';
+import { Shield, Save, ChevronDown, ChevronRight, Folder, FileText, CheckSquare, Square, Lock, Crown, UserMinus, UserCog, LayoutGrid, List } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -37,6 +37,12 @@ export default function PermissionsPage() {
   const [saving, setSaving] = useState(false);
   const [delegating, setDelegating] = useState<string | null>(null);
 
+  // 전체 매트릭스 보기 — 사용자마다 일일이 클릭해 들어가지 않고 전체 접근권한(접속 여부)을
+  // 한눈에 비교/점검하기 위한 모드. 상세 보기와 별개로 전체 사용자의 권한을 한 번에 불러온다.
+  const [viewMode, setViewMode] = useState<'detail' | 'matrix'>('detail');
+  const [allPermissions, setAllPermissions] = useState<Map<string, Permission[]>>(new Map());
+  const [matrixSavingKey, setMatrixSavingKey] = useState<string | null>(null);
+
   const loadUsers = useCallback(async () => {
     const all = await getUsers();
     const targets = [
@@ -59,6 +65,10 @@ export default function PermissionsPage() {
           setSelectedUser(targets[0]);
           setPermissions(await getPermissionsByUserId(targets[0].id));
         }
+        const all = await getAllPermissions();
+        const grouped = new Map<string, Permission[]>();
+        for (const p of all) grouped.set(p.user_id, [...(grouped.get(p.user_id) || []), p]);
+        setAllPermissions(grouped);
       } catch (e) {
         console.error(e);
       } finally {
@@ -191,7 +201,8 @@ export default function PermissionsPage() {
         const p = getPermission(page.resource);
         return { resource: page.resource, can_view: p?.can_view ?? true, can_create: p?.can_create ?? false, can_edit: p?.can_edit ?? false, can_delete: p?.can_delete ?? false };
       });
-      await updateUserPermissions(selectedUser.id, updates);
+      const saved = await updateUserPermissions(selectedUser.id, updates);
+      setAllPermissions(prev => new Map(prev).set(selectedUser.id, saved));
       toast({ title: '저장 완료', description: `${selectedUser.name}님 권한이 업데이트되었습니다.` });
     } catch {
       toast({ title: '저장 실패', variant: 'destructive' });
@@ -200,6 +211,42 @@ export default function PermissionsPage() {
 
   const toggleMenu = (id: string) =>
     setExpandedMenus(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  // usePermissions.ts와 동일한 기본값 규칙 — 레코드가 없으면 접속은 기본 허용.
+  const getMatrixCanView = (user: User, resource: string): boolean => {
+    if (user.role === 'admin' || user.role === 'system_admin') return true;
+    const p = (allPermissions.get(user.id) || []).find(pp => pp.resource === resource);
+    return p ? p.can_view : true;
+  };
+
+  const toggleMatrixCell = async (user: User, resource: string) => {
+    if (user.role === 'admin' || user.role === 'system_admin') return;
+    const key = `${user.id}:${resource}`;
+    const existing = (allPermissions.get(user.id) || []).find(pp => pp.resource === resource);
+    const newView = !(existing ? existing.can_view : true);
+    // 접속을 끄면 그 화면에 들어갈 수 없으니 추가/수정/삭제도 같이 끈다(상세 화면의 setResourceField와 동일 규칙).
+    const update: PermissionUpdate = {
+      resource,
+      can_view: newView,
+      can_create: newView ? (existing?.can_create ?? false) : false,
+      can_edit: newView ? (existing?.can_edit ?? false) : false,
+      can_delete: newView ? (existing?.can_delete ?? false) : false,
+    };
+    setMatrixSavingKey(key);
+    try {
+      const [saved] = await updateUserPermissions(user.id, [update]);
+      setAllPermissions(prev => {
+        const next = new Map(prev);
+        next.set(user.id, [...(next.get(user.id) || []).filter(pp => pp.resource !== resource), saved]);
+        return next;
+      });
+      if (selectedUser?.id === user.id) setPermissions(prev => [...prev.filter(pp => pp.resource !== resource), saved]);
+    } catch {
+      toast({ title: '저장 실패', variant: 'destructive' });
+    } finally {
+      setMatrixSavingKey(null);
+    }
+  };
 
   const roleBadge = (user: User) => {
     if (user.role === 'admin') return <Badge className="text-[10px] px-1.5 bg-purple-600 hover:bg-purple-600 text-white shrink-0">슈퍼</Badge>;
@@ -215,14 +262,73 @@ export default function PermissionsPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
-      <div className="flex items-center gap-2 mb-4">
-        <Shield className="w-5 h-5 text-blue-600" />
-        <div>
-          <h1 className="text-base font-bold text-gray-900">권한 설정</h1>
-          <p className="text-xs text-gray-500">슈퍼관리자 · 시스템 관리자만 접근 가능합니다. 관리자 역할 지정 및 메뉴별 권한을 설정합니다.</p>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <Shield className="w-5 h-5 text-blue-600" />
+          <div>
+            <h1 className="text-base font-bold text-gray-900">권한 설정</h1>
+            <p className="text-xs text-gray-500">슈퍼관리자 · 시스템 관리자만 접근 가능합니다. 관리자 역할 지정 및 메뉴별 권한을 설정합니다.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button size="sm" variant={viewMode === 'detail' ? 'default' : 'outline'} className="h-8 gap-1.5 text-xs" onClick={() => setViewMode('detail')}>
+            <List className="w-3.5 h-3.5" />사용자별 상세
+          </Button>
+          <Button size="sm" variant={viewMode === 'matrix' ? 'default' : 'outline'} className="h-8 gap-1.5 text-xs" onClick={() => setViewMode('matrix')}>
+            <LayoutGrid className="w-3.5 h-3.5" />전체 매트릭스
+          </Button>
         </div>
       </div>
 
+      {viewMode === 'matrix' ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">전체 접근권한 매트릭스 (접속 여부)</CardTitle>
+            <p className="text-xs text-gray-500">셀을 클릭하면 그 사용자의 해당 페이지 접속 권한이 바로 토글되어 저장됩니다. 접속을 끄면 추가/수정/삭제 권한도 함께 꺼집니다. 슈퍼관리자·시스템 관리자는 항상 전체 접근이라 편집할 수 없습니다.</p>
+          </CardHeader>
+          <CardContent className="pt-0 overflow-x-auto">
+            <table className="text-xs border-collapse w-full">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 bg-white text-left px-2 py-1.5 border-b min-w-[160px]">메뉴 / 페이지</th>
+                  {users.map(u => (
+                    <th key={u.id} className="px-1.5 py-1.5 border-b text-center whitespace-nowrap font-medium text-gray-600" title={u.email}>
+                      {u.name}<span className="ml-1">{roleBadge(u)}</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {MENU_STRUCTURE.map(menu => (
+                  <Fragment key={menu.id}>
+                    <tr className="bg-gray-50">
+                      <td colSpan={users.length + 1} className="px-2 py-1 text-[11px] font-semibold text-gray-600">{menu.name}</td>
+                    </tr>
+                    {menu.children?.map(page => (
+                      <tr key={page.id} className="hover:bg-blue-50/30">
+                        <td className="sticky left-0 bg-white px-2 py-1 pl-5 border-b text-gray-600 whitespace-nowrap">{page.name}</td>
+                        {users.map(u => {
+                          const key = `${u.id}:${page.resource}`;
+                          const isFullAccess = u.role === 'admin' || u.role === 'system_admin';
+                          return (
+                            <td key={u.id} className="text-center border-b px-1.5 py-1">
+                              <Checkbox
+                                checked={getMatrixCanView(u, page.resource)}
+                                disabled={isFullAccess || matrixSavingKey === key}
+                                onCheckedChange={() => toggleMatrixCell(u, page.resource)}
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
 
         {/* 사용자 목록 */}
@@ -429,6 +535,7 @@ export default function PermissionsPage() {
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }
