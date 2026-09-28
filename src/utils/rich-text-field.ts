@@ -30,6 +30,44 @@ const SAFE_STYLE_PROPS_TABLE = [
   'vertical-align', 'width', 'background-color',
 ];
 
+// 엑셀 등은 서식을 셀의 인라인 style이 아니라 <head><style>의 태그/클래스 규칙(.xl65 등)으로
+// 내보내는 경우가 많다 — DOMPurify는 <style> 태그와 class 속성을 모두 제거하므로(허용 목록에
+// 없음), 그 전에 태그 규칙 → 클래스 규칙 순서(실제 CSS 우선순위와 동일)로 각 요소의 인라인
+// style에 먼저 합쳐넣는다(기존 인라인 style이 있으면 가장 구체적인 값이므로 맨 뒤에 이어붙여
+// 우선시킨다). table-field.ts(표 붙여넣기 전용 필드)의 동일 함수와 같은 접근이다.
+function inlineClassStyles(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const styleByClass = new Map<string, string>();
+  const styleByTag = new Map<string, string>();
+  doc.querySelectorAll('style').forEach(styleEl => {
+    const cssText = styleEl.textContent || '';
+    const ruleRe = /([^{},]+)\{([^}]*)\}/g;
+    let m: RegExpExecArray | null;
+    while ((m = ruleRe.exec(cssText))) {
+      const selector = m[1].trim();
+      const body = m[2].trim();
+      if (!selector || !body) continue;
+      if (selector.startsWith('.')) {
+        const cls = selector.slice(1);
+        styleByClass.set(cls, `${styleByClass.get(cls) || ''}${body};`);
+      } else if (/^[a-zA-Z][\w-]*$/.test(selector)) {
+        styleByTag.set(selector.toLowerCase(), `${styleByTag.get(selector.toLowerCase()) || ''}${body};`);
+      }
+    }
+  });
+  if (styleByClass.size > 0 || styleByTag.size > 0) {
+    doc.body.querySelectorAll('*').forEach(el => {
+      const fromTag = styleByTag.get(el.tagName.toLowerCase()) || '';
+      const classes = (el.getAttribute('class') || '').split(/\s+/).filter(Boolean);
+      const fromClasses = classes.map(c => styleByClass.get(c) || '').filter(Boolean).join('');
+      const merged = `${fromTag}${fromClasses}${el.getAttribute('style') || ''}`;
+      if (merged) el.setAttribute('style', merged);
+      if (el.hasAttribute('class')) el.removeAttribute('class');
+    });
+  }
+  return doc.body.innerHTML;
+}
+
 function sanitizeInlineStyles(doc: Document): void {
   doc.querySelectorAll<HTMLElement>('[style]').forEach(el => {
     const allowed = TABLE_TAGS.has(el.tagName.toLowerCase()) ? SAFE_STYLE_PROPS_TABLE : SAFE_STYLE_PROPS;
@@ -93,7 +131,7 @@ function forceFullWidthTables(doc: Document): void {
 }
 
 export function sanitizeRichTextHtml(html: string): string {
-  const clean = DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false });
+  const clean = DOMPurify.sanitize(inlineClassStyles(html), { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false });
   const doc = new DOMParser().parseFromString(clean, 'text/html');
   doc.querySelectorAll('a[href]').forEach(a => {
     a.setAttribute('rel', 'noopener noreferrer');
