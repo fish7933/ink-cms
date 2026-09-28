@@ -95,6 +95,10 @@ function RichTextEditor({ value, onChange, placeholder, minRows }: Omit<Props, '
         .rich-text-readonly h2, .rich-text-editable-content h2 { font-size: 1.25em; font-weight: 700; margin: 0.4em 0; }
         .rich-text-readonly h3, .rich-text-editable-content h3 { font-size: 1.1em; font-weight: 700; margin: 0.4em 0; }
         .rich-text-readonly table, .rich-text-editable-content table { width: 100% !important; border-collapse: collapse; }
+        .rich-text-readonly td, .rich-text-editable-content td, .rich-text-readonly th, .rich-text-editable-content th {
+          border: 1px solid #999; padding: 4px 8px; vertical-align: top;
+        }
+        .rich-text-readonly th, .rich-text-editable-content th { background: #f5f5f5; font-weight: 600; }
         .rich-text-readonly blockquote, .rich-text-editable-content blockquote { border-left: 3px solid #d1d5db; padding-left: 0.8em; color: #4b5563; margin: 0 0 8px; }
         .rich-text-readonly img, .rich-text-editable-content img { max-width: 100%; }
         .rich-text-readonly hr, .rich-text-editable-content hr { border: none; border-top: 1px solid #d1d5db; margin: 0.8em 0; }
