@@ -15,6 +15,7 @@ export interface ExpenseReflectionItem {
   category: string;
   purpose: string;
   amount: number;
+  currency: string;
   vendor: string;
   attachments: ApprovalDocumentAttachment[];
   reflected: boolean;
@@ -90,6 +91,8 @@ export async function getReflectableExpenseItems(): Promise<ExpenseReflectionIte
         category: str(row.expense_category),
         purpose: str(row.purpose),
         amount: num(row.amount),
+        // 통화 컬럼 추가 이전에 이미 승인된 문서는 값이 없으므로 KRW로 간주한다(과거엔 KRW만 가능했음).
+        currency: str(row.currency) || 'KRW',
         vendor: str(row.vendor),
         attachments: files(row.attachments),
         reflected: reflectedMap.has(key),

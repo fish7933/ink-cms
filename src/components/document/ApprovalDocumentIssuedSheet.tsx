@@ -385,6 +385,18 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                 if (rows.length === 0) return null;
                 const numberColumns = columns.filter(c => c.type === 'number');
                 const totalByColumn = new Map(numberColumns.map(c => [c.key, rows.reduce((sum, r) => sum + (Number(r[c.key]) || 0), 0)]));
+                // 통화 컬럼이 있는 표(지출결의서 등)는 KRW/USD를 그냥 더하면 안 되므로 통화별로 나눠 합산한다.
+                const hasCurrencyColumn = columns.some(c => c.key === 'currency');
+                const totalByColumnAndCurrency = hasCurrencyColumn
+                  ? new Map(numberColumns.map(c => {
+                      const byCurrency = new Map<string, number>();
+                      for (const r of rows) {
+                        const cur = typeof r['currency'] === 'string' && r['currency'] ? String(r['currency']) : 'KRW';
+                        byCurrency.set(cur, (byCurrency.get(cur) || 0) + (Number(r[c.key]) || 0));
+                      }
+                      return [c.key, byCurrency];
+                    }))
+                  : null;
                 return (
                   <tr key={gi}><td>
                     <table className="issued-line-items">
@@ -409,7 +421,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                                 );
                               }
                               const isEmpty = raw === null || raw === undefined || raw === '';
-                              const display = isEmpty ? '-' : c.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}원` : String(raw);
+                              // 같은 행에 통화(currency) 컬럼이 있으면 그 값을 단위로 쓰고, 없으면 기존처럼 "원"으로 가정한다
+                              // (지출결의서처럼 KRW/USD 등을 섞어 쓰는 표를 위한 것 — 원화 전용 표는 그대로 "원" 유지).
+                              const rowCurrency = row['currency'];
+                              const unit = c.key !== 'currency' && typeof rowCurrency === 'string' && rowCurrency ? ` ${rowCurrency}` : '원';
+                              const display = isEmpty ? '-' : c.type === 'number' ? `${Number(raw).toLocaleString('ko-KR')}${unit}` : String(raw);
                               return <td key={c.key} style={c.type === 'number' ? { textAlign: 'right' } : undefined}>{display}</td>;
                             })}
                           </tr>
@@ -422,7 +438,11 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                             <tr>
                               {columns.map((c, ci) => (
                                 <td key={c.key} style={totalByColumn.has(c.key) ? { textAlign: 'right' } : undefined}>
-                                  {totalByColumn.has(c.key) ? `${totalByColumn.get(c.key)!.toLocaleString('ko-KR')}원` : ci === labelColIdx ? '합계' : ''}
+                                  {totalByColumn.has(c.key)
+                                    ? (totalByColumnAndCurrency
+                                        ? [...totalByColumnAndCurrency.get(c.key)!.entries()].map(([cur, sum]) => `${sum.toLocaleString('ko-KR')} ${cur}`).join(' / ')
+                                        : `${totalByColumn.get(c.key)!.toLocaleString('ko-KR')}원`)
+                                    : ci === labelColIdx ? '합계' : ''}
                                 </td>
                               ))}
                             </tr>

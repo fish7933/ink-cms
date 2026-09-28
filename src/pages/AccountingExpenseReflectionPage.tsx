@@ -60,7 +60,9 @@ interface DocumentGroup {
   submitted_by_name: string;
   completed_at: string | null;
   items: ExpenseReflectionItem[];
-  totalAmount: number;
+  // 지출결의서 안에 서로 다른 통화의 항목이 섞여 있을 수 있어(예: KRW+USD) 단일 합계 숫자로
+  // 더하지 않고 통화별로 나눠 합산한다.
+  totalsByCurrency: Map<string, number>;
   reflectedCount: number;
 }
 
@@ -145,12 +147,12 @@ export default function AccountingExpenseReflectionPage() {
         g = {
           document_id: item.document_id, document_title: item.document_title, reference_type: item.reference_type,
           submitted_by_name: item.submitted_by_name, completed_at: item.completed_at,
-          items: [], totalAmount: 0, reflectedCount: 0,
+          items: [], totalsByCurrency: new Map(), reflectedCount: 0,
         };
         byDoc.set(item.document_id, g);
       }
       g.items.push(item);
-      g.totalAmount += item.amount;
+      g.totalsByCurrency.set(item.currency, (g.totalsByCurrency.get(item.currency) || 0) + item.amount);
       if (item.reflected) g.reflectedCount += 1;
     }
     return [...byDoc.values()];
@@ -211,6 +213,7 @@ export default function AccountingExpenseReflectionPage() {
       counterparty: item.vendor,
       description: item.purpose,
       amount: String(item.amount),
+      currency: item.currency,
     });
     setFormTarget(item);
   };
@@ -271,7 +274,7 @@ export default function AccountingExpenseReflectionPage() {
           counterparty: item.vendor,
           description: item.purpose,
           amount: item.amount,
-          currency: form.currency,
+          currency: item.currency,
           attachments: item.attachments,
           createdBy: currentUser?.id || null,
         })));
@@ -477,20 +480,26 @@ export default function AccountingExpenseReflectionPage() {
                         <td className="p-2 whitespace-nowrap">{item.expense_date || '-'}</td>
                         <td className="p-2">{item.category || '-'}</td>
                         <td className="p-2 text-gray-500">{item.vendor}{item.purpose ? ` / ${item.purpose}` : ''}</td>
-                        <td className="p-2 text-right font-mono">{item.amount.toLocaleString()}</td>
+                        <td className="p-2 text-right font-mono">{item.amount.toLocaleString()} {item.currency}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-gray-50 font-semibold"><td className="p-2" colSpan={3}>합계</td><td className="p-2 text-right font-mono">{batchTargets.reduce((s, i) => s + i.amount, 0).toLocaleString()}</td></tr>
+                    <tr className="bg-gray-50 font-semibold">
+                      <td className="p-2" colSpan={3}>합계</td>
+                      <td className="p-2 text-right font-mono">
+                        {[...batchTargets.reduce((m, i) => m.set(i.currency, (m.get(i.currency) || 0) + i.amount), new Map<string, number>()).entries()]
+                          .map(([cur, sum]) => `${sum.toLocaleString()} ${cur}`).join(' / ')}
+                      </td>
+                    </tr>
                   </tfoot>
                 </table>
-                <p className="text-[11px] text-gray-400 p-2 border-t bg-gray-50">각 항목의 분류/지급처/적요/금액/증빙서류는 그대로 유지되고, 아래 거래일·자산만 공통으로 적용됩니다.</p>
+                <p className="text-[11px] text-gray-400 p-2 border-t bg-gray-50">각 항목의 분류/지급처/적요/금액/통화/증빙서류는 그대로 유지되고, 아래 거래일·자산만 공통으로 적용됩니다.</p>
               </div>
             ) : (
               <div className="p-2.5 bg-gray-50 rounded-md text-xs text-gray-500 space-y-0.5">
                 <p>기안자: {formTarget!.submitted_by_name} · 지출일(기안): {formTarget!.expense_date || '-'}</p>
-                <p>원본 항목: {formTarget!.category} / {formTarget!.vendor} / {formTarget!.purpose} / {formTarget!.amount.toLocaleString()}원</p>
+                <p>원본 항목: {formTarget!.category} / {formTarget!.vendor} / {formTarget!.purpose} / {formTarget!.amount.toLocaleString()} {formTarget!.currency}</p>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -498,13 +507,15 @@ export default function AccountingExpenseReflectionPage() {
                 <Label className="text-xs">거래일 * <span className="text-gray-400 font-normal">(자산·거래일은 담당자가 지정)</span></Label>
                 <Input type="date" value={form.transaction_date} max={today()} onChange={e => setForm({ ...form, transaction_date: e.target.value })} className="h-9 text-sm" />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">통화</Label>
-                <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+              {!batchTargets && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">통화</Label>
+                  <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v })}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -661,7 +672,7 @@ export default function AccountingExpenseReflectionPage() {
                       <td className="p-2 whitespace-nowrap">{item.expense_date || '-'}</td>
                       <td className="p-2">{item.category || '-'}</td>
                       <td className="p-2 text-gray-500 truncate max-w-[320px]" title={`${item.vendor} / ${item.purpose}`}>{item.vendor}{item.purpose ? ` / ${item.purpose}` : ''}</td>
-                      <td className="p-2 text-right font-mono font-semibold">{item.amount.toLocaleString()}</td>
+                      <td className="p-2 text-right font-mono font-semibold whitespace-nowrap">{item.amount.toLocaleString()} {item.currency}</td>
                       <td className="p-2 min-w-[140px]"><AttachmentLinks attachments={item.attachments} /></td>
                       <td className="p-2 text-center">
                         <Badge className={`text-[10px] ${item.reflected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -782,7 +793,9 @@ export default function AccountingExpenseReflectionPage() {
                         <td className="p-2 whitespace-nowrap">{g.submitted_by_name}</td>
                         <td className="p-2 whitespace-nowrap">{g.completed_at ? new Date(g.completed_at).toLocaleDateString('ko-KR') : '-'}</td>
                         <td className="p-2 text-center">{g.items.length}</td>
-                        <td className="p-2 text-right font-mono font-semibold">{g.totalAmount.toLocaleString()}</td>
+                        <td className="p-2 text-right font-mono font-semibold whitespace-nowrap">
+                          {[...g.totalsByCurrency.entries()].map(([cur, sum]) => `${sum.toLocaleString()} ${cur}`).join(' / ')}
+                        </td>
                         <td className="p-2 text-center">
                           <Badge className={`text-[10px] ${fullyReflected ? 'bg-green-100 text-green-700' : partiallyReflected ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
                             {g.reflectedCount}/{g.items.length} 반영
