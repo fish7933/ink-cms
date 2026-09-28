@@ -34,11 +34,17 @@ export const orgChartService = {
   },
 
   async getOrgMembers(): Promise<OrgMember[]> {
+    // is_active와 별개로 퇴사일(resignation_date)이 지난 사람은 조직도/결재라인 선택 대상에서
+    // 빠져야 한다 — 퇴사 처리는 resignation_date만 채우고 is_active는 건드리지 않기 때문에
+    // is_active 필터만으로는 이미 퇴사한 사람이 계속 남아 있었다. 퇴사예정(미래 날짜)은 아직
+    // 재직 중이므로 그대로 포함한다.
+    const today = new Date().toISOString().slice(0, 10);
     const { data, error } = await supabase
       .from('users')
       .select('id, name, role, position_id, hire_date, is_active')
       .in('role', INTERNAL_ROLES)
       .eq('is_active', true)
+      .or(`resignation_date.is.null,resignation_date.gt.${today}`)
       .order('name');
     if (error) throw error;
 

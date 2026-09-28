@@ -45,10 +45,15 @@ export default function PermissionsPage() {
 
   const loadUsers = useCallback(async () => {
     const all = await getUsers();
+    // 이미 퇴사한(퇴사일이 오늘 이전/오늘인) 사람은 권한을 새로 줄 대상이 아니므로 목록에서 뺀다.
+    // 퇴사예정(퇴사일이 미래)인 사람은 아직 재직 중이므로 그대로 남겨둔다.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isCurrentlyEmployed = (u: User) => !u.resignation_date || u.resignation_date > todayStr;
+    const active = all.filter(isCurrentlyEmployed);
     const targets = [
-      ...all.filter(u => u.role === 'admin'),
-      ...all.filter(u => u.role === 'system_admin'),
-      ...all.filter(u => u.role === 'ship_manager'),
+      ...active.filter(u => u.role === 'admin'),
+      ...active.filter(u => u.role === 'system_admin'),
+      ...active.filter(u => u.role === 'ship_manager'),
     ];
     setUsers(targets);
     return targets;
