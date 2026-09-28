@@ -28,6 +28,9 @@ const SAFE_STYLE_PROPS_TABLE = [
   'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
   'border-color', 'border-width', 'border-style', 'border-collapse', 'border-spacing',
   'vertical-align', 'width',
+  // 표 크기/배치(도구모음의 폭 조절·왼쪽/가운데/오른쪽 정렬) 저장용 — margin은 표(td/th 등
+  // 포함 TABLE_TAGS 전체)에만 열고 문단에는 열지 않는다(SAFE_STYLE_PROPS_IMG와 같은 이유).
+  'margin', 'margin-left', 'margin-right',
 ];
 // 이미지 크기/배치(도구모음의 폭 조절·정렬) 저장용 — float/margin/display는 문단 등 다른
 // 요소에는 허용하지 않는다(워드가 이 속성들을 변경내용추적/단 레이아웃에 남용해 "이상한 세로
@@ -124,8 +127,11 @@ function stripPrivateUseCharacters(doc: Document): void {
 }
 
 // 워드/한글에서 표를 붙여넣으면 원본 문서의 고정 폭(pt/px)이 style="width:..."/width="..."로
-// 그대로 딸려와, 본문 폭보다 좁게(또는 넘치게) 보인다 — 화면 표는 항상 문서 전체 폭을 쓰도록
-// 표와 그 바로 아래 열(col/td/th)의 폭 지정을 제거하고 100%로 강제한다.
+// 그대로 딸려와, 본문 폭보다 좁게(또는 넘치게) 보인다 — 붙여넣은 직후에는 표와 그 바로 아래
+// 열(col/td/th)의 폭 지정을 제거하고 100%로 강제한다. 붙여넣을 때만 적용하고(아래
+// sanitizePastedRichTextHtml) 매번 저장/재렌더할 때는 적용하지 않는다 — 그래야 이후 사용자가
+// 도구모음에서 표 폭을 직접 줄이거나 배치를 바꾼 값이 저장/재로드 때마다 다시 100%로
+// 덮어써지지 않는다.
 function forceFullWidthTables(doc: Document): void {
   doc.querySelectorAll('table').forEach(table => {
     table.removeAttribute('width');
@@ -144,6 +150,12 @@ export function sanitizeRichTextHtml(html: string): string {
   });
   sanitizeInlineStyles(doc);
   stripPrivateUseCharacters(doc);
+  return doc.body.innerHTML;
+}
+
+// 붙여넣기 전용 — 일반 정제에 더해 표 폭을 100%로 강제한다(위 forceFullWidthTables 설명 참고).
+export function sanitizePastedRichTextHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(sanitizeRichTextHtml(html), 'text/html');
   forceFullWidthTables(doc);
   return doc.body.innerHTML;
 }

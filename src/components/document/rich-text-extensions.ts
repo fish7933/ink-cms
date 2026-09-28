@@ -1,3 +1,4 @@
+import { Table } from '@tiptap/extension-table';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { Image } from '@tiptap/extension-image';
@@ -31,6 +32,41 @@ export const ImageWithLayout = Image.extend({
           if (attributes.align === 'left') decls.push('float:left', 'margin:0 12px 8px 0');
           else if (attributes.align === 'right') decls.push('float:right', 'margin:0 0 8px 12px');
           else if (attributes.align === 'center') decls.push('display:block', 'margin-left:auto', 'margin-right:auto');
+          if (decls.length === 0) return {};
+          return { style: `${decls.join(';')};` };
+        },
+      },
+    };
+  },
+});
+
+// 표 전체 크기(width)와 배치(왼쪽/가운데/오른쪽)를 저장/복원한다 — 이미지와 같은 구조.
+// 기본 Table 노드의 renderHTML은 이 style을 읽으면(userStyles) 그대로 최종 표 style로
+// 쓰고, 없으면 열 너비로부터 계산한 기본 폭으로 대체한다(@tiptap/extension-table 내부 구현) —
+// 그래서 아직 크기를 바꾸지 않은 기존 표는 지금처럼 자동 계산된 폭을 그대로 쓴다.
+export const TableWithLayout = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: element => element.style.width || null,
+        renderHTML: () => ({}),
+      },
+      align: {
+        default: null,
+        parseHTML: element => {
+          if (element.style.marginLeft === 'auto' && element.style.marginRight === 'auto') return 'center';
+          if (element.style.marginLeft === 'auto') return 'right';
+          if (element.style.marginRight === 'auto') return 'left';
+          return null;
+        },
+        renderHTML: attributes => {
+          const decls: string[] = [];
+          if (attributes.width) decls.push(`width:${attributes.width}`);
+          if (attributes.align === 'left') decls.push('margin-left:0', 'margin-right:auto');
+          else if (attributes.align === 'center') decls.push('margin-left:auto', 'margin-right:auto');
+          else if (attributes.align === 'right') decls.push('margin-left:auto', 'margin-right:0');
           if (decls.length === 0) return {};
           return { style: `${decls.join(';')};` };
         },

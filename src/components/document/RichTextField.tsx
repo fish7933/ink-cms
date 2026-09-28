@@ -3,12 +3,11 @@ import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { TextStyleKit } from '@tiptap/extension-text-style';
-import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { Placeholder } from '@tiptap/extension-placeholder';
-import { TableCellWithStyle, TableHeaderWithStyle, ImageWithLayout } from './rich-text-extensions';
+import { TableCellWithStyle, TableHeaderWithStyle, TableWithLayout, ImageWithLayout } from './rich-text-extensions';
 import RichTextToolbar from './RichTextToolbar';
-import { sanitizeRichTextHtml, renderRichTextReadOnlyHtml } from '@/utils/rich-text-field';
+import { sanitizeRichTextHtml, sanitizePastedRichTextHtml, renderRichTextReadOnlyHtml } from '@/utils/rich-text-field';
 
 interface Props {
   value: string;
@@ -47,7 +46,7 @@ function RichTextEditor({ value, onChange, placeholder, minRows }: Omit<Props, '
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyleKit,
       ImageWithLayout,
-      Table.configure({ resizable: false }),
+      TableWithLayout.configure({ resizable: false }),
       TableRow,
       TableCellWithStyle,
       TableHeaderWithStyle,
@@ -57,8 +56,10 @@ function RichTextEditor({ value, onChange, placeholder, minRows }: Omit<Props, '
     editorProps: {
       attributes: { class: 'rich-text-editable-content' },
       // 클립보드 원본 HTML을 ProseMirror가 파싱하기 전에 기존 정제 파이프라인을 그대로
-      // 거치게 한다 — 엑셀 클래스 테두리 보존, 워드 특수문자 제거, 표 전체폭 강제가 여기서 함께 적용된다.
-      transformPastedHTML: html => sanitizeRichTextHtml(html),
+      // 거치게 한다 — 엑셀 클래스 테두리 보존, 워드 특수문자 제거, 표 전체폭 강제가 여기서 함께
+      // 적용된다. 붙여넣을 때만 표 폭을 100%로 강제하고, 이후 저장/재로드에서는 사용자가
+      // 도구모음에서 직접 바꾼 표 폭/배치를 그대로 존중한다(sanitizeRichTextHtml 참고).
+      transformPastedHTML: html => sanitizePastedRichTextHtml(html),
     },
     onUpdate: ({ editor: e }) => {
       const html = sanitizeRichTextHtml(e.getHTML());
@@ -93,7 +94,10 @@ function RichTextEditor({ value, onChange, placeholder, minRows }: Omit<Props, '
         .rich-text-readonly h1, .rich-text-editable-content h1 { font-size: 1.4em; font-weight: 700; margin: 0.4em 0; }
         .rich-text-readonly h2, .rich-text-editable-content h2 { font-size: 1.25em; font-weight: 700; margin: 0.4em 0; }
         .rich-text-readonly h3, .rich-text-editable-content h3 { font-size: 1.1em; font-weight: 700; margin: 0.4em 0; }
-        .rich-text-readonly table, .rich-text-editable-content table { width: 100% !important; border-collapse: collapse; }
+        /* 표 자체 폭 지정(도구모음에서 사용자가 설정) 이 인라인 스타일로 있으면 그게 그대로
+           우선 적용되고, 없는 표(예전에 저장된 문서)만 이 기본값을 따른다 — !important를
+           빼서 표 자신의 style="width:..."가 항상 이길 수 있게 한다. */
+        .rich-text-readonly table, .rich-text-editable-content table { width: 100%; border-collapse: collapse; }
         .rich-text-readonly td, .rich-text-editable-content td, .rich-text-readonly th, .rich-text-editable-content th {
           border: 1px solid #999; padding: 4px 8px; vertical-align: top;
         }

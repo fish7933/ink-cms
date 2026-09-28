@@ -172,12 +172,32 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
 
       <Separator orientation="vertical" className="h-5 mx-0.5" />
 
-      <ToolbarButton title="표 삽입" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></ToolbarButton>
+      <ToolbarButton title="표 삽입" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).updateAttributes('table', { width: '100%' }).run()}><TableIcon className="w-3.5 h-3.5" /></ToolbarButton>
       <ToolbarButton title="행 추가" disabled={!editor.can().addRowAfter()} onClick={() => editor.chain().focus().addRowAfter().run()}><Rows3 className="w-3.5 h-3.5" /></ToolbarButton>
       <ToolbarButton title="행 삭제" disabled={!editor.can().deleteRow()} onClick={() => editor.chain().focus().deleteRow().run()}><Rows3 className="w-3.5 h-3.5 opacity-60" /></ToolbarButton>
       <ToolbarButton title="열 추가" disabled={!editor.can().addColumnAfter()} onClick={() => editor.chain().focus().addColumnAfter().run()}><Columns3 className="w-3.5 h-3.5" /></ToolbarButton>
       <ToolbarButton title="열 삭제" disabled={!editor.can().deleteColumn()} onClick={() => editor.chain().focus().deleteColumn().run()}><Columns3 className="w-3.5 h-3.5 opacity-60" /></ToolbarButton>
       <ToolbarButton title="표 삭제" disabled={!editor.can().deleteTable()} onClick={() => editor.chain().focus().deleteTable().run()}><Trash2 className="w-3.5 h-3.5" /></ToolbarButton>
+
+      {editor.isActive('table') && (
+        <>
+          <Select
+            value={(editor.getAttributes('table').width as string | undefined) || '100%'}
+            onValueChange={v => editor.chain().focus().updateAttributes('table', { width: v }).run()}
+          >
+            <SelectTrigger className="h-7 w-20 text-xs"><SelectValue placeholder="표 폭" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25%">25%</SelectItem>
+              <SelectItem value="50%">50%</SelectItem>
+              <SelectItem value="75%">75%</SelectItem>
+              <SelectItem value="100%">100%</SelectItem>
+            </SelectContent>
+          </Select>
+          <ToolbarButton title="표 왼쪽 배치" active={editor.getAttributes('table').align === 'left'} onClick={() => editor.chain().focus().updateAttributes('table', { align: 'left' }).run()}><AlignLeft className="w-3.5 h-3.5" /></ToolbarButton>
+          <ToolbarButton title="표 가운데 배치" active={editor.getAttributes('table').align === 'center'} onClick={() => editor.chain().focus().updateAttributes('table', { align: 'center' }).run()}><AlignCenter className="w-3.5 h-3.5" /></ToolbarButton>
+          <ToolbarButton title="표 오른쪽 배치" active={editor.getAttributes('table').align === 'right'} onClick={() => editor.chain().focus().updateAttributes('table', { align: 'right' }).run()}><AlignRight className="w-3.5 h-3.5" /></ToolbarButton>
+        </>
+      )}
 
       <Separator orientation="vertical" className="h-5 mx-0.5" />
 
