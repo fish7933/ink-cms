@@ -128,6 +128,9 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
         .rich-text-readonly h2 { font-size: 1.25em; font-weight: 700; margin: 0.4em 0; }
         .rich-text-readonly h3, .rich-text-readonly h4, .rich-text-readonly h5, .rich-text-readonly h6 { font-size: 1.1em; font-weight: 700; margin: 0.4em 0; }
         .rich-text-readonly table { width: 100% !important; }
+        .rich-text-readonly blockquote { border-left: 3px solid #d1d5db; padding-left: 0.8em; color: #4b5563; margin: 0 0 8px; }
+        .rich-text-readonly img { max-width: 100%; page-break-inside: avoid; break-inside: avoid; }
+        .rich-text-readonly hr { border: none; border-top: 1px solid #d1d5db; margin: 0.8em 0; }
         /* 본문 전체를 표 하나로 감싸고, 표 바깥 껍데기(.issued-page-table)는 셀 경계선 없이
            레이아웃 용도로만 쓴다 — 아래 tfoot(.issued-footer) 때문이다: 표가 인쇄 중 여러 페이지에
            걸쳐 나뉘면 브라우저(Chrome/Firefox 모두)가 tfoot 행을 나뉘는 매 페이지 하단에 자동으로

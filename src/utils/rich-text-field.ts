@@ -9,25 +9,25 @@ const ALLOWED_TAGS = [
   'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'ul', 'ol', 'li',
   'b', 'strong', 'i', 'em', 'u', 's', 'strike',
-  'a',
+  'a', 'img', 'hr', 'blockquote',
   'table', 'colgroup', 'col', 'thead', 'tbody', 'tr', 'td', 'th',
   'font',
 ];
-const ALLOWED_ATTR = ['style', 'href', 'target', 'rel', 'colspan', 'rowspan', 'align', 'valign'];
+const ALLOWED_ATTR = ['style', 'href', 'target', 'rel', 'colspan', 'rowspan', 'align', 'valign', 'src', 'alt', 'width', 'height'];
 
 // 워드의 "변경 내용 추적" 표시나 단(column)/인용 블록 서식은 문단/글자에 border(주로
 // border-left)를 넣어 화면에 세로 줄(막대)이 그대로 붙어 나온다 — 표(table/tr/td/th) 밖에서는
 // 이런 레이아웃성 속성을 허용하지 않고, 실제로 필요한 글자 서식(굵게/기울임/밑줄/정렬/색상)만
 // 남긴다. 표 안에서는 테두리/폭/배경이 표 모양 자체에 필요하므로 그대로 둔다.
 const TABLE_TAGS = new Set(['table', 'tr', 'td', 'th', 'colgroup', 'col', 'thead', 'tbody']);
-const SAFE_STYLE_PROPS = ['font-weight', 'font-style', 'text-decoration', 'text-align', 'color'];
+const SAFE_STYLE_PROPS = ['font-weight', 'font-style', 'text-decoration', 'text-align', 'color', 'font-size', 'background-color'];
 const SAFE_STYLE_PROPS_TABLE = [
   ...SAFE_STYLE_PROPS,
   // 워드 표는 보통 상/하/좌/우 테두리를 각각 따로(border-top 등) 내보낸다 — 'border'
   // 축약형만 허용하면 이 개별 지정들이 전부 걸러져 표 줄이 사라져 보인다.
   'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
   'border-color', 'border-width', 'border-style', 'border-collapse', 'border-spacing',
-  'vertical-align', 'width', 'background-color',
+  'vertical-align', 'width',
 ];
 
 // 엑셀 등은 서식을 셀의 인라인 style이 아니라 <head><style>의 태그/클래스 규칙(.xl65 등)으로

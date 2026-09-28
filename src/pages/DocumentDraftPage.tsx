@@ -23,6 +23,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useTabContext } from '@/contexts/TabContext';
 import DynamicDocumentForm from '@/components/document/DynamicDocumentForm';
 import RichTextField from '@/components/document/RichTextField';
+import { renderRichTextReadOnlyHtml } from '@/utils/rich-text-field';
 import { msg } from '@/lib/messages';
 import { Checkbox } from '@/components/ui/checkbox';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
@@ -1258,6 +1259,20 @@ export default function DocumentDraftPage() {
           </DialogHeader>
           {viewDoc && (
             <div className="space-y-4 text-sm">
+              {/* 이 열람 다이얼로그는 작성 폼(RichTextField)이 마운트돼 있지 않을 때도 열릴 수
+                  있어(예: 목록에서 바로 열람), 그 컴포넌트의 스타일 태그에 기대지 않고 이 다이얼로그
+                  안에서 필요한 최소 서식만 자체적으로 정의한다. */}
+              <style>{`
+                .rich-text-readonly p { margin: 0 0 8px; }
+                .rich-text-readonly ul, .rich-text-readonly ol { margin: 0 0 8px; padding-left: 1.5em; }
+                .rich-text-readonly h1 { font-size: 1.4em; font-weight: 700; margin: 0.4em 0; }
+                .rich-text-readonly h2 { font-size: 1.25em; font-weight: 700; margin: 0.4em 0; }
+                .rich-text-readonly h3 { font-size: 1.1em; font-weight: 700; margin: 0.4em 0; }
+                .rich-text-readonly table { width: 100% !important; border-collapse: collapse; }
+                .rich-text-readonly blockquote { border-left: 3px solid #d1d5db; padding-left: 0.8em; color: #4b5563; margin: 0 0 8px; }
+                .rich-text-readonly img { max-width: 100%; }
+                .rich-text-readonly hr { border: none; border-top: 1px solid #d1d5db; margin: 0.8em 0; }
+              `}</style>
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div className="p-2.5 bg-gray-50 rounded-md">
                   <p className="text-gray-500">문서유형</p>
@@ -1281,7 +1296,7 @@ export default function DocumentDraftPage() {
                   disabled
                 />
               ) : (
-                viewDoc.content && <div className="text-sm leading-7 whitespace-pre-wrap p-2.5 bg-gray-50 rounded-md">{viewDoc.content}</div>
+                viewDoc.content && <div className="rich-text-readonly text-sm leading-7 p-2.5 bg-gray-50 rounded-md" dangerouslySetInnerHTML={{ __html: renderRichTextReadOnlyHtml(viewDoc.content) }} />
               )}
 
               {viewDoc.attachments.length > 0 && (
