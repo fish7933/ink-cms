@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import {
-  Bold, Italic, Underline, Strikethrough, List, ListOrdered, Quote, Minus,
+  Bold, Italic, Underline, Strikethrough, List, ListOrdered, Quote, Minus, X,
   AlignLeft, AlignCenter, AlignRight, AlignJustify, Link2, Unlink, Image as ImageIcon,
   Table as TableIcon, Rows3, Columns3, Trash2, Undo2, Redo2, RemoveFormatting, Palette, Highlighter,
 } from 'lucide-react';
@@ -147,6 +147,28 @@ export default function RichTextToolbar({ editor }: { editor: Editor | null }) {
       <ToolbarButton title="링크 해제" disabled={!editor.isActive('link')} onClick={removeLink}><Unlink className="w-3.5 h-3.5" /></ToolbarButton>
       <ToolbarButton title="이미지 삽입" disabled={uploadingImage} onClick={handleImagePick}><ImageIcon className="w-3.5 h-3.5" /></ToolbarButton>
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+
+      {editor.isActive('image') && (
+        <>
+          <Select
+            value={(editor.getAttributes('image').width as string | undefined) || '__original'}
+            onValueChange={v => editor.chain().focus().updateAttributes('image', { width: v === '__original' ? null : v }).run()}
+          >
+            <SelectTrigger className="h-7 w-20 text-xs"><SelectValue placeholder="크기" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__original">원본 크기</SelectItem>
+              <SelectItem value="25%">25%</SelectItem>
+              <SelectItem value="50%">50%</SelectItem>
+              <SelectItem value="75%">75%</SelectItem>
+              <SelectItem value="100%">100%</SelectItem>
+            </SelectContent>
+          </Select>
+          <ToolbarButton title="이미지 왼쪽 배치(본문이 오른쪽으로 흐름)" active={editor.getAttributes('image').align === 'left'} onClick={() => editor.chain().focus().updateAttributes('image', { align: 'left' }).run()}><AlignLeft className="w-3.5 h-3.5" /></ToolbarButton>
+          <ToolbarButton title="이미지 가운데 배치" active={editor.getAttributes('image').align === 'center'} onClick={() => editor.chain().focus().updateAttributes('image', { align: 'center' }).run()}><AlignCenter className="w-3.5 h-3.5" /></ToolbarButton>
+          <ToolbarButton title="이미지 오른쪽 배치(본문이 왼쪽으로 흐름)" active={editor.getAttributes('image').align === 'right'} onClick={() => editor.chain().focus().updateAttributes('image', { align: 'right' }).run()}><AlignRight className="w-3.5 h-3.5" /></ToolbarButton>
+          <ToolbarButton title="배치 해제" disabled={!editor.getAttributes('image').align} onClick={() => editor.chain().focus().updateAttributes('image', { align: null }).run()}><X className="w-3.5 h-3.5" /></ToolbarButton>
+        </>
+      )}
 
       <Separator orientation="vertical" className="h-5 mx-0.5" />
 

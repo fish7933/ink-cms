@@ -3,11 +3,10 @@ import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { TextStyleKit } from '@tiptap/extension-text-style';
-import { Image as ImageExtension } from '@tiptap/extension-image';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { Placeholder } from '@tiptap/extension-placeholder';
-import { TableCellWithStyle, TableHeaderWithStyle } from './rich-text-extensions';
+import { TableCellWithStyle, TableHeaderWithStyle, ImageWithLayout } from './rich-text-extensions';
 import RichTextToolbar from './RichTextToolbar';
 import { sanitizeRichTextHtml, renderRichTextReadOnlyHtml } from '@/utils/rich-text-field';
 
@@ -47,7 +46,7 @@ function RichTextEditor({ value, onChange, placeholder, minRows }: Omit<Props, '
       }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyleKit,
-      ImageExtension,
+      ImageWithLayout,
       Table.configure({ resizable: false }),
       TableRow,
       TableCellWithStyle,

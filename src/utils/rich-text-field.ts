@@ -29,6 +29,10 @@ const SAFE_STYLE_PROPS_TABLE = [
   'border-color', 'border-width', 'border-style', 'border-collapse', 'border-spacing',
   'vertical-align', 'width',
 ];
+// 이미지 크기/배치(도구모음의 폭 조절·정렬) 저장용 — float/margin/display는 문단 등 다른
+// 요소에는 허용하지 않는다(워드가 이 속성들을 변경내용추적/단 레이아웃에 남용해 "이상한 세로
+// 줄"을 만들던 문제의 원인이었으므로, 이미지에만 한정해 연다).
+const SAFE_STYLE_PROPS_IMG = [...SAFE_STYLE_PROPS, 'width', 'height', 'float', 'display', 'margin', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom'];
 
 // 엑셀 등은 서식을 셀의 인라인 style이 아니라 <head><style>의 태그/클래스 규칙(.xl65 등)으로
 // 내보내는 경우가 많다 — DOMPurify는 <style> 태그와 class 속성을 모두 제거하므로(허용 목록에
@@ -70,7 +74,8 @@ function inlineClassStyles(html: string): string {
 
 function sanitizeInlineStyles(doc: Document): void {
   doc.querySelectorAll<HTMLElement>('[style]').forEach(el => {
-    const allowed = TABLE_TAGS.has(el.tagName.toLowerCase()) ? SAFE_STYLE_PROPS_TABLE : SAFE_STYLE_PROPS;
+    const tag = el.tagName.toLowerCase();
+    const allowed = TABLE_TAGS.has(tag) ? SAFE_STYLE_PROPS_TABLE : tag === 'img' ? SAFE_STYLE_PROPS_IMG : SAFE_STYLE_PROPS;
     const kept = (el.getAttribute('style') || '')
       .split(';')
       .map(decl => decl.trim())
