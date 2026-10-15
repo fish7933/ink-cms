@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,9 +17,15 @@ interface SidebarProps {
   badgeCounts?: Record<string, number>;
 }
 
+// 우리회사 내부 직원만 쓰는 영역 — 전 세계 사용자를 위한 영문 전환에서 제외하고 한글 그대로
+// 유지한다(사용자 명시 요청). 같은 라벨 문자열("설정" 등)이 번역 대상 카테고리에도 있을 수
+// 있어, 카테고리 id로 명시적으로 걸러야 한다(라벨 텍스트만으로는 번역 사전에서 구분이 안 됨).
+const KOREAN_ONLY_CATEGORY_IDS = new Set(['groupware', 'accounting']);
+
 export default function Sidebar({ menuStructure, currentRole, permissions = [], selectedCategoryId, badgeCounts = {} }: SidebarProps) {
   const { openTab } = useTabContext();
   const location = useLocation();
+  const { t } = useTranslation();
 
   // 접속(canView) 권한이 명시적으로 꺼진 메뉴만 숨긴다. 권한 관리 화면과 매핑되지 않은 메뉴이거나,
   // 아직 아무도 손대지 않아 레코드가 없는 리소스는 항상 노출(기본 허용)한다 — usePermissions와 동일한 기본값.
@@ -67,6 +74,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
     );
 
   const visibleItems = currentCategory ? filterItemsByRole(currentCategory.items) : [];
+  const isKoreanOnly = !!currentCategory && KOREAN_ONLY_CATEGORY_IDS.has(currentCategory.id);
 
   return (
     <div className="w-56 bg-white border-r border-gray-200 h-full flex flex-col shrink-0">
@@ -75,13 +83,13 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
           {currentCategory && (
             <div className="px-2.5 pt-2.5 pb-2 mb-1">
               <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                {currentCategory.label}
+                {isKoreanOnly ? currentCategory.label : t(currentCategory.label)}
               </h3>
             </div>
           )}
           {visibleItems.length === 0 ? (
             <p className="text-xs text-gray-400 px-2.5 py-2">
-              {currentCategory ? '접근 권한이 없습니다' : '메뉴를 선택하세요'}
+              {currentCategory ? t('접근 권한이 없습니다') : t('메뉴를 선택하세요')}
             </p>
           ) : (
             visibleItems
@@ -90,6 +98,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
                 const ItemIcon = getIconComponent(item.icon);
                 const isActive = isItemActive(item);
                 const badgeCount = badgeCounts[item.id] || 0;
+                const itemLabel = isKoreanOnly ? item.label : t(item.label);
                 return (
                   <Button
                     key={item.id}
@@ -100,10 +109,10 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
                         ? 'bg-blue-50 text-blue-700 font-semibold border-l-2 border-blue-600 pl-2 hover:bg-blue-100'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     )}
-                    onClick={() => item.path && openTab(item.path, item.label)}
+                    onClick={() => item.path && openTab(item.path, itemLabel)}
                   >
                     {ItemIcon && <ItemIcon className={cn('h-3.5 w-3.5 mr-2 shrink-0', isActive ? 'text-blue-600' : 'text-gray-400')} />}
-                    <span className="truncate flex-1 min-w-0 text-left">{item.label}</span>
+                    <span className="truncate flex-1 min-w-0 text-left">{itemLabel}</span>
                     {badgeCount > 0 && (
                       <span className="ml-1.5 shrink-0 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] leading-[1.1rem] text-center font-semibold">
                         {badgeCount > 99 ? '99+' : badgeCount}

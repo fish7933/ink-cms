@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { useRef, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTabContext } from '@/contexts/TabContext';
 import { useUISettings } from '@/contexts/UISettingsContext';
 
@@ -14,6 +15,7 @@ interface TabBarProps {
 export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
   const { tabs, activeTabId, activateTab, closeTab, closeLastTab, closeAllTabs } = useTabContext();
   const { uiSettings } = useUISettings();
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
                 isActive ? 'hover:bg-gray-100 text-gray-500' : 'hover:bg-gray-200 text-gray-400'
               }`}
               onClick={e => { e.stopPropagation(); closeTab(tab.id); }}
-              title="이 탭 닫기"
+              title={t('이 탭 닫기')}
             >
               <X className="w-3 h-3" />
             </button>
@@ -97,18 +99,18 @@ export default function TabBar({ pathBadgeCounts = {} }: TabBarProps) {
         <button
           className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-gray-800 hover:bg-white transition-colors"
           onClick={closeLastTab}
-          title="마지막 탭 닫기"
+          title={t('마지막 탭 닫기')}
         >
           <X className="w-3 h-3" />
-          <span>닫기</span>
+          <span>{t('닫기')}</span>
         </button>
         <button
           className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
           onClick={closeAllTabs}
-          title="모든 탭 닫기"
+          title={t('모든 탭 닫기')}
         >
           <X className="w-3 h-3" />
-          <span>전체</span>
+          <span>{t('전체')}</span>
         </button>
       </div>
     </div>

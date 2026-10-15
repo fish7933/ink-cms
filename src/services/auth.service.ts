@@ -20,6 +20,7 @@ export interface User {
   company_id?: string
   is_active?: boolean
   resignation_date?: string | null
+  preferred_language?: 'ko' | 'en'
   user_groups?: { id: string; name: string; permissions: string[] }
   companies?: { id: string; name: string; company_type: string }
 }

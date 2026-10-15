@@ -1,5 +1,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
 import TabBar from '@/components/TabBar';
@@ -21,6 +23,7 @@ import { useApprovalToastNotifications } from '@/hooks/useApprovalToastNotificat
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,9 @@ export default function Layout() {
         if (!isMounted) return;
         if (!user) { navigate('/login', { replace: true }); return; }
         setCurrentUser(user);
+        const lang = user.preferred_language === 'en' ? 'en' : 'ko';
+        i18n.changeLanguage(lang);
+        localStorage.setItem('lang', lang);
         const [perms, effectiveMenu] = await Promise.all([
           getPermissionsByUserId(user.id),
           getEffectiveMenuStructure(),
@@ -78,7 +84,7 @@ export default function Layout() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">인증 확인 중...</p>
+          <p className="text-gray-600">{t('인증 확인 중...')}</p>
         </div>
       </div>
     );
@@ -121,7 +127,7 @@ export default function Layout() {
             ))}
             {tabs.length === 0 && (
               <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-                메뉴에서 페이지를 선택하세요
+                {t('메뉴에서 페이지를 선택하세요')}
               </div>
             )}
           </div>

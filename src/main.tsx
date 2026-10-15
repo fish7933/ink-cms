@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import './i18n';
 
 // 결재 알림(Web Push)용 서비스워커를 미리 등록해둔다 — 알림을 켜기 전에도 등록만 해두면
 // 이후 구독 시 별도 대기 없이 바로 쓸 수 있고, 이미 이전에 구독해둔 사용자는 앱을 열지 않아도

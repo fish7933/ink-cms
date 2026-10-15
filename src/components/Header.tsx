@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser, logout as logoutUser } from '@/lib/store';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import { getCurrentUser, logout as logoutUser, setUserLanguage } from '@/lib/store';
 import type { User } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Ship, LogOut, ChevronDown, User as UserIcon } from 'lucide-react';
+import { Ship, LogOut, ChevronDown, User as UserIcon, Languages } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import NotificationCenter from '@/components/NotificationCenter';
 import {
@@ -25,12 +27,32 @@ interface HeaderProps {
   menuStructure?: MenuCategory[];
 }
 
+// 우리회사 내부 직원만 쓰는 영역 — Sidebar.tsx와 동일 기준(카테고리 id로 명시 제외).
+const KOREAN_ONLY_CATEGORY_IDS = new Set(['groupware', 'accounting']);
+
 export default function Header({ selectedCategoryId, onCategorySelect, menuStructure = defaultMenuStructure }: HeaderProps) {
   const navigate = useNavigate();
   const { openTab } = useTabContext();
+  const { t } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [logoUrl, setLogoUrl] = useState('');
+  const [lang, setLang] = useState(i18n.language);
+
+  useEffect(() => {
+    const onLangChange = (l: string) => setLang(l);
+    i18n.on('languageChanged', onLangChange);
+    return () => i18n.off('languageChanged', onLangChange);
+  }, []);
+
+  const toggleLanguage = async () => {
+    const next = lang === 'en' ? 'ko' : 'en';
+    i18n.changeLanguage(next);
+    localStorage.setItem('lang', next);
+    if (currentUser) {
+      try { await setUserLanguage(currentUser.id, next); } catch (e) { console.error(e); }
+    }
+  };
 
   useEffect(() => {
     const loadUser = async () => {
@@ -53,7 +75,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
     return () => window.removeEventListener('company-info-changed', loadLogo);
   }, []);
 
-  const goHome = () => openTab('/dashboard', '대시보드');
+  const goHome = () => openTab('/dashboard', t('대시보드'));
 
   const handleLogout = async () => {
     try {
@@ -100,7 +122,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
           ) : (
             <Ship className="h-5 w-5 text-blue-600" />
           )}
-          <span className="text-lg font-semibold text-gray-900 tracking-tight">선원 관리 시스템</span>
+          <span className="text-lg font-semibold text-gray-900 tracking-tight">{t('선원 관리 시스템')}</span>
         </div>
       </header>
     );
@@ -123,7 +145,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
             <Ship className="h-4 w-4 text-white" />
           </div>
         )}
-        <span className="text-[15px] font-semibold text-gray-900 tracking-tight whitespace-nowrap">선원 관리 시스템</span>
+        <span className="text-[15px] font-semibold text-gray-900 tracking-tight whitespace-nowrap">{t('선원 관리 시스템')}</span>
       </button>
 
       {/* 카테고리 버튼들 - 클릭 시 좌측 사이드바 즉시 변경 */}
@@ -145,7 +167,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
               onClick={() => onCategorySelect?.(category.id)}
             >
               {CategoryIcon && <CategoryIcon className="h-3.5 w-3.5" />}
-              {category.label}
+              {KOREAN_ONLY_CATEGORY_IDS.has(category.id) ? category.label : t(category.label)}
             </Button>
           );
         })}
@@ -153,6 +175,16 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
 
       {/* 우측 영역 */}
       <div className="flex items-center gap-2 shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2.5 gap-1.5 rounded-full text-gray-600 hover:bg-gray-100"
+          onClick={toggleLanguage}
+          title={lang === 'en' ? 'Switch to Korean' : '영문으로 전환'}
+        >
+          <Languages className="h-3.5 w-3.5" />
+          <span className="text-xs font-medium">{lang === 'en' ? 'EN' : 'KO'}</span>
+        </Button>
         <NotificationCenter />
 
         <DropdownMenu>
@@ -162,19 +194,19 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
                 {initial}
               </div>
               <span className="text-sm font-medium">{currentUser.name}</span>
-              <span className="text-xs text-gray-400">({roleLabels[currentUser.role] ?? currentUser.role})</span>
+              <span className="text-xs text-gray-400">({t(roleLabels[currentUser.role] ?? currentUser.role)})</span>
               <ChevronDown className="h-3 w-3 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => openTab('/profile', '내 프로필')} className="cursor-pointer">
+            <DropdownMenuItem onClick={() => openTab('/profile', t('내 프로필'))} className="cursor-pointer">
               <UserIcon className="h-4 w-4 mr-2" />
-              내 프로필
+              {t('내 프로필')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
               <LogOut className="h-4 w-4 mr-2" />
-              로그아웃
+              {t('로그아웃')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

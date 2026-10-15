@@ -28,6 +28,12 @@ export const getCurrentUser = async (): Promise<User | null> => {
   return await authGetCurrentUser();
 };
 
+// 화면 언어 — 기기(localStorage)가 아니라 계정에 저장해, 재로그인/다른 기기에서도 이어지게 한다.
+export const setUserLanguage = async (userId: string, lang: 'ko' | 'en'): Promise<void> => {
+  const { error } = await supabase.from('users').update({ preferred_language: lang }).eq('id', userId);
+  if (error) throw error;
+};
+
 export const getUsers = async (): Promise<User[]> => {
   const { data, error } = await supabase
     .from('users')

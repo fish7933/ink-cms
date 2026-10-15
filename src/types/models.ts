@@ -16,6 +16,7 @@ export interface User {
   notify_approval_request?: boolean; // 내 차례가 됐을 때 결재 요청 알림을 받을지 (기본 true)
   notify_approval_complete?: boolean; // 내가 상신한 문서가 최종 승인됐을 때 알림을 받을지 (기본 true)
   notify_approval_reference?: boolean; // 수신/참조로 지정된 문서가 최종 승인됐을 때 알림을 받을지 (기본 true)
+  preferred_language?: 'ko' | 'en'; // 화면 언어 — 기기가 아니라 계정에 귀속(재로그인/다른 기기에도 유지)
   created_at: string;
 }
 
