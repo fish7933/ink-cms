@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/SalaryRecordDialog/en.json';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -24,6 +27,8 @@ import { crewService } from '@/services/crew.service';
 import { supabase } from '@/lib/supabase';
 import type { CrewSalaryRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
+
+i18n.addResourceBundle('en', 'SalaryRecordDialog', en, true, true);
 
 interface SalaryRecordDialogProps {
   open: boolean;
@@ -56,6 +61,7 @@ export default function SalaryRecordDialog({
   onSuccess,
 }: SalaryRecordDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('SalaryRecordDialog');
   const [loading, setLoading] = useState(false);
 
   // 같은 배에 승선 중인 다른 선원에게도 동일한 급여 내역을 한 번에 적용 (신규 등록 시에만)
@@ -191,20 +197,20 @@ export default function SalaryRecordDialog({
 
       if (record) {
         await updateCrewSalaryRecord(record.id, data);
-        toast({ title: '수정 완료', description: '급여 기록이 수정되었습니다.' });
+        toast({ title: t('수정 완료'), description: t('급여 기록이 수정되었습니다.') });
       } else if (selectedSameLevelIds.size > 0) {
         const records = [data, ...[...selectedSameLevelIds].map(id => ({ ...data, crew_member_id: id }))];
         await addCrewSalaryRecordsBulk(records);
-        toast({ title: '추가 완료', description: `${records.length}명에게 동일한 급여 기록이 추가되었습니다.` });
+        toast({ title: t('추가 완료'), description: t('{{count}}명에게 동일한 급여 기록이 추가되었습니다.', { count: records.length }) });
       } else {
         await addCrewSalaryRecord(data);
-        toast({ title: '추가 완료', description: '급여 기록이 추가되었습니다.' });
+        toast({ title: t('추가 완료'), description: t('급여 기록이 추가되었습니다.') });
       }
       onSuccess();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast({ title: '저장 실패', description: '급여 기록 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('저장 실패'), description: t('급여 기록 저장 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -214,57 +220,57 @@ export default function SalaryRecordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{record ? '급여 기록 수정' : '급여 기록 추가'}</DialogTitle>
-          <DialogDescription className="text-xs">선원의 급여 내역을 {record ? '수정' : '등록'}합니다</DialogDescription>
+          <DialogTitle className="text-base">{record ? t('급여 기록 수정') : t('급여 기록 추가')}</DialogTitle>
+          <DialogDescription className="text-xs">{t('선원의 급여 내역을 {{action}}합니다', { action: record ? t('수정') : t('등록') })}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">급여 기간 시작 *</Label>
+                <Label className="text-xs">{t('급여 기간 시작 *')}</Label>
                 <Input type="date" value={formData.payment_period_start} onChange={e => setFormData({ ...formData, payment_period_start: e.target.value })} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">급여 기간 종료 *</Label>
+                <Label className="text-xs">{t('급여 기간 종료 *')}</Label>
                 <Input type="date" value={formData.payment_period_end} onChange={e => setFormData({ ...formData, payment_period_end: e.target.value })} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">지급일 *</Label>
+                <Label className="text-xs">{t('지급일 *')}</Label>
                 <Input type="date" value={formData.payment_date} onChange={e => setFormData({ ...formData, payment_date: e.target.value })} required className="h-9 text-sm" />
               </div>
             </div>
 
             <div className="border-t pt-3">
-              <p className="text-xs font-semibold text-gray-600 mb-2">금액 상세</p>
+              <p className="text-xs font-semibold text-gray-600 mb-2">{t('금액 상세')}</p>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">기본급 *</Label>
+                  <Label className="text-xs">{t('기본급 *')}</Label>
                   <Input type="number" step="0.01" value={formData.basic_salary} onChange={e => setFormData({ ...formData, basic_salary: e.target.value })} required className="h-9 text-sm" placeholder="0.00" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">초과근무 수당</Label>
+                  <Label className="text-xs">{t('초과근무 수당')}</Label>
                   <Input type="number" step="0.01" value={formData.overtime_pay} onChange={e => setFormData({ ...formData, overtime_pay: e.target.value })} className="h-9 text-sm" placeholder="0.00" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">기타 수당</Label>
+                  <Label className="text-xs">{t('기타 수당')}</Label>
                   <Input type="number" step="0.01" value={formData.allowances} onChange={e => setFormData({ ...formData, allowances: e.target.value })} className="h-9 text-sm" placeholder="0.00" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">상여금</Label>
+                  <Label className="text-xs">{t('상여금')}</Label>
                   <Input type="number" step="0.01" value={formData.bonuses} onChange={e => setFormData({ ...formData, bonuses: e.target.value })} className="h-9 text-sm" placeholder="0.00" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">공제액</Label>
+                  <Label className="text-xs">{t('공제액')}</Label>
                   <Input type="number" step="0.01" value={formData.deductions} onChange={e => setFormData({ ...formData, deductions: e.target.value })} className="h-9 text-sm" placeholder="0.00" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">세금</Label>
+                  <Label className="text-xs">{t('세금')}</Label>
                   <Input type="number" step="0.01" value={formData.tax} onChange={e => setFormData({ ...formData, tax: e.target.value })} className="h-9 text-sm" placeholder="0.00" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 mt-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">통화</Label>
+                  <Label className="text-xs">{t('통화')}</Label>
                   <Select value={formData.currency} onValueChange={v => setFormData({ ...formData, currency: v })}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c} className="text-sm">{c}</SelectItem>)}</SelectContent>
@@ -272,39 +278,39 @@ export default function SalaryRecordDialog({
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">순수령액 *</Label>
-                    <button type="button" onClick={handleCalcNet} className="text-xs text-blue-600 hover:underline">자동 계산</button>
+                    <Label className="text-xs">{t('순수령액 *')}</Label>
+                    <button type="button" onClick={handleCalcNet} className="text-xs text-blue-600 hover:underline">{t('자동 계산')}</button>
                   </div>
                   <Input type="number" step="0.01" value={formData.net_salary} onChange={e => setFormData({ ...formData, net_salary: e.target.value })} required className="h-9 text-sm font-semibold" placeholder="0.00" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">지급 상태</Label>
+                  <Label className="text-xs">{t('지급 상태')}</Label>
                   <Select value={formData.payment_status} onValueChange={v => setFormData({ ...formData, payment_status: v })}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>{PAYMENT_STATUSES.map(s => <SelectItem key={s.value} value={s.value} className="text-sm">{s.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>{PAYMENT_STATUSES.map(s => <SelectItem key={s.value} value={s.value} className="text-sm">{t(s.label)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
             </div>
 
             <div className="border-t pt-3">
-              <p className="text-xs font-semibold text-gray-600 mb-2">지급 방법</p>
+              <p className="text-xs font-semibold text-gray-600 mb-2">{t('지급 방법')}</p>
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">지급 방법</Label>
+                  <Label className="text-xs">{t('지급 방법')}</Label>
                   <Select value={formData.payment_method} onValueChange={v => setFormData({ ...formData, payment_method: v })}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
-                    <SelectContent>{PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value} className="text-sm">{m.label}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선택')} /></SelectTrigger>
+                    <SelectContent>{PAYMENT_METHODS.map(m => <SelectItem key={m.value} value={m.value} className="text-sm">{t(m.label)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 {formData.payment_method === 'bank_transfer' && (
                   <>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">은행명</Label>
+                      <Label className="text-xs">{t('은행명')}</Label>
                       <Input value={formData.bank_name} onChange={e => setFormData({ ...formData, bank_name: e.target.value })} className="h-9 text-sm" />
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">계좌번호</Label>
+                      <Label className="text-xs">{t('계좌번호')}</Label>
                       <Input value={formData.account_number} onChange={e => setFormData({ ...formData, account_number: e.target.value })} className="h-9 text-sm" />
                     </div>
                   </>
@@ -313,23 +319,23 @@ export default function SalaryRecordDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">비고</Label>
-              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="추가 정보" rows={2} className="text-sm resize-none" />
+              <Label className="text-xs">{t('비고')}</Label>
+              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder={t('추가 정보')} rows={2} className="text-sm resize-none" />
             </div>
 
             {!record && sameShipCrew.length > 0 && (
               <div className="border-t pt-3">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-gray-600">동일 급여 적용 대상 (선택)</p>
+                  <p className="text-xs font-semibold text-gray-600">{t('동일 급여 적용 대상 (선택)')}</p>
                   <button
                     type="button"
                     className="text-xs text-blue-600 hover:underline"
                     onClick={() => setSelectedSameLevelIds(allSameLevelSelected ? new Set() : new Set(sameShipCrew.map(c => c.id)))}
                   >
-                    {allSameLevelSelected ? '전체 해제' : '전체 선택'}
+                    {allSameLevelSelected ? t('전체 해제') : t('전체 선택')}
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 mb-2">같은 배에 승선 중인 선원 중 급여가 같은 선원을 선택하면, 위 급여 내역이 선택한 선원 전원에게 동일하게 한 번에 등록됩니다.</p>
+                <p className="text-xs text-gray-400 mb-2">{t('같은 배에 승선 중인 선원 중 급여가 같은 선원을 선택하면, 위 급여 내역이 선택한 선원 전원에게 동일하게 한 번에 등록됩니다.')}</p>
                 <div className="border rounded-md max-h-40 overflow-y-auto divide-y">
                   {sameShipCrew.map(c => (
                     <label key={c.id} className="flex items-center gap-2 px-2.5 py-1.5 text-sm cursor-pointer hover:bg-gray-50">
@@ -343,8 +349,8 @@ export default function SalaryRecordDialog({
             )}
           </div>
           <DialogFooter>
-            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">취소</Button>
-            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (record ? '수정' : '추가')}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">{t('취소')}</Button>
+            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? t('저장 중...') : (record ? t('수정') : t('추가'))}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -21,6 +21,10 @@ import type { RankGrade, DispatchType } from '@/types/dispatch';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import { useToast } from '@/hooks/use-toast';
 import { useTabContext } from '@/contexts/TabContext';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/DispatchOrderPage/en.json';
+i18n.addResourceBundle('en', 'DispatchOrderPage', en, true, true);
 
 interface CrewForDispatch extends CrewMember {
   ship_name?: string;
@@ -57,6 +61,7 @@ export default function DispatchOrderPage() {
   const { toast } = useToast();
   const { activeTabId, closeTab } = useTabContext();
   const [searchParams] = useSearchParams();
+  const { t } = useTranslation('DispatchOrderPage');
 
   const [crews, setCrews] = useState<CrewForDispatch[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
@@ -184,7 +189,7 @@ export default function DispatchOrderPage() {
   const handleSaveDraft = async () => {
     const validRows = getValidRows();
     if (validRows.length === 0) {
-      toast({ title: '변경사항이 없습니다', description: '직급 또는 Grade를 변경해 주세요', variant: 'destructive' });
+      toast({ title: t('변경사항이 없습니다'), description: t('직급 또는 Grade를 변경해 주세요'), variant: 'destructive' });
       return;
     }
     setSubmitting(true);
@@ -202,18 +207,18 @@ export default function DispatchOrderPage() {
           expiry_date: r.expiryDate || null,
           notes: r.notes || null,
         });
-        if (!order) throw new Error(`${r.crewName} 발령 생성 실패`);
+        if (!order) throw new Error(t('{{name}} 발령 생성 실패', { name: r.crewName }));
       }
-      toast({ title: '임시저장 완료' });
+      toast({ title: t('임시저장 완료') });
       if (activeTabId) closeTab(activeTabId);
     } catch (e) {
-      toast({ title: '오류', description: String(e), variant: 'destructive' });
+      toast({ title: t('오류'), description: String(e), variant: 'destructive' });
     } finally { setSubmitting(false); }
   };
 
   const openSubmitDialog = () => {
     if (getValidRows().length === 0) {
-      toast({ title: '변경사항이 없습니다', description: '직급 또는 Grade를 변경해 주세요', variant: 'destructive' });
+      toast({ title: t('변경사항이 없습니다'), description: t('직급 또는 Grade를 변경해 주세요'), variant: 'destructive' });
       return;
     }
     setSubmitLineId(defaultLineId || '');
@@ -244,17 +249,17 @@ export default function DispatchOrderPage() {
           expiry_date: r.expiryDate || null,
           notes: r.notes || null,
         });
-        if (!order) throw new Error(`${r.crewName} 발령 생성 실패`);
+        if (!order) throw new Error(t('{{name}} 발령 생성 실패', { name: r.crewName }));
 
         const result = await dispatchService.submitDispatchOrderForApproval(order.id, submitLineId, submitComment || undefined);
-        if (!result.ok) throw new Error(result.message || `${r.crewName} 결재 상신 실패`);
+        if (!result.ok) throw new Error(result.message || t('{{name}} 결재 상신 실패', { name: r.crewName }));
       }
-      toast({ title: '결재 상신 완료', description: '승인이 완료되면 계약/승선경력에 즉시 반영됩니다.' });
+      toast({ title: t('결재 상신 완료'), description: t('승인이 완료되면 계약/승선경력에 즉시 반영됩니다.') });
       setSubmitDialogOpen(false);
       window.dispatchEvent(new CustomEvent('dispatch-order-data-changed'));
       if (activeTabId) closeTab(activeTabId);
     } catch (e) {
-      toast({ title: '오류', description: String(e), variant: 'destructive' });
+      toast({ title: t('오류'), description: String(e), variant: 'destructive' });
     } finally { setSubmitting(false); }
   };
 
@@ -275,35 +280,35 @@ export default function DispatchOrderPage() {
               {dispatchType === 'promotion'
                 ? <ArrowUpCircle className="w-5 h-5 text-emerald-600" />
                 : <ArrowDownCircle className="w-5 h-5 text-red-500" />}
-              {dispatchType === 'promotion' ? '승진 발령' : '강등 발령'}
+              {t(dispatchType === 'promotion' ? '승진 발령' : '강등 발령')}
             </CardTitle>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleSaveDraft} disabled={submitting} className="h-8">
-                임시저장
+                {t('임시저장')}
               </Button>
               <Button size="sm" onClick={openSubmitDialog} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">
-                결재 상신 →
+                {t('결재 상신 →')}
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="flex gap-3 items-center">
-            <Label className="text-xs whitespace-nowrap">발령 유형</Label>
+            <Label className="text-xs whitespace-nowrap">{t('발령 유형')}</Label>
             <div className="flex gap-2">
               <Button
                 size="sm" variant={dispatchType === 'promotion' ? 'default' : 'outline'}
                 className={`h-8 gap-1.5 ${dispatchType === 'promotion' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
                 onClick={() => setDispatchType('promotion')}
               >
-                <TrendingUp className="w-3.5 h-3.5" />승진
+                <TrendingUp className="w-3.5 h-3.5" />{t('승진')}
               </Button>
               <Button
                 size="sm" variant={dispatchType === 'demotion' ? 'default' : 'outline'}
                 className={`h-8 gap-1.5 ${dispatchType === 'demotion' ? 'bg-red-500 hover:bg-red-600' : ''}`}
                 onClick={() => setDispatchType('demotion')}
               >
-                <TrendingDown className="w-3.5 h-3.5" />강등
+                <TrendingDown className="w-3.5 h-3.5" />{t('강등')}
               </Button>
             </div>
           </div>
@@ -324,16 +329,16 @@ export default function DispatchOrderPage() {
                   {/* 선원 선택 (선원 목록에서 넘어온 경우 고정 표시) */}
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">선원 *</Label>
+                      <Label className="text-xs">{t('선원 *')}</Label>
                       {row.locked ? (
                         <div className="h-8 flex items-center px-2 rounded border bg-gray-50 text-sm font-medium">
                           {row.crewName}
                         </div>
                       ) : (
                         <Select value={row.crewId || '_none'} onValueChange={v => handleCrewSelect(idx, v === '_none' ? '' : v)}>
-                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선원 선택 (승선중)" /></SelectTrigger>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('선원 선택 (승선중)')} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="_none">선원 선택</SelectItem>
+                            <SelectItem value="_none">{t('선원 선택')}</SelectItem>
                             {crews.map(c => (
                               <SelectItem key={c.id} value={c.id}>
                                 {c.name} — {getRankCode(c.rank_id || '')}{c.current_grade ? `(${c.current_grade})` : ''}
@@ -347,7 +352,7 @@ export default function DispatchOrderPage() {
 
                     {row.crewId && (
                       <div className="bg-gray-50 rounded p-2 text-xs space-y-1">
-                        <p className="text-gray-500 font-medium">현재</p>
+                        <p className="text-gray-500 font-medium">{t('현재')}</p>
                         <p>{row.previousRankCode || '-'}{row.previousGrade ? `(${row.previousGrade})` : ''}</p>
                         <p className="text-gray-400">
                           {[row.ownerName, row.fleetName, row.shipName].filter(Boolean).join(' / ') || '-'}
@@ -356,12 +361,12 @@ export default function DispatchOrderPage() {
                     )}
 
                     <div className="space-y-1">
-                      <Label className="text-xs">발효일 *</Label>
+                      <Label className="text-xs">{t('발효일 *')}</Label>
                       <Input type="date" value={row.effectiveDate} onChange={e => updateRow(idx, { effectiveDate: e.target.value })} className="h-8 text-xs" />
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-xs">만료일 <span className="text-gray-400 font-normal">(하선예정일 기본값, 수정 가능)</span></Label>
+                      <Label className="text-xs">{t('만료일')} <span className="text-gray-400 font-normal">{t('(하선예정일 기본값, 수정 가능)')}</span></Label>
                       <Input type="date" value={row.expiryDate} onChange={e => updateRow(idx, { expiryDate: e.target.value })} className="h-8 text-xs" />
                     </div>
                   </div>
@@ -369,25 +374,25 @@ export default function DispatchOrderPage() {
                   {/* 변경 후 */}
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-blue-700">변경 후 직급 <span className="text-gray-400 font-normal">(급여템플릿 등록 직급만)</span></Label>
+                      <Label className="text-xs font-medium text-blue-700">{t('변경 후 직급')} <span className="text-gray-400 font-normal">{t('(급여템플릿 등록 직급만)')}</span></Label>
                       <Select value={row.newRankId || '_none'} onValueChange={v => updateRow(idx, { newRankId: v === '_none' ? '' : v })} disabled={rankOptions.length === 0}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('직급 선택')} /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="_none">직급 선택</SelectItem>
+                          <SelectItem value="_none">{t('직급 선택')}</SelectItem>
                           {rankOptions.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {row.shipId && rankOptions.length === 0 && (
-                        <p className="text-xs text-red-500">이 선박에 배정된 급여템플릿이 없어 직급을 선택할 수 없습니다.</p>
+                        <p className="text-xs text-red-500">{t('이 선박에 배정된 급여템플릿이 없어 직급을 선택할 수 없습니다.')}</p>
                       )}
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-blue-700">변경 후 Grade <span className="text-gray-400 font-normal">(급여템플릿 등록 등급만)</span></Label>
+                      <Label className="text-xs font-medium text-blue-700">{t('변경 후 Grade')} <span className="text-gray-400 font-normal">{t('(급여템플릿 등록 등급만)')}</span></Label>
                       <Select value={row.newGrade || '_none'} onValueChange={v => updateRow(idx, { newGrade: v === '_none' ? null : v as RankGrade })} disabled={gradeOptions.length === 0}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Grade 선택" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('Grade 선택')} /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="_none">Grade 없음</SelectItem>
+                          <SelectItem value="_none">{t('Grade 없음')}</SelectItem>
                           {gradeOptions.map(g => (
                             <SelectItem key={g} value={g}>{g}</SelectItem>
                           ))}
@@ -398,7 +403,7 @@ export default function DispatchOrderPage() {
                     {/* 변동 미리보기 */}
                     {changed && row.crewId && (
                       <div className={`rounded p-2 text-xs ${dispatchType === 'promotion' ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-                        <p className="font-medium mb-1">{dispatchType === 'promotion' ? '↑ 승진' : '↓ 강등'}</p>
+                        <p className="font-medium mb-1">{t(dispatchType === 'promotion' ? '↑ 승진' : '↓ 강등')}</p>
                         <p>
                           <span className="text-gray-500">{row.previousRankCode}{row.previousGrade ? `(${row.previousGrade})` : ''}</span>
                           {' → '}
@@ -408,8 +413,8 @@ export default function DispatchOrderPage() {
                     )}
 
                     <div className="space-y-1">
-                      <Label className="text-xs">사유</Label>
-                      <Input value={row.notes} onChange={e => updateRow(idx, { notes: e.target.value })} className="h-8 text-xs" placeholder="발령 사유" />
+                      <Label className="text-xs">{t('사유')}</Label>
+                      <Input value={row.notes} onChange={e => updateRow(idx, { notes: e.target.value })} className="h-8 text-xs" placeholder={t('발령 사유')} />
                     </div>
                   </div>
                 </div>
@@ -420,42 +425,42 @@ export default function DispatchOrderPage() {
       </div>
 
       <Button variant="outline" size="sm" onClick={addRow} className="w-full h-8 text-xs border-dashed">
-        + 발령 대상 추가
+        {t('+ 발령 대상 추가')}
       </Button>
 
       <Dialog open={submitDialogOpen} onOpenChange={o => !submitting && setSubmitDialogOpen(o)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{dispatchType === 'promotion' ? '승진' : '강등'} 발령 결재 상신</DialogTitle>
+            <DialogTitle>{t('{{type}} 발령 결재 상신', { type: t(dispatchType === 'promotion' ? '승진' : '강등') })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">{getValidRows().length}건을 결재 상신합니다.</p>
+            <p className="text-sm text-gray-600">{t('{{count}}건을 결재 상신합니다.', { count: getValidRows().length })}</p>
             <div>
-              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <label className="text-sm font-medium mb-2 block">{t('결재 라인 선택 *')}</label>
               <Select value={submitLineId} onValueChange={setSubmitLineId}>
-                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('결재 라인을 선택하세요')} /></SelectTrigger>
                 <SelectContent>
                   {approvalLines.length === 0
-                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
-                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                    ? <SelectItem value="none" disabled>{t('등록된 결재 라인이 없습니다')}</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({t('{{count}}단계', { count: l.steps.length })})</SelectItem>)}
                 </SelectContent>
               </Select>
               {submitLineId && (
                 <div className="flex items-center space-x-2 mt-2">
                   <Checkbox id="save-line-default-dispatch" checked={saveLineDefault} onCheckedChange={c => setSaveLineDefault(c as boolean)} />
-                  <label htmlFor="save-line-default-dispatch" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                  <label htmlFor="save-line-default-dispatch" className="text-sm text-gray-700 cursor-pointer">{t('앞으로도 해당 결재 라인 이용')}</label>
                 </div>
               )}
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
-              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+              <label className="text-sm font-medium mb-2 block">{t('요청 사유 (선택)')}</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder={t('요청 사유를 입력하세요...')} className="min-h-[80px]" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)} disabled={submitting}>취소</Button>
+            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)} disabled={submitting}>{t('취소')}</Button>
             <Button onClick={handleConfirmSubmit} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
-              {submitting ? '처리 중...' : '결재 상신'}
+              {submitting ? t('처리 중...') : t('결재 상신')}
             </Button>
           </DialogFooter>
         </DialogContent>

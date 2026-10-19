@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { Printer, RefreshCw, FileSpreadsheet, Send, ExternalLink, Trash2, Wallet, CheckCircle2, Eye, History, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +26,8 @@ import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-stor
 import type { Rank } from '@/types/models';
 import type { CrewPayrollPeriod, CrewPayrollPeriodSummary, CrewPayslipWithDetails, CrewPayrollHistoryRow, CrewPayslipItem, CrewDeferredPayHistoryRow } from '@/types/crew-payroll';
 import type { CrewSickPayLedgerRow } from '@/types/sick-pay';
+import en from '@/i18n/locales/pages/CrewPayrollManagementPage/en.json';
+i18n.addResourceBundle('en', 'CrewPayrollManagementPage', en, true, true);
 
 const STATUS_LABELS: Record<string, string> = { draft: 'Draft', pending_approval: 'Pending Approval', confirmed: 'Confirmed' };
 const STATUS_COLORS: Record<string, string> = {
@@ -49,6 +53,7 @@ const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 export default function CrewPayrollManagementPage() {
   const { toast } = useToast();
   const permissions = usePermissions('crew_payroll');
+  const { t } = useTranslation('CrewPayrollManagementPage');
   const [searchParams] = useSearchParams();
 
   const [ships, setShips] = useState<Ship[]>([]);
@@ -196,7 +201,7 @@ export default function CrewPayrollManagementPage() {
 
   const handleCloseSickPay = async (row: CrewSickPayLedgerRow) => {
     const closedDate = closeDateDrafts[row.id] || new Date().toISOString().slice(0, 10);
-    if (!confirm(`${row.crew_name}의 상병급여를 ${closedDate}자로 종결하시겠습니까? 다음 달부터는 급여대장에 나타나지 않습니다.`)) return;
+    if (!confirm(t("{{crewName}}의 상병급여를 {{closedDate}}자로 종결하시겠습니까? 다음 달부터는 급여대장에 나타나지 않습니다.", { crewName: row.crew_name, closedDate }))) return;
     setSickPaySaving(row.id);
     try {
       await sickPayService.closeSickPayRecord(row.id, closedDate);

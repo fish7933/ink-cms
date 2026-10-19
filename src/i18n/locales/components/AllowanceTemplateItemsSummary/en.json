@@ -1,0 +1,21 @@
+{
+  "등록된 항목이 없습니다.": "No items registered.",
+  "항목": "Item",
+  "종류": "Type",
+  "직급": "Rank",
+  "지급방식": "Payment Basis",
+  "지급주체": "Paid By",
+  "금액": "Amount",
+  "지급 조건": "Payment Conditions",
+  "최대 {{count}}회": "Max {{count}} times",
+  "직전계약 {{months}}개월+": "Prior contract {{months}}+ months",
+  "재승선 {{months}}개월 이내": "Re-boarding within {{months}} months",
+  "공제": "Deduction",
+  "수당": "Allowance",
+  "전 직급 공통": "All Ranks",
+  "매월 지급": "Paid Monthly",
+  "승선월 1회": "Once on Boarding Month",
+  "하선 시 정산": "Settled on Disembark",
+  "본선 직접지급": "Paid Directly by Ship",
+  "선주 청구": "Billed to Owner"
+}

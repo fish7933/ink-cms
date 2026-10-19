@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/EvaluationDialog/en.json';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -9,6 +12,8 @@ import { addEvaluation, updateEvaluation } from '@/services/evaluation.service';
 import type { CrewEvaluationWithDetails } from '@/types/evaluation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+
+i18n.addResourceBundle('en', 'EvaluationDialog', en, true, true);
 
 interface EvaluationDialogProps {
   open: boolean;
@@ -43,6 +48,7 @@ interface ShipOption { id: string; name: string; owner_id: string | null; fleet_
 
 export default function EvaluationDialog({ open, onOpenChange, record, onSuccess, lockedCrewId, lockedCrewName }: EvaluationDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('EvaluationDialog');
   const [loading, setLoading] = useState(false);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [shipOptions, setShipOptions] = useState<ShipOption[]>([]);
@@ -139,16 +145,16 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
 
       if (record) {
         await updateEvaluation(record.id, data);
-        toast({ title: '수정 완료', description: '평가가 수정되었습니다.' });
+        toast({ title: t('수정 완료'), description: t('평가가 수정되었습니다.') });
       } else {
         await addEvaluation(data);
-        toast({ title: '등록 완료', description: '평가가 등록되었습니다.' });
+        toast({ title: t('등록 완료'), description: t('평가가 등록되었습니다.') });
       }
       onSuccess();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast({ title: '저장 실패', variant: 'destructive' });
+      toast({ title: t('저장 실패'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -158,69 +164,69 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{record ? '고과 수정' : '고과 작성'}</DialogTitle>
-          <DialogDescription className="text-xs">선원의 근무 고과를 {record ? '수정' : '작성'}합니다</DialogDescription>
+          <DialogTitle className="text-base">{record ? t('고과 수정') : t('고과 작성')}</DialogTitle>
+          <DialogDescription className="text-xs">{t('선원의 근무 고과를 {{action}}합니다', { action: record ? t('수정') : t('작성') })}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
             <div className="grid grid-cols-2 gap-3">
               {lockedCrewId ? (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">선원</Label>
+                  <Label className="text-xs">{t('선원')}</Label>
                   <Input value={lockedCrewName || ''} disabled className="h-9 text-sm" />
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">선원 *</Label>
+                  <Label className="text-xs">{t('선원 *')}</Label>
                   <Select value={formData.crew_member_id} onValueChange={v => setFormData({ ...formData, crew_member_id: v })}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 선택" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선원 선택')} /></SelectTrigger>
                     <SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name} ({c.rank})</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label className="text-xs">선박</Label>
+                <Label className="text-xs">{t('선박')}</Label>
                 <Select value={formData.ship_id} onValueChange={v => setFormData({ ...formData, ship_id: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선박 선택')} /></SelectTrigger>
                   <SelectContent>{shipOptions.map(s => <SelectItem key={s.id} value={s.id} className="text-sm">{s.name}</SelectItem>)}</SelectContent>
                 </Select>
                 {formData.ship_id && (
-                  <p className="text-[11px] text-gray-400">선주사: {derivedOwnerName || '-'} · 플릿: {derivedFleetName || '-'} <span className="text-gray-300">(선박 정보에서 자동으로 가져옴)</span></p>
+                  <p className="text-[11px] text-gray-400">{t('선주사:')} {derivedOwnerName || '-'} · {t('플릿:')} {derivedFleetName || '-'} <span className="text-gray-300">({t('선박 정보에서 자동으로 가져옴')})</span></p>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">평가 기간 시작 *</Label>
+                <Label className="text-xs">{t('평가 기간 시작 *')}</Label>
                 <Input type="date" value={formData.evaluation_period_start} onChange={e => setFormData({ ...formData, evaluation_period_start: e.target.value })} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">평가 기간 종료 *</Label>
+                <Label className="text-xs">{t('평가 기간 종료 *')}</Label>
                 <Input type="date" value={formData.evaluation_period_end} onChange={e => setFormData({ ...formData, evaluation_period_end: e.target.value })} required className="h-9 text-sm" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">평가자 이름</Label>
+                <Label className="text-xs">{t('평가자 이름')}</Label>
                 <Input value={formData.evaluator_name} onChange={e => setFormData({ ...formData, evaluator_name: e.target.value })} className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">평가자 직급</Label>
+                <Label className="text-xs">{t('평가자 직급')}</Label>
                 <Input value={formData.evaluator_rank} onChange={e => setFormData({ ...formData, evaluator_rank: e.target.value })} className="h-9 text-sm" />
               </div>
             </div>
 
             <div className="border-t pt-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-gray-600">평가 항목 (1~5점)</p>
-                <p className="text-xs text-blue-600 font-semibold">평균: {calcOverall() || '-'}점</p>
+                <p className="text-xs font-semibold text-gray-600">{t('평가 항목 (1~5점)')}</p>
+                <p className="text-xs text-blue-600 font-semibold">{t('평균: {{score}}점', { score: calcOverall() || '-' })}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {CATEGORIES.map(cat => (
                   <div key={cat.key} className="flex items-center gap-2">
-                    <span className="text-xs w-20">{cat.label}</span>
+                    <span className="text-xs w-20">{t(cat.label)}</span>
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5].map(n => (
                         <button
@@ -243,29 +249,29 @@ export default function EvaluationDialog({ open, onOpenChange, record, onSuccess
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">추천</Label>
+              <Label className="text-xs">{t('추천')}</Label>
               <Select value={formData.recommendation} onValueChange={v => setFormData({ ...formData, recommendation: v })}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="추천 선택" /></SelectTrigger>
-                <SelectContent>{RECOMMENDATIONS.map(r => <SelectItem key={r.value} value={r.value} className="text-sm">{r.label}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('추천 선택')} /></SelectTrigger>
+                <SelectContent>{RECOMMENDATIONS.map(r => <SelectItem key={r.value} value={r.value} className="text-sm">{t(r.label)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">강점</Label>
+              <Label className="text-xs">{t('강점')}</Label>
               <Textarea value={formData.strengths} onChange={e => setFormData({ ...formData, strengths: e.target.value })} rows={2} className="text-sm resize-none" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">개선 필요 사항</Label>
+              <Label className="text-xs">{t('개선 필요 사항')}</Label>
               <Textarea value={formData.areas_for_improvement} onChange={e => setFormData({ ...formData, areas_for_improvement: e.target.value })} rows={2} className="text-sm resize-none" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">총평</Label>
+              <Label className="text-xs">{t('총평')}</Label>
               <Textarea value={formData.comments} onChange={e => setFormData({ ...formData, comments: e.target.value })} rows={2} className="text-sm resize-none" />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">취소</Button>
-            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (record ? '수정' : '등록')}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">{t('취소')}</Button>
+            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? t('저장 중...') : (record ? t('수정') : t('등록'))}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

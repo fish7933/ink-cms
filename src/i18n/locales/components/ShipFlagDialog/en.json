@@ -1,0 +1,17 @@
+{
+  "선적국 수정": "Edit Flag State",
+  "선적국 추가": "Add Flag State",
+  "선적국 정보를 입력하세요": "Enter the flag state details",
+  "국가 코드 (ISO 3166-1 alpha-2) *": "Country Code (ISO 3166-1 alpha-2) *",
+  "예: KR, PA, LR": "e.g. KR, PA, LR",
+  "2자리 국가 코드를 입력하세요": "Enter a 2-letter country code",
+  "한글명 *": "Korean Name *",
+  "예: 대한민국": "e.g. 대한민국",
+  "영문명 *": "English Name *",
+  "예: Korea, Republic of": "e.g. Korea, Republic of",
+  "활성 상태": "Active",
+  "선박 등록 시 선택 가능 여부": "Whether this flag state can be selected when registering a ship",
+  "수정": "Edit",
+  "추가": "Add",
+  "취소": "Cancel"
+}

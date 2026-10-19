@@ -12,6 +12,10 @@ import { listAllStoredFiles, deleteStoredFiles, type StoredFileEntry } from '@/s
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/FileManagementPage/en.json';
+i18n.addResourceBundle('en', 'FileManagementPage', en, true, true);
 
 const PAGE_SIZE = 50;
 
@@ -54,6 +58,7 @@ export default function FileManagementPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const permissions = usePermissions('file_management');
+  const { t } = useTranslation('FileManagementPage');
   const [files, setFiles] = useState<StoredFileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -72,7 +77,7 @@ export default function FileManagementPage() {
       setFiles(await listAllStoredFiles());
       setSelected(new Set());
     } catch (e) {
-      toast({ title: '파일 목록을 불러오지 못했습니다.', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('파일 목록을 불러오지 못했습니다.'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -111,14 +116,14 @@ export default function FileManagementPage() {
 
   const doDelete = async (targets: StoredFileEntry[]) => {
     if (targets.length === 0) return;
-    if (!confirm(`파일 ${targets.length}개를 삭제하시겠습니까? 결재문서 등에서 이 파일을 참조하고 있다면 해당 문서에서 다운로드가 안 될 수 있습니다.`)) return;
+    if (!confirm(t('파일 {{count}}개를 삭제하시겠습니까? 결재문서 등에서 이 파일을 참조하고 있다면 해당 문서에서 다운로드가 안 될 수 있습니다.', { count: targets.length }))) return;
     setDeleting(true);
     try {
       await deleteStoredFiles(targets.map(f => ({ bucket: f.bucket, path: f.path })));
-      toast({ title: `${targets.length}개 파일이 삭제되었습니다.` });
+      toast({ title: t('{{count}}개 파일이 삭제되었습니다.', { count: targets.length }) });
       await loadData();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setDeleting(false);
     }
@@ -132,7 +137,7 @@ export default function FileManagementPage() {
   const handleDeleteOld = () => {
     if (!oldBeforeDate) return;
     const targets = files.filter(f => f.updatedAt && f.updatedAt.slice(0, 10) < oldBeforeDate);
-    if (targets.length === 0) { toast({ title: '해당 기준일 이전 파일이 없습니다.' }); return; }
+    if (targets.length === 0) { toast({ title: t('해당 기준일 이전 파일이 없습니다.') }); return; }
     doDelete(targets);
   };
 
@@ -148,43 +153,42 @@ export default function FileManagementPage() {
         <div className="flex items-center gap-2">
           <FolderOpen className="w-6 h-6" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">파일 관리</h1>
-            <p className="text-sm text-gray-500">시스템에 저장된 모든 첨부파일을 조회하고 삭제할 수 있습니다.</p>
+            <h1 className="text-xl font-bold text-gray-900">{t('파일 관리')}</h1>
+            <p className="text-sm text-gray-500">{t('시스템에 저장된 모든 첨부파일을 조회하고 삭제할 수 있습니다.')}</p>
           </div>
         </div>
         <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={loadData}>
-          <RefreshCw className="w-3.5 h-3.5" />새로고침
+          <RefreshCw className="w-3.5 h-3.5" />{t('새로고침')}
         </Button>
       </div>
 
       <Alert variant="destructive">
         <AlertDescription className="text-xs">
-          삭제는 스토리지에서 파일만 지웁니다. 결재문서·금전출납 등에서 이미 참조 중인 파일을
-          지우면 해당 화면에서 다운로드 링크가 깨질 수 있으니 신중하게 사용하세요.
+          {t('삭제는 스토리지에서 파일만 지웁니다. 결재문서·금전출납 등에서 이미 참조 중인 파일을 지우면 해당 화면에서 다운로드 링크가 깨질 수 있으니 신중하게 사용하세요.')}
         </AlertDescription>
       </Alert>
 
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-base">파일 목록</CardTitle>
+            <CardTitle className="text-base">{t('파일 목록')}</CardTitle>
             <span className="text-xs text-gray-400">{filtered.length}개 · 총 {formatBytes(totalSize)}</span>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Input placeholder="파일명/경로 검색" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="h-8 w-[220px] text-xs" />
+            <Input placeholder={t('파일명/경로 검색')} value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="h-8 w-[220px] text-xs" />
             {selected.size > 0 && permissions.canDelete && (
               <Button size="sm" variant="destructive" className="h-8 gap-1.5" onClick={handleDeleteSelected} disabled={deleting}>
-                <Trash2 className="w-3.5 h-3.5" />선택 {selected.size}개 삭제
+                <Trash2 className="w-3.5 h-3.5" />{t('선택 {{count}}개 삭제', { count: selected.size })}
               </Button>
             )}
             <div className="flex items-center gap-1.5 ml-auto">
-              <Label className="text-xs text-gray-500 whitespace-nowrap">기준일 이전 일괄삭제</Label>
+              <Label className="text-xs text-gray-500 whitespace-nowrap">{t('기준일 이전 일괄삭제')}</Label>
               <Input type="date" value={oldBeforeDate} onChange={e => setOldBeforeDate(e.target.value)} className="h-8 w-[150px] text-xs" />
               {permissions.canDelete && (
                 <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200" onClick={handleDeleteOld} disabled={!oldBeforeDate || deleting}>
-                  일괄 삭제
+                  {t('일괄 삭제')}
                 </Button>
               )}
             </div>
@@ -199,24 +203,24 @@ export default function FileManagementPage() {
                       <Checkbox checked={paged.length > 0 && paged.every(f => selected.has(fileKey(f)))} onCheckedChange={toggleAllOnPage} />
                     )}
                   </th>
-                  <th className="text-left p-2">버킷</th>
-                  <th className="text-left p-2">용도</th>
-                  <th className="text-left p-2">경로</th>
-                  <th className="text-right p-2">크기</th>
-                  <th className="text-left p-2">수정일</th>
+                  <th className="text-left p-2">{t('버킷')}</th>
+                  <th className="text-left p-2">{t('용도')}</th>
+                  <th className="text-left p-2">{t('경로')}</th>
+                  <th className="text-right p-2">{t('크기')}</th>
+                  <th className="text-left p-2">{t('수정일')}</th>
                   <th className="p-2 w-16"></th>
                 </tr>
               </thead>
               <tbody>
                 {paged.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">파일이 없습니다.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-8 text-gray-400">{t('파일이 없습니다.')}</td></tr>
                 ) : paged.map(f => (
                   <tr key={fileKey(f)} className="border-b last:border-0 hover:bg-gray-50">
                     <td className="p-2">
                       {permissions.canDelete && <Checkbox checked={selected.has(fileKey(f))} onCheckedChange={() => toggleOne(f)} />}
                     </td>
-                    <td className="p-2 whitespace-nowrap">{BUCKET_LABELS[f.bucket] || f.bucket}</td>
-                    <td className="p-2 whitespace-nowrap"><Badge variant="outline" className="text-[10px]">{purposeLabel(f.path)}</Badge></td>
+                    <td className="p-2 whitespace-nowrap">{t(BUCKET_LABELS[f.bucket] || f.bucket)}</td>
+                    <td className="p-2 whitespace-nowrap"><Badge variant="outline" className="text-[10px]">{t(purposeLabel(f.path))}</Badge></td>
                     <td className="p-2 text-gray-500 truncate max-w-[360px]" title={f.path}>{f.path}</td>
                     <td className="p-2 text-right font-mono whitespace-nowrap">{formatBytes(f.size)}</td>
                     <td className="p-2 whitespace-nowrap">{f.updatedAt ? new Date(f.updatedAt).toLocaleDateString('ko-KR') : '-'}</td>

@@ -1,4 +1,8 @@
 import { Fragment, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/AllowanceTemplateItemRows/en.json';
+i18n.addResourceBundle('en', 'AllowanceTemplateItemRows', en, true, true);
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,6 +47,7 @@ interface Props {
 // (항목, 직급, 금액, 지급방식, 지급주체, 지급 조건)를 자유롭게 설정하는 목록형 편집기. 직급을
 // "전 직급 공통"으로 두면 그 항목이 지정한 직급이 없는 모든 대상에게 적용된다.
 export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows, onChange }: Props) {
+  const { t } = useTranslation('AllowanceTemplateItemRows');
   const itemById = new Map(allowanceItems.map(i => [i.id, i]));
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggleExpanded = (clientId: string) =>
@@ -83,18 +88,18 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
   return (
     <div className="space-y-2">
       {rows.length === 0 ? (
-        <div className="text-center py-6 text-sm text-gray-400 border rounded-md">등록된 항목이 없습니다. 아래에서 행을 추가하세요.</div>
+        <div className="text-center py-6 text-sm text-gray-400 border rounded-md">{t('등록된 항목이 없습니다. 아래에서 행을 추가하세요.')}</div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs w-48">항목</TableHead>
-                <TableHead className="text-xs w-40">직급</TableHead>
-                <TableHead className="text-xs w-32">금액</TableHead>
-                <TableHead className="text-xs w-24">통화</TableHead>
-                <TableHead className="text-xs w-36">지급방식</TableHead>
-                <TableHead className="text-xs w-36">지급주체</TableHead>
+                <TableHead className="text-xs w-48">{t('항목')}</TableHead>
+                <TableHead className="text-xs w-40">{t('직급')}</TableHead>
+                <TableHead className="text-xs w-32">{t('금액')}</TableHead>
+                <TableHead className="text-xs w-24">{t('통화')}</TableHead>
+                <TableHead className="text-xs w-36">{t('지급방식')}</TableHead>
+                <TableHead className="text-xs w-36">{t('지급주체')}</TableHead>
                 <TableHead className="w-10"></TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
@@ -116,7 +121,7 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
                         >
                           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {allowanceItems.map(i => <SelectItem key={i.id} value={i.id} className="text-xs">{i.name} ({i.kind === 'deduction' ? '공제' : '수당'})</SelectItem>)}
+                            {allowanceItems.map(i => <SelectItem key={i.id} value={i.id} className="text-xs">{i.name} ({i.kind === 'deduction' ? t('공제') : t('수당')})</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -127,7 +132,7 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
                         >
                           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={ALL_RANKS_VALUE} className="text-xs">전 직급 공통</SelectItem>
+                            <SelectItem value={ALL_RANKS_VALUE} className="text-xs">{t('전 직급 공통')}</SelectItem>
                             {ranks.map(r => <SelectItem key={r.id} value={r.id} className="text-xs">{r.rank_code} ({r.name})</SelectItem>)}
                           </SelectContent>
                         </Select>
@@ -147,14 +152,14 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
                       <TableCell>
                         <Select value={row.payment_basis} onValueChange={v => updateRow(row.clientId, { payment_basis: v as AllowancePaymentBasis })}>
                           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>{Object.entries(BASIS_LABELS).map(([v, l]) => <SelectItem key={v} value={v} className="text-xs">{l}</SelectItem>)}</SelectContent>
+                          <SelectContent>{Object.entries(BASIS_LABELS).map(([v, l]) => <SelectItem key={v} value={v} className="text-xs">{t(l)}</SelectItem>)}</SelectContent>
                         </Select>
                       </TableCell>
                       <TableCell>
                         {(item?.kind ?? row.kind) === 'allowance' ? (
                           <Select value={row.payment_method} onValueChange={v => updateRow(row.clientId, { payment_method: v as AllowancePaymentMethod })}>
                             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>{Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v} className="text-xs">{l}</SelectItem>)}</SelectContent>
+                            <SelectContent>{Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v} className="text-xs">{t(l)}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : <span className="text-xs text-gray-400">-</span>}
                       </TableCell>
@@ -163,7 +168,7 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
                           type="button" variant="ghost" size="sm"
                           className={`h-7 w-7 p-0 ${hasConditions(row) ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-700`}
                           onClick={() => toggleExpanded(row.clientId)}
-                          title="지급 조건"
+                          title={t('지급 조건')}
                         >
                           <SlidersHorizontal className="w-3.5 h-3.5" />
                         </Button>
@@ -179,34 +184,34 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
                         <TableCell colSpan={8}>
                           <div className="grid grid-cols-4 gap-3 py-1">
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-gray-500">최대 지급 횟수</Label>
+                              <Label className="text-[11px] text-gray-500">{t('최대 지급 횟수')}</Label>
                               <Input
-                                type="number" placeholder="무제한"
+                                type="number" placeholder={t('무제한')}
                                 value={row.max_payout_count ?? ''}
                                 onChange={e => updateRow(row.clientId, { max_payout_count: e.target.value === '' ? null : Number(e.target.value) })}
                                 className="h-8 text-xs"
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-gray-500">직전 계약 최소 개월</Label>
+                              <Label className="text-[11px] text-gray-500">{t('직전 계약 최소 개월')}</Label>
                               <Input
-                                type="number" placeholder="조건 없음"
+                                type="number" placeholder={t('조건 없음')}
                                 value={row.min_prior_contract_months ?? ''}
                                 onChange={e => updateRow(row.clientId, { min_prior_contract_months: e.target.value === '' ? null : Number(e.target.value) })}
                                 className="h-8 text-xs"
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-gray-500">재승선 인정 기간(개월)</Label>
+                              <Label className="text-[11px] text-gray-500">{t('재승선 인정 기간(개월)')}</Label>
                               <Input
-                                type="number" placeholder="제한 없음"
+                                type="number" placeholder={t('제한 없음')}
                                 value={row.max_gap_months ?? ''}
                                 onChange={e => updateRow(row.clientId, { max_gap_months: e.target.value === '' ? null : Number(e.target.value) })}
                                 className="h-8 text-xs"
                               />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[11px] text-gray-500">선주 변경 시 초기화</Label>
+                              <Label className="text-[11px] text-gray-500">{t('선주 변경 시 초기화')}</Label>
                               <div className="flex items-center h-8">
                                 <Checkbox
                                   checked={row.reset_on_owner_change}
@@ -215,7 +220,7 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
                               </div>
                             </div>
                           </div>
-                          <p className="text-[11px] text-gray-400 pb-1">조건을 비워두면 무조건 지급됩니다. 조건은 발령 화면에서 지급 대상 여부를 보여줄 뿐, 최종 적용은 발령자가 결정합니다.</p>
+                          <p className="text-[11px] text-gray-400 pb-1">{t('조건을 비워두면 무조건 지급됩니다. 조건은 발령 화면에서 지급 대상 여부를 보여줄 뿐, 최종 적용은 발령자가 결정합니다.')}</p>
                         </TableCell>
                       </TableRow>
                     )}
@@ -227,7 +232,7 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
         </div>
       )}
       <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={addRow} disabled={allowanceItems.length === 0}>
-        <Plus className="w-3.5 h-3.5" />행 추가
+        <Plus className="w-3.5 h-3.5" />{t('행 추가')}
       </Button>
     </div>
   );

@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/CrewResumeSheet/en.json';
+i18n.addResourceBundle('en', 'CrewResumeSheet', en, true, true);
 import { supabase } from '@/lib/supabase';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 
@@ -89,9 +93,9 @@ const fmt = (date?: string) => {
   return date.slice(0, 10);
 };
 
-const yesNo = (val?: boolean | null) => {
-  if (val === true) return '예 (Yes)';
-  if (val === false) return '아니오 (No)';
+const yesNo = (val: boolean | null | undefined, t: (key: string) => string) => {
+  if (val === true) return t('예 (Yes)');
+  if (val === false) return t('아니오 (No)');
   return '-';
 };
 
@@ -109,6 +113,7 @@ interface Props {
 // 선원 이력서 문서 본문 — 독립 인쇄 페이지와 인쇄 모달 양쪽에서 재사용된다.
 // 상단 레터헤드는 결재문서 시행문(ApprovalDocumentIssuedSheet)과 동일하게 회사정보(company_info)를 사용한다.
 export default function CrewResumeSheet({ crewId }: Props) {
+  const { t } = useTranslation('CrewResumeSheet');
   const [crew, setCrew] = useState<CrewData | null>(null);
   const [rankName, setRankName] = useState('');
   const [seaService, setSeaService] = useState<SeaServiceRecord[]>([]);
@@ -117,14 +122,14 @@ export default function CrewResumeSheet({ crewId }: Props) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!crewId) { setError('선원 ID 없음'); setLoading(false); return; }
+    if (!crewId) { setError(t('선원 ID 없음')); setLoading(false); return; }
 
     Promise.all([
       supabase.from('crew_members').select('*').eq('id', crewId).single(),
       supabase.from('sea_service_records').select('*, sign_off_reasons(name)').eq('crew_member_id', crewId).order('sign_on_date', { ascending: false }),
       getCompanyInfo().catch(() => null),
     ]).then(([{ data: crewData, error: crewErr }, { data: serviceData }, companyInfo]) => {
-      if (crewErr || !crewData) { setError('선원 정보를 불러올 수 없습니다.'); setLoading(false); return; }
+      if (crewErr || !crewData) { setError(t('선원 정보를 불러올 수 없습니다.')); setLoading(false); return; }
 
       let certs: Certificate[] = [];
       try {
@@ -152,13 +157,13 @@ export default function CrewResumeSheet({ crewId }: Props) {
       setLoading(false);
     }).catch((e) => {
       console.error(e);
-      setError('선원 정보를 불러올 수 없습니다.');
+      setError(t('선원 정보를 불러올 수 없습니다.'));
       setLoading(false);
     });
   }, [crewId]);
 
-  if (loading) return <div style={{ padding: 40, fontFamily: 'sans-serif' }}>불러오는 중...</div>;
-  if (error || !crew) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: 'red' }}>{error || '오류'}</div>;
+  if (loading) return <div style={{ padding: 40, fontFamily: 'sans-serif' }}>{t('불러오는 중...')}</div>;
+  if (error || !crew) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: 'red' }}>{error || t('오류')}</div>;
 
   return (
     <div className="resume" style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', Arial, sans-serif", fontSize: '9pt', color: '#000' }}>
@@ -225,17 +230,17 @@ export default function CrewResumeSheet({ crewId }: Props) {
             <div className="resume-crew-name">{crew.name || '-'}</div>
             <div className="resume-crew-rank">{rankName || crew.rank || '-'}</div>
             <div className="resume-info-grid">
-              <div className="resume-info-item"><span className="resume-info-label">영문이름</span><span className="resume-info-value">{crew.name_english || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">한자이름</span><span className="resume-info-value">{crew.name_chinese || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">국적</span><span className="resume-info-value">{crew.nationality || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">생년월일</span><span className="resume-info-value">{fmt(crew.date_of_birth)}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">출생지</span><span className="resume-info-value">{crew.place_of_birth || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">혈액형</span><span className="resume-info-value">{crew.blood_type || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">결혼여부</span><span className="resume-info-value">{crew.marital_status ? MARITAL_LABELS[crew.marital_status] || crew.marital_status : '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">자녀수</span><span className="resume-info-value">{crew.children_count ?? '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">종교</span><span className="resume-info-value">{crew.religion || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">연락처</span><span className="resume-info-value">{crew.phone || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">이메일</span><span className="resume-info-value">{crew.email || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('영문이름')}</span><span className="resume-info-value">{crew.name_english || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('한자이름')}</span><span className="resume-info-value">{crew.name_chinese || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('국적')}</span><span className="resume-info-value">{crew.nationality || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('생년월일')}</span><span className="resume-info-value">{fmt(crew.date_of_birth)}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('출생지')}</span><span className="resume-info-value">{crew.place_of_birth || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('혈액형')}</span><span className="resume-info-value">{crew.blood_type || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('결혼여부')}</span><span className="resume-info-value">{crew.marital_status ? t(MARITAL_LABELS[crew.marital_status] || crew.marital_status) : '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('자녀수')}</span><span className="resume-info-value">{crew.children_count ?? '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('종교')}</span><span className="resume-info-value">{crew.religion || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('연락처')}</span><span className="resume-info-value">{crew.phone || '-'}</span></div>
+              <div className="resume-info-item"><span className="resume-info-label">{t('이메일')}</span><span className="resume-info-value">{crew.email || '-'}</span></div>
               <div className="resume-info-item"><span className="resume-info-label">SID</span><span className="resume-info-value">{crew.sid || '-'}</span></div>
             </div>
           </div>
@@ -246,15 +251,15 @@ export default function CrewResumeSheet({ crewId }: Props) {
       <div className="resume-section">
         <div className="resume-section-title">Physical Data</div>
         <div className="resume-info-grid">
-          <div className="resume-info-item"><span className="resume-info-label">키 (Height)</span><span className="resume-info-value">{crew.height ? `${crew.height} cm` : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">몸무게 (Weight)</span><span className="resume-info-value">{crew.weight ? `${crew.weight} kg` : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">혈액형</span><span className="resume-info-value">{crew.blood_type || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">눈 색</span><span className="resume-info-value">{crew.eye_color || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">신발 사이즈</span><span className="resume-info-value">{crew.shoe_size ? `${crew.shoe_size} mm` : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">작업복 사이즈</span><span className="resume-info-value">{crew.coverall_size || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">의류 사이즈</span><span className="resume-info-value">{crew.clothing_size || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">흡연</span><span className="resume-info-value">{crew.smoking === true ? '흡연' : crew.smoking === false ? '비흡연' : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">음주</span><span className="resume-info-value">{crew.drinking === true ? '음주' : crew.drinking === false ? '비음주' : '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('키 (Height)')}</span><span className="resume-info-value">{crew.height ? `${crew.height} cm` : '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('몸무게 (Weight)')}</span><span className="resume-info-value">{crew.weight ? `${crew.weight} kg` : '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('혈액형')}</span><span className="resume-info-value">{crew.blood_type || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('눈 색')}</span><span className="resume-info-value">{crew.eye_color || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('신발 사이즈')}</span><span className="resume-info-value">{crew.shoe_size ? `${crew.shoe_size} mm` : '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('작업복 사이즈')}</span><span className="resume-info-value">{crew.coverall_size || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('의류 사이즈')}</span><span className="resume-info-value">{crew.clothing_size || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('흡연')}</span><span className="resume-info-value">{crew.smoking === true ? t('흡연') : crew.smoking === false ? t('비흡연') : '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('음주')}</span><span className="resume-info-value">{crew.drinking === true ? t('음주') : crew.drinking === false ? t('비음주') : '-'}</span></div>
         </div>
       </div>
 
@@ -262,14 +267,14 @@ export default function CrewResumeSheet({ crewId }: Props) {
       <div className="resume-section">
         <div className="resume-section-title">Documents</div>
         <div className="resume-info-grid">
-          <div className="resume-info-item"><span className="resume-info-label">여권 번호</span><span className="resume-info-value">{crew.passport_number || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">여권 만료일</span><span className="resume-info-value">{fmt(crew.passport_expiry)}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('여권 번호')}</span><span className="resume-info-value">{crew.passport_number || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('여권 만료일')}</span><span className="resume-info-value">{fmt(crew.passport_expiry)}</span></div>
           <div className="resume-info-item" style={{ gridColumn: 'span 1' }} />
-          <div className="resume-info-item"><span className="resume-info-label">선원수첩 (국내)</span><span className="resume-info-value">{crew.seaman_book_number || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">국내 만료일</span><span className="resume-info-value">{fmt(crew.seaman_book_expiry)}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('선원수첩 (국내)')}</span><span className="resume-info-value">{crew.seaman_book_number || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('국내 만료일')}</span><span className="resume-info-value">{fmt(crew.seaman_book_expiry)}</span></div>
           <div className="resume-info-item" />
-          <div className="resume-info-item"><span className="resume-info-label">선원수첩 (국제)</span><span className="resume-info-value">{crew.seaman_book_flag_number || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">국제 만료일</span><span className="resume-info-value">{fmt(crew.seaman_book_flag_expiry)}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('선원수첩 (국제)')}</span><span className="resume-info-value">{crew.seaman_book_flag_number || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('국제 만료일')}</span><span className="resume-info-value">{fmt(crew.seaman_book_flag_expiry)}</span></div>
           <div className="resume-info-item" />
         </div>
       </div>
@@ -278,15 +283,15 @@ export default function CrewResumeSheet({ crewId }: Props) {
       <div className="resume-section">
         <div className="resume-section-title">Language Skills</div>
         <div className="resume-info-grid">
-          <div className="resume-info-item"><span className="resume-info-label">영어 읽기/쓰기</span><span className="resume-info-value">{crew.english_read_write ? LEVEL_LABELS[crew.english_read_write] || crew.english_read_write : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">영어 말하기/듣기</span><span className="resume-info-value">{crew.english_speak_listen ? LEVEL_LABELS[crew.english_speak_listen] || crew.english_speak_listen : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">기타 언어</span><span className="resume-info-value">{crew.other_languages || '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('영어 읽기/쓰기')}</span><span className="resume-info-value">{crew.english_read_write ? t(LEVEL_LABELS[crew.english_read_write] || crew.english_read_write) : '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('영어 말하기/듣기')}</span><span className="resume-info-value">{crew.english_speak_listen ? t(LEVEL_LABELS[crew.english_speak_listen] || crew.english_speak_listen) : '-'}</span></div>
+          <div className="resume-info-item"><span className="resume-info-label">{t('기타 언어')}</span><span className="resume-info-value">{crew.other_languages || '-'}</span></div>
         </div>
         {crew.job_ability && (
-          <div className="resume-info-item" style={{ marginTop: 2 }}><span className="resume-info-label">업무 능력</span><span className="resume-info-value">{crew.job_ability}</span></div>
+          <div className="resume-info-item" style={{ marginTop: 2 }}><span className="resume-info-label">{t('업무 능력')}</span><span className="resume-info-value">{crew.job_ability}</span></div>
         )}
         {crew.motivation && (
-          <div className="resume-info-item" style={{ marginTop: 2 }}><span className="resume-info-label">지원 동기</span><span className="resume-info-value">{crew.motivation}</span></div>
+          <div className="resume-info-item" style={{ marginTop: 2 }}><span className="resume-info-label">{t('지원 동기')}</span><span className="resume-info-value">{crew.motivation}</span></div>
         )}
       </div>
 
@@ -295,40 +300,40 @@ export default function CrewResumeSheet({ crewId }: Props) {
         <div className="resume-section-title">Health & Medical</div>
         <div className="resume-info-grid">
           <div className="resume-info-item">
-            <span className="resume-info-label">신체검사일</span>
+            <span className="resume-info-label">{t('신체검사일')}</span>
             <span className="resume-info-value">{fmt(crew.physical_exam_date)}</span>
           </div>
           <div className="resume-info-item">
-            <span className="resume-info-label">신체검사 결과</span>
+            <span className="resume-info-label">{t('신체검사 결과')}</span>
             <span className={`resume-info-value ${crew.physical_exam_result === 'fit' ? 'resume-result-pass' : crew.physical_exam_result === 'unfit' ? 'resume-result-fail' : ''}`}>
               {crew.physical_exam_result === 'fit' ? 'FIT' : crew.physical_exam_result === 'unfit' ? 'UNFIT' : '-'}
             </span>
           </div>
           <div className="resume-info-item" />
           <div className="resume-info-item">
-            <span className="resume-info-label">약물/알코올 검사일</span>
+            <span className="resume-info-label">{t('약물/알코올 검사일')}</span>
             <span className="resume-info-value">{fmt(crew.drug_test_date)}</span>
           </div>
           <div className="resume-info-item">
-            <span className="resume-info-label">검사 결과</span>
+            <span className="resume-info-label">{t('검사 결과')}</span>
             <span className={`resume-info-value ${crew.drug_test_result === 'pass' ? 'resume-result-pass' : crew.drug_test_result === 'fail' ? 'resume-result-fail' : ''}`}>
               {crew.drug_test_result === 'pass' ? 'PASS' : crew.drug_test_result === 'fail' ? 'FAIL' : '-'}
             </span>
           </div>
           <div className="resume-info-item" />
           <div className="resume-info-item">
-            <span className="resume-info-label">황열병 예방접종</span>
-            <span className="resume-info-value">{yesNo(crew.yellow_fever_vaccination)}</span>
+            <span className="resume-info-label">{t('황열병 예방접종')}</span>
+            <span className="resume-info-value">{yesNo(crew.yellow_fever_vaccination, t)}</span>
           </div>
           <div className="resume-info-item">
-            <span className="resume-info-label">접종일</span>
+            <span className="resume-info-label">{t('접종일')}</span>
             <span className="resume-info-value">{fmt(crew.yellow_fever_date)}</span>
           </div>
           <div className="resume-info-item" />
         </div>
         {crew.previous_illness && (
           <div className="resume-info-item" style={{ marginTop: 2 }}>
-            <span className="resume-info-label">기왕증</span>
+            <span className="resume-info-label">{t('기왕증')}</span>
             <span className="resume-info-value">{crew.previous_illness}</span>
           </div>
         )}
@@ -341,11 +346,11 @@ export default function CrewResumeSheet({ crewId }: Props) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: '35%', textAlign: 'left' }}>증서명</th>
-                <th style={{ width: '18%' }}>번호</th>
-                <th style={{ width: '12%' }}>발급일</th>
-                <th style={{ width: '12%' }}>만료일</th>
-                <th style={{ width: '23%', textAlign: 'left' }}>발급기관</th>
+                <th style={{ width: '35%', textAlign: 'left' }}>{t('증서명')}</th>
+                <th style={{ width: '18%' }}>{t('번호')}</th>
+                <th style={{ width: '12%' }}>{t('발급일')}</th>
+                <th style={{ width: '12%' }}>{t('만료일')}</th>
+                <th style={{ width: '23%', textAlign: 'left' }}>{t('발급기관')}</th>
               </tr>
             </thead>
             <tbody>
@@ -357,7 +362,7 @@ export default function CrewResumeSheet({ crewId }: Props) {
                     <td style={{ textAlign: 'center' }}>{cert.number || '-'}</td>
                     <td style={{ textAlign: 'center' }}>{fmt(cert.issued_date)}</td>
                     <td style={{ textAlign: 'center' }} className={isExpired ? 'resume-cert-expired' : cert.no_expiry ? '' : 'resume-cert-ok'}>
-                      {cert.no_expiry ? '제한없음' : fmt(cert.expiry_date)}
+                      {cert.no_expiry ? t('제한없음') : fmt(cert.expiry_date)}
                     </td>
                     <td>{cert.issuing_authority || '-'}</td>
                   </tr>
@@ -375,15 +380,15 @@ export default function CrewResumeSheet({ crewId }: Props) {
           <table>
             <thead>
               <tr>
-                <th style={{ width: '22%', textAlign: 'left' }}>선박명</th>
-                <th style={{ width: '8%' }}>선종</th>
-                <th style={{ width: '6%' }}>국적</th>
+                <th style={{ width: '22%', textAlign: 'left' }}>{t('선박명')}</th>
+                <th style={{ width: '8%' }}>{t('선종')}</th>
+                <th style={{ width: '6%' }}>{t('국적')}</th>
                 <th style={{ width: '7%' }}>GRT</th>
-                <th style={{ width: '8%' }}>직책</th>
-                <th style={{ width: '9%' }}>승선일</th>
-                <th style={{ width: '9%' }}>하선일</th>
-                <th style={{ width: '8%' }}>기간</th>
-                <th style={{ width: '23%', textAlign: 'left' }}>하선 사유</th>
+                <th style={{ width: '8%' }}>{t('직책')}</th>
+                <th style={{ width: '9%' }}>{t('승선일')}</th>
+                <th style={{ width: '9%' }}>{t('하선일')}</th>
+                <th style={{ width: '8%' }}>{t('기간')}</th>
+                <th style={{ width: '23%', textAlign: 'left' }}>{t('하선 사유')}</th>
               </tr>
             </thead>
             <tbody>
@@ -399,8 +404,8 @@ export default function CrewResumeSheet({ crewId }: Props) {
                     <td style={{ textAlign: 'center' }}>{rec.gross_tonnage?.toLocaleString() || '-'}</td>
                     <td style={{ textAlign: 'center' }}>{rec.rank}{rec.rank_grade ? `(${rec.rank_grade})` : ''}</td>
                     <td style={{ textAlign: 'center' }}>{fmt(rec.sign_on_date)}</td>
-                    <td style={{ textAlign: 'center' }}>{rec.sign_off_date ? fmt(rec.sign_off_date) : '현재'}</td>
-                    <td style={{ textAlign: 'center' }}>{months != null ? `${months}개월` : '-'}</td>
+                    <td style={{ textAlign: 'center' }}>{rec.sign_off_date ? fmt(rec.sign_off_date) : t('현재')}</td>
+                    <td style={{ textAlign: 'center' }}>{months != null ? t('{{months}}개월', { months }) : '-'}</td>
                     <td>{rec.sign_off_reason_name || rec.sign_off_reason || '-'}</td>
                   </tr>
                 );
@@ -428,7 +433,7 @@ export default function CrewResumeSheet({ crewId }: Props) {
       {/* 푸터 */}
       <div className="resume-footer">
         <span>{company?.name || ''}{company?.address ? ` — ${company.address}` : ''}{company?.phone ? ` | Tel: ${company.phone}` : ''}</span>
-        <span>출력일: {new Date().toLocaleDateString('ko-KR')}</span>
+        <span>{t('출력일: {{date}}', { date: new Date().toLocaleDateString('ko-KR') })}</span>
       </div>
     </div>
   );

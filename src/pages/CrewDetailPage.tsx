@@ -1,11 +1,16 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { CrewDetailPanel } from '@/components/crew/CrewDetailPanel';
 import { useTabContext } from '@/contexts/TabContext';
+import en from '@/i18n/locales/pages/CrewDetailPage/en.json';
+i18n.addResourceBundle('en', 'CrewDetailPage', en, true, true);
 
 export default function CrewDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { activeTabId, closeTab, updateTab } = useTabContext();
+  const { t } = useTranslation('CrewDetailPage');
 
   const crewId = id === 'new' ? undefined : id;
 
@@ -17,7 +22,7 @@ export default function CrewDetailPage() {
         else navigate('/crew');
       }}
       onSaved={(savedId) => {
-        if (activeTabId) updateTab(activeTabId, { path: `/crew/${savedId}`, title: '선원 정보' });
+        if (activeTabId) updateTab(activeTabId, { path: `/crew/${savedId}`, title: t('선원 정보') });
         navigate(`/crew/${savedId}`, { replace: true });
       }}
     />

@@ -12,11 +12,16 @@ import { useToast } from '@/hooks/use-toast';
 import { getCurrentUser } from '@/lib/store';
 import { supervisorService } from '@/services/supervisor.service';
 import type { Company, User } from '@/types/models';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/FleetManagementPage/en.json';
+i18n.addResourceBundle('en', 'FleetManagementPage', en, true, true);
 
 interface Fleet { id: string; owner_id: string; name: string; description?: string; created_at: string; }
 interface FleetWithOwner extends Fleet { owner_name: string; ship_count: number; }
 
 export default function FleetManagementPage() {
+  const { t } = useTranslation('FleetManagementPage');
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [owners, setOwners] = useState<Company[]>([]);
@@ -82,26 +87,26 @@ export default function FleetManagementPage() {
   const closeForm = () => { setFormView(null); loadData(); };
 
   const handleSave = async () => {
-    if (!formData.owner_id || !formData.name) { toast({ title: '선주사와 플릿명은 필수입니다.', variant: 'destructive' }); return; }
+    if (!formData.owner_id || !formData.name) { toast({ title: t('선주사와 플릿명은 필수입니다.'), variant: 'destructive' }); return; }
     try {
       setSaving(true);
       const data = { owner_id: formData.owner_id, name: formData.name, description: formData.description || null };
       if (formView?.id) {
         const { error } = await supabase.from('fleets').update(data).eq('id', formView.id);
         if (error) throw error;
-        toast({ title: '수정 완료' });
+        toast({ title: t('수정 완료') });
       } else {
         const { error } = await supabase.from('fleets').insert(data);
         if (error) throw error;
-        toast({ title: '등록 완료' });
+        toast({ title: t('등록 완료') });
       }
       closeForm();
-    } catch (e) { console.error(e); toast({ title: '저장 실패', variant: 'destructive' }); } finally { setSaving(false); }
+    } catch (e) { console.error(e); toast({ title: t('저장 실패'), variant: 'destructive' }); } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('이 플릿을 삭제하시겠습니까?')) return;
-    try { await supabase.from('fleets').delete().eq('id', id); toast({ title: '삭제 완료' }); loadData(); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 플릿을 삭제하시겠습니까?'))) return;
+    try { await supabase.from('fleets').delete().eq('id', id); toast({ title: t('삭제 완료') }); loadData(); } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
 
   const filtered = fleets.filter(f => selectedOwner === 'all' || f.owner_id === selectedOwner);
@@ -116,14 +121,14 @@ export default function FleetManagementPage() {
             <div className="flex items-center gap-2">
               {formView !== null && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>}
               <div>
-                <CardTitle className="text-base">{formView !== null ? (formView.id ? '플릿 수정' : '플릿 추가') : '플릿 관리'}</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선주사를 선택하고 플릿 정보를 입력하세요' : '선주사별 플릿(선대)을 관리합니다'}</p>
+                <CardTitle className="text-base">{formView !== null ? (formView.id ? t('플릿 수정') : t('플릿 추가')) : t('플릿 관리')}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">{formView !== null ? t('선주사를 선택하고 플릿 정보를 입력하세요') : t('선주사별 플릿(선대)을 관리합니다')}</p>
               </div>
             </div>
             {formView !== null ? (
-              <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button>
+              <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}</Button>
             ) : (
-              <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />플릿 추가</Button>
+              <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />{t('플릿 추가')}</Button>
             )}
           </div>
         </CardHeader>
@@ -132,35 +137,35 @@ export default function FleetManagementPage() {
             <div className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">선주사 *</Label>
+                  <Label className="text-xs">{t('선주사 *')}</Label>
                   <Select value={formData.owner_id} onValueChange={v => setFormData({ ...formData, owner_id: v })}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주사 선택" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선주사 선택')} /></SelectTrigger>
                     <SelectContent>{owners.map(o => <SelectItem key={o.id} value={o.id} className="text-sm">{o.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">플릿명 *</Label>
-                  <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="예: Pacific Fleet" className="h-9 text-sm" />
+                  <Label className="text-xs">{t('플릿명 *')}</Label>
+                  <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder={t('예: Pacific Fleet')} className="h-9 text-sm" />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">설명</Label>
-                <Textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="플릿 설명" rows={3} className="text-sm resize-none" />
+                <Label className="text-xs">{t('설명')}</Label>
+                <Textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder={t('플릿 설명')} rows={3} className="text-sm resize-none" />
               </div>
             </div>
           ) : (
             <>
               <Select value={selectedOwner} onValueChange={setSelectedOwner}>
-                <SelectTrigger className="h-9 w-60 text-sm"><SelectValue placeholder="선주사 필터" /></SelectTrigger>
-                <SelectContent><SelectItem value="all">전체 선주사</SelectItem>{owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="h-9 w-60 text-sm"><SelectValue placeholder={t('선주사 필터')} /></SelectTrigger>
+                <SelectContent><SelectItem value="all">{t('전체 선주사')}</SelectItem>{owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
               </Select>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead><tr className="border-b bg-gray-50">
-                    <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿명</th><th className="text-left p-2">설명</th><th className="text-center p-2">선박 수</th><th className="text-center p-2">작업</th>
+                    <th className="text-left p-2">{t('선주사')}</th><th className="text-left p-2">{t('플릿명')}</th><th className="text-left p-2">{t('설명')}</th><th className="text-center p-2">{t('선박 수')}</th><th className="text-center p-2">{t('작업')}</th>
                   </tr></thead>
                   <tbody>
-                    {filtered.length === 0 ? <tr><td colSpan={5} className="text-center py-8 text-gray-400">등록된 플릿이 없습니다</td></tr> : filtered.map(fleet => (
+                    {filtered.length === 0 ? <tr><td colSpan={5} className="text-center py-8 text-gray-400">{t('등록된 플릿이 없습니다')}</td></tr> : filtered.map(fleet => (
                       <tr key={fleet.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openForm(fleet)}>
                         <td className="p-2"><div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-gray-400" />{fleet.owner_name}</div></td>
                         <td className="p-2 font-medium">{fleet.name}</td>
@@ -174,7 +179,7 @@ export default function FleetManagementPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-gray-400 text-right">총 {filtered.length}건</p>
+              <p className="text-xs text-gray-400 text-right">{t('총 {{count}}건', { count: filtered.length })}</p>
             </>
           )}
         </CardContent>

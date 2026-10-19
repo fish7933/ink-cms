@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipPersonnelTab/en.json';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Users, Shield } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getAssignmentsByEntity } from '@/services/assignment.service';
+
+i18n.addResourceBundle('en', 'ShipPersonnelTab', en, true, true);
 
 interface ShipPersonnelTabProps {
   shipId?: string;
@@ -26,6 +31,7 @@ const LEVEL_LABELS = { ship: '선박 직접 할당', fleet: '선대 할당', own
 const LEVEL_COLORS = { ship: 'bg-blue-100 text-blue-700', fleet: 'bg-green-100 text-green-700', owner: 'bg-purple-100 text-purple-700' };
 
 export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabProps) {
+  const { t } = useTranslation('ShipPersonnelTab');
   const [ownerManagers, setOwnerManagers] = useState<PersonInfo[]>([]);
   const [ownerManagerLevel, setOwnerManagerLevel] = useState<'ship' | 'fleet' | 'owner' | null>(null);
   const [ownerManagerSourceName, setOwnerManagerSourceName] = useState('');
@@ -60,7 +66,7 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
           asgns = fleetAsgns;
           level = 'fleet';
           const { data: fleet } = await supabase.from('fleets').select('name').eq('id', fleetId).single();
-          sourceName = fleet?.name || '상위 플릿';
+          sourceName = fleet?.name || t('상위 플릿');
         }
       }
       if (asgns.length === 0 && ownerId) {
@@ -69,7 +75,7 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
           asgns = ownerAsgns;
           level = 'owner';
           const { data: owner } = await supabase.from('companies').select('name').eq('id', ownerId).single();
-          sourceName = owner?.name || '상위 선주사';
+          sourceName = owner?.name || t('상위 선주사');
         }
       }
       setOwnerManagerLevel(level);
@@ -109,13 +115,13 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
   };
 
   const getAssignmentLevelBadge = (level: 'ship' | 'fleet' | 'owner') => (
-    <Badge variant="secondary" className={`text-xs ${LEVEL_COLORS[level]}`}>{LEVEL_LABELS[level]}</Badge>
+    <Badge variant="secondary" className={`text-xs ${LEVEL_COLORS[level]}`}>{t(LEVEL_LABELS[level])}</Badge>
   );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-sm text-gray-500">담당자 정보를 불러오는 중...</div>
+        <div className="text-sm text-gray-500">{t('담당자 정보를 불러오는 중...')}</div>
       </div>
     );
   }
@@ -127,13 +133,16 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
         <CardContent className="pt-4">
           <div className="flex items-center gap-2 mb-3">
             <Users className="w-4 h-4 text-purple-600" />
-            <Label className="text-sm font-semibold">선주 담당자 (Ship Owner Contact)</Label>
+            <Label className="text-sm font-semibold">{t('선주 담당자 (Ship Owner Contact)')}</Label>
           </div>
           {ownerManagers.length > 0 ? (
             <div className="space-y-2">
               {ownerManagerLevel && ownerManagerLevel !== 'ship' && (
                 <p className="text-xs text-gray-400">
-                  {ownerManagerLevel === 'fleet' ? '선대' : '선주사'} 담당자가 자동 적용됩니다 ({ownerManagerSourceName})
+                  {t('{{level}} 담당자가 자동 적용됩니다 ({{name}})', {
+                    level: ownerManagerLevel === 'fleet' ? t('선대') : t('선주사'),
+                    name: ownerManagerSourceName,
+                  })}
                 </p>
               )}
               {ownerManagers.map(m => (
@@ -147,7 +156,7 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
               ))}
             </div>
           ) : (
-            <div className="text-sm text-gray-500">담당자가 지정되지 않았습니다</div>
+            <div className="text-sm text-gray-500">{t('담당자가 지정되지 않았습니다')}</div>
           )}
         </CardContent>
       </Card>
@@ -157,7 +166,7 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
         <CardContent className="pt-4">
           <div className="flex items-center gap-2 mb-3">
             <Shield className="w-4 h-4 text-green-600" />
-            <Label className="text-sm font-semibold">선박관리사 담당자 (Ship Manager Supervisors)</Label>
+            <Label className="text-sm font-semibold">{t('선박관리사 담당자 (Ship Manager Supervisors)')}</Label>
           </div>
           {supervisors.length > 0 ? (
             <div className="space-y-2">
@@ -173,9 +182,9 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
             </div>
           ) : (
             <div className="text-sm text-gray-500 text-center py-4">
-              할당된 선박관리사 감독이 없습니다
+              {t('할당된 선박관리사 감독이 없습니다')}
               <p className="text-xs text-gray-400 mt-2">
-                선박관리사 역할의 사용자를 이 선박, 선대 또는 선주사에 할당하면 여기에 표시됩니다
+                {t('선박관리사 역할의 사용자를 이 선박, 선대 또는 선주사에 할당하면 여기에 표시됩니다')}
               </p>
             </div>
           )}
@@ -184,13 +193,13 @@ export function ShipPersonnelTab({ shipId, ownerId, fleetId }: ShipPersonnelTabP
 
       {/* Information Note */}
       <div className="text-xs text-gray-500 p-3 bg-blue-50 rounded-md border border-blue-200">
-        <p className="font-medium text-blue-900 mb-1">담당자 구분</p>
+        <p className="font-medium text-blue-900 mb-1">{t('담당자 구분')}</p>
         <ul className="list-disc list-inside space-y-1 text-blue-800">
-          <li><strong>선주 담당자:</strong> 선박 소유자 측의 담당자 (선주 사용자 관리 화면에서 배정, ship_owner 역할)</li>
-          <li><strong>선박관리사 담당자:</strong> 선박 관리 감독자 (ship_manager 역할, 선박관리사 담당자 화면에서 배정)</li>
+          <li><strong>{t('선주 담당자:')}</strong> {t('선박 소유자 측의 담당자 (선주 사용자 관리 화면에서 배정, ship_owner 역할)')}</li>
+          <li><strong>{t('선박관리사 담당자:')}</strong> {t('선박 관리 감독자 (ship_manager 역할, 선박관리사 담당자 화면에서 배정)')}</li>
         </ul>
         <p className="mt-2 text-blue-800">
-          <strong>우선순위:</strong> 선박 직접 배정 → 선대 배정 → 선주사 배정
+          <strong>{t('우선순위:')}</strong> {t('선박 직접 배정 → 선대 배정 → 선주사 배정')}
         </p>
       </div>
     </div>

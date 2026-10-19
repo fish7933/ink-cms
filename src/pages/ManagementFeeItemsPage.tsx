@@ -21,6 +21,10 @@ import {
 import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ManagementFeeItemsPage/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeItemsPage', en, true, true);
 
 const BILLING_BASIS_LABEL: Record<string, string> = {
   monthly: '월정기(일할계산)',
@@ -37,6 +41,7 @@ const BILLING_BASIS_COLOR: Record<string, string> = {
 };
 
 export default function ManagementFeeItemsPage() {
+  const { t } = useTranslation('ManagementFeeItemsPage');
   const navigate = useNavigate();
   const [items, setItems] = useState<ManagementFeeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,27 +107,27 @@ export default function ManagementFeeItemsPage() {
 
   const handleSave = async () => {
     setError('');
-    if (!formData.name.trim()) { setError('항목명을 입력해주세요.'); return; }
+    if (!formData.name.trim()) { setError(t('항목명을 입력해주세요.')); return; }
     try {
       setSaving(true);
       if (formView?.id) {
         const updated = await updateManagementFeeItem(formView.id, formData);
         if (updated) { await loadItems(); closeForm(); }
-        else setError('수정에 실패했습니다.');
+        else setError(t('수정에 실패했습니다.'));
       } else {
         const added = await addManagementFeeItem({ ...formData, is_active: true });
         if (added) { await loadItems(); closeForm(); }
-        else setError('추가에 실패했습니다.');
+        else setError(t('추가에 실패했습니다.'));
       }
-    } catch { setError('오류가 발생했습니다.'); }
+    } catch { setError(t('오류가 발생했습니다.')); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('이 청구 항목을 삭제하시겠습니까?')) return;
+    if (!confirm(t('이 청구 항목을 삭제하시겠습니까?'))) return;
     const success = await deleteManagementFeeItem(id);
     if (success) await loadItems();
-    else alert('삭제에 실패했습니다.');
+    else alert(t('삭제에 실패했습니다.'));
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -145,7 +150,7 @@ export default function ManagementFeeItemsPage() {
     try {
       await Promise.all(updates.map(u => updateManagementFeeItem(u.id, { display_order: u.display_order })));
     } catch {
-      alert('순서 저장 중 오류가 발생했습니다.');
+      alert(t('순서 저장 중 오류가 발생했습니다.'));
       await loadItems();
     }
   };
@@ -154,7 +159,7 @@ export default function ManagementFeeItemsPage() {
     return (
       <ProtectedRoute resource="management_fee_items">
         <div className="flex items-center justify-center h-64">
-          <p className="text-sm text-gray-500">로딩 중...</p>
+          <p className="text-sm text-gray-500">{t('로딩 중...')}</p>
         </div>
       </ProtectedRoute>
     );
@@ -170,29 +175,29 @@ export default function ManagementFeeItemsPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">
-                  {formView.id ? '청구 항목 수정' : '청구 항목 추가'}
+                  {formView.id ? t('청구 항목 수정') : t('청구 항목 추가')}
                 </CardTitle>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={closeForm}>취소</Button>
+                  <Button variant="ghost" size="sm" onClick={closeForm}>{t('취소')}</Button>
                   <Button size="sm" onClick={handleSave} disabled={saving}>
                     <Save className="w-3.5 h-3.5 mr-1" />
-                    {saving ? '저장 중...' : '저장'}
+                    {saving ? t('저장 중...') : t('저장')}
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">항목명 *</Label>
+                <Label className="text-xs">{t('항목명 *')}</Label>
                 <Input
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="예: 대리점비, 통신비, 선발비, 사회보장기금"
+                  placeholder={t('예: 대리점비, 통신비, 선발비, 사회보장기금')}
                   className="h-8 text-sm"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">기본 과금 방식</Label>
+                <Label className="text-xs">{t('기본 과금 방식')}</Label>
                 <div className="flex gap-2">
                   {(['monthly', 'monthly_flat', 'one_time', 'actual_cost'] as const).map(basis => (
                     <button
@@ -204,18 +209,18 @@ export default function ManagementFeeItemsPage() {
                           : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
                       }`}
                     >
-                      {BILLING_BASIS_LABEL[basis]}
+                      {t(BILLING_BASIS_LABEL[basis])}
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400">템플릿에 항목 추가 시 기본으로 제안될 값이며, 실제 적용 방식은 템플릿 조건 행마다 따로 지정할 수 있습니다.</p>
+                <p className="text-xs text-gray-400">{t('템플릿에 항목 추가 시 기본으로 제안될 값이며, 실제 적용 방식은 템플릿 조건 행마다 따로 지정할 수 있습니다.')}</p>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">설명</Label>
+                <Label className="text-xs">{t('설명')}</Label>
                 <Textarea
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="항목에 대한 설명을 입력하세요"
+                  placeholder={t('항목에 대한 설명을 입력하세요')}
                   rows={2}
                   className="text-sm"
                 />
@@ -233,11 +238,11 @@ export default function ManagementFeeItemsPage() {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm">관리비 청구 항목</CardTitle>
+              <CardTitle className="text-sm">{t('관리비 청구 항목')}</CardTitle>
               {formView === null && permissions.canCreate && (
                 <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => openForm()}>
                   <Plus className="w-3.5 h-3.5" />
-                  항목 추가
+                  {t('항목 추가')}
                 </Button>
               )}
             </div>
@@ -245,18 +250,18 @@ export default function ManagementFeeItemsPage() {
           <CardContent className="pt-0">
             {items.length === 0 ? (
               <div className="text-center py-8 text-sm text-gray-400">
-                등록된 관리비 청구 항목이 없습니다. (예: 대리점비, 통신비, 선발비, 사회보장기금)
+                {t('등록된 관리비 청구 항목이 없습니다. (예: 대리점비, 통신비, 선발비, 사회보장기금)')}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12 text-xs"></TableHead>
-                    <TableHead className="text-xs">항목명</TableHead>
-                    <TableHead className="text-xs w-40">기본 과금 방식</TableHead>
-                    <TableHead className="text-xs">설명</TableHead>
+                    <TableHead className="text-xs">{t('항목명')}</TableHead>
+                    <TableHead className="text-xs w-40">{t('기본 과금 방식')}</TableHead>
+                    <TableHead className="text-xs">{t('설명')}</TableHead>
                     {(permissions.canEdit || permissions.canDelete) && (
-                      <TableHead className="text-right text-xs w-16">작업</TableHead>
+                      <TableHead className="text-right text-xs w-16">{t('작업')}</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
@@ -268,7 +273,7 @@ export default function ManagementFeeItemsPage() {
                           <TableCell className="font-medium text-sm">{item.name}</TableCell>
                           <TableCell>
                             <span className={`text-xs px-2 py-0.5 rounded border ${BILLING_BASIS_COLOR[item.default_billing_basis]}`}>
-                              {BILLING_BASIS_LABEL[item.default_billing_basis]}
+                              {t(BILLING_BASIS_LABEL[item.default_billing_basis])}
                             </span>
                           </TableCell>
                           <TableCell className="text-gray-500 text-xs">{item.description || '-'}</TableCell>

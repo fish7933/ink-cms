@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/SupervisorManagementPage/en.json';
 import { supervisorService } from '@/services/supervisor.service';
 import { supabase } from '@/lib/supabase';
 import { getCurrentUser } from '@/lib/store';
@@ -25,8 +28,11 @@ interface EffectiveResult {
   sourceName: string;
 }
 
+i18n.addResourceBundle('en', 'SupervisorManagementPage', en, true, true);
+
 export default function SupervisorManagementPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('SupervisorManagementPage');
   const { toast } = useToast();
 
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
@@ -92,7 +98,7 @@ export default function SupervisorManagementPage() {
         const ownerAsgns = getDirectFor('owner', fleet.owner_id);
         if (ownerAsgns.length > 0) {
           const owner = owners.find(o => o.id === fleet.owner_id);
-          return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || '상위 선주사' };
+          return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || t('상위 선주사') };
         }
       }
     }
@@ -104,7 +110,7 @@ export default function SupervisorManagementPage() {
         const fleetAsgns = getDirectFor('fleet', ship.fleet_id);
         if (fleetAsgns.length > 0) {
           const fleet = fleets.find(f => f.id === ship.fleet_id);
-          return { assignments: fleetAsgns, inherited: true, sourceName: fleet?.name || '상위 플릿' };
+          return { assignments: fleetAsgns, inherited: true, sourceName: fleet?.name || t('상위 플릿') };
         }
         // 플릿도 없으면 선주사 레벨
         const fleet = fleets.find(f => f.id === ship.fleet_id);
@@ -112,7 +118,7 @@ export default function SupervisorManagementPage() {
           const ownerAsgns = getDirectFor('owner', fleet.owner_id);
           if (ownerAsgns.length > 0) {
             const owner = owners.find(o => o.id === fleet.owner_id);
-            return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || '상위 선주사' };
+            return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || t('상위 선주사') };
           }
         }
       }
@@ -121,7 +127,7 @@ export default function SupervisorManagementPage() {
         const ownerAsgns = getDirectFor('owner', ship.owner_id);
         if (ownerAsgns.length > 0) {
           const owner = owners.find(o => o.id === ship.owner_id);
-          return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || '상위 선주사' };
+          return { assignments: ownerAsgns, inherited: true, sourceName: owner?.name || t('상위 선주사') };
         }
       }
     }
@@ -133,7 +139,7 @@ export default function SupervisorManagementPage() {
 
   const renderBadges = (type: 'owner' | 'fleet' | 'ship', entityId: string) => {
     const { assignments: asgns, inherited, sourceName } = getEffective(type, entityId);
-    if (!asgns.length) return <span className="text-xs text-gray-300">미배정</span>;
+    if (!asgns.length) return <span className="text-xs text-gray-300">{t('미배정')}</span>;
     return (
       <div className="flex flex-wrap items-center gap-1">
         {inherited && (
@@ -165,25 +171,25 @@ export default function SupervisorManagementPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedSupervisor) { toast({ title: '담당자를 선택하세요', variant: 'destructive' }); return; }
+    if (!selectedSupervisor) { toast({ title: t('담당자를 선택하세요'), variant: 'destructive' }); return; }
     if (!modal) return;
     try {
       setSaving(true);
       await supervisorService.createAssignment(selectedSupervisor, modal.type, modal.entityId, currentUserId);
-      toast({ title: '배정 완료' });
+      toast({ title: t('배정 완료') });
       setModal(null);
       await loadData();
     } catch (e: unknown) {
       const code = (e as { code?: string })?.code;
-      const msg = code === '23505' ? '이미 동일한 배정이 존재합니다' : (e as { message?: string })?.message || '배정 실패';
-      toast({ title: '오류', description: msg, variant: 'destructive' });
+      const msg = code === '23505' ? t('이미 동일한 배정이 존재합니다') : (e as { message?: string })?.message || t('배정 실패');
+      toast({ title: t('오류'), description: msg, variant: 'destructive' });
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('이 배정을 해제하시겠습니까?')) return;
-    try { await supervisorService.deleteAssignment(id); await loadData(); toast({ title: '해제 완료' }); }
-    catch { toast({ title: '해제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 배정을 해제하시겠습니까?'))) return;
+    try { await supervisorService.deleteAssignment(id); await loadData(); toast({ title: t('해제 완료') }); }
+    catch { toast({ title: t('해제 실패'), variant: 'destructive' }); }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
@@ -194,10 +200,9 @@ export default function SupervisorManagementPage() {
         <div className="flex items-center gap-2">
           <UserCheck className="w-6 h-6" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">우리회사 담당자 관리</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t('우리회사 담당자 관리')}</h1>
             <p className="text-sm text-gray-500">
-              선주사·플릿·선박별 내부 담당자(선박관리사)를 배정합니다.
-              직접 배정이 없으면 상위 레벨 배정을 자동 상속합니다.
+              {t('선주사·플릿·선박별 내부 담당자(선박관리사)를 배정합니다. 직접 배정이 없으면 상위 레벨 배정을 자동 상속합니다.')}
             </p>
           </div>
         </div>
@@ -205,15 +210,15 @@ export default function SupervisorManagementPage() {
         {/* 범례 */}
         <div className="flex items-center gap-4 text-xs text-gray-500 px-1">
           <span className="flex items-center gap-1">
-            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">이름</span> 직접 배정
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{t('이름')}</span> {t('직접 배정')}
           </span>
           <span className="flex items-center gap-1">
-            <span className="px-2 py-0.5 rounded-full border border-dashed border-gray-300 text-gray-400">이름</span> 상위에서 상속
+            <span className="px-2 py-0.5 rounded-full border border-dashed border-gray-300 text-gray-400">{t('이름')}</span> {t('상위에서 상속')}
           </span>
         </div>
 
         {owners.length === 0 ? (
-          <Card><CardContent className="py-12 text-center text-sm text-gray-400">등록된 선주사가 없습니다</CardContent></Card>
+          <Card><CardContent className="py-12 text-center text-sm text-gray-400">{t('등록된 선주사가 없습니다')}</CardContent></Card>
         ) : owners.map(owner => {
           const ownerFleets = fleets.filter(f => f.owner_id === owner.id);
           // fleet_id가 존재하지 않는(삭제된) 플릿을 가리키는 고아 참조인 경우도 선주 직속 선박으로 취급
@@ -227,7 +232,7 @@ export default function SupervisorManagementPage() {
                   </CardTitle>
                   {permissions.canCreate && (
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openModal('owner', owner.id, owner.name)}>
-                      <Plus className="w-3 h-3" />배정 추가
+                      <Plus className="w-3 h-3" />{t('배정 추가')}
                     </Button>
                   )}
                 </div>
@@ -248,7 +253,7 @@ export default function SupervisorManagementPage() {
                             </div>
                             {permissions.canCreate && (
                               <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('fleet', fleet.id, `${owner.name} › ${fleet.name}`)}>
-                                <Plus className="w-3 h-3" />배정
+                                <Plus className="w-3 h-3" />{t('배정')}
                               </Button>
                             )}
                           </div>
@@ -262,7 +267,7 @@ export default function SupervisorManagementPage() {
                                 </div>
                                 {permissions.canCreate && (
                                   <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${fleet.name} › ${ship.name}`)}>
-                                    <Plus className="w-3 h-3" />배정
+                                    <Plus className="w-3 h-3" />{t('배정')}
                                   </Button>
                                 )}
                               </div>
@@ -281,7 +286,7 @@ export default function SupervisorManagementPage() {
                           </div>
                           {permissions.canCreate && (
                             <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2 shrink-0" onClick={() => openModal('ship', ship.id, `${owner.name} › ${ship.name}`)}>
-                              <Plus className="w-3 h-3" />배정
+                              <Plus className="w-3 h-3" />{t('배정')}
                             </Button>
                           )}
                         </div>
@@ -296,7 +301,7 @@ export default function SupervisorManagementPage() {
 
         {fleets.filter(f => !owners.find(o => o.id === f.owner_id)).length > 0 && (
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">선주사 미지정 플릿</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">{t('선주사 미지정 플릿')}</CardTitle></CardHeader>
             <CardContent className="pt-0 pb-3 space-y-1">
               {fleets.filter(f => !owners.find(o => o.id === f.owner_id)).map(fleet => (
                 <div key={fleet.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-50">
@@ -306,7 +311,7 @@ export default function SupervisorManagementPage() {
                   </div>
                   {permissions.canCreate && (
                     <Button size="sm" variant="ghost" className="h-6 text-xs gap-1 px-2" onClick={() => openModal('fleet', fleet.id, fleet.name)}>
-                      <Plus className="w-3 h-3" />배정
+                      <Plus className="w-3 h-3" />{t('배정')}
                     </Button>
                   )}
                 </div>
@@ -320,11 +325,11 @@ export default function SupervisorManagementPage() {
       <Dialog open={!!modal} onOpenChange={open => !open && setModal(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base">우리회사 담당자 배정</DialogTitle>
+            <DialogTitle className="text-base">{t('우리회사 담당자 배정')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
-              <Label className="text-xs text-gray-500">대상</Label>
+              <Label className="text-xs text-gray-500">{t('대상')}</Label>
               <p className="text-sm font-medium">{modal?.entityLabel}</p>
             </div>
             {modal && (() => {
@@ -332,18 +337,18 @@ export default function SupervisorManagementPage() {
               if (isInherited && asgns.length > 0) {
                 return (
                   <div className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-700">
-                    현재 <strong>{sourceName}</strong>에서 상속됨:&nbsp;
+                    {t('현재 {{sourceName}}에서 상속됨:', { sourceName })}&nbsp;
                     {asgns.map(a => getSupervisorById(a.supervisor_id)?.name).filter(Boolean).join(', ')}
-                    <br />직접 배정하면 상속 대신 이 배정이 적용됩니다.
+                    <br />{t('직접 배정하면 상속 대신 이 배정이 적용됩니다.')}
                   </div>
                 );
               }
               return null;
             })()}
             <div className="space-y-1.5">
-              <Label className="text-xs">담당 감독 (선박관리사) *</Label>
+              <Label className="text-xs">{t('담당 감독 (선박관리사) *')}</Label>
               <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="담당자 선택" /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('담당자 선택')} /></SelectTrigger>
                 <SelectContent>
                   {supervisors.map(s => (
                     <SelectItem key={s.id} value={s.id} className="text-sm">
@@ -352,12 +357,12 @@ export default function SupervisorManagementPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-400">우리 회사(INK) 선박관리사 중에서 선택합니다</p>
+              <p className="text-xs text-gray-400">{t('우리 회사(INK) 선박관리사 중에서 선택합니다')}</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setModal(null)}>취소</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving || !selectedSupervisor}>{saving ? '저장 중...' : '배정'}</Button>
+            <Button variant="outline" size="sm" onClick={() => setModal(null)}>{t('취소')}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving || !selectedSupervisor}>{saving ? t('저장 중...') : t('배정')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

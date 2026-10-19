@@ -1,0 +1,18 @@
+{
+  "선박 관리 시스템": "Ship Management System",
+  "계정 정보를 입력하여 로그인하세요": "Sign in with your account",
+  "아이디": "Username",
+  "아이디를 입력하세요": "Enter your username",
+  "비밀번호": "Password",
+  "비밀번호를 입력하세요": "Enter your password",
+  "로그인 중...": "Signing in...",
+  "로그인": "Sign In",
+  "테스트 계정:": "Test Accounts:",
+  "• 선주사: owner1 / password123": "• Ship Owner: owner1 / password123",
+  "• 관리자: manager1 / password123": "• Manager: manager1 / password123",
+  "• 매닝사: manning1 / password123": "• Manning Agency: manning1 / password123",
+  "• 선원: crew1 / password123": "• Crew: crew1 / password123",
+  "입력하신 아이디가 존재하지 않습니다. 아이디를 확인해주세요.": "This username doesn't exist. Please check your username.",
+  "비밀번호가 올바르지 않습니다. 다시 확인해주세요.": "Incorrect password. Please try again.",
+  "로그인 중 오류가 발생했습니다. 다시 시도해주세요.": "An error occurred while signing in. Please try again."
+}

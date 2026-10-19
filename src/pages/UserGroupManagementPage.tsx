@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/UserGroupManagementPage/en.json';
 import { getCurrentUser } from '@/services/auth.service';
 import { getUsers, addUser, updateUser, deleteUser } from '@/services/user.service';
 import { getCompanies } from '@/services/company.service';
@@ -26,8 +29,11 @@ interface CrewOption { id: string; name: string; }
 
 const EMPTY_FORM = { username: '', password: '', name: '', email: '', role: 'crew', company_id: '', crew_member_id: '' };
 
+i18n.addResourceBundle('en', 'UserGroupManagementPage', en, true, true);
+
 export default function UserGroupManagementPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('UserGroupManagementPage');
   const { toast } = useToast();
 
   const [users, setUsers] = useState<User[]>([]);
@@ -108,10 +114,10 @@ export default function UserGroupManagementPage() {
 
   const handleSave = async () => {
     setFormError('');
-    if (!formData.name.trim()) { setFormError('이름을 입력하세요.'); return; }
-    if (!formData.email.trim()) { setFormError('이메일을 입력하세요.'); return; }
-    if (!editId && !formData.username.trim()) { setFormError('사용자명을 입력하세요.'); return; }
-    if (!editId && !formData.password.trim()) { setFormError('비밀번호를 입력하세요.'); return; }
+    if (!formData.name.trim()) { setFormError(t('이름을 입력하세요.')); return; }
+    if (!formData.email.trim()) { setFormError(t('이메일을 입력하세요.')); return; }
+    if (!editId && !formData.username.trim()) { setFormError(t('사용자명을 입력하세요.')); return; }
+    if (!editId && !formData.password.trim()) { setFormError(t('비밀번호를 입력하세요.')); return; }
     try {
       setSaving(true);
       if (editId) {
@@ -131,24 +137,24 @@ export default function UserGroupManagementPage() {
           crew_member_id: formData.crew_member_id || null,
         });
       }
-      toast({ title: editId ? '수정 완료' : '등록 완료' });
+      toast({ title: editId ? t('수정 완료') : t('등록 완료') });
       closeModal();
       await loadData();
     } catch (e: unknown) {
-      setFormError((e as { message?: string })?.message || '저장 실패');
+      setFormError((e as { message?: string })?.message || t('저장 실패'));
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
     const target = users.find(u => u.id === id);
     if (target && isProtectedFromCurrentUser(target)) return;
-    if (!confirm('이 사용자를 삭제하시겠습니까?')) return;
+    if (!confirm(t('이 사용자를 삭제하시겠습니까?'))) return;
     try {
       await deleteUser(id);
       await loadData();
-      toast({ title: '삭제 완료' });
+      toast({ title: t('삭제 완료') });
     } catch (e: unknown) {
-      toast({ title: '삭제 실패', description: (e as { message?: string })?.message, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: (e as { message?: string })?.message, variant: 'destructive' });
     }
   };
 
@@ -159,30 +165,30 @@ export default function UserGroupManagementPage() {
         <CardHeader className="pb-3">
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle className="text-base">{ROLE_LABELS[role] || role} 관리</CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">총 {roleUsers.length}명</p>
+              <CardTitle className="text-base">{t('{{role}} 관리', { role: t(ROLE_LABELS[role] || role) })}</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">{t('총 {{count}}명', { count: roleUsers.length })}</p>
             </div>
             {permissions.canCreate && (
               <Button size="sm" className="gap-1.5 h-8" onClick={() => openAdd(role)}>
-                <Plus className="w-3.5 h-3.5" />사용자 추가
+                <Plus className="w-3.5 h-3.5" />{t('사용자 추가')}
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent className="pt-0">
           {roleUsers.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">등록된 {ROLE_LABELS[role] || role}이 없습니다</div>
+            <div className="text-center py-8 text-sm text-gray-500">{t('등록된 {{role}}이 없습니다', { role: t(ROLE_LABELS[role] || role) })}</div>
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">사용자명</TableHead>
-                    <TableHead className="text-xs">이름</TableHead>
-                    <TableHead className="text-xs">이메일</TableHead>
-                    <TableHead className="text-xs">소속</TableHead>
-                    <TableHead className="text-xs">역할</TableHead>
-                    <TableHead className="text-right text-xs w-20">작업</TableHead>
+                    <TableHead className="text-xs">{t('사용자명')}</TableHead>
+                    <TableHead className="text-xs">{t('이름')}</TableHead>
+                    <TableHead className="text-xs">{t('이메일')}</TableHead>
+                    <TableHead className="text-xs">{t('소속')}</TableHead>
+                    <TableHead className="text-xs">{t('역할')}</TableHead>
+                    <TableHead className="text-right text-xs w-20">{t('작업')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -198,7 +204,7 @@ export default function UserGroupManagementPage() {
                         <TableCell className="text-sm">{u.name}</TableCell>
                         <TableCell className="text-sm">{u.email}</TableCell>
                         <TableCell className="text-sm">{company ? company.name : '-'}</TableCell>
-                        <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-500'}`}>{ROLE_LABELS[u.role] || u.role}</Badge></TableCell>
+                        <TableCell><Badge className={`text-xs ${ROLE_COLORS[u.role] || 'bg-gray-500'}`}>{t(ROLE_LABELS[u.role] || u.role)}</Badge></TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           {canDeleteRow && (
                             <Button size="sm" variant="ghost" onClick={() => handleDelete(u.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
@@ -206,7 +212,7 @@ export default function UserGroupManagementPage() {
                             </Button>
                           )}
                           {protectedRow && (permissions.canEdit || permissions.canDelete) && (
-                            <span className="text-xs text-gray-400">수정 불가</span>
+                            <span className="text-xs text-gray-400">{t('수정 불가')}</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -232,19 +238,19 @@ export default function UserGroupManagementPage() {
           <div className="flex items-center gap-2">
             <UserCircle className="w-6 h-6" />
             <div>
-              <h1 className="text-xl font-bold text-gray-900">사용자 관리</h1>
-              <p className="text-sm text-gray-600">선주/선원매닝사/선원 등 외부 사용자를 그룹별로 관리합니다</p>
+              <h1 className="text-xl font-bold text-gray-900">{t('사용자 관리')}</h1>
+              <p className="text-sm text-gray-600">{t('선주/선원매닝사/선원 등 외부 사용자를 그룹별로 관리합니다')}</p>
             </div>
           </div>
           <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={loadData}>
-            <RefreshCw className="w-3.5 h-3.5" />새로고침
+            <RefreshCw className="w-3.5 h-3.5" />{t('새로고침')}
           </Button>
         </div>
         <Tabs defaultValue="ship_owner" className="w-full">
           <TabsList className="grid w-full grid-cols-3 h-9">
             {['ship_owner','manning_agency','crew'].map(role => (
               <TabsTrigger key={role} value={role} className="text-sm">
-                {ROLE_LABELS[role]} ({users.filter(u => u.role === role).length})
+                {t(ROLE_LABELS[role])} ({users.filter(u => u.role === role).length})
               </TabsTrigger>
             ))}
           </TabsList>
@@ -260,7 +266,7 @@ export default function UserGroupManagementPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <UserCircle className="w-5 h-5" />
-              {editId ? '사용자 수정' : `${ROLE_LABELS[formData.role] || formData.role} 추가`}
+              {editId ? t('사용자 수정') : t('{{role}} 추가', { role: t(ROLE_LABELS[formData.role] || formData.role) })}
             </DialogTitle>
           </DialogHeader>
 
@@ -269,33 +275,33 @@ export default function UserGroupManagementPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">사용자명 * {editId && <span className="text-gray-400">(수정 불가)</span>}</Label>
-                <Input value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} placeholder="로그인 ID" disabled={!!editId} className="h-8 text-sm" />
+                <Label className="text-xs">{t('사용자명 *')} {editId && <span className="text-gray-400">{t('(수정 불가)')}</span>}</Label>
+                <Input value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} placeholder={t('로그인 ID')} disabled={!!editId} className="h-8 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">비밀번호 {editId ? '(변경시만 입력)' : '*'}</Label>
-                <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="비밀번호" className="h-8 text-sm" />
+                <Label className="text-xs">{t('비밀번호')} {editId ? t('(변경시만 입력)') : '*'}</Label>
+                <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder={t('비밀번호')} className="h-8 text-sm" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">이름 *</Label>
-                <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="실명" className="h-8 text-sm" />
+                <Label className="text-xs">{t('이름 *')}</Label>
+                <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder={t('실명')} className="h-8 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">이메일 *</Label>
+                <Label className="text-xs">{t('이메일 *')}</Label>
                 <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="email@example.com" className="h-8 text-sm" />
               </div>
             </div>
 
             {['ship_owner','manning_agency'].includes(formData.role) && (
               <div className="space-y-1.5">
-                <Label className="text-xs">소속 회사 <span className="text-gray-400 font-normal">(선택)</span></Label>
+                <Label className="text-xs">{t('소속 회사')} <span className="text-gray-400 font-normal">{t('(선택)')}</span></Label>
                 <Select value={formData.company_id || '_none'} onValueChange={v => setFormData({ ...formData, company_id: v === '_none' ? '' : v })}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="회사 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('회사 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">— 미지정 —</SelectItem>
+                    <SelectItem value="_none">{t('— 미지정 —')}</SelectItem>
                     {companyOptions.map(c => <SelectItem key={c.id} value={String(c.id)} className="text-sm">{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -304,27 +310,27 @@ export default function UserGroupManagementPage() {
 
             {formData.role === 'crew' && (
               <div className="space-y-1.5">
-                <Label className="text-xs">연결할 선원 레코드 <span className="text-gray-400 font-normal">(선택)</span></Label>
+                <Label className="text-xs">{t('연결할 선원 레코드')} <span className="text-gray-400 font-normal">{t('(선택)')}</span></Label>
                 <Select value={formData.crew_member_id || '_none'} onValueChange={v => setFormData({ ...formData, crew_member_id: v === '_none' ? '' : v })}>
-                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="선원 레코드 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('선원 레코드 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">— 미연결 —</SelectItem>
+                    <SelectItem value="_none">{t('— 미연결 —')}</SelectItem>
                     {crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-gray-400">로그인 시 본인의 이력서·채용·교육·고과 조회에 사용됩니다</p>
+                <p className="text-xs text-gray-400">{t('로그인 시 본인의 이력서·채용·교육·고과 조회에 사용됩니다')}</p>
               </div>
             )}
 
             <div className="flex items-center gap-2 pt-1">
-              <Label className="text-xs">역할</Label>
-              <Badge className={`text-xs ${ROLE_COLORS[formData.role] || 'bg-gray-500'}`}>{ROLE_LABELS[formData.role] || formData.role}</Badge>
+              <Label className="text-xs">{t('역할')}</Label>
+              <Badge className={`text-xs ${ROLE_COLORS[formData.role] || 'bg-gray-500'}`}>{t(ROLE_LABELS[formData.role] || formData.role)}</Badge>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={closeModal}>취소</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? '저장 중...' : '저장'}</Button>
+            <Button variant="outline" size="sm" onClick={closeModal}>{t('취소')}</Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t('저장 중...') : t('저장')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipListGridView/en.json';
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +12,8 @@ import type { Ship, Company, Fleet } from '@/types/models';
 import type { SalaryTemplate } from '@/lib/salary-store';
 import type { OnboardCount } from '@/services/ship-onboard-count.service';
 import SalaryTemplateViewDialog from '@/components/salary/SalaryTemplateViewDialog';
+
+i18n.addResourceBundle('en', 'ShipListGridView', en, true, true);
 
 interface ShipListGridViewProps {
   ships: Ship[];
@@ -41,6 +46,7 @@ export default function ShipListGridView({
   selectedShips = [],
   onSelectionChange,
 }: ShipListGridViewProps) {
+  const { t } = useTranslation('ShipListGridView');
   const [viewingTemplateId, setViewingTemplateId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -95,13 +101,13 @@ export default function ShipListGridView({
   };
 
   if (sortedShips.length === 0) {
-    return <div className="rounded-md border py-12 text-center text-sm text-gray-500">등록된 선박이 없습니다</div>;
+    return <div className="rounded-md border py-12 text-center text-sm text-gray-500">{t('등록된 선박이 없습니다')}</div>;
   }
 
   return (
     <>
       <div className="flex justify-end items-center gap-2 mb-2">
-        <Label className="text-xs">페이지당:</Label>
+        <Label className="text-xs">{t('페이지당:')}</Label>
         <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
           <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -120,21 +126,21 @@ export default function ShipListGridView({
                     checked={allSelected}
                     onCheckedChange={checked => toggleSelectAll(!!checked)}
                     className={someSelected && !allSelected ? 'data-[state=checked]:bg-gray-400' : ''}
-                    aria-label="현재 페이지 전체 선택"
+                    aria-label={t('현재 페이지 전체 선택')}
                   />
                 </th>
               )}
               <th className="w-8 px-2 py-1.5 text-center font-medium text-gray-400">#</th>
-              <th className="px-2 py-1.5 text-left font-medium text-gray-600">선주사</th>
-              <th className="px-2 py-1.5 text-left font-medium text-gray-600">플릿</th>
-              <th className="px-2 py-1.5 text-left font-medium text-gray-600">선박명</th>
-              <th className="px-2 py-1.5 text-left font-medium text-gray-600">선종</th>
-              <th className="px-2 py-1.5 text-left font-medium text-gray-600">선적</th>
+              <th className="px-2 py-1.5 text-left font-medium text-gray-600">{t('선주사')}</th>
+              <th className="px-2 py-1.5 text-left font-medium text-gray-600">{t('플릿')}</th>
+              <th className="px-2 py-1.5 text-left font-medium text-gray-600">{t('선박명')}</th>
+              <th className="px-2 py-1.5 text-left font-medium text-gray-600">{t('선종')}</th>
+              <th className="px-2 py-1.5 text-left font-medium text-gray-600">{t('선적')}</th>
               <th className="px-2 py-1.5 text-right font-medium text-gray-600">GT</th>
               <th className="px-2 py-1.5 text-right font-medium text-gray-600">DWT</th>
-              <th className="px-2 py-1.5 text-center font-medium text-gray-600">급여</th>
-              <th className="px-2 py-1.5 text-center font-medium text-gray-600">승선인원</th>
-              <th className="px-2 py-1.5 text-center font-medium text-gray-600">상태</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600">{t('급여')}</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600">{t('승선인원')}</th>
+              <th className="px-2 py-1.5 text-center font-medium text-gray-600">{t('상태')}</th>
               <th className="px-2 py-1.5"></th>
             </tr>
           </thead>
@@ -151,7 +157,7 @@ export default function ShipListGridView({
                 >
                   {showCheckboxes && (
                     <td className="px-2 py-1.5" onClick={e => e.stopPropagation()}>
-                      <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(ship.id)} aria-label={`${ship.name} 선택`} />
+                      <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(ship.id)} aria-label={t('{{name}} 선택', { name: ship.name })} />
                     </td>
                   )}
                   <td className="px-2 py-1.5 text-center text-gray-400">{(currentPageClamped - 1) * itemsPerPage + i + 1}</td>
@@ -165,17 +171,17 @@ export default function ShipListGridView({
                   <td className="px-2 py-1.5 text-center" onClick={e => e.stopPropagation()}>
                     {shipTemplateMap[ship.id] ? (
                       <button type="button" onClick={() => setViewingTemplateId(shipTemplateMap[ship.id]!.id)}>
-                        <Badge variant="secondary" className="text-[10px] cursor-pointer bg-green-100 text-green-700 hover:bg-green-200">배정됨</Badge>
+                        <Badge variant="secondary" className="text-[10px] cursor-pointer bg-green-100 text-green-700 hover:bg-green-200">{t('배정됨')}</Badge>
                       </button>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] text-gray-400">미배정</Badge>
+                      <Badge variant="outline" className="text-[10px] text-gray-400">{t('미배정')}</Badge>
                     )}
                   </td>
                   <td className="px-2 py-1.5 text-center">
                     {onboard && (onboard.officer > 0 || onboard.rating > 0) ? (
                       <div className="flex justify-center gap-1">
-                        <Badge variant="secondary" className="text-[10px] bg-indigo-50 text-indigo-700">사관 {onboard.officer}</Badge>
-                        <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-700">부원 {onboard.rating}</Badge>
+                        <Badge variant="secondary" className="text-[10px] bg-indigo-50 text-indigo-700">{t('사관 {{count}}', { count: onboard.officer })}</Badge>
+                        <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-700">{t('부원 {{count}}', { count: onboard.rating })}</Badge>
                       </div>
                     ) : (
                       <span className="text-gray-300">-</span>
@@ -183,9 +189,9 @@ export default function ShipListGridView({
                   </td>
                   <td className="px-2 py-1.5 text-center">
                     {isInactive ? (
-                      <Badge variant="outline" className="text-[10px] text-gray-400 border-gray-300">비활성</Badge>
+                      <Badge variant="outline" className="text-[10px] text-gray-400 border-gray-300">{t('비활성')}</Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-[10px] bg-blue-50 text-blue-600">활성</Badge>
+                      <Badge variant="secondary" className="text-[10px] bg-blue-50 text-blue-600">{t('활성')}</Badge>
                     )}
                   </td>
                   <td className="px-2 py-1.5 text-right" onClick={e => e.stopPropagation()}>
@@ -196,7 +202,7 @@ export default function ShipListGridView({
                           onClick={() => onToggleActive(ship)}
                           className={`h-6 px-1.5 text-[11px] ${isInactive ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-gray-400 hover:text-gray-600'}`}
                         >
-                          {isInactive ? '활성화' : '비활성화'}
+                          {isInactive ? t('활성화') : t('비활성화')}
                         </Button>
                       )}
                       {canEdit && (

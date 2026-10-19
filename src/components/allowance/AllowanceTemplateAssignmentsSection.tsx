@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/AllowanceTemplateAssignmentsSection/en.json';
+i18n.addResourceBundle('en', 'AllowanceTemplateAssignmentsSection', en, true, true);
 import { msg } from '@/lib/messages';
 import { Plus, Trash2, Filter, Building2, Layers, Ship as ShipIcon, ArrowLeft, Save, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,6 +53,7 @@ interface AllowanceTemplateAssignmentsSectionProps {
 
 // 수당/공제 템플릿 관리 페이지의 "템플릿 할당" 탭 내용. 선주/플릿/선박에 템플릿을 배정/해제한다.
 export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId, onPrefillConsumed }: AllowanceTemplateAssignmentsSectionProps) {
+  const { t } = useTranslation('AllowanceTemplateAssignmentsSection');
   const [templates, setTemplates] = useState<AllowanceTemplate[]>([]);
   const [ships, setShips] = useState<Ship[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
@@ -183,12 +188,12 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
   };
 
   const handleAssign = async () => {
-    if (!assignTemplateId) { alert('템플릿을 선택하세요.'); return; }
+    if (!assignTemplateId) { alert(t('템플릿을 선택하세요.')); return; }
     let success = false;
-    const templateName = templates.find(t => String(t.id) === assignTemplateId)?.name || '';
+    const templateName = templates.find(tp => String(tp.id) === assignTemplateId)?.name || '';
 
     if (assignTarget === 'owner') {
-      if (!assignOwnerId) { alert('선주를 선택하세요.'); return; }
+      if (!assignOwnerId) { alert(t('선주를 선택하세요.')); return; }
       const ownerName = ownerCompanies.find(c => String(c.id) === assignOwnerId)?.name || '';
       const ownerFleets = fleets.filter(f => String(f.owner_id) === assignOwnerId);
       const ownerFleetIds = ownerFleets.map(f => String(f.id));

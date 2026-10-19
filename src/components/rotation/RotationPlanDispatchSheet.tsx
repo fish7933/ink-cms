@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/RotationPlanDispatchSheet/en.json';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
+
+i18n.addResourceBundle('en', 'RotationPlanDispatchSheet', en, true, true);
 
 // A4 세로 기준 여백(10mm) 제외 인쇄 가능 영역 (96dpi CSS px 환산)
 const PAGE_WIDTH_PX = (210 - 20) * (96 / 25.4);
@@ -17,6 +22,7 @@ const fmtDate = (d?: string | null) => (d ? format(new Date(d), 'yyyy-MM-dd', { 
 // 배승계획서 — 인쇄 페이지와 엑셀 내보내기 미리보기 양쪽에서 재사용되는 문서 본문.
 // 좌측 승선자(신규 배승) / 우측 하선자(교대 대상) 구성으로 한 행에 한 쌍씩 보여준다.
 export default function RotationPlanDispatchSheet({ plan, portLabel }: Props) {
+  const { t } = useTranslation('RotationPlanDispatchSheet');
   const contentRef = useRef<HTMLDivElement>(null);
   const [printZoom, setPrintZoom] = useState(1);
 
@@ -57,21 +63,21 @@ export default function RotationPlanDispatchSheet({ plan, portLabel }: Props) {
       <div ref={contentRef} className="print-content" style={{ '--print-zoom': printZoom } as React.CSSProperties}>
         <div style={{ textAlign: 'center', marginBottom: 20, borderBottom: '3px solid #1a1a1a', paddingBottom: 14 }}>
           <div style={{ fontSize: 11, letterSpacing: 3, color: '#888', marginBottom: 6, textTransform: 'uppercase' }}>Crew Dispatch Plan</div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: 1 }}>배승계획서</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: 1 }}>{t('배승계획서')}</h1>
         </div>
 
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px 20px',
           marginBottom: 20, padding: '14px 18px', background: '#f8f9fb', borderRadius: 8, fontSize: 13,
         }}>
-          <div><span style={{ color: '#888' }}>계획명</span><div style={{ fontWeight: 600 }}>{plan.plan_name}</div></div>
-          <div><span style={{ color: '#888' }}>선박</span><div style={{ fontWeight: 600 }}>{plan.ship_name}</div></div>
-          <div><span style={{ color: '#888' }}>선주 / 플릿</span><div style={{ fontWeight: 600 }}>{plan.owner_name}{plan.fleet_name ? ` / ${plan.fleet_name}` : ''}</div></div>
-          <div><span style={{ color: '#888' }}>교대일</span><div style={{ fontWeight: 600 }}>{fmtDate(plan.rotation_date)}</div></div>
-          <div><span style={{ color: '#888' }}>기준 교대일</span><div style={{ fontWeight: 600 }}>{plan.base_departure_date ? fmtDate(plan.base_departure_date) : '-'}</div></div>
-          <div><span style={{ color: '#888' }}>교대 항구</span><div style={{ fontWeight: 600 }}>{portLabel || '-'}</div></div>
-          <div><span style={{ color: '#888' }}>작성자</span><div style={{ fontWeight: 600 }}>{plan.creator_name || '-'}</div></div>
-          <div><span style={{ color: '#888' }}>작성일</span><div style={{ fontWeight: 600 }}>{format(new Date(plan.created_at), 'yyyy-MM-dd', { locale: ko })}</div></div>
+          <div><span style={{ color: '#888' }}>{t('계획명')}</span><div style={{ fontWeight: 600 }}>{plan.plan_name}</div></div>
+          <div><span style={{ color: '#888' }}>{t('선박')}</span><div style={{ fontWeight: 600 }}>{plan.ship_name}</div></div>
+          <div><span style={{ color: '#888' }}>{t('선주 / 플릿')}</span><div style={{ fontWeight: 600 }}>{plan.owner_name}{plan.fleet_name ? ` / ${plan.fleet_name}` : ''}</div></div>
+          <div><span style={{ color: '#888' }}>{t('교대일')}</span><div style={{ fontWeight: 600 }}>{fmtDate(plan.rotation_date)}</div></div>
+          <div><span style={{ color: '#888' }}>{t('기준 교대일')}</span><div style={{ fontWeight: 600 }}>{plan.base_departure_date ? fmtDate(plan.base_departure_date) : '-'}</div></div>
+          <div><span style={{ color: '#888' }}>{t('교대 항구')}</span><div style={{ fontWeight: 600 }}>{portLabel || '-'}</div></div>
+          <div><span style={{ color: '#888' }}>{t('작성자')}</span><div style={{ fontWeight: 600 }}>{plan.creator_name || '-'}</div></div>
+          <div><span style={{ color: '#888' }}>{t('작성일')}</span><div style={{ fontWeight: 600 }}>{format(new Date(plan.created_at), 'yyyy-MM-dd', { locale: ko })}</div></div>
         </div>
 
         <table className="dispatch-table">
@@ -83,18 +89,18 @@ export default function RotationPlanDispatchSheet({ plan, portLabel }: Props) {
           <thead>
             <tr className="group-row">
               <th></th>
-              <th className="group-board" colSpan={4}>신규 승선 (IN)</th>
-              <th className="group-disembark divider-left" colSpan={4}>기존 하선 (OUT)</th>
+              <th className="group-board" colSpan={4}>{t('신규 승선 (IN)')}</th>
+              <th className="group-disembark divider-left" colSpan={4}>{t('기존 하선 (OUT)')}</th>
             </tr>
             <tr className="col-row">
               <th>No.</th>
-              <th>직급</th><th>성명</th><th>출국일</th><th>승선일</th>
-              <th className="divider-left">직급</th><th>성명</th><th>하선일</th><th>귀국일</th>
+              <th>{t('직급')}</th><th>{t('성명')}</th><th>{t('출국일')}</th><th>{t('승선일')}</th>
+              <th className="divider-left">{t('직급')}</th><th>{t('성명')}</th><th>{t('하선일')}</th><th>{t('귀국일')}</th>
             </tr>
           </thead>
           <tbody>
             {plan.assignments.length === 0 ? (
-              <tr><td colSpan={9} className="empty" style={{ padding: 24 }}>배정된 선원이 없습니다</td></tr>
+              <tr><td colSpan={9} className="empty" style={{ padding: 24 }}>{t('배정된 선원이 없습니다')}</td></tr>
             ) : plan.assignments.map((a, i) => (
               <tr key={a.id}>
                 <td className="center">{i + 1}</td>
@@ -106,7 +112,7 @@ export default function RotationPlanDispatchSheet({ plan, portLabel }: Props) {
                     <td className="center">{fmtDate(a.embark_date)}</td>
                   </>
                 ) : (
-                  <td className="empty divider-left-none" colSpan={4}>승선 없음</td>
+                  <td className="empty divider-left-none" colSpan={4}>{t('승선 없음')}</td>
                 )}
                 {a.off_crew_id ? (
                   <>
@@ -116,7 +122,7 @@ export default function RotationPlanDispatchSheet({ plan, portLabel }: Props) {
                     <td className="center">{fmtDate(a.off_return_date)}</td>
                   </>
                 ) : (
-                  <td className="empty divider-left" colSpan={4}>하선 없음</td>
+                  <td className="empty divider-left" colSpan={4}>{t('하선 없음')}</td>
                 )}
               </tr>
             ))}
@@ -125,7 +131,7 @@ export default function RotationPlanDispatchSheet({ plan, portLabel }: Props) {
 
         {plan.notes && (
           <div style={{ marginTop: 16, fontSize: 12.5, color: '#444' }}>
-            <span style={{ color: '#888' }}>비고: </span>{plan.notes}
+            <span style={{ color: '#888' }}>{t('비고: ')}</span>{plan.notes}
           </div>
         )}
       </div>

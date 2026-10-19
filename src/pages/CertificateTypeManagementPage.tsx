@@ -30,6 +30,10 @@ import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CertificateTypeManagementPage/en.json';
+i18n.addResourceBundle('en', 'CertificateTypeManagementPage', en, true, true);
 
 function SortableCategoryRow({ id, children }: { id: string; children: React.ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -47,6 +51,7 @@ function SortableCategoryRow({ id, children }: { id: string; children: React.Rea
 const EMPTY_FORM = { category: '', type_code: '', type_name_en: '', type_name_ko: '', description: '', validity_period_months: undefined as number|undefined, is_mandatory: false, is_active: true, display_order: 999 };
 
 export default function CertificateTypeManagementPage() {
+  const { t } = useTranslation('CertificateTypeManagementPage');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
@@ -131,14 +136,14 @@ export default function CertificateTypeManagementPage() {
 
   const handleAddCategory = async () => {
     const code = newCatCode.trim().toLowerCase().replace(/\s+/g, '_');
-    if (!code || !newCatName.trim()) { alert('코드와 이름을 모두 입력하세요.'); return; }
-    if (categories.some(c => c.code === code)) { alert('이미 존재하는 코드입니다.'); return; }
+    if (!code || !newCatName.trim()) { alert(t('코드와 이름을 모두 입력하세요.')); return; }
+    if (categories.some(c => c.code === code)) { alert(t('이미 존재하는 코드입니다.')); return; }
     try {
       setCatSaving(true);
       await addCertificateCategory({ code, name: newCatName.trim() });
       setNewCatCode(''); setNewCatName('');
       await loadData();
-    } catch { alert('카테고리 추가 중 오류가 발생했습니다.'); }
+    } catch { alert(t('카테고리 추가 중 오류가 발생했습니다.')); }
     finally { setCatSaving(false); }
   };
 
@@ -150,21 +155,21 @@ export default function CertificateTypeManagementPage() {
       await updateCertificateCategory(id, { name: editingCatName.trim() });
       setEditingCatId(null);
       await loadData();
-    } catch { alert('카테고리 수정 중 오류가 발생했습니다.'); }
+    } catch { alert(t('카테고리 수정 중 오류가 발생했습니다.')); }
     finally { setCatSaving(false); }
   };
 
   const handleDeleteCategory = async (c: CertificateCategory) => {
     const inUse = types.filter(t => t.category === c.code).length;
-    if (inUse > 0) { alert(`이 카테고리를 사용하는 증서 유형이 ${inUse}개 있어 삭제할 수 없습니다. 먼저 해당 증서 유형의 카테고리를 변경하거나 삭제하세요.`); return; }
-    if (!confirm(`'${c.name}' 카테고리를 삭제하시겠습니까?`)) return;
+    if (inUse > 0) { alert(t('이 카테고리를 사용하는 증서 유형이 {{count}}개 있어 삭제할 수 없습니다. 먼저 해당 증서 유형의 카테고리를 변경하거나 삭제하세요.', { count: inUse })); return; }
+    if (!confirm(t("'{{name}}' 카테고리를 삭제하시겠습니까?", { name: c.name }))) return;
     try { await deleteCertificateCategory(c.id); await loadData(); }
-    catch { alert('카테고리 삭제 중 오류가 발생했습니다.'); }
+    catch { alert(t('카테고리 삭제 중 오류가 발생했습니다.')); }
   };
 
   const toggleCategoryActive = async (c: CertificateCategory) => {
     try { await updateCertificateCategory(c.id, { is_active: !c.is_active }); await loadData(); }
-    catch { alert('변경 중 오류가 발생했습니다.'); }
+    catch { alert(t('변경 중 오류가 발생했습니다.')); }
   };
 
   const handleSave = async () => {
@@ -177,27 +182,27 @@ export default function CertificateTypeManagementPage() {
       closeTab(activeTabId!);
     } catch (e) {
       console.error(e);
-      alert(`저장 중 오류가 발생했습니다.${e instanceof Error ? `\n(${e.message})` : ''}`);
+      alert(`${t('저장 중 오류가 발생했습니다.')}${e instanceof Error ? `\n(${e.message})` : ''}`);
     }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('삭제하시겠습니까?')) return;
+    if (!confirm(t('삭제하시겠습니까?'))) return;
     try { await deleteCertificateType(id); await loadData(); }
-    catch { alert('삭제 중 오류가 발생했습니다.'); }
+    catch { alert(t('삭제 중 오류가 발생했습니다.')); }
   };
 
   // 국적별 유효기간 예외 — 증서유형과 별개로 즉시 저장(카테고리 관리와 동일한 방식)
   const handleAddOverride = async () => {
     if (!editId || !newOverrideNat) return;
-    if (validityOverrides.some(o => o.nationality_code === newOverrideNat)) { alert('이미 이 국적에 대한 예외가 등록되어 있습니다.'); return; }
+    if (validityOverrides.some(o => o.nationality_code === newOverrideNat)) { alert(t('이미 이 국적에 대한 예외가 등록되어 있습니다.')); return; }
     try {
       setOverrideSaving(true);
       await upsertNationalityValidity(editId, newOverrideNat, newOverrideMonths ? parseInt(newOverrideMonths) : null);
       setValidityOverrides(await getNationalityValidityForType(editId));
       setNewOverrideNat(''); setNewOverrideMonths('');
-    } catch { alert('국적별 예외 저장 중 오류가 발생했습니다.'); }
+    } catch { alert(t('국적별 예외 저장 중 오류가 발생했습니다.')); }
     finally { setOverrideSaving(false); }
   };
 
@@ -206,14 +211,14 @@ export default function CertificateTypeManagementPage() {
     try {
       await upsertNationalityValidity(editId, o.nationality_code, months ? parseInt(months) : null);
       setValidityOverrides(await getNationalityValidityForType(editId));
-    } catch { alert('국적별 예외 저장 중 오류가 발생했습니다.'); }
+    } catch { alert(t('국적별 예외 저장 중 오류가 발생했습니다.')); }
   };
 
   const handleDeleteOverride = async (o: CertificateNationalityValidity) => {
     try {
       await deleteNationalityValidity(o.id);
       setValidityOverrides(prev => prev.filter(v => v.id !== o.id));
-    } catch { alert('국적별 예외 삭제 중 오류가 발생했습니다.'); }
+    } catch { alert(t('국적별 예외 삭제 중 오류가 발생했습니다.')); }
   };
 
   const handleCategoryReorderDragEnd = async (event: DragEndEvent) => {
@@ -230,7 +235,7 @@ export default function CertificateTypeManagementPage() {
     try {
       await reorderCertificateCategories(reordered.map(c => c.id));
     } catch {
-      alert('순서 저장 중 오류가 발생했습니다.');
+      alert(t('순서 저장 중 오류가 발생했습니다.'));
       await loadData();
     }
   };
@@ -256,7 +261,7 @@ export default function CertificateTypeManagementPage() {
     try {
       await Promise.all(updates.map(u => updateCertificateType(u.id, { display_order: u.display_order })));
     } catch {
-      alert('순서 저장 중 오류가 발생했습니다.');
+      alert(t('순서 저장 중 오류가 발생했습니다.'));
       await loadData();
     }
   };
@@ -273,24 +278,24 @@ export default function CertificateTypeManagementPage() {
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
               <div>
-                <CardTitle className="text-base">{isFormMode ? (editId ? '증서 유형 수정' : '증서 유형 추가') : '증서 관리'}</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">{isFormMode ? '증서 유형 정보를 입력하세요' : '선원 증서 카테고리 및 유형 관리'}</p>
+                <CardTitle className="text-base">{isFormMode ? (editId ? t('증서 유형 수정') : t('증서 유형 추가')) : t('증서 관리')}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">{isFormMode ? t('증서 유형 정보를 입력하세요') : t('선원 증서 카테고리 및 유형 관리')}</p>
               </div>
             </div>
             {isFormMode ? (
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>취소</Button>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>{t('취소')}</Button>
                 <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
-                  <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+                  <Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}
                 </Button>
               </div>
             ) : (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setCatDialogOpen(true)}>
-                  <Settings className="w-3.5 h-3.5" />카테고리 관리
+                  <Settings className="w-3.5 h-3.5" />{t('카테고리 관리')}
                 </Button>
-                <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/certificate-types?mode=new', '증서 유형 추가', true)}>
-                  <Plus className="w-3.5 h-3.5" />증서 유형 추가
+                <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/certificate-types?mode=new', t('증서 유형 추가'), true)}>
+                  <Plus className="w-3.5 h-3.5" />{t('증서 유형 추가')}
                 </Button>
               </div>
             )}
@@ -301,42 +306,42 @@ export default function CertificateTypeManagementPage() {
             <div className="space-y-3 pt-2 max-w-lg">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">카테고리 *</Label>
+                  <Label className="text-xs">{t('카테고리 *')}</Label>
                   <Select value={formData.category} onValueChange={(v: string) => setFormData({ ...formData, category: v })}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>{categories.map(c => <SelectItem key={c.code} value={c.code} className="text-sm">{c.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">증서 코드 *</Label>
-                  <Input value={formData.type_code} onChange={e => setFormData({ ...formData, type_code: e.target.value.toUpperCase() })} placeholder="예: STCW_BST" disabled={!!editId} className="h-9 text-sm font-mono" />
+                  <Label className="text-xs">{t('증서 코드 *')}</Label>
+                  <Input value={formData.type_code} onChange={e => setFormData({ ...formData, type_code: e.target.value.toUpperCase() })} placeholder={t('예: STCW_BST')} disabled={!!editId} className="h-9 text-sm font-mono" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">영문명 *</Label>
-                  <Input value={formData.type_name_en} onChange={e => setFormData({ ...formData, type_name_en: e.target.value })} placeholder="예: Basic Safety Training" className="h-9 text-sm" />
+                  <Label className="text-xs">{t('영문명 *')}</Label>
+                  <Input value={formData.type_name_en} onChange={e => setFormData({ ...formData, type_name_en: e.target.value })} placeholder={t('예: Basic Safety Training')} className="h-9 text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">한글명 *</Label>
-                  <Input value={formData.type_name_ko} onChange={e => setFormData({ ...formData, type_name_ko: e.target.value })} placeholder="예: 기본안전교육" className="h-9 text-sm" />
+                  <Label className="text-xs">{t('한글명 *')}</Label>
+                  <Input value={formData.type_name_ko} onChange={e => setFormData({ ...formData, type_name_ko: e.target.value })} placeholder={t('예: 기본안전교육')} className="h-9 text-sm" />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">설명</Label>
+                <Label className="text-xs">{t('설명')}</Label>
                 <Textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="text-sm min-h-[60px]" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">유효기간 (개월, 비워두면 무기한)</Label>
-                <Input type="number" value={formData.validity_period_months || ''} onChange={e => setFormData({ ...formData, validity_period_months: e.target.value ? parseInt(e.target.value) : undefined })} placeholder="예: 60" min={1} className="h-9 text-sm max-w-[200px]" />
+                <Label className="text-xs">{t('유효기간 (개월, 비워두면 무기한)')}</Label>
+                <Input type="number" value={formData.validity_period_months || ''} onChange={e => setFormData({ ...formData, validity_period_months: e.target.value ? parseInt(e.target.value) : undefined })} placeholder={t('예: 60')} min={1} className="h-9 text-sm max-w-[200px]" />
               </div>
               <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_mandatory} onCheckedChange={c => setFormData({ ...formData, is_mandatory: c === true })} /><span className="text-xs">필수 증서</span></label>
-                <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_active} onCheckedChange={c => setFormData({ ...formData, is_active: c === true })} /><span className="text-xs">활성 상태</span></label>
+                <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_mandatory} onCheckedChange={c => setFormData({ ...formData, is_mandatory: c === true })} /><span className="text-xs">{t('필수 증서')}</span></label>
+                <label className="flex items-center gap-2 cursor-pointer"><Checkbox checked={formData.is_active} onCheckedChange={c => setFormData({ ...formData, is_active: c === true })} /><span className="text-xs">{t('활성 상태')}</span></label>
               </div>
               {editId && (
                 <div className="space-y-1.5 border-t pt-3">
-                  <Label className="text-xs">국적별 유효기간 예외 <span className="text-gray-400 font-normal">(같은 증서라도 자국 증서 유효기간이 다른 국적만 등록 — 비워두면 그 국적은 무기한)</span></Label>
+                  <Label className="text-xs">{t('국적별 유효기간 예외')} <span className="text-gray-400 font-normal">{t('(같은 증서라도 자국 증서 유효기간이 다른 국적만 등록 — 비워두면 그 국적은 무기한)')}</span></Label>
                   {validityOverrides.length > 0 && (
                     <div className="rounded-md border divide-y">
                       {validityOverrides.map(o => {
@@ -345,12 +350,12 @@ export default function CertificateTypeManagementPage() {
                           <div key={o.id} className="flex items-center gap-2 p-2 text-sm">
                             <span className="flex-1 min-w-0 truncate">{nat ? `${nat.country_name_ko} (${nat.country_code})` : o.nationality_code}</span>
                             <Input
-                              type="number" min={1} placeholder="무기한"
+                              type="number" min={1} placeholder={t('무기한')}
                               defaultValue={o.validity_period_months ?? ''}
                               onBlur={e => handleUpdateOverrideMonths(o, e.target.value)}
                               className="h-8 text-sm w-24"
                             />
-                            <span className="text-xs text-gray-400 shrink-0">개월</span>
+                            <span className="text-xs text-gray-400 shrink-0">{t('개월')}</span>
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteOverride(o)}><Trash2 className="h-3.5 w-3.5" /></Button>
                           </div>
                         );
@@ -359,9 +364,9 @@ export default function CertificateTypeManagementPage() {
                   )}
                   <div className="flex gap-2 items-end p-2.5 bg-gray-50 rounded-md">
                     <div className="space-y-1 flex-1">
-                      <Label className="text-xs">국적</Label>
+                      <Label className="text-xs">{t('국적')}</Label>
                       <Select value={newOverrideNat} onValueChange={setNewOverrideNat}>
-                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
                         <SelectContent>
                           {nationalities.filter(n => !validityOverrides.some(o => o.nationality_code === n.country_code)).map(n => (
                             <SelectItem key={n.country_code} value={n.country_code} className="text-sm">{n.country_name_ko} ({n.country_code})</SelectItem>
@@ -370,16 +375,16 @@ export default function CertificateTypeManagementPage() {
                       </Select>
                     </div>
                     <div className="space-y-1 w-28">
-                      <Label className="text-xs">유효기간(개월)</Label>
-                      <Input type="number" min={1} placeholder="무기한" value={newOverrideMonths} onChange={e => setNewOverrideMonths(e.target.value)} className="h-8 text-sm" disabled={overrideSaving} />
+                      <Label className="text-xs">{t('유효기간(개월)')}</Label>
+                      <Input type="number" min={1} placeholder={t('무기한')} value={newOverrideMonths} onChange={e => setNewOverrideMonths(e.target.value)} className="h-8 text-sm" disabled={overrideSaving} />
                     </div>
-                    <Button size="sm" className="h-8 gap-1" onClick={handleAddOverride} disabled={overrideSaving || !newOverrideNat}><Plus className="w-3.5 h-3.5" />추가</Button>
+                    <Button size="sm" className="h-8 gap-1" onClick={handleAddOverride} disabled={overrideSaving || !newOverrideNat}><Plus className="w-3.5 h-3.5" />{t('추가')}</Button>
                   </div>
                 </div>
               )}
             </div>
           ) : categories.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">등록된 카테고리가 없습니다. 카테고리 관리에서 먼저 추가하세요.</div>
+            <div className="text-center py-8 text-sm text-gray-500">{t('등록된 카테고리가 없습니다. 카테고리 관리에서 먼저 추가하세요.')}</div>
           ) : (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="w-full flex-wrap h-auto gap-1 justify-start">
@@ -389,34 +394,34 @@ export default function CertificateTypeManagementPage() {
                 const items = types.filter(t => t.category === cat.code);
                 return (
                   <TabsContent key={cat.code} value={cat.code} className="mt-3">
-                    {items.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">등록된 증서 유형이 없습니다</div> : (
+                    {items.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">{t('등록된 증서 유형이 없습니다')}</div> : (
                       <div className="rounded-md border">
                         <Table className="whitespace-nowrap">
                           <TableHeader>
                             <TableRow>
                               <TableHead className="text-xs w-12"></TableHead>
-                              <TableHead className="text-xs w-32">코드</TableHead>
-                              <TableHead className="text-xs">영문명</TableHead>
-                              <TableHead className="text-xs">한글명</TableHead>
-                              <TableHead className="text-xs w-24">유효기간</TableHead>
-                              <TableHead className="text-xs w-16">필수</TableHead>
-                              <TableHead className="text-xs w-16">상태</TableHead>
-                              <TableHead className="text-right text-xs w-16">작업</TableHead>
+                              <TableHead className="text-xs w-32">{t('코드')}</TableHead>
+                              <TableHead className="text-xs">{t('영문명')}</TableHead>
+                              <TableHead className="text-xs">{t('한글명')}</TableHead>
+                              <TableHead className="text-xs w-24">{t('유효기간')}</TableHead>
+                              <TableHead className="text-xs w-16">{t('필수')}</TableHead>
+                              <TableHead className="text-xs w-16">{t('상태')}</TableHead>
+                              <TableHead className="text-right text-xs w-16">{t('작업')}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleCategoryDragEnd(cat.code, e)}>
-                              <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                                {items.map(t => (
-                                  <SortableTableRow key={t.id} id={t.id} onClick={() => openNewTab(`/certificate-types?id=${t.id}`, `${t.type_name_ko} 수정`)}>
-                                    <TableCell className="text-sm font-mono">{t.type_code}</TableCell>
-                                    <TableCell className="text-sm">{t.type_name_en}</TableCell>
-                                    <TableCell className="text-sm font-medium">{t.type_name_ko}</TableCell>
-                                    <TableCell className="text-sm">{t.validity_period_months ? `${t.validity_period_months}개월` : '무기한'}</TableCell>
-                                    <TableCell>{t.is_mandatory ? <Badge variant="destructive" className="text-xs">필수</Badge> : <Badge variant="outline" className="text-xs">선택</Badge>}</TableCell>
-                                    <TableCell>{t.is_active ? <Badge variant="secondary" className="text-xs">활성</Badge> : <Badge variant="outline" className="text-xs">비활성</Badge>}</TableCell>
+                              <SortableContext items={items.map(ct => ct.id)} strategy={verticalListSortingStrategy}>
+                                {items.map(ct => (
+                                  <SortableTableRow key={ct.id} id={ct.id} onClick={() => openNewTab(`/certificate-types?id=${ct.id}`, t('{{name}} 수정', { name: ct.type_name_ko }))}>
+                                    <TableCell className="text-sm font-mono">{ct.type_code}</TableCell>
+                                    <TableCell className="text-sm">{ct.type_name_en}</TableCell>
+                                    <TableCell className="text-sm font-medium">{ct.type_name_ko}</TableCell>
+                                    <TableCell className="text-sm">{ct.validity_period_months ? t('{{months}}개월', { months: ct.validity_period_months }) : t('무기한')}</TableCell>
+                                    <TableCell>{ct.is_mandatory ? <Badge variant="destructive" className="text-xs">{t('필수')}</Badge> : <Badge variant="outline" className="text-xs">{t('선택')}</Badge>}</TableCell>
+                                    <TableCell>{ct.is_active ? <Badge variant="secondary" className="text-xs">{t('활성')}</Badge> : <Badge variant="outline" className="text-xs">{t('비활성')}</Badge>}</TableCell>
                                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                                      <Button size="sm" variant="ghost" onClick={() => handleDelete(t.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="w-3 h-3" /></Button>
+                                      <Button size="sm" variant="ghost" onClick={() => handleDelete(ct.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"><Trash2 className="w-3 h-3" /></Button>
                                     </TableCell>
                                   </SortableTableRow>
                                 ))}
@@ -436,22 +441,22 @@ export default function CertificateTypeManagementPage() {
 
       <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle className="text-base">증서 카테고리 관리</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base">{t('증서 카테고리 관리')}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="flex gap-2 items-end p-2.5 bg-gray-50 rounded-md">
               <div className="space-y-1 flex-1">
-                <Label className="text-xs">코드</Label>
-                <Input value={newCatCode} onChange={e => setNewCatCode(e.target.value)} placeholder="예: license" className="h-8 text-sm font-mono" disabled={catSaving} />
+                <Label className="text-xs">{t('코드')}</Label>
+                <Input value={newCatCode} onChange={e => setNewCatCode(e.target.value)} placeholder={t('예: license')} className="h-8 text-sm font-mono" disabled={catSaving} />
               </div>
               <div className="space-y-1 flex-1">
-                <Label className="text-xs">이름</Label>
-                <Input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="예: 면허증" className="h-8 text-sm" disabled={catSaving} />
+                <Label className="text-xs">{t('이름')}</Label>
+                <Input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder={t('예: 면허증')} className="h-8 text-sm" disabled={catSaving} />
               </div>
-              <Button size="sm" className="h-8 gap-1" onClick={handleAddCategory} disabled={catSaving}><Plus className="w-3.5 h-3.5" />추가</Button>
+              <Button size="sm" className="h-8 gap-1" onClick={handleAddCategory} disabled={catSaving}><Plus className="w-3.5 h-3.5" />{t('추가')}</Button>
             </div>
             <div className="rounded-md border divide-y max-h-80 overflow-y-auto">
               {categories.length === 0 ? (
-                <p className="text-center py-6 text-sm text-gray-400">등록된 카테고리가 없습니다</p>
+                <p className="text-center py-6 text-sm text-gray-400">{t('등록된 카테고리가 없습니다')}</p>
               ) : (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryReorderDragEnd}>
                   <SortableContext items={categories.map(c => c.id)} strategy={verticalListSortingStrategy}>
@@ -464,7 +469,7 @@ export default function CertificateTypeManagementPage() {
                           ) : (
                             <span className={`truncate ${!c.is_active ? 'text-gray-400' : ''}`}>{c.name}</span>
                           )}
-                          {!c.is_active && <Badge variant="outline" className="text-xs shrink-0">비활성</Badge>}
+                          {!c.is_active && <Badge variant="outline" className="text-xs shrink-0">{t('비활성')}</Badge>}
                         </div>
                         <div className="flex gap-0.5 shrink-0">
                           {editingCatId === c.id ? (
@@ -474,7 +479,7 @@ export default function CertificateTypeManagementPage() {
                             </>
                           ) : (
                             <>
-                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleCategoryActive(c)}>{c.is_active ? '비활성화' : '활성화'}</Button>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => toggleCategoryActive(c)}>{c.is_active ? t('비활성화') : t('활성화')}</Button>
                               <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEditCategory(c)}><Edit2 className="h-3.5 w-3.5" /></Button>
                               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteCategory(c)}><Trash2 className="h-3.5 w-3.5" /></Button>
                             </>

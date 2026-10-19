@@ -1,4 +1,8 @@
 import type { ApprovalLineStep, ApprovalAction } from '@/types/approval';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ApprovalChainCell/en.json';
+i18n.addResourceBundle('en', 'ApprovalChainCell', en, true, true);
 
 export interface ApprovalChainLike {
   status: string;
@@ -12,6 +16,7 @@ export interface ApprovalChainLike {
 // 결재중인 단계는 파란색으로 강조하고, 이미 승인/반려된 단계는 각각 초록/빨강으로 표시한다.
 // 공간이 부족할 때만(테이블 자체 스크롤) 잘리도록, 여기서는 폭을 임의로 제한하지 않는다.
 export function ApprovalChainCell({ approval }: { approval?: ApprovalChainLike | null }) {
+  const { t } = useTranslation('ApprovalChainCell');
   if (!approval) return <span className="text-xs text-gray-300">-</span>;
   const plainText = [approval.requester_name, ...approval.approval_line.steps.map(s => s.approver_name)].join(' → ');
   return (
@@ -29,13 +34,13 @@ export function ApprovalChainCell({ approval }: { approval?: ApprovalChainLike |
               : isCurrent ? 'text-blue-600 font-semibold'
               : 'text-gray-400'
             }>
-              {step.approver_name}{isCurrent ? '(결재중)' : ''}
+              {step.approver_name}{isCurrent ? t('(결재중)') : ''}
             </span>
           </span>
         );
       })}
       {approval.status === 'approved' && (
-        <span className="ml-1.5 text-green-700 font-semibold">(결재완료)</span>
+        <span className="ml-1.5 text-green-700 font-semibold">{t('(결재완료)')}</span>
       )}
     </div>
   );

@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/PortDialog/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +16,8 @@ import {
 } from '@/components/ui/dialog';
 import type { Port } from '@/types/port';
 
+i18n.addResourceBundle('en', 'PortDialog', en, true, true);
+
 interface PortDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -23,6 +28,7 @@ interface PortDialogProps {
 const EMPTY_FORM = { country_code: '', country_name: '', city_name: '', is_active: true };
 
 export default function PortDialog({ open, onOpenChange, port, onSave }: PortDialogProps) {
+  const { t } = useTranslation('PortDialog');
   const [formData, setFormData] = useState(EMPTY_FORM);
 
   useEffect(() => {
@@ -52,31 +58,31 @@ export default function PortDialog({ open, onOpenChange, port, onSave }: PortDia
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="text-base">{port ? '교대지 수정' : '교대지 추가'}</DialogTitle>
-          <DialogDescription className="text-xs">국가/도시 정보를 입력하세요</DialogDescription>
+          <DialogTitle className="text-base">{port ? t('교대지 수정') : t('교대지 추가')}</DialogTitle>
+          <DialogDescription className="text-xs">{t('국가/도시 정보를 입력하세요')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="country_name" className="text-xs">국가명 *</Label>
-              <Input id="country_name" value={formData.country_name} onChange={e => setFormData({ ...formData, country_name: e.target.value })} required className="h-9 text-sm" placeholder="예: South Korea" />
+              <Label htmlFor="country_name" className="text-xs">{t('국가명 *')}</Label>
+              <Input id="country_name" value={formData.country_name} onChange={e => setFormData({ ...formData, country_name: e.target.value })} required className="h-9 text-sm" placeholder={t('예: South Korea')} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="country_code" className="text-xs">국가 코드</Label>
-              <Input id="country_code" value={formData.country_code} onChange={e => setFormData({ ...formData, country_code: e.target.value.toUpperCase() })} maxLength={2} className="h-9 text-sm font-mono uppercase" placeholder="예: KR" />
+              <Label htmlFor="country_code" className="text-xs">{t('국가 코드')}</Label>
+              <Input id="country_code" value={formData.country_code} onChange={e => setFormData({ ...formData, country_code: e.target.value.toUpperCase() })} maxLength={2} className="h-9 text-sm font-mono uppercase" placeholder={t('예: KR')} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="city_name" className="text-xs">도시명 *</Label>
-            <Input id="city_name" value={formData.city_name} onChange={e => setFormData({ ...formData, city_name: e.target.value })} required className="h-9 text-sm" placeholder="예: Busan" />
+            <Label htmlFor="city_name" className="text-xs">{t('도시명 *')}</Label>
+            <Input id="city_name" value={formData.city_name} onChange={e => setFormData({ ...formData, city_name: e.target.value })} required className="h-9 text-sm" placeholder={t('예: Busan')} />
           </div>
           <label className="flex items-center gap-2 cursor-pointer pt-1">
             <Checkbox checked={formData.is_active} onCheckedChange={c => setFormData({ ...formData, is_active: c === true })} />
-            <span className="text-xs">활성 상태</span>
+            <span className="text-xs">{t('활성 상태')}</span>
           </label>
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-9 text-sm">취소</Button>
-            <Button type="submit" className="h-9 text-sm">{port ? '수정' : '추가'}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-9 text-sm">{t('취소')}</Button>
+            <Button type="submit" className="h-9 text-sm">{port ? t('수정') : t('추가')}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

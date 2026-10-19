@@ -14,6 +14,10 @@ import {
   isPushSupported, isSubscribed, subscribeToPush, unsubscribeFromPush,
   getNotificationPreferences, updateNotificationPreferences, type NotificationPreferences,
 } from '@/services/push.service';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ProfilePage/en.json';
+i18n.addResourceBundle('en', 'ProfilePage', en, true, true);
 
 interface UserData {
   id: string;
@@ -33,6 +37,7 @@ interface UserData {
 }
 
 export default function ProfilePage() {
+  const { t } = useTranslation('ProfilePage');
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -70,14 +75,14 @@ export default function ProfilePage() {
       if (checked) {
         await subscribeToPush(user.id);
         setPushEnabled(true);
-        toast({ title: '알림이 켜졌습니다.', description: '결재 차례가 되면 이 브라우저로 알림을 받습니다.' });
+        toast({ title: t('알림이 켜졌습니다.'), description: t('결재 차례가 되면 이 브라우저로 알림을 받습니다.') });
       } else {
         await unsubscribeFromPush();
         setPushEnabled(false);
-        toast({ title: '알림이 꺼졌습니다.' });
+        toast({ title: t('알림이 꺼졌습니다.') });
       }
     } catch (e) {
-      toast({ title: '알림 설정 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('알림 설정 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setPushBusy(false);
     }
@@ -92,7 +97,7 @@ export default function ProfilePage() {
       await updateNotificationPreferences(user.id, { [key]: checked });
     } catch (e) {
       setPrefs(prev);
-      toast({ title: '설정 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('설정 저장 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setPrefsBusy(false);
     }
@@ -114,8 +119,8 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error loading user data:', error);
       toast({
-        title: '오류',
-        description: '사용자 정보를 불러오는데 실패했습니다.',
+        title: t('오류'),
+        description: t('사용자 정보를 불러오는데 실패했습니다.'),
         variant: 'destructive',
       });
     } finally {
@@ -141,8 +146,8 @@ export default function ProfilePage() {
       if (error) throw error;
 
       toast({
-        title: '성공',
-        description: '프로필이 업데이트되었습니다.',
+        title: t('성공'),
+        description: t('프로필이 업데이트되었습니다.'),
       });
 
       // Reload user data
@@ -150,8 +155,8 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error updating profile:', error);
       toast({
-        title: '오류',
-        description: '프로필 업데이트에 실패했습니다.',
+        title: t('오류'),
+        description: t('프로필 업데이트에 실패했습니다.'),
         variant: 'destructive',
       });
     } finally {
@@ -164,8 +169,8 @@ export default function ProfilePage() {
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast({
-        title: '오류',
-        description: '새 비밀번호가 일치하지 않습니다.',
+        title: t('오류'),
+        description: t('새 비밀번호가 일치하지 않습니다.'),
         variant: 'destructive',
       });
       return;
@@ -173,8 +178,8 @@ export default function ProfilePage() {
 
     if (passwordData.newPassword.length < 6) {
       toast({
-        title: '오류',
-        description: '비밀번호는 최소 6자 이상이어야 합니다.',
+        title: t('오류'),
+        description: t('비밀번호는 최소 6자 이상이어야 합니다.'),
         variant: 'destructive',
       });
       return;
@@ -188,8 +193,8 @@ export default function ProfilePage() {
       if (error) throw error;
 
       toast({
-        title: '성공',
-        description: '비밀번호가 변경되었습니다.',
+        title: t('성공'),
+        description: t('비밀번호가 변경되었습니다.'),
       });
 
       // Clear password fields
@@ -201,8 +206,8 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error changing password:', error);
       toast({
-        title: '오류',
-        description: '비밀번호 변경에 실패했습니다.',
+        title: t('오류'),
+        description: t('비밀번호 변경에 실패했습니다.'),
         variant: 'destructive',
       });
     } finally {
@@ -216,7 +221,7 @@ export default function ProfilePage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-            <p className="text-sm text-gray-600">로딩 중...</p>
+            <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
           </div>
         </div>
       </>
@@ -227,18 +232,18 @@ export default function ProfilePage() {
     return null;
   }
 
-  const displayName = user?.full_name || user?.name || user?.username || '사용자';
-  const userGroup = user?.user_groups?.name || '미지정';
-  const companyName = user?.companies?.name || '미지정';
+  const displayName = user?.full_name || user?.name || user?.username || t('사용자');
+  const userGroup = user?.user_groups?.name || t('미지정');
+  const companyName = user?.companies?.name || t('미지정');
 
   return (
     <>
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Page Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">프로필 설정</h1>
+          <h1 className="text-3xl font-bold text-gray-900">{t('프로필 설정')}</h1>
           <p className="text-sm text-gray-600 mt-1">
-            계정 정보를 관리하고 비밀번호를 변경할 수 있습니다.
+            {t('계정 정보를 관리하고 비밀번호를 변경할 수 있습니다.')}
           </p>
         </div>
 
@@ -247,10 +252,10 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              기본 정보
+              {t('기본 정보')}
             </CardTitle>
             <CardDescription>
-              사용자 계정의 기본 정보입니다.
+              {t('사용자 계정의 기본 정보입니다.')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -258,28 +263,28 @@ export default function ProfilePage() {
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <User className="h-5 w-5 text-gray-500" />
                 <div>
-                  <p className="text-xs text-gray-500">사용자명</p>
+                  <p className="text-xs text-gray-500">{t('사용자명')}</p>
                   <p className="font-medium">{user.username}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <Shield className="h-5 w-5 text-gray-500" />
                 <div>
-                  <p className="text-xs text-gray-500">사용자 그룹</p>
+                  <p className="text-xs text-gray-500">{t('사용자 그룹')}</p>
                   <p className="font-medium">{userGroup}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <Building2 className="h-5 w-5 text-gray-500" />
                 <div>
-                  <p className="text-xs text-gray-500">소속 회사</p>
+                  <p className="text-xs text-gray-500">{t('소속 회사')}</p>
                   <p className="font-medium">{companyName}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                 <Calendar className="h-5 w-5 text-gray-500" />
                 <div>
-                  <p className="text-xs text-gray-500">가입일</p>
+                  <p className="text-xs text-gray-500">{t('가입일')}</p>
                   <p className="font-medium">
                     {new Date(user.created_at).toLocaleDateString('ko-KR')}
                   </p>
@@ -294,10 +299,10 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" />
-              결재 알림
+              {t('결재 알림')}
             </CardTitle>
             <CardDescription>
-              내 차례의 결재 문서가 도착하면 이 브라우저(또는 홈 화면에 추가한 앱)로 알림을 받습니다.
+              {t('내 차례의 결재 문서가 도착하면 이 브라우저(또는 홈 화면에 추가한 앱)로 알림을 받습니다.')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -305,9 +310,9 @@ export default function ProfilePage() {
               <>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>
-                    <p className="font-medium text-sm">이 브라우저에서 결재 알림 받기</p>
+                    <p className="font-medium text-sm">{t('이 브라우저에서 결재 알림 받기')}</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {pushEnabled ? '알림이 켜져 있습니다.' : '알림이 꺼져 있습니다.'}
+                      {pushEnabled ? t('알림이 켜져 있습니다.') : t('알림이 꺼져 있습니다.')}
                     </p>
                   </div>
                   <Switch checked={pushEnabled} disabled={pushBusy} onCheckedChange={handleTogglePush} />
@@ -317,8 +322,8 @@ export default function ProfilePage() {
                   <div className="space-y-2 pl-1">
                     <div className="flex items-center justify-between py-1.5">
                       <div>
-                        <p className="text-sm">결재 요청 알림</p>
-                        <p className="text-xs text-gray-500">내 차례의 결재가 도착했을 때</p>
+                        <p className="text-sm">{t('결재 요청 알림')}</p>
+                        <p className="text-xs text-gray-500">{t('내 차례의 결재가 도착했을 때')}</p>
                       </div>
                       <Switch
                         checked={prefs.notify_approval_request}
@@ -328,8 +333,8 @@ export default function ProfilePage() {
                     </div>
                     <div className="flex items-center justify-between py-1.5">
                       <div>
-                        <p className="text-sm">결재 완료 알림</p>
-                        <p className="text-xs text-gray-500">내가 상신한 문서가 최종 승인됐을 때</p>
+                        <p className="text-sm">{t('결재 완료 알림')}</p>
+                        <p className="text-xs text-gray-500">{t('내가 상신한 문서가 최종 승인됐을 때')}</p>
                       </div>
                       <Switch
                         checked={prefs.notify_approval_complete}
@@ -339,8 +344,8 @@ export default function ProfilePage() {
                     </div>
                     <div className="flex items-center justify-between py-1.5">
                       <div>
-                        <p className="text-sm">수신/참조 문서 알림</p>
-                        <p className="text-xs text-gray-500">나에게 수신 또는 참조 문서가 도착했을 때</p>
+                        <p className="text-sm">{t('수신/참조 문서 알림')}</p>
+                        <p className="text-xs text-gray-500">{t('나에게 수신 또는 참조 문서가 도착했을 때')}</p>
                       </div>
                       <Switch
                         checked={prefs.notify_approval_reference}
@@ -352,7 +357,7 @@ export default function ProfilePage() {
                 )}
               </>
             ) : (
-              <p className="text-sm text-gray-500">이 브라우저는 알림 기능을 지원하지 않습니다.</p>
+              <p className="text-sm text-gray-500">{t('이 브라우저는 알림 기능을 지원하지 않습니다.')}</p>
             )}
           </CardContent>
         </Card>
@@ -362,28 +367,28 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
-              프로필 수정
+              {t('프로필 수정')}
             </CardTitle>
             <CardDescription>
-              이름, 이메일, 연락처 정보를 수정할 수 있습니다.
+              {t('이름, 이메일, 연락처 정보를 수정할 수 있습니다.')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleUpdateProfile} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="full_name">이름</Label>
+                <Label htmlFor="full_name">{t('이름')}</Label>
                 <Input
                   id="full_name"
                   value={formData.full_name}
                   onChange={(e) =>
                     setFormData({ ...formData, full_name: e.target.value })
                   }
-                  placeholder="이름을 입력하세요"
+                  placeholder={t('이름을 입력하세요')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">이메일</Label>
+                <Label htmlFor="email">{t('이메일')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -391,24 +396,24 @@ export default function ProfilePage() {
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
                   }
-                  placeholder="이메일을 입력하세요"
+                  placeholder={t('이메일을 입력하세요')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">연락처</Label>
+                <Label htmlFor="phone">{t('연락처')}</Label>
                 <Input
                   id="phone"
                   value={formData.phone}
                   onChange={(e) =>
                     setFormData({ ...formData, phone: e.target.value })
                   }
-                  placeholder="연락처를 입력하세요"
+                  placeholder={t('연락처를 입력하세요')}
                 />
               </div>
 
               <Button type="submit" disabled={updating} className="w-full">
-                {updating ? '업데이트 중...' : '프로필 업데이트'}
+                {updating ? t('업데이트 중...') : t('프로필 업데이트')}
               </Button>
             </form>
           </CardContent>
@@ -419,16 +424,16 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Lock className="h-5 w-5" />
-              비밀번호 변경
+              {t('비밀번호 변경')}
             </CardTitle>
             <CardDescription>
-              계정 보안을 위해 주기적으로 비밀번호를 변경하세요.
+              {t('계정 보안을 위해 주기적으로 비밀번호를 변경하세요.')}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleChangePassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="currentPassword">현재 비밀번호</Label>
+                <Label htmlFor="currentPassword">{t('현재 비밀번호')}</Label>
                 <Input
                   id="currentPassword"
                   type="password"
@@ -439,14 +444,14 @@ export default function ProfilePage() {
                       currentPassword: e.target.value,
                     })
                   }
-                  placeholder="현재 비밀번호를 입력하세요"
+                  placeholder={t('현재 비밀번호를 입력하세요')}
                 />
               </div>
 
               <Separator />
 
               <div className="space-y-2">
-                <Label htmlFor="newPassword">새 비밀번호</Label>
+                <Label htmlFor="newPassword">{t('새 비밀번호')}</Label>
                 <Input
                   id="newPassword"
                   type="password"
@@ -457,12 +462,12 @@ export default function ProfilePage() {
                       newPassword: e.target.value,
                     })
                   }
-                  placeholder="새 비밀번호를 입력하세요 (최소 6자)"
+                  placeholder={t('새 비밀번호를 입력하세요 (최소 6자)')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">새 비밀번호 확인</Label>
+                <Label htmlFor="confirmPassword">{t('새 비밀번호 확인')}</Label>
                 <Input
                   id="confirmPassword"
                   type="password"
@@ -473,7 +478,7 @@ export default function ProfilePage() {
                       confirmPassword: e.target.value,
                     })
                   }
-                  placeholder="새 비밀번호를 다시 입력하세요"
+                  placeholder={t('새 비밀번호를 다시 입력하세요')}
                 />
               </div>
 
@@ -483,7 +488,7 @@ export default function ProfilePage() {
                 className="w-full"
                 variant="secondary"
               >
-                {changingPassword ? '변경 중...' : '비밀번호 변경'}
+                {changingPassword ? t('변경 중...') : t('비밀번호 변경')}
               </Button>
             </form>
           </CardContent>

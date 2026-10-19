@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipTypeTable/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,6 +16,8 @@ import {
 import { Pencil, Trash2, Search } from 'lucide-react';
 import type { ShipType } from '@/types/ship-classification';
 import { SHIP_CATEGORIES, CATEGORY_COLORS } from '@/types/ship-classification';
+
+i18n.addResourceBundle('en', 'ShipTypeTable', en, true, true);
 
 interface ShipTypeTableProps {
   shipTypes: ShipType[];
@@ -29,6 +34,7 @@ export default function ShipTypeTable({
   canEdit = true,
   canDelete = true,
 }: ShipTypeTableProps) {
+  const { t } = useTranslation('ShipTypeTable');
   const showActions = canEdit || canDelete;
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -49,7 +55,7 @@ export default function ShipTypeTable({
   if (shipTypes.length === 0) {
     return (
       <div className="text-center py-8 text-sm text-gray-500">
-        등록된 선종이 없습니다
+        {t('등록된 선종이 없습니다')}
       </div>
     );
   }
@@ -61,7 +67,7 @@ export default function ShipTypeTable({
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="선종명 검색..."
+            placeholder={t('선종명 검색...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="h-8 text-sm pl-8"
@@ -69,10 +75,10 @@ export default function ShipTypeTable({
         </div>
         <Select value={selectedCategory} onValueChange={setSelectedCategory}>
           <SelectTrigger className="h-8 text-sm w-[160px]">
-            <SelectValue placeholder="카테고리 필터" />
+            <SelectValue placeholder={t('카테고리 필터')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="text-sm">전체 카테고리</SelectItem>
+            <SelectItem value="all" className="text-sm">{t('전체 카테고리')}</SelectItem>
             {uniqueCategories.map((cat) => {
               const catInfo = SHIP_CATEGORIES.find((c) => c.value === cat);
               return (
@@ -84,7 +90,7 @@ export default function ShipTypeTable({
           </SelectContent>
         </Select>
         <span className="text-xs text-gray-500 ml-auto">
-          {filteredShipTypes.length} / {shipTypes.length}건
+          {t('{{filtered}} / {{total}}건', { filtered: filteredShipTypes.length, total: shipTypes.length })}
         </span>
       </div>
 
@@ -94,11 +100,11 @@ export default function ShipTypeTable({
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs w-[50px]">No.</TableHead>
-              <TableHead className="text-xs">선종명 (영문)</TableHead>
-              <TableHead className="text-xs">선종명 (한글)</TableHead>
-              <TableHead className="text-xs">카테고리</TableHead>
-              <TableHead className="text-xs">설명</TableHead>
-              {showActions && <TableHead className="text-right text-xs w-24">작업</TableHead>}
+              <TableHead className="text-xs">{t('선종명 (영문)')}</TableHead>
+              <TableHead className="text-xs">{t('선종명 (한글)')}</TableHead>
+              <TableHead className="text-xs">{t('카테고리')}</TableHead>
+              <TableHead className="text-xs">{t('설명')}</TableHead>
+              {showActions && <TableHead className="text-right text-xs w-24">{t('작업')}</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -146,7 +152,7 @@ export default function ShipTypeTable({
             {filteredShipTypes.length === 0 && (
               <TableRow>
                 <TableCell colSpan={showActions ? 6 : 5} className="text-center py-6 text-sm text-gray-500">
-                  검색 결과가 없습니다
+                  {t('검색 결과가 없습니다')}
                 </TableCell>
               </TableRow>
             )}

@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/CrewCandidateSelectDialog/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,6 +26,8 @@ import CrewBoardingFitDetail from '@/components/rotation/CrewBoardingFitDetail';
 import type { CrewWithDetails } from '@/services/crew.service';
 import type { Rank, Company, Fleet, Ship as ShipType } from '@/types/models';
 import type { Nationality } from '@/types/nationality';
+
+i18n.addResourceBundle('en', 'CrewCandidateSelectDialog', en, true, true);
 
 interface CrewCandidateSelectDialogProps {
   open: boolean;
@@ -56,6 +61,7 @@ const getCrewStatus = (c: CrewWithDetails) => (c as CrewWithDetails & { status?:
 export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote, initialCrew, defaultRankId, scoringContext }: CrewCandidateSelectDialogProps) {
   const isSingle = selectionMode === 'single';
   const { openNewTab } = useTabContext();
+  const { t } = useTranslation('CrewCandidateSelectDialog');
 
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -192,48 +198,48 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="text-base">{mode === 'boarding' ? '승선 후보 선택' : '하선 후보 선택'}</DialogTitle>
+          <DialogTitle className="text-base">{mode === 'boarding' ? t('승선 후보 선택') : t('하선 후보 선택')}</DialogTitle>
           <DialogDescription className="text-xs">
-            {isSingle ? '선원을 한 명 선택하세요' : '여러 명을 선택하면 각 인원마다 새 발령 행이 생성됩니다'}
+            {isSingle ? t('선원을 한 명 선택하세요') : t('여러 명을 선택하면 각 인원마다 새 발령 행이 생성됩니다')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground w-3.5 h-3.5" />
-            <Input placeholder="이름, 직급, 여권번호, 선원수첩번호로 검색..." value={search} onChange={e => setSearch(e.target.value)} className="h-8 text-xs pl-8" />
+            <Input placeholder={t('이름, 직급, 여권번호, 선원수첩번호로 검색...')} value={search} onChange={e => setSearch(e.target.value)} className="h-8 text-xs pl-8" />
           </div>
           <div className="flex flex-wrap gap-2">
             <Select value={filterOwner} onValueChange={setFilterOwner}>
-              <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="선주사" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">전체 선주사</SelectItem>{owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('선주사')} /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t('전체 선주사')}</SelectItem>{owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filterFleet} onValueChange={setFilterFleet} disabled={filterOwner === 'all'}>
-              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder="플릿" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder={t('플릿')} /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t('전체 플릿')}</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filterShip} onValueChange={setFilterShip} disabled={filterOwner === 'all'}>
-              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder="선박" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder={t('선박')} /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t('전체 선박')}</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filterRank} onValueChange={setFilterRank}>
-              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder="직급" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code || r.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder={t('직급')} /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t('전체 직급')}</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code || r.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filterManning} onValueChange={setFilterManning}>
-              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder="매닝사" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">전체 매닝사</SelectItem>{manningAgencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder={t('매닝사')} /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{t('전체 매닝사')}</SelectItem>{manningAgencies.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filterNationality} onValueChange={setFilterNationality}>
-              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder="국적" /></SelectTrigger>
+              <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder={t('국적')} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 국적</SelectItem>
+                <SelectItem value="all">{t('전체 국적')}</SelectItem>
                 {nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}
               </SelectContent>
             </Select>
             {isFiltered && (
               <Button variant="outline" size="sm" onClick={clearFilters} className="h-8 text-xs gap-1">
-                <X className="w-3 h-3" />초기화
+                <X className="w-3 h-3" />{t('초기화')}
               </Button>
             )}
           </div>
@@ -251,11 +257,11 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                     />
                   </th>
                 )}
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">직급</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">이름</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">상태</th>
-                {scores.size > 0 && <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">적합도</th>}
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">선택</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">{t('직급')}</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">{t('이름')}</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">{t('상태')}</th>
+                {scores.size > 0 && <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">{t('적합도')}</th>}
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">{t('선택')}</th>
               </tr>
             </thead>
             <tbody>
@@ -270,10 +276,10 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                         <Checkbox checked={selected} onCheckedChange={() => toggleSelect(c.id)} />
                       </td>
                     )}
-                    <td className="px-3 py-2 text-gray-700" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보')}>
+                    <td className="px-3 py-2 text-gray-700" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || t('선원 정보'))}>
                       <button type="button" className="hover:underline hover:text-blue-600">{c.rank_code || '-'}</button>
                     </td>
-                    <td className="px-3 py-2 font-medium" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보')}>
+                    <td className="px-3 py-2 font-medium" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || t('선원 정보'))}>
                       <button type="button" className="hover:underline hover:text-blue-600">{crewDisplayName(c)}</button>
                       {reservationNote && (
                         <div className="text-[10px] text-amber-600 font-normal mt-0.5">⚠ {reservationNote}</div>
@@ -282,8 +288,8 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                     <td className="px-3 py-2 text-xs text-gray-500">
                       {/* "대기"만으로는 하선 후 대기 중인지 다른 계획에 이미 배정 예정인지 구분이 안 되므로,
                           예약이 걸려 있으면 상태 옆에 명시한다. */}
-                      {STATUS_LABELS[getCrewStatus(c)] || getCrewStatus(c) || '-'}
-                      {reservationNote && <span className="text-amber-600"> (배정예정)</span>}
+                      {STATUS_LABELS[getCrewStatus(c)] ? t(STATUS_LABELS[getCrewStatus(c)]) : (getCrewStatus(c) || '-')}
+                      {reservationNote && <span className="text-amber-600">{t(' (배정예정)')}</span>}
                     </td>
                     {scores.size > 0 && (
                       <td className="px-3 py-2">
@@ -305,23 +311,23 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                         className="h-7 text-xs"
                         onClick={() => handleRowClick(c.id)}
                       >
-                        {isSingle ? '선택' : (selected ? '선택됨' : '선택')}
+                        {isSingle ? t('선택') : (selected ? t('선택됨') : t('선택'))}
                       </Button>
                     </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={(isSingle ? 4 : 5) + (scores.size > 0 ? 1 : 0)} className="text-center py-8 text-xs text-gray-400">후보가 없습니다</td></tr>
+                <tr><td colSpan={(isSingle ? 4 : 5) + (scores.size > 0 ? 1 : 0)} className="text-center py-8 text-xs text-gray-400">{t('후보가 없습니다')}</td></tr>
               )}
             </tbody>
           </table>
         </div>
 
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-9 text-sm">취소</Button>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-9 text-sm">{t('취소')}</Button>
           {isSingle ? (
-            <Button type="button" variant="outline" onClick={handleClear} className="h-9 text-sm text-gray-600">선택 해제</Button>
+            <Button type="button" variant="outline" onClick={handleClear} className="h-9 text-sm text-gray-600">{t('선택 해제')}</Button>
           ) : (
             <Button
               type="button"
@@ -329,7 +335,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
               disabled={selectedIds.length === 0}
               className={`h-9 text-sm ${mode === 'boarding' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}
             >
-              {selectedIds.length > 0 ? `${selectedIds.length}명 추가` : (mode === 'boarding' ? '승선 후보 추가' : '하선 후보 추가')}
+              {selectedIds.length > 0 ? t('{{count}}명 추가', { count: selectedIds.length }) : (mode === 'boarding' ? t('승선 후보 추가') : t('하선 후보 추가'))}
             </Button>
           )}
         </DialogFooter>

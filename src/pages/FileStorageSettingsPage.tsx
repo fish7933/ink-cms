@@ -14,6 +14,10 @@ import { invalidateFileStorageCache } from '@/lib/s3-client';
 import { getCurrentUser } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/FileStorageSettingsPage/en.json';
+i18n.addResourceBundle('en', 'FileStorageSettingsPage', en, true, true);
 
 const emptyForm = {
   endpoint_url: '', region: '', bucket: '', access_key_id: '', secret_access_key: '',
@@ -24,6 +28,7 @@ const emptyForm = {
 // 보관만 하고, 실제 업로드는 계속 이 시스템(Supabase Storage)으로 간다. 나중에 실제 외부
 // 파일서버가 준비되면 여기 저장된 정보로 연동 작업을 진행한다.
 export default function FileStorageSettingsPage() {
+  const { t } = useTranslation('FileStorageSettingsPage');
   const navigate = useNavigate();
   const { toast } = useToast();
   const permissions = usePermissions('file_storage_settings');
@@ -70,9 +75,9 @@ export default function FileStorageSettingsPage() {
       });
       setSettingsId(saved.id);
       invalidateFileStorageCache();
-      toast({ title: '저장되었습니다.' });
+      toast({ title: t('저장되었습니다.') });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '저장 중 오류가 발생했습니다.');
+      setError(e instanceof Error ? e.message : t('저장 중 오류가 발생했습니다.'));
     } finally {
       setSaving(false);
     }
@@ -87,49 +92,49 @@ export default function FileStorageSettingsPage() {
       <div className="flex items-center gap-2">
         <HardDrive className="w-6 h-6" />
         <div>
-          <h1 className="text-xl font-bold text-gray-900">파일 저장소 설정</h1>
-          <p className="text-sm text-gray-500">그룹웨어/경리 첨부파일을 이 시스템(Supabase)에 저장할지, 외부 S3 호환 저장소에 저장할지 선택합니다.</p>
+          <h1 className="text-xl font-bold text-gray-900">{t('파일 저장소 설정')}</h1>
+          <p className="text-sm text-gray-500">{t('그룹웨어/경리 첨부파일을 이 시스템(Supabase)에 저장할지, 외부 S3 호환 저장소에 저장할지 선택합니다.')}</p>
         </div>
       </div>
 
       <Alert variant={form.is_active ? 'destructive' : 'default'}>
         <AlertDescription className="text-xs">
           {form.is_active
-            ? '외부 저장소 사용이 켜져 있습니다 — 아래 정보가 유효하면 새로 올리는 첨부파일부터 이 브라우저가 Access Key로 직접 서명해 외부 저장소에 업로드합니다. 브라우저에서 Key를 직접 사용하므로 신뢰할 수 있는 관리자만 이 화면에 접근해야 합니다. 이미 올라간 파일은 그대로 유지되며 링크도 계속 정상 동작합니다.'
-            : '꺼져 있으면 지금처럼 모든 첨부파일이 이 시스템(Supabase Storage)에 저장됩니다. 아래 연결 정보를 저장해두고 준비되면 켜서 바로 전환할 수 있습니다.'}
+            ? t('외부 저장소 사용이 켜져 있습니다 — 아래 정보가 유효하면 새로 올리는 첨부파일부터 이 브라우저가 Access Key로 직접 서명해 외부 저장소에 업로드합니다. 브라우저에서 Key를 직접 사용하므로 신뢰할 수 있는 관리자만 이 화면에 접근해야 합니다. 이미 올라간 파일은 그대로 유지되며 링크도 계속 정상 동작합니다.')
+            : t('꺼져 있으면 지금처럼 모든 첨부파일이 이 시스템(Supabase Storage)에 저장됩니다. 아래 연결 정보를 저장해두고 준비되면 켜서 바로 전환할 수 있습니다.')}
         </AlertDescription>
       </Alert>
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{settingsId ? '연결 정보' : '연결 정보 등록'}</CardTitle>
+          <CardTitle className="text-base">{settingsId ? t('연결 정보') : t('연결 정보 등록')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label className="text-xs">엔드포인트 URL</Label><Input value={form.endpoint_url} onChange={e => setForm({ ...form, endpoint_url: e.target.value })} placeholder="https://s3.ap-northeast-2.amazonaws.com" className="h-9 text-sm" /></div>
-            <div className="space-y-1.5"><Label className="text-xs">리전</Label><Input value={form.region} onChange={e => setForm({ ...form, region: e.target.value })} placeholder="ap-northeast-2" className="h-9 text-sm" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">{t('엔드포인트 URL')}</Label><Input value={form.endpoint_url} onChange={e => setForm({ ...form, endpoint_url: e.target.value })} placeholder="https://s3.ap-northeast-2.amazonaws.com" className="h-9 text-sm" /></div>
+            <div className="space-y-1.5"><Label className="text-xs">{t('리전')}</Label><Input value={form.region} onChange={e => setForm({ ...form, region: e.target.value })} placeholder="ap-northeast-2" className="h-9 text-sm" /></div>
           </div>
-          <div className="space-y-1.5"><Label className="text-xs">버킷명</Label><Input value={form.bucket} onChange={e => setForm({ ...form, bucket: e.target.value })} className="h-9 text-sm" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">{t('버킷명')}</Label><Input value={form.bucket} onChange={e => setForm({ ...form, bucket: e.target.value })} className="h-9 text-sm" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label className="text-xs">Access Key ID</Label><Input value={form.access_key_id} onChange={e => setForm({ ...form, access_key_id: e.target.value })} className="h-9 text-sm font-mono" /></div>
             <div className="space-y-1.5"><Label className="text-xs">Secret Access Key</Label><Input type="password" value={form.secret_access_key} onChange={e => setForm({ ...form, secret_access_key: e.target.value })} className="h-9 text-sm font-mono" /></div>
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox checked={form.path_style_access} onCheckedChange={c => setForm({ ...form, path_style_access: c === true })} />
-            <span className="text-sm">Path-style 접근 방식 사용 (MinIO 등 일부 S3 호환 스토리지에서 필요)</span>
+            <span className="text-sm">{t('Path-style 접근 방식 사용 (MinIO 등 일부 S3 호환 스토리지에서 필요)')}</span>
           </label>
           <div className="flex items-center justify-between p-3 rounded-md border bg-gray-50">
             <div>
-              <p className="text-sm font-medium">{form.is_active ? '외부 저장소 사용 중' : 'Supabase Storage 사용 중'}</p>
-              <p className="text-xs text-gray-500 mt-0.5">엔드포인트/버킷/Key가 모두 입력돼 있어야 실제로 적용됩니다.</p>
+              <p className="text-sm font-medium">{form.is_active ? t('외부 저장소 사용 중') : t('Supabase Storage 사용 중')}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{t('엔드포인트/버킷/Key가 모두 입력돼 있어야 실제로 적용됩니다.')}</p>
             </div>
             <Switch checked={form.is_active} onCheckedChange={c => setForm({ ...form, is_active: c })} />
           </div>
-          <div className="space-y-1.5"><Label className="text-xs">메모</Label><Textarea value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} rows={2} className="text-sm resize-none" /></div>
+          <div className="space-y-1.5"><Label className="text-xs">{t('메모')}</Label><Textarea value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} rows={2} className="text-sm resize-none" /></div>
           {error && <Alert variant="destructive"><AlertDescription className="text-xs">{error}</AlertDescription></Alert>}
           {permissions.canEdit && (
             <div className="flex justify-end">
-              <Button size="sm" onClick={handleSave} disabled={saving}><Save className="w-3.5 h-3.5 mr-1" />{saving ? '저장 중...' : '저장'}</Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}><Save className="w-3.5 h-3.5 mr-1" />{saving ? t('저장 중...') : t('저장')}</Button>
             </div>
           )}
         </CardContent>

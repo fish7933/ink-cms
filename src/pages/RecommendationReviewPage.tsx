@@ -20,6 +20,10 @@ import { getCurrentUser, getCompanies, getFleets, getShips, getRanks } from '@/l
 import { usePermissions } from '@/hooks/usePermissions';
 import type { CrewRecommendationWithDetails, CrewRecommendationResumeFile, User, Company, Fleet, Ship, Rank } from '@/types/models';
 import type { ApprovalLineWithSteps, CrewRecommendationApprovalWithDetails } from '@/types/approval';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/RecommendationReviewPage/en.json';
+i18n.addResourceBundle('en', 'RecommendationReviewPage', en, true, true);
 
 const ITEMS_PER_PAGE = 20;
 
@@ -33,6 +37,7 @@ const calcAge = (birthDate: string): number => {
 };
 
 export default function RecommendationReviewPage() {
+  const { t } = useTranslation('RecommendationReviewPage');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openTab, openNewTab, closeTab, activeTabId } = useTabContext();

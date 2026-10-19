@@ -1,0 +1,17 @@
+{
+  "선종 수정": "Edit Ship Type",
+  "선종 추가": "Add Ship Type",
+  "선종 정보를 입력하세요": "Enter the ship type details",
+  "선종명 (영문) *": "Type Name (English) *",
+  "예: Bulk Carrier": "e.g. Bulk Carrier",
+  "선종명 (한글) *": "Type Name (Korean) *",
+  "예: 벌크선": "e.g. 벌크선",
+  "카테고리 *": "Category *",
+  "카테고리를 선택하세요": "Select a category",
+  "설명": "Description",
+  "선종에 대한 설명을 입력하세요": "Enter a description for this ship type",
+  "카테고리를 선택해주세요.": "Please select a category.",
+  "취소": "Cancel",
+  "수정": "Save",
+  "추가": "Add"
+}

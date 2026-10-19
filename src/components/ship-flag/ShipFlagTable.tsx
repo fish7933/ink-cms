@@ -1,3 +1,6 @@
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipFlagTable/en.json';
 import { TableCell, TableHead, TableHeader, TableRow, Table, TableBody } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +11,8 @@ import { useDragReorder } from '@/hooks/useDragReorder';
 import { updateShipFlag } from '@/services/ship-flag.service';
 import { DndContext } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+
+i18n.addResourceBundle('en', 'ShipFlagTable', en, true, true);
 
 interface ShipFlagTableProps {
   flags: ShipFlag[];
@@ -20,6 +25,7 @@ interface ShipFlagTableProps {
 }
 
 export default function ShipFlagTable({ flags, onFlagsChange, onReorderError, onEdit, onDelete, canEdit, canDelete }: ShipFlagTableProps) {
+  const { t } = useTranslation('ShipFlagTable');
   const { sensors, collisionDetection, handleDragEnd } = useDragReorder(
     flags,
     onFlagsChange,
@@ -30,7 +36,7 @@ export default function ShipFlagTable({ flags, onFlagsChange, onReorderError, on
   if (flags.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500 text-sm">
-        등록된 선적국이 없습니다.
+        {t('등록된 선적국이 없습니다.')}
       </div>
     );
   }
@@ -41,12 +47,12 @@ export default function ShipFlagTable({ flags, onFlagsChange, onReorderError, on
         <TableHeader>
           <TableRow>
             <TableHead className="w-12"></TableHead>
-            <TableHead className="w-24">코드</TableHead>
-            <TableHead>한글명</TableHead>
-            <TableHead>영문명</TableHead>
-            <TableHead className="w-24 text-center">표시순서</TableHead>
-            <TableHead className="w-24 text-center">상태</TableHead>
-            {(canEdit || canDelete) && <TableHead className="w-32 text-right">작업</TableHead>}
+            <TableHead className="w-24">{t('코드')}</TableHead>
+            <TableHead>{t('한글명')}</TableHead>
+            <TableHead>{t('영문명')}</TableHead>
+            <TableHead className="w-24 text-center">{t('표시순서')}</TableHead>
+            <TableHead className="w-24 text-center">{t('상태')}</TableHead>
+            {(canEdit || canDelete) && <TableHead className="w-32 text-right">{t('작업')}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -60,9 +66,9 @@ export default function ShipFlagTable({ flags, onFlagsChange, onReorderError, on
                   <TableCell className="text-center">{flag.display_order}</TableCell>
                   <TableCell className="text-center">
                     {flag.is_active ? (
-                      <Badge variant="default" className="bg-green-600">활성</Badge>
+                      <Badge variant="default" className="bg-green-600">{t('활성')}</Badge>
                     ) : (
-                      <Badge variant="secondary">비활성</Badge>
+                      <Badge variant="secondary">{t('비활성')}</Badge>
                     )}
                   </TableCell>
                   {(canEdit || canDelete) && (

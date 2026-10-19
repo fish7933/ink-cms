@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/SizeClassificationDialog/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +23,8 @@ import {
 } from '@/components/ui/select';
 import type { ShipSizeClassification, ShipType } from '@/types/ship-classification';
 
+i18n.addResourceBundle('en', 'SizeClassificationDialog', en, true, true);
+
 interface SizeClassificationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -35,6 +40,7 @@ export default function SizeClassificationDialog({
   shipTypes,
   onSave,
 }: SizeClassificationDialogProps) {
+  const { t } = useTranslation('SizeClassificationDialog');
   const [formData, setFormData] = useState({
     name: '',
     name_ko: '',
@@ -95,7 +101,7 @@ export default function SizeClassificationDialog({
 
   // Group ship types by category for easier selection
   const groupedShipTypes = shipTypes.reduce<Record<string, ShipType[]>>((acc, st) => {
-    const cat = st.category || '기타';
+    const cat = st.category || t('기타');
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(st);
     return acc;
@@ -108,52 +114,52 @@ export default function SizeClassificationDialog({
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">
-            {classification ? '크기 분류 수정' : '크기 분류 추가'}
+            {classification ? t('크기 분류 수정') : t('크기 분류 추가')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            선박 크기 분류 정보를 입력하세요
+            {t('선박 크기 분류 정보를 입력하세요')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-xs">분류명 (영문) *</Label>
+              <Label htmlFor="name" className="text-xs">{t('분류명 (영문) *')}</Label>
               <Input
                 id="name"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
                 className="h-9 text-sm"
-                placeholder="예: Capesize"
+                placeholder={t('예: Capesize')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="name_ko" className="text-xs">분류명 (한글) *</Label>
+              <Label htmlFor="name_ko" className="text-xs">{t('분류명 (한글) *')}</Label>
               <Input
                 id="name_ko"
                 value={formData.name_ko}
                 onChange={(e) => setFormData({ ...formData, name_ko: e.target.value })}
                 required
                 className="h-9 text-sm"
-                placeholder="예: 케이프사이즈"
+                placeholder={t('예: 케이프사이즈')}
               />
             </div>
           </div>
 
           {/* Ship Type Selection */}
           <div className="space-y-1.5">
-            <Label htmlFor="ship_type_id" className="text-xs">소속 선종</Label>
+            <Label htmlFor="ship_type_id" className="text-xs">{t('소속 선종')}</Label>
             <Select
               value={formData.ship_type_id}
               onValueChange={(value) => setFormData({ ...formData, ship_type_id: value === '__none__' ? '' : value })}
             >
               <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="선종을 선택하세요" />
+                <SelectValue placeholder={t('선종을 선택하세요')} />
               </SelectTrigger>
               <SelectContent className="max-h-[300px]">
                 <SelectItem value="__none__" className="text-sm text-gray-500">
-                  선택 안함
+                  {t('선택 안함')}
                 </SelectItem>
                 {sortedCategories.map((category) => (
                   <div key={category}>
@@ -173,59 +179,59 @@ export default function SizeClassificationDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="min_gt" className="text-xs">최소 GT</Label>
+              <Label htmlFor="min_gt" className="text-xs">{t('최소 GT')}</Label>
               <Input
                 id="min_gt"
                 type="number"
                 value={formData.min_gt}
                 onChange={(e) => setFormData({ ...formData, min_gt: e.target.value })}
                 className="h-9 text-sm"
-                placeholder="예: 50000"
+                placeholder={t('예: 50000')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="max_gt" className="text-xs">최대 GT</Label>
+              <Label htmlFor="max_gt" className="text-xs">{t('최대 GT')}</Label>
               <Input
                 id="max_gt"
                 type="number"
                 value={formData.max_gt}
                 onChange={(e) => setFormData({ ...formData, max_gt: e.target.value })}
                 className="h-9 text-sm"
-                placeholder="예: 100000"
+                placeholder={t('예: 100000')}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="min_dwt" className="text-xs">최소 DWT</Label>
+              <Label htmlFor="min_dwt" className="text-xs">{t('최소 DWT')}</Label>
               <Input
                 id="min_dwt"
                 type="number"
                 value={formData.min_dwt}
                 onChange={(e) => setFormData({ ...formData, min_dwt: e.target.value })}
                 className="h-9 text-sm"
-                placeholder="예: 100000"
+                placeholder={t('예: 100000')}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="max_dwt" className="text-xs">최대 DWT</Label>
+              <Label htmlFor="max_dwt" className="text-xs">{t('최대 DWT')}</Label>
               <Input
                 id="max_dwt"
                 type="number"
                 value={formData.max_dwt}
                 onChange={(e) => setFormData({ ...formData, max_dwt: e.target.value })}
                 className="h-9 text-sm"
-                placeholder="예: 200000"
+                placeholder={t('예: 200000')}
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="dwt_gt_ratio" className="text-xs">
-              DWT/GT 비율 (자동 계산용)
+              {t('DWT/GT 비율 (자동 계산용)')}
             </Label>
             <Input
               id="dwt_gt_ratio"
@@ -234,22 +240,22 @@ export default function SizeClassificationDialog({
               value={formData.dwt_gt_ratio}
               onChange={(e) => setFormData({ ...formData, dwt_gt_ratio: e.target.value })}
               className="h-9 text-sm"
-              placeholder="예: 1.85"
+              placeholder={t('예: 1.85')}
             />
             <p className="text-xs text-gray-500">
-              GT 입력 시 DWT를 자동 계산하는데 사용됩니다
+              {t('GT 입력 시 DWT를 자동 계산하는데 사용됩니다')}
             </p>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="description" className="text-xs">설명</Label>
+            <Label htmlFor="description" className="text-xs">{t('설명')}</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
               className="text-sm resize-none"
-              placeholder="분류에 대한 설명을 입력하세요"
+              placeholder={t('분류에 대한 설명을 입력하세요')}
             />
           </div>
 
@@ -260,10 +266,10 @@ export default function SizeClassificationDialog({
               onClick={() => onOpenChange(false)}
               className="h-9 text-sm"
             >
-              취소
+              {t('취소')}
             </Button>
             <Button type="submit" className="h-9 text-sm">
-              {classification ? '수정' : '추가'}
+              {classification ? t('수정') : t('추가')}
             </Button>
           </DialogFooter>
         </form>

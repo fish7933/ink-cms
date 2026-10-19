@@ -13,6 +13,10 @@ import { getNationalities } from '@/services/nationality.service';
 import type { Nationality } from '@/types/nationality';
 import { useTabContext } from '@/contexts/TabContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CompanyManagementPage/en.json';
+i18n.addResourceBundle('en', 'CompanyManagementPage', en, true, true);
 
 interface Company {
   id: string;
@@ -42,6 +46,7 @@ const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', off
 const MONTH_BASIS_LABELS: Record<string, string> = { '30': '30일 고정', 'actual': '실제 일수' };
 
 export default function CompanyManagementPage() {
+  const { t } = useTranslation('CompanyManagementPage');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
@@ -52,8 +57,8 @@ export default function CompanyManagementPage() {
   const isNew = searchParams.get('mode') === 'new';
   const isFormMode = isNew || !!editId;
 
-  const pageTitle = companyType === 'owner' ? '선주사 관리' : '선원 매닝사 관리';
-  const formTitle = isFormMode ? (editId ? (companyType === 'owner' ? '선주사 수정' : '매닝사 수정') : (companyType === 'owner' ? '선주사 등록' : '매닝사 등록')) : pageTitle;
+  const pageTitle = companyType === 'owner' ? t('선주사 관리') : t('선원 매닝사 관리');
+  const formTitle = isFormMode ? (editId ? (companyType === 'owner' ? t('선주사 수정') : t('매닝사 수정')) : (companyType === 'owner' ? t('선주사 등록') : t('매닝사 등록'))) : pageTitle;
 
   // 이 컴포넌트는 /companies?type=owner(선주사 관리)와 /companies?type=manning(선원 매닝사 관리)
   // 두 개의 서로 다른 메뉴 항목을 겸하므로, 쿼리 파라미터에 따라 리소스 키를 동적으로 결정한다.
@@ -101,19 +106,19 @@ export default function CompanyManagementPage() {
         supabase.from('companies').select('id,name,type,company_type,country,email,phone,officer_contract_months,rating_contract_months,month_days_basis,management_fee_days_basis').eq('type', companyType).order('name'),
         getNationalities(),
       ]);
-      if (error) { toast({ title: '불러오기 실패', variant: 'destructive' }); }
+      if (error) { toast({ title: t('불러오기 실패'), variant: 'destructive' }); }
       else { setCompanies((cd || []) as Company[]); }
       setNationalities(natData);
     } catch (e) {
       console.error(e);
-      toast({ title: '불러오기 실패', variant: 'destructive' });
+      toast({ title: t('불러오기 실패'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   }
 
   async function handleSave() {
-    if (!form.name.trim()) { toast({ title: '회사명을 입력하세요', variant: 'destructive' }); return; }
+    if (!form.name.trim()) { toast({ title: t('회사명을 입력하세요'), variant: 'destructive' }); return; }
     setSaving(true);
     const payload = { name: form.name.trim(), type: companyType, company_type: form.is_ship_manager ? '선박관리사' : '일반', country: form.country || null, email: form.email || null, phone: form.phone || null, officer_contract_months: form.officer_contract_months || null, rating_contract_months: form.rating_contract_months || null, month_days_basis: form.month_days_basis, management_fee_days_basis: form.management_fee_days_basis, updated_at: new Date().toISOString() };
     let error;
@@ -123,8 +128,8 @@ export default function CompanyManagementPage() {
       ({ error } = await supabase.from('companies').insert([{ ...payload, created_at: new Date().toISOString() }]));
     }
     setSaving(false);
-    if (error) { toast({ title: '저장 실패', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: editId ? '수정 완료' : '등록 완료' });
+    if (error) { toast({ title: t('저장 실패'), description: error.message, variant: 'destructive' }); return; }
+    toast({ title: editId ? t('수정 완료') : t('등록 완료') });
     window.dispatchEvent(new CustomEvent('company-data-changed', { detail: { companyType } }));
     closeTab(activeTabId!);
   }
@@ -133,8 +138,8 @@ export default function CompanyManagementPage() {
     if (!deleteId) return;
     const { error } = await supabase.from('companies').delete().eq('id', deleteId);
     setDeleteId(null);
-    if (error) { toast({ title: '삭제 실패', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: '삭제 완료' });
+    if (error) { toast({ title: t('삭제 실패'), description: error.message, variant: 'destructive' }); return; }
+    toast({ title: t('삭제 완료') });
     window.dispatchEvent(new CustomEvent('company-data-changed', { detail: { companyType } }));
     load();
   }

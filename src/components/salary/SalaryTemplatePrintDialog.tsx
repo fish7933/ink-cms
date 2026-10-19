@@ -1,9 +1,14 @@
 import { useEffect } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X, Printer } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/SalaryTemplatePrintDialog/en.json';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
 import SalaryTemplateWageSheet from './SalaryTemplateWageSheet';
+
+i18n.addResourceBundle('en', 'SalaryTemplatePrintDialog', en, true, true);
 
 const BODY_PRINT_CLASS = 'salary-print-dialog-open';
 
@@ -18,6 +23,7 @@ interface Props {
 // 인쇄 시 뒤에 있는 앱 화면(#root) 전체를 숨기고 이 모달 내용만 인쇄되도록 하는 전용 클래스.
 // index.css의 `body.salary-print-dialog-open #root { display: none }` 규칙과 짝을 이룬다.
 export default function SalaryTemplatePrintDialog({ open, onOpenChange, template, components, ranks }: Props) {
+  const { t } = useTranslation('SalaryTemplatePrintDialog');
   useEffect(() => {
     if (open) document.body.classList.add(BODY_PRINT_CLASS);
     else document.body.classList.remove(BODY_PRINT_CLASS);
@@ -34,18 +40,18 @@ export default function SalaryTemplatePrintDialog({ open, onOpenChange, template
             print:overflow-visible print:rounded-none print:border-none print:shadow-none"
         >
           <div className="print:hidden sticky top-0 z-10 flex items-center justify-between border-b bg-white px-4 py-3">
-            <DialogPrimitive.Title className="text-sm font-semibold">급여 템플릿 인쇄 — {template.name}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="text-sm font-semibold">{t('급여 템플릿 인쇄 — {{name}}', { name: template.name })}</DialogPrimitive.Title>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700"
               >
-                <Printer className="h-4 w-4" />인쇄 / PDF 저장
+                <Printer className="h-4 w-4" />{t('인쇄 / PDF 저장')}
               </button>
               <DialogPrimitive.Close className="rounded-sm p-1 opacity-70 hover:opacity-100 focus:outline-none">
                 <X className="h-4 w-4" />
-                <span className="sr-only">닫기</span>
+                <span className="sr-only">{t('닫기')}</span>
               </DialogPrimitive.Close>
             </div>
           </div>

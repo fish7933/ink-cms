@@ -1,0 +1,22 @@
+{
+  "현재 페이지 전체 선택": "Select all on this page",
+  "페이지당:": "Per page:",
+  "등록된 선박이 없습니다": "No ships registered",
+  "선주사": "Ship Owner",
+  "플릿": "Fleet",
+  "선박명": "Ship Name",
+  "선종": "Ship Type",
+  "선적": "Flag",
+  "급여": "Payroll",
+  "승선인원": "Crew on Board",
+  "상태": "Status",
+  "{{name}} 선택": "Select {{name}}",
+  "배정됨": "Assigned",
+  "미배정": "Unassigned",
+  "사관 {{count}}": "Officers {{count}}",
+  "부원 {{count}}": "Ratings {{count}}",
+  "비활성": "Inactive",
+  "활성": "Active",
+  "활성화": "Activate",
+  "비활성화": "Deactivate"
+}

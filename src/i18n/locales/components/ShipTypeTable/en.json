@@ -1,0 +1,13 @@
+{
+  "등록된 선종이 없습니다": "No ship types registered",
+  "선종명 검색...": "Search ship type name...",
+  "카테고리 필터": "Filter by category",
+  "전체 카테고리": "All Categories",
+  "선종명 (영문)": "Ship Type (English)",
+  "선종명 (한글)": "Ship Type (Korean)",
+  "카테고리": "Category",
+  "설명": "Description",
+  "작업": "Actions",
+  "검색 결과가 없습니다": "No results found",
+  "{{filtered}} / {{total}}건": "{{filtered}} / {{total}} items"
+}

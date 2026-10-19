@@ -1,0 +1,10 @@
+{
+  "비활성": "Inactive",
+  "사관 {{count}}": "Officers {{count}}",
+  "부원 {{count}}": "Ratings {{count}}",
+  "활성화": "Activate",
+  "비활성화": "Deactivate",
+  "등록된 선박이 없습니다": "No ships registered",
+  "선주사 미지정": "No Owner Assigned",
+  "{{count}}척": "{{count}} ship(s)"
+}

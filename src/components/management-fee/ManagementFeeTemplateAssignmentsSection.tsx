@@ -29,6 +29,10 @@ import {
   type FleetManagementFeeAssignment,
   type OwnerManagementFeeAssignment,
 } from '@/lib/management-fee-store';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ManagementFeeTemplateAssignmentsSection/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeTemplateAssignmentsSection', en, true, true);
 
 interface OwnerAssignmentRow extends OwnerManagementFeeAssignment {
   owner_name: string;
@@ -59,6 +63,7 @@ interface ManagementFeeTemplateAssignmentsSectionProps {
 
 // 관리비 템플릿 관리 페이지의 "템플릿 할당" 탭 내용. 선주/플릿/선박에 템플릿을 배정/해제한다.
 export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplateId, onPrefillConsumed }: ManagementFeeTemplateAssignmentsSectionProps) {
+  const { t } = useTranslation('ManagementFeeTemplateAssignmentsSection');
   const [templates, setTemplates] = useState<ManagementFeeTemplate[]>([]);
   const [ships, setShips] = useState<Ship[]>([]);
   const [fleets, setFleets] = useState<Fleet[]>([]);
@@ -131,7 +136,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
       const fleetMap = new Map<string, Fleet>(fleetsData.map(f => [String(f.id), f]));
       const ownerMap = new Map<string, string>(ownerCompaniesData.map((o: Company) => [String(o.id), o.name]));
       const shipMap = new Map<string, Ship>(shipsData.map(s => [String(s.id), s]));
-      const templateMap = new Map<string, string>(templatesData.map(t => [String(t.id), t.name]));
+      const templateMap = new Map<string, string>(templatesData.map(tpl => [String(tpl.id), tpl.name]));
 
       setOwnerAssignments(ownerAssignmentsData.map((a: OwnerManagementFeeAssignment) => ({
         ...a,
@@ -195,12 +200,12 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
   };
 
   const handleAssign = async () => {
-    if (!assignTemplateId) { alert('템플릿을 선택하세요.'); return; }
+    if (!assignTemplateId) { alert(t('템플릿을 선택하세요.')); return; }
     let success = false;
-    const templateName = templates.find(t => String(t.id) === assignTemplateId)?.name || '';
+    const templateName = templates.find(tpl => String(tpl.id) === assignTemplateId)?.name || '';
 
     if (assignTarget === 'owner') {
-      if (!assignOwnerId) { alert('선주를 선택하세요.'); return; }
+      if (!assignOwnerId) { alert(t('선주를 선택하세요.')); return; }
       const ownerName = ownerCompanies.find(c => String(c.id) === assignOwnerId)?.name || '';
       const ownerFleets = fleets.filter(f => String(f.owner_id) === assignOwnerId);
       const ownerFleetIds = ownerFleets.map(f => String(f.id));
@@ -221,7 +226,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
       success = !!(await assignTemplateToOwner(assignOwnerId, assignTemplateId));
 
     } else if (assignTarget === 'fleet') {
-      if (!assignFleetId) { alert('플릿을 선택하세요.'); return; }
+      if (!assignFleetId) { alert(t('플릿을 선택하세요.')); return; }
       const fleetName = fleets.find(f => String(f.id) === assignFleetId)?.name || '';
       const fleetShips = ships.filter(s => String(s.fleet_id) === assignFleetId);
       const fleetShipIds = fleetShips.map(s => String(s.id));
@@ -236,7 +241,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
       success = !!(await assignTemplateToFleet(assignFleetId, assignTemplateId));
 
     } else if (assignTarget === 'ship') {
-      if (!assignShipId) { alert('선박을 선택하세요.'); return; }
+      if (!assignShipId) { alert(t('선박을 선택하세요.')); return; }
       const shipName = ships.find(s => String(s.id) === assignShipId)?.name || '';
       if (!window.confirm(msg.salaryTemplate.shipAssignConfirm(shipName, templateName))) return;
       const existing = await getShipManagementFeeAssignments(assignShipId);
@@ -245,30 +250,30 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
     }
 
     if (success) { setFormView(null); await loadData(); }
-    else alert('할당에 실패했습니다.');
+    else alert(t('할당에 실패했습니다.'));
   };
 
   const handleUnassignOwner = async (ownerId: string, templateId: string) => {
-    if (!confirm('할당을 해제하시겠습니까?')) return;
+    if (!confirm(t('할당을 해제하시겠습니까?'))) return;
     if (await unassignTemplateFromOwner(ownerId, templateId)) await loadData();
-    else alert('해제에 실패했습니다.');
+    else alert(t('해제에 실패했습니다.'));
   };
 
   const handleUnassignFleet = async (fleetId: string, templateId: string) => {
-    if (!confirm('할당을 해제하시겠습니까?')) return;
+    if (!confirm(t('할당을 해제하시겠습니까?'))) return;
     if (await unassignTemplateFromFleet(fleetId, templateId)) await loadData();
-    else alert('해제에 실패했습니다.');
+    else alert(t('해제에 실패했습니다.'));
   };
 
   const handleUnassignShip = async (shipId: string, templateId: string) => {
-    if (!confirm('할당을 해제하시겠습니까?')) return;
+    if (!confirm(t('할당을 해제하시겠습니까?'))) return;
     if (await unassignTemplateFromShip(shipId, templateId)) await loadData();
-    else alert('해제에 실패했습니다.');
+    else alert(t('해제에 실패했습니다.'));
   };
 
   const handleBulkUnassignOwner = async () => {
     if (selectedOwnerIds.size === 0) return;
-    if (!confirm(`선택한 선주 할당 ${selectedOwnerIds.size}건을 해제하시겠습니까?`)) return;
+    if (!confirm(t('선택한 선주 할당 {{count}}건을 해제하시겠습니까?', { count: selectedOwnerIds.size }))) return;
     const rows = ownerAssignments.filter(a => selectedOwnerIds.has(a.id));
     await Promise.all(rows.map(a => unassignTemplateFromOwner(String(a.owner_id), String(a.template_id))));
     setSelectedOwnerIds(new Set());
@@ -277,7 +282,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
 
   const handleBulkUnassignFleet = async () => {
     if (selectedFleetIds.size === 0) return;
-    if (!confirm(`선택한 플릿 할당 ${selectedFleetIds.size}건을 해제하시겠습니까?`)) return;
+    if (!confirm(t('선택한 플릿 할당 {{count}}건을 해제하시겠습니까?', { count: selectedFleetIds.size }))) return;
     const rows = fleetAssignments.filter(a => selectedFleetIds.has(a.id));
     await Promise.all(rows.map(a => unassignTemplateFromFleet(String(a.fleet_id), String(a.template_id))));
     setSelectedFleetIds(new Set());
@@ -286,7 +291,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
 
   const handleBulkUnassignShip = async () => {
     if (selectedShipIds.size === 0) return;
-    if (!confirm(`선택한 선박 할당 ${selectedShipIds.size}건을 해제하시겠습니까?`)) return;
+    if (!confirm(t('선택한 선박 할당 {{count}}건을 해제하시겠습니까?', { count: selectedShipIds.size }))) return;
     const rows = shipAssignments.filter(a => selectedShipIds.has(a.id));
     await Promise.all(rows.map(a => unassignTemplateFromShip(String(a.ship_id), String(a.template_id))));
     setSelectedShipIds(new Set());
@@ -337,7 +342,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
 
   const unassignBtn = (onClick: () => void) => (
     <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onClick(); }} className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
-      <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">해제</span>
+      <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">{t('해제')}</span>
     </Button>
   );
 
@@ -349,7 +354,7 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
   // 특정 범위(선주/플릿 전체)에서 이 템플릿으로 최종 귀결되는 선박만 뽑아 뱃지로 표시 (다른 곳에 더 구체적으로 할당돼 제외된 선박은 자동으로 빠짐)
   // 할당된 선박은 일부만 보여주고 "외 N척"으로 생략하지 않고 전부 보여준다.
   const renderShipBadges = (shipList: Ship[]) => {
-    if (shipList.length === 0) return <span className="text-xs text-gray-400">해당 선박 없음</span>;
+    if (shipList.length === 0) return <span className="text-xs text-gray-400">{t('해당 선박 없음')}</span>;
     return (
       <div className="flex flex-wrap gap-1">
         {shipList.map(s => <Badge key={s.id} variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 whitespace-nowrap">{s.name}</Badge>)}
@@ -359,9 +364,9 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
 
   const bulkBar = (count: number, onUnassign: () => void) => count === 0 ? null : (
     <div className="flex items-center justify-between gap-2 rounded-md border bg-blue-50 border-blue-200 px-3 py-2 mb-2">
-      <span className="text-xs text-blue-800">{count}건 선택됨</span>
+      <span className="text-xs text-blue-800">{t('{{count}}건 선택됨', { count })}</span>
       <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={onUnassign}>
-        <Trash2 className="h-3.5 w-3.5 mr-1" />선택 해제
+        <Trash2 className="h-3.5 w-3.5 mr-1" />{t('선택 해제')}
       </Button>
     </div>
   );
@@ -392,8 +397,8 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
         <Table>
           <TableHeader><TableRow>
             {headerCheckbox(rows, selectedOwnerIds, setSelectedOwnerIds)}
-            <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">템플릿</TableHead>
-            <TableHead className="text-xs">적용 범위</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
+            <TableHead className="text-xs">{t('선주')}</TableHead><TableHead className="text-xs">{t('템플릿')}</TableHead>
+            <TableHead className="text-xs">{t('적용 범위')}</TableHead><TableHead className="text-xs">{t('할당 일시')}</TableHead><TableHead className="text-xs w-20">{t('작업')}</TableHead>
           </TableRow></TableHeader>
           <TableBody>{rows.map(a => (
             <TableRow key={`${keyPrefix}-${a.id}`}>
@@ -417,8 +422,8 @@ export default function ManagementFeeTemplateAssignmentsSection({ prefillTemplat
         <Table>
           <TableHeader><TableRow>
             {headerCheckbox(rows, selectedFleetIds, setSelectedFleetIds)}
-            <TableHead className="text-xs">선주</TableHead><TableHead className="text-xs">플릿</TableHead><TableHead className="text-xs">템플릿</TableHead>
-            <TableHead className="text-xs">소속 선박</TableHead><TableHead className="text-xs">할당 일시</TableHead><TableHead className="text-xs w-20">작업</TableHead>
+            <TableHead className="text-xs">{t('선주')}</TableHead><TableHead className="text-xs">{t('플릿')}</TableHead><TableHead className="text-xs">{t('템플릿')}</TableHead>
+            <TableHead className="text-xs">{t('소속 선박')}</TableHead><TableHead className="text-xs">{t('할당 일시')}</TableHead><TableHead className="text-xs w-20">{t('작업')}</TableHead>
           </TableRow></TableHeader>
           <TableBody>{rows.map(a => (
             <TableRow key={`${keyPrefix}-${a.id}`}>

@@ -8,6 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCompanyInfo, saveCompanyInfo, uploadCompanyLogo } from '@/services/company-info.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CompanyInfoPage/en.json';
+i18n.addResourceBundle('en', 'CompanyInfoPage', en, true, true);
 
 interface FormState {
   name: string;
@@ -23,6 +27,7 @@ interface FormState {
 const EMPTY_FORM: FormState = { name: '', name_en: '', address: '', phone: '', fax: '', email: '', website: '', logo_url: '' };
 
 export default function CompanyInfoPage() {
+  const { t } = useTranslation('CompanyInfoPage');
   const navigate = useNavigate();
   const { toast } = useToast();
   const [id, setId] = useState<string | null>(null);
@@ -53,7 +58,7 @@ export default function CompanyInfoPage() {
       }
     } catch (e) {
       console.error(e);
-      toast({ title: '불러오기 실패', variant: 'destructive' });
+      toast({ title: t('불러오기 실패'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -63,11 +68,11 @@ export default function CompanyInfoPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/svg+xml'].includes(file.type)) {
-      toast({ title: 'JPG, PNG, WEBP, SVG 형식만 가능합니다', variant: 'destructive' });
+      toast({ title: t('JPG, PNG, WEBP, SVG 형식만 가능합니다'), variant: 'destructive' });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast({ title: '5MB 이하만 가능합니다', variant: 'destructive' });
+      toast({ title: t('5MB 이하만 가능합니다'), variant: 'destructive' });
       return;
     }
     setSelectedFile(file);
@@ -83,7 +88,7 @@ export default function CompanyInfoPage() {
   }
 
   async function handleSave() {
-    if (!form.name.trim()) { toast({ title: '회사명을 입력하세요', variant: 'destructive' }); return; }
+    if (!form.name.trim()) { toast({ title: t('회사명을 입력하세요'), variant: 'destructive' }); return; }
     setSaving(true);
     try {
       let logoUrl = form.logo_url;
@@ -101,13 +106,13 @@ export default function CompanyInfoPage() {
         website: form.website || null,
         logo_url: logoUrl || null,
       });
-      toast({ title: '저장 완료' });
+      toast({ title: t('저장 완료') });
       setSelectedFile(null);
       window.dispatchEvent(new CustomEvent('company-info-changed'));
       await load();
     } catch (e) {
       console.error(e);
-      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('저장 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -118,10 +123,10 @@ export default function CompanyInfoPage() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">회사 정보 관리</CardTitle>
+            <CardTitle className="text-base">{t('회사 정보 관리')}</CardTitle>
             {permissions.canEdit && (
               <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving || loading}>
-                <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+                <Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}
               </Button>
             )}
           </div>
@@ -132,7 +137,7 @@ export default function CompanyInfoPage() {
           ) : (
             <div className="space-y-3 py-2 max-w-md">
               <div className="space-y-1">
-                <Label className="text-xs">회사 로고</Label>
+                <Label className="text-xs">{t('회사 로고')}</Label>
                 <div className="flex items-center gap-3">
                   {previewUrl ? (
                     <div className="relative">
@@ -142,50 +147,50 @@ export default function CompanyInfoPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center text-gray-300 text-xs">없음</div>
+                    <div className="w-16 h-16 rounded-md border border-dashed flex items-center justify-center text-gray-300 text-xs">{t('없음')}</div>
                   )}
                   <Label htmlFor="logo-input" className="cursor-pointer">
                     <div className="flex items-center gap-1.5 px-3 py-1.5 border rounded-md hover:bg-gray-50 text-xs">
-                      <Upload className="w-3.5 h-3.5" />로고 업로드
+                      <Upload className="w-3.5 h-3.5" />{t('로고 업로드')}
                     </div>
                   </Label>
                   <Input id="logo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/svg+xml" onChange={handleFileSelect} className="hidden" />
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">회사명 *</Label>
-                <Input className="h-8 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="회사명 입력" />
+                <Label className="text-xs">{t('회사명 *')}</Label>
+                <Input className="h-8 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('회사명 입력')} />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">회사명 (영문)</Label>
-                <Input className="h-8 text-sm" value={form.name_en} onChange={e => setForm(f => ({ ...f, name_en: e.target.value }))} placeholder="예: Ink Marine Co., Ltd." />
-                <p className="text-[11px] text-gray-400">외부로 나가는 결재문서(시행문)의 "발신"란에 사용됩니다. 미입력 시 국문 회사명이 대신 쓰입니다.</p>
+                <Label className="text-xs">{t('회사명 (영문)')}</Label>
+                <Input className="h-8 text-sm" value={form.name_en} onChange={e => setForm(f => ({ ...f, name_en: e.target.value }))} placeholder={t('예: Ink Marine Co., Ltd.')} />
+                <p className="text-[11px] text-gray-400">{t('외부로 나가는 결재문서(시행문)의 "발신"란에 사용됩니다. 미입력 시 국문 회사명이 대신 쓰입니다.')}</p>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">주소</Label>
-                <Input className="h-8 text-sm" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="주소 입력" />
+                <Label className="text-xs">{t('주소')}</Label>
+                <Input className="h-8 text-sm" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder={t('주소 입력')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">연락처</Label>
-                  <Input className="h-8 text-sm" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="전화번호" />
+                  <Label className="text-xs">{t('연락처')}</Label>
+                  <Input className="h-8 text-sm" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('전화번호')} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">팩스번호</Label>
-                  <Input className="h-8 text-sm" value={form.fax} onChange={e => setForm(f => ({ ...f, fax: e.target.value }))} placeholder="팩스번호" />
+                  <Label className="text-xs">{t('팩스번호')}</Label>
+                  <Input className="h-8 text-sm" value={form.fax} onChange={e => setForm(f => ({ ...f, fax: e.target.value }))} placeholder={t('팩스번호')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">이메일</Label>
-                  <Input className="h-8 text-sm" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="예: info@company.com" />
+                  <Label className="text-xs">{t('이메일')}</Label>
+                  <Input className="h-8 text-sm" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder={t('예: info@company.com')} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">홈페이지</Label>
-                  <Input className="h-8 text-sm" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="예: https://company.com" />
+                  <Label className="text-xs">{t('홈페이지')}</Label>
+                  <Input className="h-8 text-sm" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder={t('예: https://company.com')} />
                 </div>
               </div>
-              <p className="text-xs text-gray-400 pt-1">여기 등록된 회사명은 선원 승선경력의 "회사 배치" 기록에서 선박관리사명으로 자동 사용됩니다. 회사 정보는 시행문 레터헤드에도 사용됩니다.</p>
+              <p className="text-xs text-gray-400 pt-1">{t('여기 등록된 회사명은 선원 승선경력의 "회사 배치" 기록에서 선박관리사명으로 자동 사용됩니다. 회사 정보는 시행문 레터헤드에도 사용됩니다.')}</p>
             </div>
           )}
         </CardContent>

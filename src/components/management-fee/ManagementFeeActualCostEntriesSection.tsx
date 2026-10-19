@@ -17,6 +17,10 @@ import {
   type ManagementFeeItem,
 } from '@/lib/management-fee-store';
 import type { ManagementFeeLedgerActualCostEntry } from '@/services/management-fee-calc.service';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ManagementFeeActualCostEntriesSection/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeActualCostEntriesSection', en, true, true);
 
 const CURRENCIES = ['USD', 'EUR', 'KRW', 'JPY', 'IDR', 'MMK', 'PHP', 'CNY'];
 
@@ -65,6 +69,7 @@ function monthRange(yearMonth: string): { start: string; end: string } {
 // "승하선 비용상세" 시트와 1:1 대응 — actual_cost(실비) 청구항목은 승선기록마다 자동으로
 // 라인이 생기지 않으므로, 그 달에 실제로 발생한 건만 여기서 직접 기록한다.
 export default function ManagementFeeActualCostEntriesSection({ periodId, shipId, yearMonth, entries, onChanged }: ManagementFeeActualCostEntriesSectionProps) {
+  const { t } = useTranslation('ManagementFeeActualCostEntriesSection');
   const [availableFeeItems, setAvailableFeeItems] = useState<ManagementFeeItem[]>([]);
   const [crewOptions, setCrewOptions] = useState<CrewOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,11 +150,11 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
       return {
         value: c.id,
         label: crewOptionLabel(c),
-        sublabel: isDisembarked ? '하선' : isEmbarked ? '승선' : undefined,
+        sublabel: isDisembarked ? t('하선') : isEmbarked ? t('승선') : undefined,
         sublabelColor: (isDisembarked ? 'amber' : isEmbarked ? 'blue' : undefined) as 'amber' | 'blue' | undefined,
       };
     });
-  }, [crewOptions, yearMonth]);
+  }, [crewOptions, yearMonth, t]);
 
   const resetForm = () => {
     setFeeItemId('');
@@ -162,9 +167,9 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
   };
 
   const handleAdd = async () => {
-    if (!feeItemId) { alert('청구 항목을 선택하세요.'); return; }
+    if (!feeItemId) { alert(t('청구 항목을 선택하세요.')); return; }
     const amount = parseFloat(amountUsd);
-    if (!amount || amount <= 0) { alert('USD 청구 금액을 입력하세요.'); return; }
+    if (!amount || amount <= 0) { alert(t('USD 청구 금액을 입력하세요.')); return; }
     setSaving(true);
     try {
       const added = await addActualCostEntry({
@@ -178,19 +183,19 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
         remark: remark || null,
       });
       if (added) { resetForm(); onChanged(); }
-      else alert('추가에 실패했습니다.');
+      else alert(t('추가에 실패했습니다.'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('이 기록을 삭제하시겠습니까?')) return;
+    if (!confirm(t('이 기록을 삭제하시겠습니까?'))) return;
     setDeletingId(id);
     try {
       const success = await deleteActualCostEntry(id);
       if (success) onChanged();
-      else alert('삭제에 실패했습니다.');
+      else alert(t('삭제에 실패했습니다.'));
     } finally {
       setDeletingId(null);
     }
@@ -212,7 +217,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
   const handleSaveEdit = async () => {
     if (!editingId) return;
     const amount = parseFloat(editAmountUsd);
-    if (!amount || amount <= 0) { alert('USD 청구 금액을 입력하세요.'); return; }
+    if (!amount || amount <= 0) { alert(t('USD 청구 금액을 입력하세요.')); return; }
     setEditSaving(true);
     try {
       const updated = await updateActualCostEntry(editingId, {
@@ -225,58 +230,58 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
         remark: editRemark || null,
       });
       if (updated) { setEditingId(null); onChanged(); }
-      else alert('수정에 실패했습니다.');
+      else alert(t('수정에 실패했습니다.'));
     } finally {
       setEditSaving(false);
     }
   };
 
   if (loading) {
-    return <div className="text-center py-4 text-xs text-gray-400">불러오는 중...</div>;
+    return <div className="text-center py-4 text-xs text-gray-400">{t('불러오는 중...')}</div>;
   }
 
   return (
     <div className="space-y-3">
       {availableFeeItems.length === 0 ? (
-        <p className="text-xs text-gray-400">이 선박의 관리비 템플릿에 실비(수기입력) 항목이 배정되어 있지 않습니다.</p>
+        <p className="text-xs text-gray-400">{t('이 선박의 관리비 템플릿에 실비(수기입력) 항목이 배정되어 있지 않습니다.')}</p>
       ) : (
         <div className="p-3 bg-gray-50 rounded-md border space-y-2.5">
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-0.5">
-            <Label className="text-[10px] text-gray-400">청구 항목</Label>
+            <Label className="text-[10px] text-gray-400">{t('청구 항목')}</Label>
             <Select value={feeItemId} onValueChange={setFeeItemId}>
-              <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder="항목 선택" /></SelectTrigger>
+              <SelectTrigger className="h-8 text-xs w-44"><SelectValue placeholder={t('항목 선택')} /></SelectTrigger>
               <SelectContent>
                 {availableFeeItems.map(f => <SelectItem key={f.id} value={f.id} className="text-xs">{f.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-0.5">
-            <Label className="text-[10px] text-gray-400">원 화폐</Label>
+            <Label className="text-[10px] text-gray-400">{t('원 화폐')}</Label>
             <Select value={currency} onValueChange={setCurrency}>
               <SelectTrigger className="h-8 text-xs w-20"><SelectValue /></SelectTrigger>
               <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-0.5">
-            <Label className="text-[10px] text-gray-400">단가(원 화폐, 참고용)</Label>
+            <Label className="text-[10px] text-gray-400">{t('단가(원 화폐, 참고용)')}</Label>
             <Input type="number" min={0} value={unitPrice} onChange={e => { setUnitPrice(e.target.value); const a = computeAmount(e.target.value, quantity); if (a != null) setAmountUsd(a); }} className="h-8 text-xs w-28" />
           </div>
           <div className="space-y-0.5">
-            <Label className="text-[10px] text-gray-400">개수/인원</Label>
+            <Label className="text-[10px] text-gray-400">{t('개수/인원')}</Label>
             <Input type="number" min={0} value={quantity} onChange={e => { setQuantity(e.target.value); const a = computeAmount(unitPrice, e.target.value); if (a != null) setAmountUsd(a); }} className="h-8 text-xs w-16" />
           </div>
           <div className="space-y-0.5">
-            <Label className="text-[10px] text-gray-400">청구 금액(USD) *</Label>
+            <Label className="text-[10px] text-gray-400">{t('청구 금액(USD) *')}</Label>
             <Input type="number" min={0} value={amountUsd} onChange={e => setAmountUsd(e.target.value)} className="h-8 text-xs w-24" />
           </div>
           <Button size="sm" className="h-8 gap-1 text-xs" onClick={handleAdd} disabled={saving}>
-            <Plus className="w-3.5 h-3.5" />{saving ? '추가 중...' : '추가'}
+            <Plus className="w-3.5 h-3.5" />{saving ? t('추가 중...') : t('추가')}
           </Button>
         </div>
         {crewOptions.length > 0 && (
           <BadgeSelect
-            label="관련 선원"
+            label={t('관련 선원')}
             items={crewBadgeItems}
             selected={crewMemberIds}
             onChange={ids => { setCrewMemberIds(ids); setRemark(buildRemarkFromCrew(ids, crewOptions)); }}
@@ -284,25 +289,25 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
           />
         )}
         <div className="space-y-0.5">
-          <Label className="text-[10px] text-gray-400">비고</Label>
+          <Label className="text-[10px] text-gray-400">{t('비고')}</Label>
           <Textarea value={remark} onChange={e => setRemark(e.target.value)} rows={2} className="min-h-0 text-xs resize-y" />
         </div>
         </div>
       )}
 
       {entries.length === 0 ? (
-        <div className="text-center py-4 text-xs text-gray-400">기록된 실비 항목이 없습니다.</div>
+        <div className="text-center py-4 text-xs text-gray-400">{t('기록된 실비 항목이 없습니다.')}</div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs">항목</TableHead>
-                <TableHead className="text-xs">관련 선원</TableHead>
-                <TableHead className="text-xs text-right">단가</TableHead>
-                <TableHead className="text-xs text-center">개수</TableHead>
-                <TableHead className="text-xs text-right">청구 금액(USD)</TableHead>
-                <TableHead className="text-xs">비고</TableHead>
+                <TableHead className="text-xs">{t('항목')}</TableHead>
+                <TableHead className="text-xs">{t('관련 선원')}</TableHead>
+                <TableHead className="text-xs text-right">{t('단가')}</TableHead>
+                <TableHead className="text-xs text-center">{t('개수')}</TableHead>
+                <TableHead className="text-xs text-right">{t('청구 금액(USD)')}</TableHead>
+                <TableHead className="text-xs">{t('비고')}</TableHead>
                 <TableHead className="text-xs w-10"></TableHead>
               </TableRow>
             </TableHeader>
@@ -314,7 +319,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                     <div className="space-y-2.5">
                       <div className="flex flex-wrap items-end gap-2">
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-gray-400">청구 항목</Label>
+                          <Label className="text-[10px] text-gray-400">{t('청구 항목')}</Label>
                           <Select value={editFeeItemId} onValueChange={setEditFeeItemId}>
                             <SelectTrigger className="h-8 text-xs w-44"><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -323,22 +328,22 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                           </Select>
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-gray-400">원 화폐</Label>
+                          <Label className="text-[10px] text-gray-400">{t('원 화폐')}</Label>
                           <Select value={editCurrency} onValueChange={setEditCurrency}>
                             <SelectTrigger className="h-8 text-xs w-20"><SelectValue /></SelectTrigger>
                             <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-gray-400">단가(원 화폐, 참고용)</Label>
+                          <Label className="text-[10px] text-gray-400">{t('단가(원 화폐, 참고용)')}</Label>
                           <Input type="number" min={0} value={editUnitPrice} onChange={ev => { setEditUnitPrice(ev.target.value); const a = computeAmount(ev.target.value, editQuantity); if (a != null) setEditAmountUsd(a); }} className="h-8 text-xs w-28" />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-gray-400">개수/인원</Label>
+                          <Label className="text-[10px] text-gray-400">{t('개수/인원')}</Label>
                           <Input type="number" min={0} value={editQuantity} onChange={ev => { setEditQuantity(ev.target.value); const a = computeAmount(editUnitPrice, ev.target.value); if (a != null) setEditAmountUsd(a); }} className="h-8 text-xs w-16" />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-gray-400">청구 금액(USD) *</Label>
+                          <Label className="text-[10px] text-gray-400">{t('청구 금액(USD) *')}</Label>
                           <Input type="number" min={0} value={editAmountUsd} onChange={ev => setEditAmountUsd(ev.target.value)} className="h-8 text-xs w-24" />
                         </div>
                         <div className="flex items-center gap-0.5">
@@ -352,7 +357,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                       </div>
                       {crewOptions.length > 0 && (
                         <BadgeSelect
-                          label="관련 선원"
+                          label={t('관련 선원')}
                           items={crewBadgeItems}
                           selected={editCrewMemberIds}
                           onChange={ids => { setEditCrewMemberIds(ids); setEditRemark(buildRemarkFromCrew(ids, crewOptions)); }}
@@ -360,7 +365,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
                         />
                       )}
                       <div className="space-y-0.5">
-                        <Label className="text-[10px] text-gray-400">비고</Label>
+                        <Label className="text-[10px] text-gray-400">{t('비고')}</Label>
                         <Textarea value={editRemark} onChange={ev => setEditRemark(ev.target.value)} rows={2} className="min-h-0 text-xs resize-y" />
                       </div>
                     </div>

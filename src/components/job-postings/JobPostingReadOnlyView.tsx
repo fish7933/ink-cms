@@ -7,6 +7,10 @@ import { UserPlus } from 'lucide-react';
 import type { JobPostingGroupWithDetails, Ship, Company } from '@/types/models';
 import type { SelectedRankDetail } from './types';
 import { departmentColors } from './utils';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/JobPostingReadOnlyView/en.json';
+i18n.addResourceBundle('en', 'JobPostingReadOnlyView', en, true, true);
 
 interface JobPostingReadOnlyViewProps {
   posting: JobPostingGroupWithDetails;
@@ -25,11 +29,13 @@ export function JobPostingReadOnlyView({
   onClose,
   onRecommendCrew,
 }: JobPostingReadOnlyViewProps) {
+  const { t } = useTranslation('JobPostingReadOnlyView');
+
   const getAgencyNames = (agencyIds: string[]) => {
-    if (!agencyIds || agencyIds.length === 0) return '전체 매닝사';
-    
+    if (!agencyIds || agencyIds.length === 0) return t('전체 매닝사');
+
     const agencies = manningAgencies.filter(a => agencyIds.includes(a.id));
-    if (agencies.length === 0) return '전체 매닝사';
+    if (agencies.length === 0) return t('전체 매닝사');
     return agencies.map(a => a.name).join(', ');
   };
 
@@ -37,22 +43,22 @@ export function JobPostingReadOnlyView({
     <>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">구인 공고 및 선원 추천</CardTitle>
+          <CardTitle className="text-base">{t('구인 공고 및 선원 추천')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {/* Company and Ship Basic Info */}
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label className="text-xs text-gray-500">선주사</Label>
+                <Label className="text-xs text-gray-500">{t('선주사')}</Label>
                 <p className="text-sm font-medium mt-0.5">{posting.company_name}</p>
               </div>
               <div>
-                <Label className="text-xs text-gray-500">선대</Label>
+                <Label className="text-xs text-gray-500">{t('선대')}</Label>
                 <p className="text-sm font-medium mt-0.5">{posting.fleet_name || '-'}</p>
               </div>
               <div>
-                <Label className="text-xs text-gray-500">선박명</Label>
+                <Label className="text-xs text-gray-500">{t('선박명')}</Label>
                 <p className="text-sm font-medium mt-0.5">{posting.ship_name}</p>
               </div>
             </div>
@@ -60,25 +66,25 @@ export function JobPostingReadOnlyView({
             {/* Detailed Ship Information */}
             {shipDetails && (
               <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700 mb-2">선박 상세 정보</h3>
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">{t('선박 상세 정보')}</h3>
                 
                 {/* Basic Ship Specs */}
                 <div className="grid grid-cols-3 gap-3">
                   {shipDetails.imo_number && (
                     <div>
-                      <Label className="text-xs text-gray-500">IMO 번호</Label>
+                      <Label className="text-xs text-gray-500">{t('IMO 번호')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.imo_number}</p>
                     </div>
                   )}
                   {shipDetails.ship_type && (
                     <div>
-                      <Label className="text-xs text-gray-500">선종</Label>
+                      <Label className="text-xs text-gray-500">{t('선종')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.ship_type}</p>
                     </div>
                   )}
                   {shipDetails.flag && (
                     <div>
-                      <Label className="text-xs text-gray-500">선적국</Label>
+                      <Label className="text-xs text-gray-500">{t('선적국')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.flag}</p>
                     </div>
                   )}
@@ -88,25 +94,25 @@ export function JobPostingReadOnlyView({
                 <div className="grid grid-cols-4 gap-3">
                   {shipDetails.gross_tonnage && (
                     <div>
-                      <Label className="text-xs text-gray-500">총톤수 (GT)</Label>
+                      <Label className="text-xs text-gray-500">{t('총톤수 (GT)')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.gross_tonnage.toLocaleString()}</p>
                     </div>
                   )}
                   {shipDetails.dwt && (
                     <div>
-                      <Label className="text-xs text-gray-500">재화중량톤 (DWT)</Label>
+                      <Label className="text-xs text-gray-500">{t('재화중량톤 (DWT)')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.dwt.toLocaleString()}</p>
                     </div>
                   )}
                   {shipDetails.length_overall && (
                     <div>
-                      <Label className="text-xs text-gray-500">전장 (m)</Label>
+                      <Label className="text-xs text-gray-500">{t('전장 (m)')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.length_overall}</p>
                     </div>
                   )}
                   {shipDetails.breadth && (
                     <div>
-                      <Label className="text-xs text-gray-500">선폭 (m)</Label>
+                      <Label className="text-xs text-gray-500">{t('선폭 (m)')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.breadth}</p>
                     </div>
                   )}
@@ -116,19 +122,19 @@ export function JobPostingReadOnlyView({
                 <div className="grid grid-cols-3 gap-3">
                   {shipDetails.built_year && (
                     <div>
-                      <Label className="text-xs text-gray-500">건조년도</Label>
+                      <Label className="text-xs text-gray-500">{t('건조년도')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.built_year}</p>
                     </div>
                   )}
                   {shipDetails.builder && (
                     <div>
-                      <Label className="text-xs text-gray-500">건조사</Label>
+                      <Label className="text-xs text-gray-500">{t('건조사')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.builder}</p>
                     </div>
                   )}
                   {shipDetails.classification_society && (
                     <div>
-                      <Label className="text-xs text-gray-500">선급</Label>
+                      <Label className="text-xs text-gray-500">{t('선급')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.classification_society}</p>
                     </div>
                   )}
@@ -138,19 +144,19 @@ export function JobPostingReadOnlyView({
                 <div className="grid grid-cols-3 gap-3">
                   {shipDetails.engine_type && (
                     <div>
-                      <Label className="text-xs text-gray-500">엔진 타입</Label>
+                      <Label className="text-xs text-gray-500">{t('엔진 타입')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.engine_type}</p>
                     </div>
                   )}
                   {shipDetails.engine_power && (
                     <div>
-                      <Label className="text-xs text-gray-500">엔진 출력 (kW)</Label>
+                      <Label className="text-xs text-gray-500">{t('엔진 출력 (kW)')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.engine_power.toLocaleString()}</p>
                     </div>
                   )}
                   {shipDetails.speed_service && (
                     <div>
-                      <Label className="text-xs text-gray-500">항해속력 (knots)</Label>
+                      <Label className="text-xs text-gray-500">{t('항해속력 (knots)')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.speed_service}</p>
                     </div>
                   )}
@@ -160,20 +166,20 @@ export function JobPostingReadOnlyView({
                 <div className="grid grid-cols-3 gap-3">
                   {shipDetails.call_sign && (
                     <div>
-                      <Label className="text-xs text-gray-500">호출부호</Label>
+                      <Label className="text-xs text-gray-500">{t('호출부호')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.call_sign}</p>
                     </div>
                   )}
                   {shipDetails.port_of_registry && (
                     <div>
-                      <Label className="text-xs text-gray-500">선적항</Label>
+                      <Label className="text-xs text-gray-500">{t('선적항')}</Label>
                       <p className="text-sm mt-0.5">{shipDetails.port_of_registry}</p>
                     </div>
                   )}
                   {shipDetails.crew_capacity && (
                     <div>
-                      <Label className="text-xs text-gray-500">선원 정원</Label>
-                      <p className="text-sm mt-0.5">{shipDetails.crew_capacity}명</p>
+                      <Label className="text-xs text-gray-500">{t('선원 정원')}</Label>
+                      <p className="text-sm mt-0.5">{t('{{count}}명', { count: shipDetails.crew_capacity })}</p>
                     </div>
                   )}
                 </div>
@@ -182,7 +188,7 @@ export function JobPostingReadOnlyView({
 
             {/* Rank Details */}
             <div>
-              <Label className="text-xs text-gray-500 mb-2 block">구인 직급 상세</Label>
+              <Label className="text-xs text-gray-500 mb-2 block">{t('구인 직급 상세')}</Label>
               <div className="space-y-1.5">
                 {selectedRankDetails.map((detail) => (
                   <div key={detail.rank_id} className="flex items-center justify-between p-2 bg-gray-50 rounded-md border">
@@ -197,10 +203,10 @@ export function JobPostingReadOnlyView({
                         {detail.currency} {detail.base_salary.toLocaleString()}
                       </span>
                       <span className="text-xs text-gray-600">
-                        {detail.contract_months}개월
+                        {t('{{count}}개월', { count: detail.contract_months })}
                       </span>
                       <span className="text-xs text-gray-600">
-                        {detail.positions_available}명
+                        {t('{{count}}명', { count: detail.positions_available })}
                       </span>
                     </div>
                     <Button
@@ -209,7 +215,7 @@ export function JobPostingReadOnlyView({
                       className="h-7 px-2 text-xs"
                     >
                       <UserPlus className="w-3 h-3 mr-1" />
-                      추천
+                      {t('추천')}
                     </Button>
                   </div>
                 ))}
@@ -219,7 +225,7 @@ export function JobPostingReadOnlyView({
             {/* Dates, Urgency, Agencies */}
             <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
               <div>
-                <Label className="text-xs text-gray-500">승선예정일</Label>
+                <Label className="text-xs text-gray-500">{t('승선예정일')}</Label>
                 <p className="text-sm mt-0.5">
                   {new Date(posting.embarkation_date).toLocaleDateString('ko-KR', {
                     year: '2-digit',
@@ -229,7 +235,7 @@ export function JobPostingReadOnlyView({
                 </p>
               </div>
               <div>
-                <Label className="text-xs text-gray-500">공고마감일</Label>
+                <Label className="text-xs text-gray-500">{t('공고마감일')}</Label>
                 <p className="text-sm mt-0.5">
                   {posting.application_deadline ? (
                     new Date(posting.application_deadline).toLocaleDateString('ko-KR', {
@@ -243,17 +249,17 @@ export function JobPostingReadOnlyView({
                 </p>
               </div>
               <div>
-                <Label className="text-xs text-gray-500">긴급여부</Label>
+                <Label className="text-xs text-gray-500">{t('긴급여부')}</Label>
                 <div className="mt-0.5">
                   {posting.urgency === 'urgent' ? (
                     <UrgentBadge />
                   ) : (
-                    <Badge variant="outline" className="text-xs">일반</Badge>
+                    <Badge variant="outline" className="text-xs">{t('일반')}</Badge>
                   )}
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-gray-500">공개 대상</Label>
+                <Label className="text-xs text-gray-500">{t('공개 대상')}</Label>
                 <p className="text-sm mt-0.5 truncate" title={getAgencyNames(posting.visible_to_agencies)}>
                   {getAgencyNames(posting.visible_to_agencies)}
                 </p>
@@ -263,7 +269,7 @@ export function JobPostingReadOnlyView({
             {/* Remarks */}
             {posting.requirements && (
               <div>
-                <Label className="text-xs text-gray-500">비고</Label>
+                <Label className="text-xs text-gray-500">{t('비고')}</Label>
                 <p className="text-sm mt-1 whitespace-pre-wrap p-2 bg-gray-50 rounded-md">{posting.requirements}</p>
               </div>
             )}
@@ -271,7 +277,7 @@ export function JobPostingReadOnlyView({
             {/* Close Button */}
             <div className="flex justify-end pt-2">
               <Button onClick={() => onClose(false)} size="sm">
-                닫기
+                {t('닫기')}
               </Button>
             </div>
           </div>

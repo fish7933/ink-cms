@@ -1,0 +1,13 @@
+{
+  "적합도 정보를 계산할 수 없습니다. 대상 선박 정보가 필요합니다.": "Fitness information cannot be calculated. Target ship information is required.",
+  "{{name}} — 승선 적합도 분석": "{{name}} — Boarding Fitness Analysis",
+  "{{score}}점": "{{score}} pts",
+  "대상 선박: {{shipName}}": "Target Ship: {{shipName}}",
+  " · 목표 승선일: {{embarkDate}}": " · Target Boarding Date: {{embarkDate}}",
+  "요소": "Factor",
+  "가중치": "Weight",
+  "점수": "Score",
+  "근거": "Basis",
+  "제외": "Excluded",
+  "\"제외\"로 표시된 요소는 비교할 이력/정보가 없어 채점에서 빠졌습니다(감점이 아닙니다) — 총점은 데이터가 있는 요소끼리만 가중평균한 값입니다.": "Factors marked \"Excluded\" had no history/data to compare and were left out of scoring (this is not a penalty) — the total score is a weighted average of only the factors with available data."
+}

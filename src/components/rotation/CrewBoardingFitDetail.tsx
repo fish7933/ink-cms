@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/CrewBoardingFitDetail/en.json';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { crewService } from '@/services/crew.service';
 import { crewDisplayName } from '@/lib/utils';
 import { getBoardingScoreDetail, type CrewBoardingScoreDetail } from '@/services/crew-boarding-score.service';
+
+i18n.addResourceBundle('en', 'CrewBoardingFitDetail', en, true, true);
 
 interface CrewBoardingFitDetailProps {
   crewId: string;
@@ -15,6 +20,7 @@ interface CrewBoardingFitDetailProps {
 // 승선 후보의 적합도 분석 내용 — 페이지(CrewBoardingFitDetailPage)와 후보 선택 모달
 // (CrewCandidateSelectDialog) 양쪽에서 같은 내용을 재사용한다.
 export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rankId }: CrewBoardingFitDetailProps) {
+  const { t } = useTranslation('CrewBoardingFitDetail');
   const [loading, setLoading] = useState(true);
   const [crewName, setCrewName] = useState('');
   const [shipName, setShipName] = useState('');
@@ -43,7 +49,7 @@ export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rank
   }
 
   if (!shipId || !detail) {
-    return <p className="text-sm text-gray-400 text-center py-12">적합도 정보를 계산할 수 없습니다. 대상 선박 정보가 필요합니다.</p>;
+    return <p className="text-sm text-gray-400 text-center py-12">{t('적합도 정보를 계산할 수 없습니다. 대상 선박 정보가 필요합니다.')}</p>;
   }
 
   return (
@@ -51,21 +57,24 @@ export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rank
       <CardHeader className="pb-3 px-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">
-            {crewName} — 승선 적합도 분석
+            {t('{{name}} — 승선 적합도 분석', { name: crewName })}
           </CardTitle>
-          <span className="text-2xl font-bold text-emerald-700">{detail.score}점</span>
+          <span className="text-2xl font-bold text-emerald-700">{t('{{score}}점', { score: detail.score })}</span>
         </div>
-        <p className="text-xs text-gray-500">대상 선박: {shipName || '-'}{embarkDate ? ` · 목표 승선일: ${embarkDate}` : ''}</p>
+        <p className="text-xs text-gray-500">
+          {t('대상 선박: {{shipName}}', { shipName: shipName || '-' })}
+          {embarkDate ? t(' · 목표 승선일: {{embarkDate}}', { embarkDate }) : ''}
+        </p>
       </CardHeader>
       <CardContent className="px-0">
         <div className="border rounded-md overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left p-2 text-xs font-medium text-gray-600">요소</th>
-                <th className="text-center p-2 text-xs font-medium text-gray-600">가중치</th>
-                <th className="text-center p-2 text-xs font-medium text-gray-600">점수</th>
-                <th className="text-left p-2 text-xs font-medium text-gray-600">근거</th>
+                <th className="text-left p-2 text-xs font-medium text-gray-600">{t('요소')}</th>
+                <th className="text-center p-2 text-xs font-medium text-gray-600">{t('가중치')}</th>
+                <th className="text-center p-2 text-xs font-medium text-gray-600">{t('점수')}</th>
+                <th className="text-left p-2 text-xs font-medium text-gray-600">{t('근거')}</th>
               </tr>
             </thead>
             <tbody>
@@ -75,7 +84,7 @@ export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rank
                   <td className="p-2 text-center text-gray-500">{f.weight}</td>
                   <td className="p-2 text-center">
                     {f.value === null ? (
-                      <span className="text-gray-300">제외</span>
+                      <span className="text-gray-300">{t('제외')}</span>
                     ) : (
                       <span className={f.value >= 0.7 ? 'text-emerald-700 font-semibold' : f.value >= 0.4 ? 'text-amber-600' : 'text-red-500'}>
                         {Math.round(f.value * 100)}
@@ -88,7 +97,7 @@ export default function CrewBoardingFitDetail({ crewId, shipId, embarkDate, rank
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-400 pt-2">"제외"로 표시된 요소는 비교할 이력/정보가 없어 채점에서 빠졌습니다(감점이 아닙니다) — 총점은 데이터가 있는 요소끼리만 가중평균한 값입니다.</p>
+        <p className="text-xs text-gray-400 pt-2">{t('"제외"로 표시된 요소는 비교할 이력/정보가 없어 채점에서 빠졌습니다(감점이 아닙니다) — 총점은 데이터가 있는 요소끼리만 가중평균한 값입니다.')}</p>
       </CardContent>
     </Card>
   );

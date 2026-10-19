@@ -15,12 +15,17 @@ import { useTabContext } from '@/contexts/TabContext';
 import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/RanksPage/en.json';
+i18n.addResourceBundle('en', 'RanksPage', en, true, true);
 
 const EMPTY_FORM = { name: '', rank_code: '', department: 'deck' as 'deck'|'engine'|'catering', rank_category: 'officer' as 'officer'|'rating', stcw_requirement: '', display_order: 0 };
 const DEPT_LABELS = { deck: '갑판부', engine: '기관부', catering: '사주부' };
 const DEPT_COLORS = { deck: 'bg-blue-50 border-blue-200', engine: 'bg-gray-50 border-gray-200', catering: 'bg-green-50 border-green-200' };
 
 export default function RanksPage() {
+  const { t } = useTranslation('RanksPage');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
@@ -92,17 +97,17 @@ export default function RanksPage() {
       }
       window.dispatchEvent(new CustomEvent('ranks-data-changed'));
       closeTab(activeTabId!);
-    } catch { alert('저장 중 오류가 발생했습니다.'); }
+    } catch { alert(t('저장 중 오류가 발생했습니다.')); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('삭제하시겠습니까?')) return;
+    if (!confirm(t('삭제하시겠습니까?'))) return;
     try {
       const { error } = await supabase.from('ranks').delete().eq('id', id);
       if (error) throw error;
       await loadData();
-    } catch { alert('삭제 중 오류가 발생했습니다.'); }
+    } catch { alert(t('삭제 중 오류가 발생했습니다.')); }
   };
 
   const handleDeptDragEnd = async (dept: keyof typeof DEPT_LABELS, event: DragEndEvent) => {
@@ -130,7 +135,7 @@ export default function RanksPage() {
     try {
       await Promise.all(updates.map(u => supabase.from('ranks').update({ display_order: u.display_order }).eq('id', u.id)));
     } catch {
-      alert('순서 저장 중 오류가 발생했습니다.');
+      alert(t('순서 저장 중 오류가 발생했습니다.'));
       await loadData();
     }
   };
@@ -146,17 +151,17 @@ export default function RanksPage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex justify-between items-center">
-            <CardTitle className="text-base">{isFormMode ? (editId ? '직급 수정' : '직급 추가') : '선원 직급 관리'}</CardTitle>
+            <CardTitle className="text-base">{isFormMode ? (editId ? t('직급 수정') : t('직급 추가')) : t('선원 직급 관리')}</CardTitle>
             {isFormMode ? (
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>취소</Button>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>{t('취소')}</Button>
                 <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
-                  <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+                  <Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}
                 </Button>
               </div>
             ) : (
-              <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/ranks?mode=new', '직급 추가', true)}>
-                <Plus className="w-4 h-4" />직급 추가
+              <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/ranks?mode=new', t('직급 추가'), true)}>
+                <Plus className="w-4 h-4" />{t('직급 추가')}
               </Button>
             )}
           </div>
@@ -166,63 +171,63 @@ export default function RanksPage() {
             <div className="space-y-3 pt-2 max-w-lg">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-sm">직급 코드 *</Label>
-                  <Input value={formData.rank_code} onChange={e => setFormData({ ...formData, rank_code: e.target.value })} placeholder="예: MSTR, C/O" className="h-9 text-sm" />
+                  <Label className="text-sm">{t('직급 코드 *')}</Label>
+                  <Input value={formData.rank_code} onChange={e => setFormData({ ...formData, rank_code: e.target.value })} placeholder={t('예: MSTR, C/O')} className="h-9 text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">직급명 *</Label>
-                  <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="예: Master, Chief Officer" className="h-9 text-sm" />
+                  <Label className="text-sm">{t('직급명 *')}</Label>
+                  <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder={t('예: Master, Chief Officer')} className="h-9 text-sm" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-sm">부서 *</Label>
+                  <Label className="text-sm">{t('부서 *')}</Label>
                   <select value={formData.department} onChange={e => setFormData({ ...formData, department: e.target.value as 'deck'|'engine'|'catering' })} className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="deck">갑판부</option><option value="engine">기관부</option><option value="catering">사주부</option>
+                    <option value="deck">{t('갑판부')}</option><option value="engine">{t('기관부')}</option><option value="catering">{t('사주부')}</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">직급 구분 *</Label>
+                  <Label className="text-sm">{t('직급 구분 *')}</Label>
                   <select value={formData.rank_category} onChange={e => setFormData({ ...formData, rank_category: e.target.value as 'officer'|'rating' })} className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm">
-                    <option value="officer">Officer (사관)</option><option value="rating">Rating (부원)</option>
+                    <option value="officer">{t('Officer (사관)')}</option><option value="rating">{t('Rating (부원)')}</option>
                   </select>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">STCW 요구사항</Label>
-                <Input value={formData.stcw_requirement} onChange={e => setFormData({ ...formData, stcw_requirement: e.target.value })} placeholder="예: STCW II/2" className="h-9 text-sm" />
+                <Label className="text-sm">{t('STCW 요구사항')}</Label>
+                <Input value={formData.stcw_requirement} onChange={e => setFormData({ ...formData, stcw_requirement: e.target.value })} placeholder={t('예: STCW II/2')} className="h-9 text-sm" />
               </div>
             </div>
           ) : ranks.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-500">등록된 직급이 없습니다</div>
+            <div className="text-center py-8 text-sm text-gray-500">{t('등록된 직급이 없습니다')}</div>
           ) : (
             <div className="space-y-3">
               {(Object.entries(grouped) as [keyof typeof grouped, Rank[]][]).map(([dept, deptRanks]) => {
                 if (!deptRanks.length) return null;
                 return (
                   <div key={dept} className={`rounded-lg border p-3 ${DEPT_COLORS[dept]}`}>
-                    <h3 className="text-sm font-semibold mb-2 text-gray-700">{DEPT_LABELS[dept]} ({deptRanks.length})</h3>
+                    <h3 className="text-sm font-semibold mb-2 text-gray-700">{t(DEPT_LABELS[dept])} ({deptRanks.length})</h3>
                     <div className="rounded-md border bg-white overflow-hidden">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gray-50/50">
                             <TableHead className="w-12 text-xs"></TableHead>
-                            <TableHead className="text-xs">직급 코드</TableHead>
-                            <TableHead className="text-xs">직급명</TableHead>
-                            <TableHead className="text-xs">구분</TableHead>
+                            <TableHead className="text-xs">{t('직급 코드')}</TableHead>
+                            <TableHead className="text-xs">{t('직급명')}</TableHead>
+                            <TableHead className="text-xs">{t('구분')}</TableHead>
                             <TableHead className="text-xs">STCW</TableHead>
-                            <TableHead className="text-right text-xs w-20">작업</TableHead>
+                            <TableHead className="text-right text-xs w-20">{t('작업')}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDeptDragEnd(dept, e)}>
                             <SortableContext items={deptRanks.map(r => r.id)} strategy={verticalListSortingStrategy}>
                               {deptRanks.map((rank) => (
-                                <SortableTableRow key={rank.id} id={rank.id} className="hover:bg-gray-50/50" onClick={() => openNewTab(`/ranks?id=${rank.id}`, `${rank.name} 수정`)}>
+                                <SortableTableRow key={rank.id} id={rank.id} className="hover:bg-gray-50/50" onClick={() => openNewTab(`/ranks?id=${rank.id}`, t('{{name}} 수정', { name: rank.name }))}>
                                   <TableCell className="font-bold text-sm py-2">{rank.rank_code}</TableCell>
                                   <TableCell className="font-medium text-sm py-2">{rank.name}</TableCell>
                                   <TableCell className="text-sm py-2">
-                                    <Badge variant={rank.rank_category === 'officer' ? 'default' : 'secondary'} className="text-xs">{rank.rank_category === 'officer' ? '사관' : '부원'}</Badge>
+                                    <Badge variant={rank.rank_category === 'officer' ? 'default' : 'secondary'} className="text-xs">{rank.rank_category === 'officer' ? t('사관') : t('부원')}</Badge>
                                   </TableCell>
                                   <TableCell className="text-sm py-2">{(rank as Record<string, string>).stcw_requirement}</TableCell>
                                   <TableCell className="text-right py-2" onClick={e => e.stopPropagation()}>

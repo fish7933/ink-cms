@@ -28,6 +28,10 @@ import { getRanks } from '@/lib/store';
 import { getShips } from '@/services/ship.service';
 import type { Rank } from '@/types/models';
 import SalaryTemplateMatrixTable from '@/components/salary/SalaryTemplateMatrixTable';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/SalaryTemplateFormPage/en.json';
+i18n.addResourceBundle('en', 'SalaryTemplateFormPage', en, true, true);
 
 const CURRENCIES = ['USD', 'EUR', 'KRW', 'JPY'];
 type AmountMatrix = Record<string, Record<string, number>>;
@@ -38,6 +42,7 @@ export default function SalaryTemplateFormPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { closeTab, activeTabId, updateTab } = useTabContext();
+  const { t } = useTranslation('SalaryTemplateFormPage');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,7 +97,7 @@ export default function SalaryTemplateFormPage() {
             Object.values(grades).forEach(list => list.sort());
             setAmounts(mat);
             setRankGrades(grades);
-            if (activeTabId) updateTab(activeTabId, { title: `템플릿 수정: ${tmpl.name}` });
+            if (activeTabId) updateTab(activeTabId, { title: t('템플릿 수정: {{name}}', { name: tmpl.name }) });
 
             const ships = await getShips();
             const templateMap = await getEffectiveTemplateMapForShips(ships);
@@ -110,7 +115,7 @@ export default function SalaryTemplateFormPage() {
         }
       } catch (e) {
         console.error(e);
-        toast({ title: '불러오기 실패', variant: 'destructive' });
+        toast({ title: t('불러오기 실패'), variant: 'destructive' });
       } finally {
         setLoading(false);
       }
@@ -157,13 +162,13 @@ export default function SalaryTemplateFormPage() {
   };
 
   const handleDeleteHistory = async (h: SalaryTemplate) => {
-    if (!confirm(`${h.effective_from} ~ ${h.effective_until} 버전을 삭제하시겠습니까?\n앞뒤 버전의 유효기간이 자동으로 이어붙습니다.`)) return;
+    if (!confirm(t('{{from}} ~ {{until}} 버전을 삭제하시겠습니까?\n앞뒤 버전의 유효기간이 자동으로 이어붙습니다.', { from: h.effective_from, until: h.effective_until }))) return;
     const ok = await deleteSalaryTemplateHistoryVersion(h.id);
     if (!ok) {
-      toast({ title: '삭제 실패', variant: 'destructive' });
+      toast({ title: t('삭제 실패'), variant: 'destructive' });
       return;
     }
-    toast({ title: '삭제 완료' });
+    toast({ title: t('삭제 완료') });
     window.dispatchEvent(new CustomEvent('salary-template-data-changed'));
     if (expandedHistoryId === h.id) setExpandedHistoryId(null);
     setHistoryDetails(prev => { const next = { ...prev }; delete next[h.id]; return next; });
@@ -191,8 +196,8 @@ export default function SalaryTemplateFormPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) { toast({ title: '템플릿명을 입력하세요.', variant: 'destructive' }); return; }
-    if (selectedRanks.length === 0) { toast({ title: '직급을 1개 이상 선택하세요.', variant: 'destructive' }); return; }
+    if (!formData.name.trim()) { toast({ title: t('템플릿명을 입력하세요.'), variant: 'destructive' }); return; }
+    if (selectedRanks.length === 0) { toast({ title: t('직급을 1개 이상 선택하세요.'), variant: 'destructive' }); return; }
 
     const items = selectedRanks.flatMap(rank => {
       const grades = rankGrades[rank]?.length ? rankGrades[rank] : [null];
@@ -206,13 +211,13 @@ export default function SalaryTemplateFormPage() {
       if (isEdit && id) {
         const result = await updateSalaryTemplate(id, { ...formData, is_active: true, effective_from: effectiveFrom }, selectedRanks, items);
         if (!result) {
-          toast({ title: '수정 실패', description: '적용 시작일은 이전 버전의 적용 시작일보다 뒤여야 합니다.', variant: 'destructive' });
+          toast({ title: t('수정 실패'), description: t('적용 시작일은 이전 버전의 적용 시작일보다 뒤여야 합니다.'), variant: 'destructive' });
           return;
         }
-        toast({ title: '수정 완료' });
+        toast({ title: t('수정 완료') });
       } else {
         await addSalaryTemplate({ ...formData, is_active: true, effective_from: effectiveFrom }, selectedRanks, items);
-        toast({ title: '저장 완료' });
+        toast({ title: t('저장 완료') });
       }
       window.dispatchEvent(new CustomEvent('salary-template-data-changed'));
       // 현재 탭 닫고 목록으로
@@ -226,7 +231,7 @@ export default function SalaryTemplateFormPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-500">로딩 중...</p>
+        <p className="text-sm text-gray-500">{t('로딩 중...')}</p>
       </div>
     );
   }
@@ -242,19 +247,19 @@ export default function SalaryTemplateFormPage() {
 
   const compGroups: BadgeSelectGroup[] = [
     {
-      label: '급여 구성',
+      label: t('급여 구성'),
       color: 'blue' as const,
       items: components
         .filter(c => (c.component_type ?? 'earning') === 'earning')
         .map(c => ({
           value: c.id,
           label: c.name,
-          sublabel: c.payment_type === 'deferred' ? '후불' : '매월',
+          sublabel: c.payment_type === 'deferred' ? t('후불') : t('매월'),
           color: c.payment_type === 'deferred' ? 'amber' : 'blue',
         } as BadgeSelectItem)),
     },
     {
-      label: '공제 항목',
+      label: t('공제 항목'),
       color: 'red' as const,
       items: components
         .filter(c => c.component_type === 'deduction')
@@ -269,11 +274,11 @@ export default function SalaryTemplateFormPage() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">
-                {isEdit ? '급여 템플릿 수정' : '급여 템플릿 추가'}
+                {isEdit ? t('급여 템플릿 수정') : t('급여 템플릿 추가')}
               </CardTitle>
               <Button type="submit" size="sm" className="gap-1.5 h-8" disabled={saving || (isEdit && !!effectiveUntil)}>
                 <Save className="h-4 w-4" />
-                {saving ? '저장 중...' : '저장'}
+                {saving ? t('저장 중...') : t('저장')}
               </Button>
             </div>
           </CardHeader>
@@ -282,7 +287,7 @@ export default function SalaryTemplateFormPage() {
             {/* 기본 정보 */}
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-sm">템플릿명 *</Label>
+                <Label className="text-sm">{t('템플릿명 *')}</Label>
                 <Input
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -292,14 +297,14 @@ export default function SalaryTemplateFormPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">통화</Label>
+                <Label className="text-sm">{t('통화')}</Label>
                 <Select value={formData.currency} onValueChange={v => setFormData({ ...formData, currency: v })}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm">적용 시작일 {isEdit && <span className="text-gray-400 font-normal">(~ {effectiveUntil || '현재'})</span>}</Label>
+                <Label className="text-sm">{t('적용 시작일')} {isEdit && <span className="text-gray-400 font-normal">(~ {effectiveUntil || t('현재')})</span>}</Label>
                 <Input
                   type="date"
                   value={effectiveFrom}
@@ -311,18 +316,18 @@ export default function SalaryTemplateFormPage() {
             </div>
             {isEdit && effectiveUntil && (
               <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-                종료된 과거 버전입니다 (이력 열람 전용). 급여 인상 등 변경사항은 목록의 "갱신"으로 새 버전을 만들어 반영하세요.
+                {t('종료된 과거 버전입니다 (이력 열람 전용). 급여 인상 등 변경사항은 목록의 "갱신"으로 새 버전을 만들어 반영하세요.')}
               </p>
             )}
             {isEdit && !effectiveUntil && (
               <p className="text-xs text-gray-400">
-                적용 시작일을 변경하면 이전 버전의 종료일도 하루 전으로 자동 조정됩니다.
+                {t('적용 시작일을 변경하면 이전 버전의 종료일도 하루 전으로 자동 조정됩니다.')}
               </p>
             )}
 
             {/* 직급 선택 */}
             <BadgeSelect
-              label="적용 직급"
+              label={t('적용 직급')}
               items={rankItems}
               selected={selectedRanks}
               onChange={setSelectedRanks}
@@ -330,7 +335,7 @@ export default function SalaryTemplateFormPage() {
 
             {/* 급여 항목 선택 */}
             <BadgeSelect
-              label="급여 항목"
+              label={t('급여 항목')}
               groups={compGroups}
               selected={selectedComponents}
               onChange={setSelectedComponents}
@@ -339,7 +344,7 @@ export default function SalaryTemplateFormPage() {
             {/* 금액 입력 표 */}
             {selectedRanks.length > 0 && selectedComponents.length > 0 && (
               <div className="space-y-1.5">
-                <Label className="text-sm">직급별 금액 입력</Label>
+                <Label className="text-sm">{t('직급별 금액 입력')}</Label>
                 <div className="overflow-x-auto border rounded-md">
                   <table className="text-xs w-full">
                     <thead>
@@ -347,27 +352,27 @@ export default function SalaryTemplateFormPage() {
                         <th className="sticky left-0 bg-gray-50 border-r p-1" />
                         {earningIds.length > 0 && (
                           <th colSpan={earningIds.length} className="text-center py-1 px-2 text-blue-700 font-semibold border-r bg-blue-50/50">
-                            ← 급여 구성 항목
+                            {t('← 급여 구성 항목')}
                           </th>
                         )}
                         {deductionIds.length > 0 && (
                           <th colSpan={deductionIds.length} className="text-center py-1 px-2 text-red-600 font-semibold border-r bg-red-50/50">
-                            공제 항목
+                            {t('공제 항목')}
                           </th>
                         )}
                         <th colSpan={2} className="text-center py-1 px-2 text-gray-600 font-semibold bg-gray-100">
-                          계산 결과
+                          {t('계산 결과')}
                         </th>
                       </tr>
                       <tr className="bg-gray-100">
-                        <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100 min-w-32">직급</th>
+                        <th className="text-left p-2 border-r font-semibold sticky left-0 bg-gray-100 min-w-32">{t('직급')}</th>
                         {earningIds.map(cid => {
                           const comp = components.find(c => c.id === cid);
                           return (
                             <th key={cid} className="text-center p-1 border-r font-semibold min-w-24 bg-blue-50/30">
                               <div>{comp?.name}</div>
                               <div className={`text-[10px] font-normal ${comp?.payment_type === 'deferred' ? 'text-amber-500' : 'text-blue-400'}`}>
-                                {comp?.payment_type === 'deferred' ? '후불성' : '매월'}
+                                {comp?.payment_type === 'deferred' ? t('후불성') : t('매월')}
                               </div>
                             </th>
                           );
@@ -377,17 +382,17 @@ export default function SalaryTemplateFormPage() {
                           return (
                             <th key={cid} className={`text-center p-1 border-r font-semibold min-w-24 bg-red-50/30 ${i === 0 ? 'border-l-2 border-l-red-200' : ''}`}>
                               <div>{comp?.name}</div>
-                              <div className="text-[10px] font-normal text-red-400">공제</div>
+                              <div className="text-[10px] font-normal text-red-400">{t('공제')}</div>
                             </th>
                           );
                         })}
                         <th className="text-center p-2 font-semibold min-w-24 bg-gray-100 border-l-2 border-l-gray-400">
                           <div className="text-[10px] font-bold text-gray-500">TW</div>
-                          <div>월 급여 총액</div>
+                          <div>{t('월 급여 총액')}</div>
                         </th>
                         <th className="text-center p-2 font-semibold min-w-24 bg-blue-100 text-blue-800">
                           <div className="text-[10px] font-bold text-blue-500">AW</div>
-                          <div>월 실지급액</div>
+                          <div>{t('월 실지급액')}</div>
                         </th>
                       </tr>
                     </thead>
@@ -412,7 +417,7 @@ export default function SalaryTemplateFormPage() {
                                   )}
                                   {isLast && (
                                     <button type="button" onClick={() => addGrade(rank)} className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline shrink-0">
-                                      <Plus className="w-2.5 h-2.5" />등급
+                                      <Plus className="w-2.5 h-2.5" />{t('등급')}
                                     </button>
                                   )}
                                 </div>
@@ -442,19 +447,19 @@ export default function SalaryTemplateFormPage() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-xs text-gray-400">월 실지급액 = 급여 구성 합계 − 후불성 − 공제</p>
+                <p className="text-xs text-gray-400">{t('월 실지급액 = 급여 구성 합계 − 후불성 − 공제')}</p>
               </div>
             )}
 
             {/* 설명 (맨 아래) */}
             <div className="space-y-1.5">
-              <Label className="text-sm">설명</Label>
+              <Label className="text-sm">{t('설명')}</Label>
               <Textarea
                 value={formData.description}
                 onChange={e => setFormData({ ...formData, description: e.target.value })}
                 rows={2}
                 className="text-sm"
-                placeholder="템플릿에 대한 설명을 입력하세요"
+                placeholder={t('템플릿에 대한 설명을 입력하세요')}
               />
             </div>
 
@@ -462,11 +467,11 @@ export default function SalaryTemplateFormPage() {
             {isEdit && (
               <div>
                 <Label className="text-sm flex items-center gap-1.5">
-                  <ShipIcon className="h-3.5 w-3.5" />할당된 선박 ({assignedShips.length})
+                  <ShipIcon className="h-3.5 w-3.5" />{t('할당된 선박 ({{count}})', { count: assignedShips.length })}
                 </Label>
                 <div className="mt-1.5">
                   {assignedShips.length === 0 ? (
-                    <p className="text-xs text-gray-400">할당된 선박이 없습니다.</p>
+                    <p className="text-xs text-gray-400">{t('할당된 선박이 없습니다.')}</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {assignedShips.map(name => (
@@ -486,11 +491,11 @@ export default function SalaryTemplateFormPage() {
       {isEdit && (
         <Card className="mt-4">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">갱신 히스토리 ({history.length})</CardTitle>
+            <CardTitle className="text-base">{t('갱신 히스토리 ({{count}})', { count: history.length })}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {history.length === 0 ? (
-              <p className="text-xs text-gray-400 py-2 text-center">이전 버전이 없습니다.</p>
+              <p className="text-xs text-gray-400 py-2 text-center">{t('이전 버전이 없습니다.')}</p>
             ) : (
               history.map(h => (
                 <div key={h.id} className="border rounded-md">
@@ -500,12 +505,12 @@ export default function SalaryTemplateFormPage() {
                       {h.effective_from} ~ {h.effective_until}
                     </button>
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">종료된 버전</Badge>
+                      <Badge variant="secondary" className="text-xs">{t('종료된 버전')}</Badge>
                       <button
                         type="button"
                         onClick={() => handleDeleteHistory(h)}
                         className="text-gray-400 hover:text-red-600"
-                        title="이 버전 삭제"
+                        title={t('이 버전 삭제')}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -516,7 +521,7 @@ export default function SalaryTemplateFormPage() {
                       {historyDetails[h.id] ? (
                         <SalaryTemplateMatrixTable template={historyDetails[h.id]!} components={components} ranks={ranks} />
                       ) : (
-                        <p className="text-xs text-gray-400 py-2 text-center">불러오는 중...</p>
+                        <p className="text-xs text-gray-400 py-2 text-center">{t('불러오는 중...')}</p>
                       )}
                     </div>
                   )}

@@ -1,0 +1,16 @@
+{
+  "등록된 크기 분류가 없습니다": "No size classifications registered",
+  "분류명 검색...": "Search classification name...",
+  "선종 필터": "Filter by ship type",
+  "전체 선종": "All Ship Types",
+  "ID: {{id}}": "ID: {{id}}",
+  "분류명 (영문)": "Classification (English)",
+  "분류명 (한글)": "Classification (Korean)",
+  "소속 선종": "Ship Type",
+  "GT 범위": "GT Range",
+  "DWT 범위": "DWT Range",
+  "설명": "Description",
+  "작업": "Actions",
+  "검색 결과가 없습니다": "No results found",
+  "{{filtered}} / {{total}}건": "{{filtered}} / {{total}} items"
+}

@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipCrewRosterTab/en.json';
 import { Printer, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -8,6 +11,8 @@ import { exportShipCrewRosterToExcel } from '@/utils/ship-crew-roster-export';
 import type { Nationality } from '@/types/nationality';
 import ShipCrewRosterTable from './ShipCrewRosterTable';
 import ShipRosterCalendar from './ShipRosterCalendar';
+
+i18n.addResourceBundle('en', 'ShipCrewRosterTab', en, true, true);
 
 interface ShipCrewRosterTabProps {
   shipId?: string;
@@ -22,6 +27,7 @@ function todayISO(): string {
 }
 
 export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSign, flag }: ShipCrewRosterTabProps) {
+  const { t } = useTranslation('ShipCrewRosterTab');
   const [date, setDate] = useState(todayISO());
   const [roster, setRoster] = useState<ShipCrewRosterEntry[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
@@ -54,22 +60,22 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
   }, [nationalities]);
 
   if (!shipId) {
-    return <p className="text-sm text-gray-400 py-8 text-center">선박을 먼저 저장한 후 승선 현황을 확인할 수 있습니다.</p>;
+    return <p className="text-sm text-gray-400 py-8 text-center">{t('선박을 먼저 저장한 후 승선 현황을 확인할 수 있습니다.')}</p>;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="space-y-1">
-          <Label className="text-xs">기준일 (해당 날짜에 승선 중인 선원 조회 — 파란 배경: 승선 인원 있음)</Label>
+          <Label className="text-xs">{t('기준일 (해당 날짜에 승선 중인 선원 조회 — 파란 배경: 승선 인원 있음)')}</Label>
           <ShipRosterCalendar shipId={shipId} selectedDate={date} onSelectDate={setDate} />
         </div>
         <div className="flex gap-2">
           <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => exportShipCrewRosterToExcel({ shipName, imoNumber, callSign, flag }, date, roster, nationalityLabelEn)} disabled={roster.length === 0}>
-            <FileSpreadsheet className="w-3.5 h-3.5" />엑셀 저장
+            <FileSpreadsheet className="w-3.5 h-3.5" />{t('엑셀 저장')}
           </Button>
           <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => shipId && window.open(`/print/ships/${shipId}/crew-list?date=${date}`, '_blank')} disabled={roster.length === 0}>
-            <Printer className="w-3.5 h-3.5" />인쇄
+            <Printer className="w-3.5 h-3.5" />{t('인쇄')}
           </Button>
         </div>
       </div>

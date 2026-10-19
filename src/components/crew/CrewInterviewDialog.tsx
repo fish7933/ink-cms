@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/CrewInterviewDialog/en.json';
+i18n.addResourceBundle('en', 'CrewInterviewDialog', en, true, true);
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -40,6 +44,7 @@ export default function CrewInterviewDialog({
   record,
   onSuccess,
 }: CrewInterviewDialogProps) {
+  const { t } = useTranslation('CrewInterviewDialog');
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
@@ -133,16 +138,16 @@ export default function CrewInterviewDialog({
 
       if (record) {
         await updateCrewInterviewLog(record.id, data);
-        toast({ title: '수정 완료', description: '면담 일지가 수정되었습니다.' });
+        toast({ title: t('수정 완료'), description: t('면담 일지가 수정되었습니다.') });
       } else {
         await addCrewInterviewLog(data);
-        toast({ title: '추가 완료', description: '면담 일지가 추가되었습니다.' });
+        toast({ title: t('추가 완료'), description: t('면담 일지가 추가되었습니다.') });
       }
       onSuccess();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast({ title: '저장 실패', description: '면담 일지 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('저장 실패'), description: t('면담 일지 저장 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -152,49 +157,49 @@ export default function CrewInterviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{record ? '면담 일지 수정' : '면담 일지 추가'}</DialogTitle>
-          <DialogDescription className="text-xs">매닝회사 면담 내용을 {record ? '수정' : '등록'}합니다. 가장 최근 면담의 승선 희망일이 기본정보에 반영됩니다.</DialogDescription>
+          <DialogTitle className="text-base">{record ? t('면담 일지 수정') : t('면담 일지 추가')}</DialogTitle>
+          <DialogDescription className="text-xs">{t('매닝회사 면담 내용을 {{action}}합니다. 가장 최근 면담의 승선 희망일이 기본정보에 반영됩니다.', { action: record ? t('수정') : t('등록') })}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">면담일 *</Label>
+                <Label className="text-xs">{t('면담일 *')}</Label>
                 <Input type="date" value={formData.interview_date} onChange={e => setFormData({ ...formData, interview_date: e.target.value })} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">면담자(작성자) *</Label>
-                <Input value={formData.interviewer_name} onChange={e => setFormData({ ...formData, interviewer_name: e.target.value })} placeholder="매닝회사 면담자 이름" required className="h-9 text-sm" />
+                <Label className="text-xs">{t('면담자(작성자) *')}</Label>
+                <Input value={formData.interviewer_name} onChange={e => setFormData({ ...formData, interviewer_name: e.target.value })} placeholder={t('매닝회사 면담자 이름')} required className="h-9 text-sm" />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">승선 희망 선주</Label>
+                <Label className="text-xs">{t('승선 희망 선주')}</Label>
                 <Select value={formData.desired_owner_id || '_none'} onValueChange={handleOwnerChange}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선주 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">선택 안 함</SelectItem>
+                    <SelectItem value="_none">{t('선택 안 함')}</SelectItem>
                     {owners.map(o => <SelectItem key={o.id} value={o.id} className="text-sm">{o.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">희망 플릿</Label>
+                <Label className="text-xs">{t('희망 플릿')}</Label>
                 <Select value={formData.desired_fleet_id || '_none'} onValueChange={handleFleetChange} disabled={!formData.desired_owner_id}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="플릿 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('플릿 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">선택 안 함</SelectItem>
+                    <SelectItem value="_none">{t('선택 안 함')}</SelectItem>
                     {fleetsForOwner.map(f => <SelectItem key={f.id} value={f.id} className="text-sm">{f.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">희망 선박</Label>
+                <Label className="text-xs">{t('희망 선박')}</Label>
                 <Select value={formData.desired_ship_id || '_none'} onValueChange={v => setFormData(p => ({ ...p, desired_ship_id: v === '_none' ? '' : v }))} disabled={!formData.desired_owner_id}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선박 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">선택 안 함</SelectItem>
+                    <SelectItem value="_none">{t('선택 안 함')}</SelectItem>
                     {shipsForSelection.map(s => <SelectItem key={s.id} value={s.id} className="text-sm">{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -202,18 +207,18 @@ export default function CrewInterviewDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">승선 희망일</Label>
+              <Label className="text-xs">{t('승선 희망일')}</Label>
               <Input type="date" value={formData.desired_embark_date} onChange={e => setFormData({ ...formData, desired_embark_date: e.target.value })} className="h-9 text-sm w-1/2" />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">비고</Label>
-              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="면담 내용 등 추가 정보" rows={3} className="text-sm resize-none" />
+              <Label className="text-xs">{t('비고')}</Label>
+              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder={t('면담 내용 등 추가 정보')} rows={3} className="text-sm resize-none" />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">취소</Button>
-            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (record ? '수정' : '추가')}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">{t('취소')}</Button>
+            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? t('저장 중...') : (record ? t('수정') : t('추가'))}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

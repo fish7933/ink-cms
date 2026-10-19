@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ApprovalLineForm/en.json';
+i18n.addResourceBundle('en', 'ApprovalLineForm', en, true, true);
 import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +38,7 @@ interface ApprovalLineFormProps {
 }
 
 export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: ApprovalLineFormProps) {
+  const { t } = useTranslation('ApprovalLineForm');
   const { toast } = useToast();
   const [name, setName] = useState(approvalLine?.name || '');
   const [description, setDescription] = useState(approvalLine?.description || '');
@@ -58,18 +63,18 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
     } catch (error) {
       console.error('Error loading org chart:', error);
       toast({
-        title: '오류',
-        description: '조직도/사용자 목록을 불러오는 중 오류가 발생했습니다.',
+        title: t('오류'),
+        description: t('조직도/사용자 목록을 불러오는 중 오류가 발생했습니다.'),
         variant: 'destructive',
       });
     }
   };
 
   const generateFromDept = () => {
-    if (selectedDeptId === '_none') { alert('부서를 선택해주세요.'); return; }
+    if (selectedDeptId === '_none') { alert(t('부서를 선택해주세요.')); return; }
     const chain = orgChartService.buildApprovalChain(selectedDeptId, orgUnits, orgMembers);
     if (chain.length === 0) {
-      alert('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.');
+      alert(t('선택한 부서에서 결재라인을 구성할 수 없습니다. 부서장(또는 소속 인원)이 지정되어 있는지 확인해주세요.'));
       return;
     }
     setSteps(chain.map((c, i) => ({
@@ -108,7 +113,7 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
       ...newSteps[index],
       approver_id: approverId,
       approver_name: member.name,
-      approver_role: member.position_name || '미지정',
+      approver_role: member.position_name || t('미지정'),
     };
     setSteps(newSteps);
   };
@@ -138,8 +143,8 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
 
     if (!name.trim()) {
       toast({
-        title: '오류',
-        description: '결재 라인 이름을 입력해주세요.',
+        title: t('오류'),
+        description: t('결재 라인 이름을 입력해주세요.'),
         variant: 'destructive',
       });
       return;
@@ -147,8 +152,8 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
 
     if (steps.length === 0) {
       toast({
-        title: '오류',
-        description: '최소 1명의 결재자를 추가해주세요.',
+        title: t('오류'),
+        description: t('최소 1명의 결재자를 추가해주세요.'),
         variant: 'destructive',
       });
       return;
@@ -156,8 +161,8 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
 
     if (steps.some(step => !step.approver_id)) {
       toast({
-        title: '오류',
-        description: '모든 단계의 결재자를 선택해주세요.',
+        title: t('오류'),
+        description: t('모든 단계의 결재자를 선택해주세요.'),
         variant: 'destructive',
       });
       return;
@@ -260,22 +265,22 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
       }
 
       toast({
-        title: '성공',
+        title: t('성공'),
         description: msg.approval.lineChanged(!!approvalLine?.id),
       });
 
       onSuccess();
     } catch (error) {
       console.error('Error submitting form:', error);
-      
+
       // Provide more detailed error message
-      let errorMessage = '결재 라인 저장 중 오류가 발생했습니다.';
+      let errorMessage = t('결재 라인 저장 중 오류가 발생했습니다.');
       if (error instanceof Error) {
         errorMessage += ` (${error.message})`;
       }
-      
+
       toast({
-        title: '오류',
+        title: t('오류'),
         description: errorMessage,
         variant: 'destructive',
       });
@@ -288,38 +293,38 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="space-y-4">
         <div>
-          <Label htmlFor="name">결재 라인 이름 *</Label>
+          <Label htmlFor="name">{t('결재 라인 이름 *')}</Label>
           <Input
             id="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="예: 선원 채용 결재"
+            placeholder={t('예: 선원 채용 결재')}
             required
           />
         </div>
 
         <div>
-          <Label htmlFor="approval_type">결재 유형 *</Label>
+          <Label htmlFor="approval_type">{t('결재 유형 *')}</Label>
           <Select value={approvalType} onValueChange={setApprovalType}>
             <SelectTrigger id="approval_type">
-              <SelectValue placeholder="결재 유형 선택" />
+              <SelectValue placeholder={t('결재 유형 선택')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="hiring">채용</SelectItem>
-              <SelectItem value="salary_change">급여 변경</SelectItem>
-              <SelectItem value="contract">계약</SelectItem>
-              <SelectItem value="general">일반</SelectItem>
+              <SelectItem value="hiring">{t('채용')}</SelectItem>
+              <SelectItem value="salary_change">{t('급여 변경')}</SelectItem>
+              <SelectItem value="contract">{t('계약')}</SelectItem>
+              <SelectItem value="general">{t('일반')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
         <div>
-          <Label htmlFor="description">설명</Label>
+          <Label htmlFor="description">{t('설명')}</Label>
           <Textarea
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="결재 라인에 대한 설명을 입력하세요"
+            placeholder={t('결재 라인에 대한 설명을 입력하세요')}
             rows={3}
           />
         </div>
@@ -332,46 +337,46 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
             onChange={(e) => setIsActive(e.target.checked)}
             className="h-4 w-4"
           />
-          <Label htmlFor="is_active" className="cursor-pointer">활성화</Label>
+          <Label htmlFor="is_active" className="cursor-pointer">{t('활성화')}</Label>
         </div>
       </div>
 
       <div className="space-y-4">
         <div className="rounded-md border bg-gray-50 p-3 space-y-2">
-          <Label className="text-sm">조직도에서 자동 생성</Label>
+          <Label className="text-sm">{t('조직도에서 자동 생성')}</Label>
           <p className="text-xs text-gray-500">
-            부서를 선택하면 그 부서장 → 상위 부서장 → … 순서로 결재 단계가 자동으로 채워집니다. 생성 후에도 아래에서 자유롭게 추가/삭제/순서 변경할 수 있습니다.
+            {t('부서를 선택하면 그 부서장 → 상위 부서장 → … 순서로 결재 단계가 자동으로 채워집니다. 생성 후에도 아래에서 자유롭게 추가/삭제/순서 변경할 수 있습니다.')}
           </p>
           <div className="flex items-center gap-2">
             <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder="부서 선택" />
+                <SelectValue placeholder={t('부서 선택')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="_none">— 부서 선택 —</SelectItem>
+                <SelectItem value="_none">{t('— 부서 선택 —')}</SelectItem>
                 {orgUnits.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button type="button" variant="secondary" onClick={generateFromDept} disabled={selectedDeptId === '_none'}>
-              자동 생성
+              {t('자동 생성')}
             </Button>
           </div>
           {orgUnits.length === 0 && (
-            <p className="text-xs text-amber-600">등록된 부서가 없습니다. 설정 &gt; 조직도 관리에서 먼저 부서를 만들어주세요.</p>
+            <p className="text-xs text-amber-600">{t('등록된 부서가 없습니다. 설정 > 조직도 관리에서 먼저 부서를 만들어주세요.')}</p>
           )}
         </div>
 
         <div className="flex items-center justify-between">
-          <Label>결재 단계</Label>
+          <Label>{t('결재 단계')}</Label>
           <Button type="button" onClick={addStep} size="sm">
-            단계 추가
+            {t('단계 추가')}
           </Button>
         </div>
 
         {steps.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-gray-500">
-              결재 단계를 추가해주세요
+              {t('결재 단계를 추가해주세요')}
             </CardContent>
           </Card>
         ) : (
@@ -415,17 +420,17 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
                         onValueChange={(value) => updateStep(index, value)}
                       >
                         <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="결재자 선택" />
+                          <SelectValue placeholder={t('결재자 선택')} />
                         </SelectTrigger>
                         <SelectContent>
                           {orgMembers.length === 0 ? (
                             <div className="px-2 py-1.5 text-sm text-gray-500">
-                              선박관리사 직원이 없습니다
+                              {t('선박관리사 직원이 없습니다')}
                             </div>
                           ) : (
                             orgMembers.map((member) => (
                               <SelectItem key={member.id} value={String(member.id)}>
-                                {member.name} ({member.position_name || '직급 미지정'})
+                                {member.name} ({member.position_name || t('직급 미지정')})
                               </SelectItem>
                             ))
                           )}
@@ -452,10 +457,10 @@ export default function ApprovalLineForm({ approvalLine, onSuccess, onCancel }: 
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
-          취소
+          {t('취소')}
         </Button>
         <Button type="submit" disabled={loading}>
-          {loading ? '저장 중...' : '저장'}
+          {loading ? t('저장 중...') : t('저장')}
         </Button>
       </div>
     </form>

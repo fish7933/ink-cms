@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/SalaryTemplateWageSheet/en.json';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
+
+i18n.addResourceBundle('en', 'SalaryTemplateWageSheet', en, true, true);
 
 const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', KRW: '₩', JPY: '¥' };
 
@@ -16,6 +21,7 @@ interface Props {
 
 // 급여 템플릿 급여표 — 인쇄 페이지와 인쇄 모달 양쪽에서 재사용되는 문서 본문
 export default function SalaryTemplateWageSheet({ template: data, components, ranks }: Props) {
+  const { t } = useTranslation('SalaryTemplateWageSheet');
   const contentRef = useRef<HTMLDivElement>(null);
   const [printZoom, setPrintZoom] = useState(1);
 
@@ -79,17 +85,17 @@ export default function SalaryTemplateWageSheet({ template: data, components, ra
           <div style={{ fontSize: 11, letterSpacing: 2, color: '#888', marginBottom: 6, textTransform: 'uppercase' }}>Wage Table</div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: 0.5 }}>{data.name}</h1>
           <p style={{ fontSize: 13, color: '#555', marginTop: 8 }}>
-            통화 {data.currency} ({symbol}) &nbsp;|&nbsp; 유효기간 {data.effective_from} ~ {data.effective_until || '현재'}
+            {t('통화')} {data.currency} ({symbol}) &nbsp;|&nbsp; {t('유효기간')} {data.effective_from} ~ {data.effective_until || t('현재')}
           </p>
         </div>
 
         <table className="wage-table">
           <thead>
             <tr className="group-row">
-              <th rowSpan={2} style={{ background: '#e0e7ff', color: '#3730a3' }}>직급</th>
-              {earningIds.length > 0 && <th className="group-earning" colSpan={earningIds.length}>급여 구성 항목</th>}
-              {deductionIds.length > 0 && <th className="group-deduction divider-left" colSpan={deductionIds.length}>공제 항목</th>}
-              <th className="group-result divider-left" colSpan={2}>계산 결과</th>
+              <th rowSpan={2} style={{ background: '#e0e7ff', color: '#3730a3' }}>{t('직급')}</th>
+              {earningIds.length > 0 && <th className="group-earning" colSpan={earningIds.length}>{t('급여 구성 항목')}</th>}
+              {deductionIds.length > 0 && <th className="group-deduction divider-left" colSpan={deductionIds.length}>{t('공제 항목')}</th>}
+              <th className="group-result divider-left" colSpan={2}>{t('계산 결과')}</th>
             </tr>
             <tr className="col-row">
               {orderedComps.map((comp, i) => (
@@ -100,8 +106,8 @@ export default function SalaryTemplateWageSheet({ template: data, components, ra
                   {comp.name}
                 </th>
               ))}
-              <th style={{ borderLeft: '2px solid #333' }}>TW<div style={{ fontWeight: 400, fontSize: 10, color: '#666' }}>월 총액</div></th>
-              <th>AW<div style={{ fontWeight: 400, fontSize: 10, color: '#666' }}>월 실지급액</div></th>
+              <th style={{ borderLeft: '2px solid #333' }}>TW<div style={{ fontWeight: 400, fontSize: 10, color: '#666' }}>{t('월 총액')}</div></th>
+              <th>AW<div style={{ fontWeight: 400, fontSize: 10, color: '#666' }}>{t('월 실지급액')}</div></th>
             </tr>
           </thead>
           <tbody>

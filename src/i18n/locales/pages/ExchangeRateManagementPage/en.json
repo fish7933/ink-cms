@@ -1,0 +1,15 @@
+{
+  "환율 관리": "Exchange Rate Management",
+  "그 달 승선 중인 선원의 국적을 기준으로 필요한 통화를 자동으로 보여줍니다(원화는 항상 포함). 매월 한 번 입력해두면 관리비 청구서 작성 시 자동으로 적용됩니다.": "Automatically shows the currencies needed based on the nationalities of crew onboard that month (KRW is always included). Enter rates once a month and they'll be applied automatically when creating management fee invoices.",
+  "월별 환율 (1 USD 당)": "Monthly Exchange Rate (per 1 USD)",
+  "불러오는 중...": "Loading...",
+  "통화": "Currency",
+  "환율 (1 USD = ?)": "Exchange Rate (1 USD = ?)",
+  "예: 1330": "e.g. 1330",
+  "저장 중...": "Saving...",
+  "저장": "Save",
+  "이 달에 값을 입력하지 않은 통화는 청구서 작성 시 가장 최근에 입력된 이전 달 환율을 대신 사용합니다. 그마저도 없으면 해당 항목은 환산되지 않고 경고로 표시됩니다.": "If a currency has no rate entered for this month, invoices will use the most recently entered rate from a previous month instead. If none exists at all, that item will not be converted and will be shown as a warning.",
+  "입력된 환율이 없습니다.": "No exchange rates entered.",
+  "저장 완료": "Saved",
+  "저장 실패": "Save failed"
+}

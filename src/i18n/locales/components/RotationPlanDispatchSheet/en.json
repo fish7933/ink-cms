@@ -1,0 +1,23 @@
+{
+  "배승계획서": "Crew Dispatch Plan",
+  "계획명": "Plan Name",
+  "선박": "Ship",
+  "선주 / 플릿": "Owner / Fleet",
+  "교대일": "Rotation Date",
+  "기준 교대일": "Base Rotation Date",
+  "교대 항구": "Rotation Port",
+  "작성자": "Prepared By",
+  "작성일": "Prepared Date",
+  "신규 승선 (IN)": "New Boarding (IN)",
+  "기존 하선 (OUT)": "Existing Disembarkation (OUT)",
+  "직급": "Rank",
+  "성명": "Name",
+  "출국일": "Departure Date",
+  "승선일": "Boarding Date",
+  "하선일": "Disembark Date",
+  "귀국일": "Return Date",
+  "배정된 선원이 없습니다": "No crew assigned",
+  "승선 없음": "No Boarding",
+  "하선 없음": "No Disembarkation",
+  "비고: ": "Remarks: "
+}

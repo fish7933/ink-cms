@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/MedicalRecordDialog/en.json';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,6 +26,8 @@ import type { MedicalRecord, SeaServiceRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import MedicalRecordFollowUp, { type MedicalRecordFollowUpHandle } from '@/components/crew/MedicalRecordFollowUp';
+
+i18n.addResourceBundle('en', 'MedicalRecordDialog', en, true, true);
 
 interface CrewOption { id: string; name: string; rank: string; }
 
@@ -60,6 +65,7 @@ export default function MedicalRecordDialog({
   seaServiceRecords = [],
 }: MedicalRecordDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('MedicalRecordDialog');
   const [loading, setLoading] = useState(false);
   const [savedRecordId, setSavedRecordId] = useState<string | undefined>(record?.id);
   const [savedAttachments, setSavedAttachments] = useState(record?.attachments || []);
@@ -149,7 +155,7 @@ export default function MedicalRecordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!effectiveCrewId) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
+    if (!effectiveCrewId) { toast({ title: t('선원을 선택하세요'), variant: 'destructive' }); return; }
     setLoading(true);
     try {
       const data = {
@@ -175,19 +181,19 @@ export default function MedicalRecordDialog({
         // 치료 경과 로그 입력란에 "추가" 버튼을 누르지 않은 채 남아있는 내용이 있으면
         // 다이얼로그를 닫기 전에 먼저 저장한다 — 그렇지 않으면 입력한 내용이 그대로 사라진다.
         await followUpRef.current?.flushPendingLog();
-        toast({ title: '수정 완료', description: '상병 기록이 수정되었습니다.' });
+        toast({ title: t('수정 완료'), description: t('상병 기록이 수정되었습니다.') });
         onSuccess();
         onOpenChange(false);
       } else {
         const created = await addMedicalRecord(data);
-        toast({ title: '추가 완료', description: '이어서 치료 로그나 첨부파일을 등록할 수 있습니다.' });
+        toast({ title: t('추가 완료'), description: t('이어서 치료 로그나 첨부파일을 등록할 수 있습니다.') });
         setSavedRecordId(created.id);
         setSavedAttachments(created.attachments || []);
         onSuccess();
       }
     } catch (error) {
       console.error(error);
-      toast({ title: '저장 실패', description: '상병 기록 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('저장 실패'), description: t('상병 기록 저장 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -197,29 +203,29 @@ export default function MedicalRecordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{record ? '상병 기록 수정' : '상병 기록 추가'}</DialogTitle>
-          <DialogDescription className="text-xs">선원의 부상/질병 기록을 {record ? '수정' : '등록'}합니다</DialogDescription>
+          <DialogTitle className="text-base">{record ? t('상병 기록 수정') : t('상병 기록 추가')}</DialogTitle>
+          <DialogDescription className="text-xs">{t('선원의 부상/질병 기록을 {{action}}합니다', { action: record ? t('수정') : t('등록') })}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
             {!crewId && (
               <div className="space-y-1.5">
-                <Label className="text-xs">선원 *</Label>
+                <Label className="text-xs">{t('선원 *')}</Label>
                 <Select value={selectedCrewId} onValueChange={setSelectedCrewId} disabled={!!savedRecordId}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선원 선택')} /></SelectTrigger>
                   <SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name} ({c.rank})</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             )}
             {effectiveSeaServiceRecords.length > 0 && (
               <div className="space-y-1.5">
-                <Label className="text-xs">관련 승선 기록 <span className="text-gray-400 font-normal">(어느 배에 승선 중/승선했을 때 발생했는지 선택, 선택사항)</span></Label>
+                <Label className="text-xs">{t('관련 승선 기록')} <span className="text-gray-400 font-normal">{t('(어느 배에 승선 중/승선했을 때 발생했는지 선택, 선택사항)')}</span></Label>
                 <Select value={formData.sea_service_record_id || '_none'} onValueChange={handleSeaServiceChange}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="승선 기록 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('승선 기록 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">선택 안함</SelectItem>
+                    <SelectItem value="_none">{t('선택 안함')}</SelectItem>
                     {effectiveSeaServiceRecords.map(s => (
-                      <SelectItem key={s.id} value={s.id} className="text-sm">{s.ship_name} ({s.sign_on_date} ~ {s.sign_off_date || '진행중'})</SelectItem>
+                      <SelectItem key={s.id} value={s.id} className="text-sm">{s.ship_name} ({s.sign_on_date} ~ {s.sign_off_date || t('진행중')})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -227,63 +233,63 @@ export default function MedicalRecordDialog({
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">발생일 *</Label>
+                <Label className="text-xs">{t('발생일 *')}</Label>
                 <Input type="date" value={formData.record_date} onChange={e => setFormData({ ...formData, record_date: e.target.value })} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">유형 *</Label>
+                <Label className="text-xs">{t('유형 *')}</Label>
                 <Select value={formData.record_type} onValueChange={v => setFormData({ ...formData, record_type: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="유형 선택" /></SelectTrigger>
-                  <SelectContent>{RECORD_TYPES.map(t => <SelectItem key={t.value} value={t.value} className="text-sm">{t.label}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('유형 선택')} /></SelectTrigger>
+                  <SelectContent>{RECORD_TYPES.map(rt => <SelectItem key={rt.value} value={rt.value} className="text-sm">{t(rt.label)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">진단 내용 *</Label>
-              <Input value={formData.diagnosis} onChange={e => setFormData({ ...formData, diagnosis: e.target.value })} placeholder="진단명 또는 내용" required className="h-9 text-sm" />
+              <Label className="text-xs">{t('진단 내용 *')}</Label>
+              <Input value={formData.diagnosis} onChange={e => setFormData({ ...formData, diagnosis: e.target.value })} placeholder={t('진단명 또는 내용')} required className="h-9 text-sm" />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">치료 내용</Label>
-              <Textarea value={formData.treatment} onChange={e => setFormData({ ...formData, treatment: e.target.value })} placeholder="치료 방법 및 처방 내용" rows={2} className="text-sm resize-none" />
+              <Label className="text-xs">{t('치료 내용')}</Label>
+              <Textarea value={formData.treatment} onChange={e => setFormData({ ...formData, treatment: e.target.value })} placeholder={t('치료 방법 및 처방 내용')} rows={2} className="text-sm resize-none" />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">담당 의사</Label>
-                <Input value={formData.doctor_name} onChange={e => setFormData({ ...formData, doctor_name: e.target.value })} placeholder="의사명" className="h-9 text-sm" />
+                <Label className="text-xs">{t('담당 의사')}</Label>
+                <Input value={formData.doctor_name} onChange={e => setFormData({ ...formData, doctor_name: e.target.value })} placeholder={t('의사명')} className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">병원/의원</Label>
-                <Input value={formData.hospital_clinic} onChange={e => setFormData({ ...formData, hospital_clinic: e.target.value })} placeholder="병원명" className="h-9 text-sm" />
+                <Label className="text-xs">{t('병원/의원')}</Label>
+                <Input value={formData.hospital_clinic} onChange={e => setFormData({ ...formData, hospital_clinic: e.target.value })} placeholder={t('병원명')} className="h-9 text-sm" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">장소</Label>
-                <Input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} placeholder="진료 장소 (도시/국가)" className="h-9 text-sm" />
+                <Label className="text-xs">{t('장소')}</Label>
+                <Input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} placeholder={t('진료 장소 (도시/국가)')} className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">당시 승선 선박</Label>
+                <Label className="text-xs">{t('당시 승선 선박')}</Label>
                 <Input
                   value={formData.ship_name} onChange={e => setFormData({ ...formData, ship_name: e.target.value })}
-                  placeholder="선박명" className="h-9 text-sm" disabled={!!formData.sea_service_record_id}
+                  placeholder={t('선박명')} className="h-9 text-sm" disabled={!!formData.sea_service_record_id}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">휴무 일수</Label>
-                <Input type="number" min="0" value={formData.days_off_duty} onChange={e => setFormData({ ...formData, days_off_duty: e.target.value })} placeholder="일" className="h-9 text-sm" />
+                <Label className="text-xs">{t('휴무 일수')}</Label>
+                <Input type="number" min="0" value={formData.days_off_duty} onChange={e => setFormData({ ...formData, days_off_duty: e.target.value })} placeholder={t('일')} className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">적합성 판정</Label>
+                <Label className="text-xs">{t('적합성 판정')}</Label>
                 <Select value={formData.fitness_status} onValueChange={v => setFormData({ ...formData, fitness_status: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="판정 선택" /></SelectTrigger>
-                  <SelectContent>{FITNESS_OPTIONS.map(f => <SelectItem key={f.value} value={f.value} className="text-sm">{f.label}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('판정 선택')} /></SelectTrigger>
+                  <SelectContent>{FITNESS_OPTIONS.map(f => <SelectItem key={f.value} value={f.value} className="text-sm">{t(f.label)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -291,19 +297,19 @@ export default function MedicalRecordDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-end space-x-2 pb-1">
                 <input type="checkbox" id="follow_up" checked={formData.follow_up_required} onChange={e => setFormData({ ...formData, follow_up_required: e.target.checked })} className="accent-blue-600 w-4 h-4" />
-                <Label htmlFor="follow_up" className="text-xs cursor-pointer">추적 관찰 필요</Label>
+                <Label htmlFor="follow_up" className="text-xs cursor-pointer">{t('추적 관찰 필요')}</Label>
               </div>
               {formData.follow_up_required && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">추적 관찰일</Label>
+                  <Label className="text-xs">{t('추적 관찰일')}</Label>
                   <Input type="date" value={formData.follow_up_date} onChange={e => setFormData({ ...formData, follow_up_date: e.target.value })} className="h-9 text-sm" />
                 </div>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">비고</Label>
-              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="추가 정보" rows={3} className="text-sm resize-none" />
+              <Label className="text-xs">{t('비고')}</Label>
+              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder={t('추가 정보')} rows={3} className="text-sm resize-none" />
             </div>
 
             {savedRecordId && (
@@ -322,9 +328,9 @@ export default function MedicalRecordDialog({
               type="button" size="sm" variant="outline" disabled={loading} className="h-8"
               onClick={async () => { if (savedRecordId) await followUpRef.current?.flushPendingLog(); onOpenChange(false); }}
             >
-              {savedRecordId ? '닫기' : '취소'}
+              {savedRecordId ? t('닫기') : t('취소')}
             </Button>
-            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (savedRecordId ? '수정' : '추가')}</Button>
+            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? t('저장 중...') : (savedRecordId ? t('수정') : t('추가'))}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

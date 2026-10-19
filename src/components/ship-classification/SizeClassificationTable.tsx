@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/SizeClassificationTable/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +15,8 @@ import {
 } from '@/components/ui/select';
 import { Pencil, Trash2, Search } from 'lucide-react';
 import type { ShipSizeClassification, ShipType } from '@/types/ship-classification';
+
+i18n.addResourceBundle('en', 'SizeClassificationTable', en, true, true);
 
 interface SizeClassificationTableProps {
   classifications: ShipSizeClassification[];
@@ -30,6 +35,7 @@ export default function SizeClassificationTable({
   canEdit = true,
   canDelete = true,
 }: SizeClassificationTableProps) {
+  const { t } = useTranslation('SizeClassificationTable');
   const showActions = canEdit || canDelete;
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedShipType, setSelectedShipType] = useState('all');
@@ -58,7 +64,7 @@ export default function SizeClassificationTable({
   if (classifications.length === 0) {
     return (
       <div className="text-center py-8 text-sm text-gray-500">
-        등록된 크기 분류가 없습니다
+        {t('등록된 크기 분류가 없습니다')}
       </div>
     );
   }
@@ -77,7 +83,7 @@ export default function SizeClassificationTable({
   const getShipTypeName = (shipTypeId?: number) => {
     if (shipTypeId == null) return '-';
     const st = shipTypeMap.get(shipTypeId);
-    return st ? `${st.name_ko}` : `-`;
+    return st ? `${st.name_ko}` : '-';
   };
 
   return (
@@ -87,7 +93,7 @@ export default function SizeClassificationTable({
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="분류명 검색..."
+            placeholder={t('분류명 검색...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="h-8 text-sm pl-8"
@@ -95,22 +101,22 @@ export default function SizeClassificationTable({
         </div>
         <Select value={selectedShipType} onValueChange={setSelectedShipType}>
           <SelectTrigger className="h-8 text-sm w-[200px]">
-            <SelectValue placeholder="선종 필터" />
+            <SelectValue placeholder={t('선종 필터')} />
           </SelectTrigger>
           <SelectContent className="max-h-[300px]">
-            <SelectItem value="all" className="text-sm">전체 선종</SelectItem>
+            <SelectItem value="all" className="text-sm">{t('전체 선종')}</SelectItem>
             {usedShipTypeIds.map((id) => {
               const st = shipTypeMap.get(id);
               return (
                 <SelectItem key={id} value={String(id)} className="text-sm">
-                  {st ? `${st.name_ko} (${st.name})` : `ID: ${id}`}
+                  {st ? `${st.name_ko} (${st.name})` : t('ID: {{id}}', { id })}
                 </SelectItem>
               );
             })}
           </SelectContent>
         </Select>
         <span className="text-xs text-gray-500 ml-auto">
-          {filteredClassifications.length} / {classifications.length}건
+          {t('{{filtered}} / {{total}}건', { filtered: filteredClassifications.length, total: classifications.length })}
         </span>
       </div>
 
@@ -120,14 +126,14 @@ export default function SizeClassificationTable({
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs w-[50px]">No.</TableHead>
-              <TableHead className="text-xs">분류명 (영문)</TableHead>
-              <TableHead className="text-xs">분류명 (한글)</TableHead>
-              <TableHead className="text-xs">소속 선종</TableHead>
-              <TableHead className="text-xs">GT 범위</TableHead>
-              <TableHead className="text-xs">DWT 범위</TableHead>
+              <TableHead className="text-xs">{t('분류명 (영문)')}</TableHead>
+              <TableHead className="text-xs">{t('분류명 (한글)')}</TableHead>
+              <TableHead className="text-xs">{t('소속 선종')}</TableHead>
+              <TableHead className="text-xs">{t('GT 범위')}</TableHead>
+              <TableHead className="text-xs">{t('DWT 범위')}</TableHead>
               <TableHead className="text-xs">DWT/GT</TableHead>
-              <TableHead className="text-xs">설명</TableHead>
-              {showActions && <TableHead className="text-right text-xs w-24">작업</TableHead>}
+              <TableHead className="text-xs">{t('설명')}</TableHead>
+              {showActions && <TableHead className="text-right text-xs w-24">{t('작업')}</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -188,7 +194,7 @@ export default function SizeClassificationTable({
             {filteredClassifications.length === 0 && (
               <TableRow>
                 <TableCell colSpan={showActions ? 9 : 8} className="text-center py-6 text-sm text-gray-500">
-                  검색 결과가 없습니다
+                  {t('검색 결과가 없습니다')}
                 </TableCell>
               </TableRow>
             )}

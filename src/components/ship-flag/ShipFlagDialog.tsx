@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipFlagDialog/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import type { ShipFlag } from '@/types/ship-flag';
+
+i18n.addResourceBundle('en', 'ShipFlagDialog', en, true, true);
 
 interface ShipFlagDialogProps {
   open: boolean;
@@ -14,6 +19,7 @@ interface ShipFlagDialogProps {
 }
 
 export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: ShipFlagDialogProps) {
+  const { t } = useTranslation('ShipFlagDialog');
   const [formData, setFormData] = useState({
     code: '',
     name_ko: '',
@@ -48,43 +54,43 @@ export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: Shi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-base">{flag ? '선적국 수정' : '선적국 추가'}</DialogTitle>
-          <DialogDescription className="text-xs">선적국 정보를 입력하세요</DialogDescription>
+          <DialogTitle className="text-base">{flag ? t('선적국 수정') : t('선적국 추가')}</DialogTitle>
+          <DialogDescription className="text-xs">{t('선적국 정보를 입력하세요')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="code" className="text-xs">국가 코드 (ISO 3166-1 alpha-2) *</Label>
+            <Label htmlFor="code" className="text-xs">{t('국가 코드 (ISO 3166-1 alpha-2) *')}</Label>
             <Input
               id="code"
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              placeholder="예: KR, PA, LR"
+              placeholder={t('예: KR, PA, LR')}
               maxLength={3}
               required
               className="h-9 text-sm uppercase"
             />
-            <p className="text-xs text-gray-500">2자리 국가 코드를 입력하세요</p>
+            <p className="text-xs text-gray-500">{t('2자리 국가 코드를 입력하세요')}</p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name_ko" className="text-xs">한글명 *</Label>
+            <Label htmlFor="name_ko" className="text-xs">{t('한글명 *')}</Label>
             <Input
               id="name_ko"
               value={formData.name_ko}
               onChange={(e) => setFormData({ ...formData, name_ko: e.target.value })}
-              placeholder="예: 대한민국"
+              placeholder={t('예: 대한민국')}
               required
               className="h-9 text-sm"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="name_en" className="text-xs">영문명 *</Label>
+            <Label htmlFor="name_en" className="text-xs">{t('영문명 *')}</Label>
             <Input
               id="name_en"
               value={formData.name_en}
               onChange={(e) => setFormData({ ...formData, name_en: e.target.value })}
-              placeholder="예: Korea, Republic of"
+              placeholder={t('예: Korea, Republic of')}
               required
               className="h-9 text-sm"
             />
@@ -92,8 +98,8 @@ export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: Shi
 
           <div className="flex items-center justify-between p-3 border rounded-md">
             <div className="space-y-0.5">
-              <Label htmlFor="is_active" className="text-sm font-medium">활성 상태</Label>
-              <p className="text-xs text-gray-500">선박 등록 시 선택 가능 여부</p>
+              <Label htmlFor="is_active" className="text-sm font-medium">{t('활성 상태')}</Label>
+              <p className="text-xs text-gray-500">{t('선박 등록 시 선택 가능 여부')}</p>
             </div>
             <Switch
               id="is_active"
@@ -104,10 +110,10 @@ export default function ShipFlagDialog({ open, onOpenChange, flag, onSave }: Shi
 
           <div className="flex gap-2 pt-4">
             <Button type="submit" className="flex-1 h-9">
-              {flag ? '수정' : '추가'}
+              {flag ? t('수정') : t('추가')}
             </Button>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="h-9">
-              취소
+              {t('취소')}
             </Button>
           </div>
         </form>

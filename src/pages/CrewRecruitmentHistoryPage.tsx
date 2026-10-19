@@ -2,6 +2,9 @@ import { Fragment, useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { Trash2, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewRecruitmentHistoryPage/en.json';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +17,8 @@ import { getCurrentUser } from '@/lib/store';
 import { supabase } from '@/lib/supabase';
 import type { CrewRecommendationApprovalLog } from '@/types/approval';
 
+i18n.addResourceBundle('en', 'CrewRecruitmentHistoryPage', en, true, true);
+
 const STATUS_LABEL: Record<string, { label: string; className: string }> = {
   approved: { label: '승인', className: 'bg-green-50 text-green-700 border-green-200' },
   rejected: { label: '반려', className: 'bg-red-50 text-red-700 border-red-200' },
@@ -23,6 +28,7 @@ const STATUS_LABEL: Record<string, { label: string; className: string }> = {
 
 export default function CrewRecruitmentHistoryPage() {
   const { toast } = useToast();
+  const { t } = useTranslation('CrewRecruitmentHistoryPage');
   const [logs, setLogs] = useState<CrewRecommendationApprovalLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -72,18 +78,18 @@ export default function CrewRecruitmentHistoryPage() {
       }
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '채용 히스토리를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('채용 히스토리를 불러오는 중 오류가 발생했습니다.'), variant: 'destructive' });
     }
   };
 
   const handleDelete = async (log: CrewRecommendationApprovalLog) => {
-    if (!confirm(`${log.crew_name}님의 채용 히스토리를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('{{name}}님의 채용 히스토리를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.', { name: log.crew_name }))) return;
     try {
       await approvalService.deleteApprovalDeletionLog(log.id);
-      toast({ title: '삭제되었습니다.' });
+      toast({ title: t('삭제되었습니다.') });
       await loadLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -93,14 +99,14 @@ export default function CrewRecruitmentHistoryPage() {
     setSelectedIds(checked ? logs.map(l => l.id) : []);
 
   const handleBulkDelete = async () => {
-    if (!confirm(`선택한 ${selectedIds.length}건의 채용 히스토리를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('선택한 {{count}}건의 채용 히스토리를 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.', { count: selectedIds.length }))) return;
     try {
       setBulkDeleting(true);
       const results = await Promise.allSettled(selectedIds.map(id => approvalService.deleteApprovalDeletionLog(id)));
       const failed = results.filter(r => r.status === 'rejected').length;
       toast(failed > 0
-        ? { title: '일부 삭제 실패', description: `${results.length - failed}건 삭제됨, ${failed}건 실패`, variant: 'destructive' }
-        : { title: `${results.length}건 삭제되었습니다.` });
+        ? { title: t('일부 삭제 실패'), description: t('{{success}}건 삭제됨, {{failed}}건 실패', { success: results.length - failed, failed }), variant: 'destructive' }
+        : { title: t('{{count}}건 삭제되었습니다.', { count: results.length }) });
       setSelectedIds([]);
       await loadLogs();
     } finally {
@@ -125,14 +131,13 @@ export default function CrewRecruitmentHistoryPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <CardTitle className="text-base">채용 히스토리 관리</CardTitle>
+              <CardTitle className="text-base">{t('채용 히스토리 관리')}</CardTitle>
               <CardDescription className="text-xs mt-1">
-                결재함에서 삭제된 선원추천 결재 건의 추천자/결재선/결재자별 승인·반려 이력을 영구 보관합니다.
-                등록된 선원 정보와는 별개이며, 이 목록 자체는 시스템관리자 이상만 삭제할 수 있습니다.
+                {t('결재함에서 삭제된 선원추천 결재 건의 추천자/결재선/결재자별 승인·반려 이력을 영구 보관합니다. 등록된 선원 정보와는 별개이며, 이 목록 자체는 시스템관리자 이상만 삭제할 수 있습니다.')}
               </CardDescription>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-xs text-gray-400">페이지당</span>
+              <span className="text-xs text-gray-400">{t('페이지당')}</span>
               <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
                 <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
@@ -142,15 +147,15 @@ export default function CrewRecruitmentHistoryPage() {
         </CardHeader>
         {isAdmin && selectedIds.length > 0 && (
           <div className="flex items-center justify-between gap-2 bg-red-50 border-y border-red-200 px-4 py-2">
-            <span className="text-xs text-red-800">{selectedIds.length}건 선택됨</span>
+            <span className="text-xs text-red-800">{t('{{count}}건 선택됨', { count: selectedIds.length })}</span>
             <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 bg-white hover:bg-red-100" onClick={handleBulkDelete} disabled={bulkDeleting}>
-              <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting ? '삭제 중...' : `선택 영구 삭제 (${selectedIds.length})`}
+              <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting ? t('삭제 중...') : t('선택 영구 삭제 ({{count}})', { count: selectedIds.length })}
             </Button>
           </div>
         )}
         <CardContent className="pt-0">
           {logs.length === 0 ? (
-            <div className="text-center py-8 text-sm text-gray-400">보관된 채용 히스토리가 없습니다.</div>
+            <div className="text-center py-8 text-sm text-gray-400">{t('보관된 채용 히스토리가 없습니다.')}</div>
           ) : (
             <>
             <Table>
@@ -165,15 +170,15 @@ export default function CrewRecruitmentHistoryPage() {
                     </TableHead>
                   )}
                   <TableHead className="text-xs w-6" />
-                  <TableHead className="text-xs">선원명</TableHead>
-                  <TableHead className="text-xs">직급</TableHead>
-                  <TableHead className="text-xs">추천자</TableHead>
-                  <TableHead className="text-xs">결재선</TableHead>
-                  <TableHead className="text-xs">최종 상태</TableHead>
-                  <TableHead className="text-xs">완료일</TableHead>
-                  <TableHead className="text-xs">삭제한 사람</TableHead>
-                  <TableHead className="text-xs">삭제일</TableHead>
-                  {isAdmin && <TableHead className="text-right text-xs w-16">작업</TableHead>}
+                  <TableHead className="text-xs">{t('선원명')}</TableHead>
+                  <TableHead className="text-xs">{t('직급')}</TableHead>
+                  <TableHead className="text-xs">{t('추천자')}</TableHead>
+                  <TableHead className="text-xs">{t('결재선')}</TableHead>
+                  <TableHead className="text-xs">{t('최종 상태')}</TableHead>
+                  <TableHead className="text-xs">{t('완료일')}</TableHead>
+                  <TableHead className="text-xs">{t('삭제한 사람')}</TableHead>
+                  <TableHead className="text-xs">{t('삭제일')}</TableHead>
+                  {isAdmin && <TableHead className="text-right text-xs w-16">{t('작업')}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -193,7 +198,7 @@ export default function CrewRecruitmentHistoryPage() {
                         <TableCell className="text-sm">{(log.crew_recommendation_id && rankByRecommendationId.get(log.crew_recommendation_id)) || '-'}</TableCell>
                         <TableCell className="text-sm">{log.requester_name}</TableCell>
                         <TableCell className="text-sm">{log.approval_line_name || '-'}</TableCell>
-                        <TableCell><Badge variant="outline" className={`text-xs ${status.className}`}>{status.label}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className={`text-xs ${status.className}`}>{t(status.label)}</Badge></TableCell>
                         <TableCell className="text-sm">{log.completed_at ? format(new Date(log.completed_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</TableCell>
                         <TableCell className="text-sm">{log.deleted_by_name}</TableCell>
                         <TableCell className="text-sm">{format(new Date(log.deleted_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</TableCell>
@@ -209,15 +214,15 @@ export default function CrewRecruitmentHistoryPage() {
                         <TableRow className="bg-gray-50/60">
                           <TableCell colSpan={isAdmin ? 11 : 9} className="text-xs">
                             {log.actions.length === 0 ? (
-                              <div className="text-gray-400 py-2">결재 진행 이력이 없습니다.</div>
+                              <div className="text-gray-400 py-2">{t('결재 진행 이력이 없습니다.')}</div>
                             ) : (
                               <div className="py-2 space-y-1.5">
                                 {log.actions.sort((a, b) => a.step_order - b.step_order).map((a, i) => (
                                   <div key={i} className="flex items-center gap-2">
-                                    <span className="text-gray-400 w-10">{a.step_order}단계</span>
-                                    <span className="font-medium">{a.approver_name || '알 수 없음'}</span>
+                                    <span className="text-gray-400 w-10">{t('{{step}}단계', { step: a.step_order })}</span>
+                                    <span className="font-medium">{a.approver_name || t('알 수 없음')}</span>
                                     <Badge variant="outline" className={a.action === 'approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}>
-                                      {a.action === 'approved' ? '승인' : '반려'}
+                                      {a.action === 'approved' ? t('승인') : t('반려')}
                                     </Badge>
                                     {a.comment && <span className="text-gray-500">"{a.comment}"</span>}
                                     <span className="text-gray-400 ml-auto">{format(new Date(a.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>

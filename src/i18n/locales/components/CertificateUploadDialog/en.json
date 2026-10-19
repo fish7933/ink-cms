@@ -1,0 +1,21 @@
+{
+  "최소 1개의 증서를 입력하세요.": "Please enter at least one certificate.",
+  "증서가 저장되었습니다.": "Certificate saved.",
+  "저장에 실패했습니다.": "Failed to save.",
+  "증서 등록 — {{crewName}}": "Register Certificates — {{crewName}}",
+  "선박관리사 승인 후 증서를 등록합니다. 증서명, 번호, 만료일을 정확히 입력해주세요.": "Register certificates after ship manager approval. Please enter the certificate name, number, and expiry date accurately.",
+  "보유 증서 ({{count}})": "Certificates Held ({{count}})",
+  "증서 선택 추가": "Add from list",
+  "직접 입력": "Enter manually",
+  "증서를 추가하세요.": "Add a certificate.",
+  "증서 {{num}}": "Certificate {{num}}",
+  "증서명 *": "Certificate Name *",
+  "증서 번호": "Certificate Number",
+  "번호": "Number",
+  "발급 기관": "Issuing Authority",
+  "발급일": "Issued Date",
+  "만료일": "Expiry Date",
+  "취소": "Cancel",
+  "저장 중...": "Saving...",
+  "증서 저장": "Save Certificates"
+}

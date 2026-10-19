@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/SalaryTemplateViewDialog/en.json';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getRanks } from '@/lib/store';
 import type { Rank } from '@/types/models';
@@ -9,6 +12,8 @@ import {
   type SalaryComponent,
 } from '@/lib/salary-store';
 import SalaryTemplateMatrixTable from './SalaryTemplateMatrixTable';
+
+i18n.addResourceBundle('en', 'SalaryTemplateViewDialog', en, true, true);
 
 interface SalaryTemplateViewDialogProps {
   open: boolean;
@@ -22,6 +27,7 @@ interface SalaryTemplateViewDialogProps {
  * ShipDialog(선박 상세)와 ShipTable(선박 목록, 배정된 템플릿 클릭)에서 공용으로 사용.
  */
 export default function SalaryTemplateViewDialog({ open, onOpenChange, templateId, templateName }: SalaryTemplateViewDialogProps) {
+  const { t } = useTranslation('SalaryTemplateViewDialog');
   const [data, setData] = useState<SalaryTemplateWithItems | null>(null);
   const [components, setComponents] = useState<SalaryComponent[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
@@ -51,10 +57,10 @@ export default function SalaryTemplateViewDialog({ open, onOpenChange, templateI
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="text-base">{data?.name || templateName} — 직급별 급여 현황</DialogTitle>
+          <DialogTitle className="text-base">{t('{{name}} — 직급별 급여 현황', { name: data?.name || templateName })}</DialogTitle>
         </DialogHeader>
         {!data ? (
-          <p className="text-xs text-gray-400 py-6 text-center">불러오는 중...</p>
+          <p className="text-xs text-gray-400 py-6 text-center">{t('불러오는 중...')}</p>
         ) : (
           <div className="overflow-auto">
             <SalaryTemplateMatrixTable template={data} components={components} ranks={ranks} />

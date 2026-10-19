@@ -1,0 +1,23 @@
+{
+  "선박 직접 할당": "Direct Ship Assignment",
+  "선대 할당": "Fleet Assignment",
+  "선주사 할당": "Ship Owner Assignment",
+  "상위 플릿": "Parent Fleet",
+  "상위 선주사": "Parent Ship Owner",
+  "담당자 정보를 불러오는 중...": "Loading contact information...",
+  "선주 담당자 (Ship Owner Contact)": "Ship Owner Contact",
+  "선대": "Fleet",
+  "선주사": "Ship Owner",
+  "{{level}} 담당자가 자동 적용됩니다 ({{name}})": "{{level}} contact applies automatically ({{name}})",
+  "담당자가 지정되지 않았습니다": "No contact assigned",
+  "선박관리사 담당자 (Ship Manager Supervisors)": "Ship Manager Supervisors",
+  "할당된 선박관리사 감독이 없습니다": "No ship manager supervisors assigned",
+  "선박관리사 역할의 사용자를 이 선박, 선대 또는 선주사에 할당하면 여기에 표시됩니다": "Users with the ship manager role assigned to this ship, fleet, or ship owner will appear here",
+  "담당자 구분": "Contact Types",
+  "선주 담당자:": "Ship Owner Contact:",
+  "선박 소유자 측의 담당자 (선주 사용자 관리 화면에서 배정, ship_owner 역할)": "The contact on the ship owner's side (assigned from the Owner User Management screen, ship_owner role)",
+  "선박관리사 담당자:": "Ship Manager Contact:",
+  "선박 관리 감독자 (ship_manager 역할, 선박관리사 담당자 화면에서 배정)": "The ship management supervisor (ship_manager role, assigned from the Ship Manager Contacts screen)",
+  "우선순위:": "Priority:",
+  "선박 직접 배정 → 선대 배정 → 선주사 배정": "Direct ship assignment → fleet assignment → ship owner assignment"
+}

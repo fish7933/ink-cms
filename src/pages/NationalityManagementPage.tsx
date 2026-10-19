@@ -16,6 +16,10 @@ import { getCurrentUser } from '@/services/auth.service';
 import { SortableTableRow } from '@/components/ui/sortable-table-row';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/NationalityManagementPage/en.json';
+i18n.addResourceBundle('en', 'NationalityManagementPage', en, true, true);
 
 const EMPTY_FORM = {
   country_code: '', country_name_en: '', country_name_ko: '',
@@ -26,6 +30,7 @@ const EMPTY_FORM = {
 const REGION_LABELS: Record<string, string> = { asia: '아시아', europe: '유럽', americas: '아메리카', africa: '아프리카', oceania: '오세아니아' };
 
 export default function NationalityManagementPage() {
+  const { t } = useTranslation('NationalityManagementPage');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
@@ -86,14 +91,14 @@ export default function NationalityManagementPage() {
       else await addNationality(formData);
       window.dispatchEvent(new CustomEvent('nationality-data-changed'));
       closeTab(activeTabId!);
-    } catch { alert('저장 중 오류가 발생했습니다.'); }
+    } catch { alert(t('저장 중 오류가 발생했습니다.')); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('삭제하시겠습니까?')) return;
+    if (!confirm(t('삭제하시겠습니까?'))) return;
     try { await deleteNationality(id); await loadData(); }
-    catch { alert('삭제 중 오류가 발생했습니다.'); }
+    catch { alert(t('삭제 중 오류가 발생했습니다.')); }
   };
 
   const handleGroupDragEnd = async (groupItems: Nationality[], event: DragEndEvent) => {
@@ -116,7 +121,7 @@ export default function NationalityManagementPage() {
     try {
       await Promise.all(updates.map(u => updateNationality(u.id, { display_order: u.display_order })));
     } catch {
-      alert('순서 저장 중 오류가 발생했습니다.');
+      alert(t('순서 저장 중 오류가 발생했습니다.'));
       await loadData();
     }
   };
@@ -128,25 +133,25 @@ export default function NationalityManagementPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs w-12"></TableHead>
-              <TableHead className="text-xs w-20">코드</TableHead>
-              <TableHead className="text-xs">영문명</TableHead>
-              <TableHead className="text-xs">한글명</TableHead>
-              <TableHead className="text-xs">지역</TableHead>
-              <TableHead className="text-xs">상태</TableHead>
-              <TableHead className="text-right text-xs w-16">작업</TableHead>
+              <TableHead className="text-xs w-20">{t('코드')}</TableHead>
+              <TableHead className="text-xs">{t('영문명')}</TableHead>
+              <TableHead className="text-xs">{t('한글명')}</TableHead>
+              <TableHead className="text-xs">{t('지역')}</TableHead>
+              <TableHead className="text-xs">{t('상태')}</TableHead>
+              <TableHead className="text-right text-xs w-16">{t('작업')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleGroupDragEnd(items, e)}>
               <SortableContext items={items.map(n => n.id)} strategy={verticalListSortingStrategy}>
                 {items.map(n => (
-                  <SortableTableRow key={n.id} id={n.id} onClick={() => openNewTab(`/nationalities?id=${n.id}`, `${n.country_name_ko} 수정`)}>
+                  <SortableTableRow key={n.id} id={n.id} onClick={() => openNewTab(`/nationalities?id=${n.id}`, t('{{name}} 수정', { name: n.country_name_ko }))}>
                     <TableCell className="text-sm font-mono font-semibold">{n.country_code}</TableCell>
                     <TableCell className="text-sm">{n.country_name_en}</TableCell>
                     <TableCell className="text-sm font-medium">{n.country_name_ko}</TableCell>
-                    <TableCell className="text-sm">{REGION_LABELS[n.region || ''] || n.region}</TableCell>
+                    <TableCell className="text-sm">{t(REGION_LABELS[n.region || ''] || n.region || '')}</TableCell>
                     <TableCell>
-                      {n.is_active ? <Badge variant="secondary" className="text-xs">활성</Badge> : <Badge variant="outline" className="text-xs">비활성</Badge>}
+                      {n.is_active ? <Badge variant="secondary" className="text-xs">{t('활성')}</Badge> : <Badge variant="outline" className="text-xs">{t('비활성')}</Badge>}
                     </TableCell>
                     <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                       <Button size="sm" variant="ghost" onClick={() => handleDelete(n.id)} className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50">
@@ -178,20 +183,20 @@ export default function NationalityManagementPage() {
             <div className="flex items-center gap-2">
               <Globe className="w-5 h-5" />
               <div>
-                <CardTitle className="text-base">{isFormMode ? (editId ? '국적 수정' : '국적 추가') : '선원 국적 관리'}</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">{isFormMode ? '국적 정보를 입력하세요' : '주요 선원 송출국 및 국적 데이터 관리'}</p>
+                <CardTitle className="text-base">{isFormMode ? (editId ? t('국적 수정') : t('국적 추가')) : t('선원 국적 관리')}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">{isFormMode ? t('국적 정보를 입력하세요') : t('주요 선원 송출국 및 국적 데이터 관리')}</p>
               </div>
             </div>
             {isFormMode ? (
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>취소</Button>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>{t('취소')}</Button>
                 <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
-                  <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+                  <Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}
                 </Button>
               </div>
             ) : (
-              <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/nationalities?mode=new', '국적 추가', true)}>
-                <Plus className="w-3.5 h-3.5" />국적 추가
+              <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/nationalities?mode=new', t('국적 추가'), true)}>
+                <Plus className="w-3.5 h-3.5" />{t('국적 추가')}
               </Button>
             )}
           </div>
@@ -201,49 +206,49 @@ export default function NationalityManagementPage() {
             <div className="space-y-3 pt-2 max-w-lg">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">국가 코드 * (ISO 3166-1 alpha-2)</Label>
-                  <Input value={formData.country_code} onChange={e => setFormData({ ...formData, country_code: e.target.value.toUpperCase() })} placeholder="예: KR, PH, US" maxLength={2} disabled={!!editId} className="h-9 text-sm font-mono" />
+                  <Label className="text-xs">{t('국가 코드 * (ISO 3166-1 alpha-2)')}</Label>
+                  <Input value={formData.country_code} onChange={e => setFormData({ ...formData, country_code: e.target.value.toUpperCase() })} placeholder={t('예: KR, PH, US')} maxLength={2} disabled={!!editId} className="h-9 text-sm font-mono" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">지역 *</Label>
+                  <Label className="text-xs">{t('지역 *')}</Label>
                   <Select value={formData.region} onValueChange={(v: 'asia'|'europe'|'americas'|'africa'|'oceania') => setFormData({ ...formData, region: v })}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(REGION_LABELS).map(([v, l]) => <SelectItem key={v} value={v} className="text-sm">{l}</SelectItem>)}
+                      {Object.entries(REGION_LABELS).map(([v, l]) => <SelectItem key={v} value={v} className="text-sm">{t(l)}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">영문명 *</Label>
-                  <Input value={formData.country_name_en} onChange={e => setFormData({ ...formData, country_name_en: e.target.value })} placeholder="예: South Korea" className="h-9 text-sm" />
+                  <Label className="text-xs">{t('영문명 *')}</Label>
+                  <Input value={formData.country_name_en} onChange={e => setFormData({ ...formData, country_name_en: e.target.value })} placeholder={t('예: South Korea')} className="h-9 text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">한글명 *</Label>
-                  <Input value={formData.country_name_ko} onChange={e => setFormData({ ...formData, country_name_ko: e.target.value })} placeholder="예: 대한민국" className="h-9 text-sm" />
+                  <Label className="text-xs">{t('한글명 *')}</Label>
+                  <Input value={formData.country_name_ko} onChange={e => setFormData({ ...formData, country_name_ko: e.target.value })} placeholder={t('예: 대한민국')} className="h-9 text-sm" />
                 </div>
               </div>
               <div className="flex items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox checked={formData.is_major_supplier} onCheckedChange={c => setFormData({ ...formData, is_major_supplier: c === true })} />
-                  <span className="text-xs">주요 선원 송출국</span>
+                  <span className="text-xs">{t('주요 선원 송출국')}</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox checked={formData.is_active} onCheckedChange={c => setFormData({ ...formData, is_active: c === true })} />
-                  <span className="text-xs">활성 상태</span>
+                  <span className="text-xs">{t('활성 상태')}</span>
                 </label>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
               <div>
-                <h3 className="text-sm font-semibold mb-2">주요 선원 송출국 ({major.length})</h3>
-                {renderTable(major, '등록된 주요 송출국이 없습니다')}
+                <h3 className="text-sm font-semibold mb-2">{t('주요 선원 송출국')} ({major.length})</h3>
+                {renderTable(major, t('등록된 주요 송출국이 없습니다'))}
               </div>
               <div>
-                <h3 className="text-sm font-semibold mb-2">기타 국가 ({others.length})</h3>
-                {renderTable(others, '등록된 기타 국가가 없습니다')}
+                <h3 className="text-sm font-semibold mb-2">{t('기타 국가')} ({others.length})</h3>
+                {renderTable(others, t('등록된 기타 국가가 없습니다'))}
               </div>
             </div>
           )}

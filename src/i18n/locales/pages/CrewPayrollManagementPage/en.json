@@ -1,0 +1,3 @@
+{
+  "{{crewName}}의 상병급여를 {{closedDate}}자로 종결하시겠습니까? 다음 달부터는 급여대장에 나타나지 않습니다.": "Close {{crewName}}'s sick pay case as of {{closedDate}}? It will no longer appear in the payroll ledger from next month."
+}

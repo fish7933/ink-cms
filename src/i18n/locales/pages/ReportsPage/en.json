@@ -1,0 +1,23 @@
+{
+  "등록": "Registered",
+  "대기": "Available",
+  "승선": "On Board",
+  "휴가": "On Leave",
+  "퇴직": "Retired",
+  "미지정": "Unspecified",
+  "통계 대시보드": "Statistics Dashboard",
+  "선원 관리 현황을 한눈에 확인합니다": "View crew management status at a glance",
+  "전체 선원": "Total Crew",
+  "선원 상태별 분포": "Crew Status Distribution",
+  "국적별 분포": "Nationality Distribution",
+  "직급별 분포": "Rank Distribution",
+  "{{count}}명": "{{count}}",
+  "선박별 승선 인원": "Crew Count by Ship",
+  "승선 중인 선원이 없습니다": "No crew currently on board",
+  "증서 만료 현황 요약": "Certificate Expiry Summary",
+  "만료됨": "Expired",
+  "30일 이내": "Within 30 Days",
+  "60일 이내": "Within 60 Days",
+  "90일 이내": "Within 90 Days",
+  "유효": "Valid"
+}

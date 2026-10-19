@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ProtectedRoute/en.json';
 import { getCurrentUser } from '@/lib/store';
 import { Shield, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+i18n.addResourceBundle('en', 'ProtectedRoute', en, true, true);
 
 interface ProtectedRouteProps {
   resource?: string;
@@ -12,6 +17,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ resource, children }: ProtectedRouteProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation('ProtectedRoute');
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +57,7 @@ export default function ProtectedRoute({ resource, children }: ProtectedRoutePro
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">권한을 확인하는 중...</p>
+          <p className="text-gray-600">{t('권한을 확인하는 중...')}</p>
         </div>
       </div>
     );
@@ -67,8 +73,8 @@ export default function ProtectedRoute({ resource, children }: ProtectedRoutePro
                 <Shield className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <CardTitle className="text-red-900">접근 권한 없음</CardTitle>
-                <CardDescription>이 페이지에 접근할 권한이 없습니다</CardDescription>
+                <CardTitle className="text-red-900">{t('접근 권한 없음')}</CardTitle>
+                <CardDescription>{t('이 페이지에 접근할 권한이 없습니다')}</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -77,8 +83,8 @@ export default function ProtectedRoute({ resource, children }: ProtectedRoutePro
               <div className="flex gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-red-800">
-                  <p className="font-medium mb-1">권한이 필요합니다</p>
-                  <p>이 페이지를 보려면 관리자에게 조회 권한을 요청하세요.</p>
+                  <p className="font-medium mb-1">{t('권한이 필요합니다')}</p>
+                  <p>{t('이 페이지를 보려면 관리자에게 조회 권한을 요청하세요.')}</p>
                 </div>
               </div>
             </div>
@@ -86,7 +92,7 @@ export default function ProtectedRoute({ resource, children }: ProtectedRoutePro
               onClick={() => navigate('/dashboard')} 
               className="w-full"
             >
-              대시보드로 돌아가기
+              {t('대시보드로 돌아가기')}
             </Button>
           </CardContent>
         </Card>

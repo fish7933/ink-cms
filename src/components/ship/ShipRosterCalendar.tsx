@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipRosterCalendar/en.json';
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isAfter, isSameDay, isSameMonth, startOfDay, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getShipContractRanges, type CrewContractRange } from '@/services/ship-crew-roster.service';
 import { isContractActiveOnDate } from '@/lib/crew-contract-coverage';
+
+i18n.addResourceBundle('en', 'ShipRosterCalendar', en, true, true);
 
 interface ShipRosterCalendarProps {
   shipId: string;
@@ -15,6 +20,7 @@ interface ShipRosterCalendarProps {
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate }: ShipRosterCalendarProps) {
+  const { t } = useTranslation('ShipRosterCalendar');
   const [ranges, setRanges] = useState<CrewContractRange[]>([]);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date(selectedDate)));
   const [monthInputOpen, setMonthInputOpen] = useState(false);
@@ -57,7 +63,7 @@ export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate 
           />
         ) : (
           <button type="button" onClick={() => setMonthInputOpen(true)} className="text-sm font-medium hover:bg-gray-100 rounded px-2 py-0.5">
-            {format(viewMonth, 'yyyy년 M월')}
+            {format(viewMonth, i18n.language === 'en' ? 'MMMM yyyy' : 'yyyy년 M월')}
           </button>
         )}
         <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setViewMonth(m => addMonths(m, 1))}>
@@ -65,7 +71,7 @@ export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate 
         </Button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-gray-400 mb-1">
-        {WEEKDAYS.map(w => <div key={w}>{w}</div>)}
+        {WEEKDAYS.map(w => <div key={w}>{t(w)}</div>)}
       </div>
       <div className="grid grid-cols-7 gap-1">
         {days.map(day => {
@@ -94,8 +100,8 @@ export default function ShipRosterCalendar({ shipId, selectedDate, onSelectDate 
         })}
       </div>
       <div className="flex items-center gap-3 mt-2 pt-2 border-t text-[11px] text-gray-400">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100 inline-block" />승선 인원 있음</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" />선택된 날짜</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100 inline-block" />{t('승선 인원 있음')}</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" />{t('선택된 날짜')}</span>
       </div>
     </div>
   );

@@ -1,4 +1,7 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipListTreeView/en.json';
 import { Building2, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import type { Ship, Company, Fleet } from '@/types/models';
 import { groupShips } from '@/lib/ship-grouping';
 import type { OnboardCount } from '@/services/ship-onboard-count.service';
+
+i18n.addResourceBundle('en', 'ShipListTreeView', en, true, true);
 
 interface ShipListTreeViewProps {
   ships: Ship[];
@@ -30,6 +35,7 @@ function ShipRow({ ship, onboard, onEdit, onDelete, onToggleActive, canEdit, can
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const { t } = useTranslation('ShipListTreeView');
   const isInactive = ship.is_active === false;
   return (
     <div className="border-l-2 border-gray-100 pl-3 ml-3">
@@ -40,13 +46,13 @@ function ShipRow({ ship, onboard, onEdit, onDelete, onToggleActive, canEdit, can
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />
           <span className={`text-xs ${isInactive ? 'text-gray-300' : 'text-gray-500'} truncate`}>{ship.name}</span>
-          {isInactive && <Badge variant="outline" className="text-[10px] text-gray-400 border-gray-300">비활성</Badge>}
+          {isInactive && <Badge variant="outline" className="text-[10px] text-gray-400 border-gray-300">{t('비활성')}</Badge>}
           {ship.ship_type && <span className="text-xs text-gray-400">{ship.ship_type}</span>}
           {ship.flag && <span className="text-xs text-gray-400">{ship.flag}</span>}
           {onboard && (onboard.officer > 0 || onboard.rating > 0) && (
             <span className="flex items-center gap-1">
-              <Badge variant="secondary" className="text-[10px] bg-indigo-50 text-indigo-700">사관 {onboard.officer}</Badge>
-              <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-700">부원 {onboard.rating}</Badge>
+              <Badge variant="secondary" className="text-[10px] bg-indigo-50 text-indigo-700">{t('사관 {{count}}', { count: onboard.officer })}</Badge>
+              <Badge variant="secondary" className="text-[10px] bg-teal-50 text-teal-700">{t('부원 {{count}}', { count: onboard.rating })}</Badge>
             </span>
           )}
         </div>
@@ -57,7 +63,7 @@ function ShipRow({ ship, onboard, onEdit, onDelete, onToggleActive, canEdit, can
               onClick={() => onToggleActive(ship)}
               className={`h-6 px-2 text-xs ${isInactive ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-gray-400 hover:text-gray-600'}`}
             >
-              {isInactive ? '활성화' : '비활성화'}
+              {isInactive ? t('활성화') : t('비활성화')}
             </Button>
           )}
           {canEdit && (
@@ -87,10 +93,11 @@ export default function ShipListTreeView({
   canEdit = true,
   canDelete = true,
 }: ShipListTreeViewProps) {
+  const { t } = useTranslation('ShipListTreeView');
   const groups = useMemo(() => groupShips(ships, companies, fleets), [ships, companies, fleets]);
 
   if (ships.length === 0) {
-    return <div className="rounded-md border py-12 text-center text-sm text-gray-500">등록된 선박이 없습니다</div>;
+    return <div className="rounded-md border py-12 text-center text-sm text-gray-500">{t('등록된 선박이 없습니다')}</div>;
   }
 
   return (
@@ -104,9 +111,9 @@ export default function ShipListTreeView({
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold text-gray-800 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-                  {group.owner?.name || '선주사 미지정'}
+                  {group.owner?.name || t('선주사 미지정')}
                 </CardTitle>
-                <Badge variant="secondary" className="text-xs">{totalShips}척</Badge>
+                <Badge variant="secondary" className="text-xs">{t('{{count}}척', { count: totalShips })}</Badge>
               </div>
             </CardHeader>
             {totalShips > 0 && (
@@ -118,7 +125,7 @@ export default function ShipListTreeView({
                         <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
                         <Building2 className="w-3 h-3 text-gray-400 shrink-0" />
                         <span className="text-xs font-medium text-gray-600">{fg.fleet.name}</span>
-                        <Badge variant="secondary" className="text-xs">{fg.ships.length}척</Badge>
+                        <Badge variant="secondary" className="text-xs">{t('{{count}}척', { count: fg.ships.length })}</Badge>
                       </div>
                       {fg.ships.map(ship => (
                         <ShipRow key={ship.id} ship={ship} onboard={onboardCounts.get(ship.id)} onEdit={onEdit} onDelete={onDelete} onToggleActive={onToggleActive} canEdit={canEdit} canDelete={canDelete} />

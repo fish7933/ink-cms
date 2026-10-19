@@ -24,8 +24,15 @@ import {
 import { useTabContext } from '@/contexts/TabContext';
 import ManagementFeeTemplateAssignmentsSection from '@/components/management-fee/ManagementFeeTemplateAssignmentsSection';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ManagementFeeTemplatesPage/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeTemplatesPage', en, true, true);
 
 export default function ManagementFeeTemplatesPage() {
+  // Named `tr` (not `t`) because this file already uses `t` as a local variable name
+  // for template objects (e.g. `(t: ManagementFeeTemplate) => ...`) in several places.
+  const { t: tr } = useTranslation('ManagementFeeTemplatesPage');
   const navigate = useNavigate();
   const { openNewTab } = useTabContext();
   const { toast } = useToast();
@@ -76,7 +83,7 @@ export default function ManagementFeeTemplatesPage() {
     }
   };
 
-  const openEdit = (t: ManagementFeeTemplate) => openNewTab(`/management-fee/templates/${t.id}/edit`, `템플릿 수정: ${t.name}`);
+  const openEdit = (t: ManagementFeeTemplate) => openNewTab(`/management-fee/templates/${t.id}/edit`, tr('템플릿 수정: {{name}}', { name: t.name }));
 
   const openAssign = (t: ManagementFeeTemplate) => {
     setPrefillAssignId(t.id);
@@ -90,7 +97,7 @@ export default function ManagementFeeTemplatesPage() {
 
   const performDelete = async (ids: string[]) => {
     await Promise.all(ids.map(id => deleteManagementFeeTemplate(id)));
-    toast({ title: '삭제 완료', description: ids.length > 1 ? `${ids.length}개 템플릿이 삭제되었습니다.` : '삭제되었습니다.' });
+    toast({ title: tr('삭제 완료'), description: ids.length > 1 ? tr('{{count}}개 템플릿이 삭제되었습니다.', { count: ids.length }) : tr('삭제되었습니다.') });
     setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
     setPendingDeleteIds(null);
     setDeleteWarning(null);
@@ -103,7 +110,7 @@ export default function ManagementFeeTemplatesPage() {
     try {
       const summary = await getTemplateAssignmentSummary(ids);
       if (summary.total === 0) {
-        if (!confirm(ids.length > 1 ? `선택한 ${ids.length}개 템플릿을 삭제하시겠습니까?` : '삭제하시겠습니까?')) return;
+        if (!confirm(ids.length > 1 ? tr('선택한 {{count}}개 템플릿을 삭제하시겠습니까?', { count: ids.length }) : tr('삭제하시겠습니까?'))) return;
         await performDelete(ids);
         return;
       }
@@ -139,7 +146,7 @@ export default function ManagementFeeTemplatesPage() {
 
   const openCopy = (t: ManagementFeeTemplate) => {
     setCopyTarget(t);
-    setCopyName(`${t.name} 복사본`);
+    setCopyName(tr('{{name}} 복사본', { name: t.name }));
   };
 
   const handleCopy = async () => {
@@ -148,13 +155,13 @@ export default function ManagementFeeTemplatesPage() {
     try {
       const newTemplate = await copyManagementFeeTemplate(copyTarget.id, copyName.trim());
       if (!newTemplate) {
-        toast({ title: '복사 실패', description: '템플릿을 복사하는 중 오류가 발생했습니다.', variant: 'destructive' });
+        toast({ title: tr('복사 실패'), description: tr('템플릿을 복사하는 중 오류가 발생했습니다.'), variant: 'destructive' });
         return;
       }
-      toast({ title: '복사 완료', description: '청구 항목 구성이 그대로 복사되었습니다. 필요한 금액을 수정해주세요.' });
+      toast({ title: tr('복사 완료'), description: tr('청구 항목 구성이 그대로 복사되었습니다. 필요한 금액을 수정해주세요.') });
       window.dispatchEvent(new CustomEvent('management-fee-template-data-changed'));
       setCopyTarget(null);
-      openNewTab(`/management-fee/templates/${newTemplate.id}/edit`, `템플릿 수정: ${newTemplate.name}`);
+      openNewTab(`/management-fee/templates/${newTemplate.id}/edit`, tr('템플릿 수정: {{name}}', { name: newTemplate.name }));
     } finally {
       setCopying(false);
     }
@@ -166,13 +173,13 @@ export default function ManagementFeeTemplatesPage() {
     try {
       const newTemplate = await renewManagementFeeTemplate(renewTarget.id, renewDate);
       if (!newTemplate) {
-        toast({ title: '갱신 실패', description: '적용 시작일은 기존 유효기간 이후여야 합니다.', variant: 'destructive' });
+        toast({ title: tr('갱신 실패'), description: tr('적용 시작일은 기존 유효기간 이후여야 합니다.'), variant: 'destructive' });
         return;
       }
-      toast({ title: '갱신 완료', description: '새 버전이 생성되었습니다. 인상분 금액을 수정해주세요.' });
+      toast({ title: tr('갱신 완료'), description: tr('새 버전이 생성되었습니다. 인상분 금액을 수정해주세요.') });
       window.dispatchEvent(new CustomEvent('management-fee-template-data-changed'));
       setRenewTarget(null);
-      openNewTab(`/management-fee/templates/${newTemplate.id}/edit`, `템플릿 수정: ${newTemplate.name}`);
+      openNewTab(`/management-fee/templates/${newTemplate.id}/edit`, tr('템플릿 수정: {{name}}', { name: newTemplate.name }));
     } finally {
       setRenewing(false);
     }
@@ -181,7 +188,7 @@ export default function ManagementFeeTemplatesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-500">로딩 중...</p>
+        <p className="text-sm text-gray-500">{tr('로딩 중...')}</p>
       </div>
     );
   }
@@ -192,36 +199,36 @@ export default function ManagementFeeTemplatesPage() {
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className={`grid w-full ${permissions.canEdit ? 'grid-cols-2' : 'grid-cols-1'} h-9 mb-3 max-w-md`}>
-          <TabsTrigger value="templates" className="text-xs">템플릿 목록</TabsTrigger>
-          {permissions.canEdit && <TabsTrigger value="assignments" className="text-xs">템플릿 할당</TabsTrigger>}
+          <TabsTrigger value="templates" className="text-xs">{tr('템플릿 목록')}</TabsTrigger>
+          {permissions.canEdit && <TabsTrigger value="assignments" className="text-xs">{tr('템플릿 할당')}</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="templates">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">관리비 템플릿 관리</CardTitle>
+                <CardTitle className="text-base">{tr('관리비 템플릿 관리')}</CardTitle>
                 {permissions.canCreate && (
-                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/management-fee/templates/new', '관리비 템플릿 추가')}>
-                    <Plus className="h-4 w-4" />템플릿 추가
+                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab('/management-fee/templates/new', tr('관리비 템플릿 추가'))}>
+                    <Plus className="h-4 w-4" />{tr('템플릿 추가')}
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent className="pt-0">
               {templates.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-500">등록된 관리비 템플릿이 없습니다.</div>
+                <div className="text-center py-6 text-sm text-gray-500">{tr('등록된 관리비 템플릿이 없습니다.')}</div>
               ) : (
                 <div className="space-y-2">
                   {permissions.canDelete && selectedIds.length > 0 && (
                     <div className="flex items-center justify-between gap-2 rounded-md border bg-blue-50 border-blue-200 px-3 py-2">
-                      <span className="text-xs text-blue-800">{selectedIds.length}개 선택됨</span>
+                      <span className="text-xs text-blue-800">{tr('{{count}}개 선택됨', { count: selectedIds.length })}</span>
                       <Button
                         size="sm" variant="outline"
                         className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50"
                         onClick={handleBulkDelete} disabled={bulkDeleting || deleteChecking}
                       >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting || deleteChecking ? '확인 중...' : '선택 삭제'}
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting || deleteChecking ? tr('확인 중...') : tr('선택 삭제')}
                       </Button>
                     </div>
                   )}
@@ -238,12 +245,12 @@ export default function ManagementFeeTemplatesPage() {
                             />
                           </TableHead>
                         )}
-                        <TableHead className="text-xs">템플릿명</TableHead>
-                        <TableHead className="text-xs">통화</TableHead>
-                        <TableHead className="text-xs">설명</TableHead>
-                        <TableHead className="text-xs">유효기간</TableHead>
-                        <TableHead className="text-xs">상태</TableHead>
-                        <TableHead className="text-right text-xs">작업</TableHead>
+                        <TableHead className="text-xs">{tr('템플릿명')}</TableHead>
+                        <TableHead className="text-xs">{tr('통화')}</TableHead>
+                        <TableHead className="text-xs">{tr('설명')}</TableHead>
+                        <TableHead className="text-xs">{tr('유효기간')}</TableHead>
+                        <TableHead className="text-xs">{tr('상태')}</TableHead>
+                        <TableHead className="text-right text-xs">{tr('작업')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -260,10 +267,10 @@ export default function ManagementFeeTemplatesPage() {
                           <TableCell className="font-medium text-sm">{t.name}</TableCell>
                           <TableCell className="text-sm">{t.currency}</TableCell>
                           <TableCell className="text-gray-600 text-sm">{t.description || '-'}</TableCell>
-                          <TableCell className="text-xs">{t.effective_from} ~ 현재</TableCell>
+                          <TableCell className="text-xs">{tr('{{from}} ~ 현재', { from: t.effective_from })}</TableCell>
                           <TableCell>
                             <Badge variant={t.is_active ? 'default' : 'secondary'} className="text-xs">
-                              {t.is_active ? '활성' : '비활성'}
+                              {t.is_active ? tr('활성') : tr('비활성')}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right" onClick={e => e.stopPropagation()}>
@@ -274,7 +281,7 @@ export default function ManagementFeeTemplatesPage() {
                                 onClick={() => openEdit(t)}
                               >
                                 {permissions.canEdit ? <Edit2 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                <span className="text-xs">{permissions.canEdit ? '수정' : '보기'}</span>
+                                <span className="text-xs">{permissions.canEdit ? tr('수정') : tr('보기')}</span>
                               </Button>
                               {permissions.canEdit && (
                                 <Button
@@ -282,7 +289,7 @@ export default function ManagementFeeTemplatesPage() {
                                   className="gap-1 h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                   onClick={() => openRenew(t)}
                                 >
-                                  <RefreshCw className="h-3.5 w-3.5" /><span className="text-xs">갱신</span>
+                                  <RefreshCw className="h-3.5 w-3.5" /><span className="text-xs">{tr('갱신')}</span>
                                 </Button>
                               )}
                               {permissions.canCreate && (
@@ -291,7 +298,7 @@ export default function ManagementFeeTemplatesPage() {
                                   className="gap-1 h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
                                   onClick={() => openCopy(t)}
                                 >
-                                  <Copy className="h-3.5 w-3.5" /><span className="text-xs">복사</span>
+                                  <Copy className="h-3.5 w-3.5" /><span className="text-xs">{tr('복사')}</span>
                                 </Button>
                               )}
                               {permissions.canEdit && (
@@ -300,7 +307,7 @@ export default function ManagementFeeTemplatesPage() {
                                   className="gap-1 h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
                                   onClick={() => openAssign(t)}
                                 >
-                                  <ClipboardList className="h-3.5 w-3.5" /><span className="text-xs">할당</span>
+                                  <ClipboardList className="h-3.5 w-3.5" /><span className="text-xs">{tr('할당')}</span>
                                 </Button>
                               )}
                               {permissions.canDelete && (
@@ -309,7 +316,7 @@ export default function ManagementFeeTemplatesPage() {
                                   className="gap-1 h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                                   onClick={() => handleDelete(t.id)}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">삭제</span>
+                                  <Trash2 className="h-3.5 w-3.5" /><span className="text-xs">{tr('삭제')}</span>
                                 </Button>
                               )}
                             </div>
@@ -356,21 +363,21 @@ export default function ManagementFeeTemplatesPage() {
       <Dialog open={renewTarget !== null} onOpenChange={open => { if (!open) setRenewTarget(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base">템플릿 갱신 — {renewTarget?.name}</DialogTitle>
+            <DialogTitle className="text-base">{tr('템플릿 갱신 — {{name}}', { name: renewTarget?.name })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-xs text-gray-500">
-              새 유효기간 버전을 생성합니다. 기존 금액이 그대로 복사되며, 이 템플릿을 사용 중인 선박/플릿/선주 배정은 자동으로 새 버전으로 이전됩니다.
+              {tr('새 유효기간 버전을 생성합니다. 기존 금액이 그대로 복사되며, 이 템플릿을 사용 중인 선박/플릿/선주 배정은 자동으로 새 버전으로 이전됩니다.')}
             </p>
             <div className="space-y-1.5">
-              <Label className="text-sm">적용 시작일</Label>
+              <Label className="text-sm">{tr('적용 시작일')}</Label>
               <Input type="date" value={renewDate} onChange={e => setRenewDate(e.target.value)} className="h-9 text-sm" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setRenewTarget(null)}>취소</Button>
+            <Button variant="outline" size="sm" onClick={() => setRenewTarget(null)}>{tr('취소')}</Button>
             <Button size="sm" onClick={handleRenew} disabled={renewing || !renewDate}>
-              {renewing ? '갱신 중...' : '갱신'}
+              {renewing ? tr('갱신 중...') : tr('갱신')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -380,21 +387,21 @@ export default function ManagementFeeTemplatesPage() {
       <Dialog open={copyTarget !== null} onOpenChange={open => { if (!open) setCopyTarget(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base">템플릿 복사 — {copyTarget?.name}</DialogTitle>
+            <DialogTitle className="text-base">{tr('템플릿 복사 — {{name}}', { name: copyTarget?.name })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-xs text-gray-500">
-              청구 항목 구성과 금액을 그대로 복사한 새 템플릿을 만듭니다. 원본과는 완전히 독립된 별개 템플릿이며, 복사 후 필요한 부분만 수정하면 됩니다.
+              {tr('청구 항목 구성과 금액을 그대로 복사한 새 템플릿을 만듭니다. 원본과는 완전히 독립된 별개 템플릿이며, 복사 후 필요한 부분만 수정하면 됩니다.')}
             </p>
             <div className="space-y-1.5">
-              <Label className="text-sm">새 템플릿명</Label>
-              <Input value={copyName} onChange={e => setCopyName(e.target.value)} className="h-9 text-sm" placeholder="예: A 템플릿 복사본" />
+              <Label className="text-sm">{tr('새 템플릿명')}</Label>
+              <Input value={copyName} onChange={e => setCopyName(e.target.value)} className="h-9 text-sm" placeholder={tr('예: A 템플릿 복사본')} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCopyTarget(null)}>취소</Button>
+            <Button variant="outline" size="sm" onClick={() => setCopyTarget(null)}>{tr('취소')}</Button>
             <Button size="sm" onClick={handleCopy} disabled={copying || !copyName.trim()}>
-              {copying ? '복사 중...' : '복사'}
+              {copying ? tr('복사 중...') : tr('복사')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -404,22 +411,22 @@ export default function ManagementFeeTemplatesPage() {
       <Dialog open={pendingDeleteIds !== null} onOpenChange={open => { if (!open) { setPendingDeleteIds(null); setDeleteWarning(null); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base text-red-600">할당된 선박/플릿/선주가 있습니다</DialogTitle>
+            <DialogTitle className="text-base text-red-600">{tr('할당된 선박/플릿/선주가 있습니다')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-sm text-gray-700">
-              {pendingDeleteIds && pendingDeleteIds.length > 1 ? `선택한 ${pendingDeleteIds.length}개 템플릿 중` : '삭제하려는 템플릿이'} 아래 대상에 할당되어 있습니다. 삭제해도 배정 자체는 그대로 남아 계속 이 템플릿을 참조하게 되므로, 미리 배정을 해제하는 것을 권장합니다.
+              {pendingDeleteIds && pendingDeleteIds.length > 1 ? tr('선택한 {{count}}개 템플릿 중', { count: pendingDeleteIds.length }) : tr('삭제하려는 템플릿이')} {tr('아래 대상에 할당되어 있습니다. 삭제해도 배정 자체는 그대로 남아 계속 이 템플릿을 참조하게 되므로, 미리 배정을 해제하는 것을 권장합니다.')}
             </p>
             <ul className="text-sm bg-red-50 border border-red-200 rounded-md p-3 space-y-1">
-              {deleteWarning && deleteWarning.shipCount > 0 && <li>선박 <span className="font-medium">{deleteWarning.shipCount}건</span></li>}
-              {deleteWarning && deleteWarning.fleetCount > 0 && <li>플릿 <span className="font-medium">{deleteWarning.fleetCount}건</span></li>}
-              {deleteWarning && deleteWarning.ownerCount > 0 && <li>선주 <span className="font-medium">{deleteWarning.ownerCount}건</span></li>}
+              {deleteWarning && deleteWarning.shipCount > 0 && <li>{tr('선박')} <span className="font-medium">{tr('{{count}}건', { count: deleteWarning.shipCount })}</span></li>}
+              {deleteWarning && deleteWarning.fleetCount > 0 && <li>{tr('플릿')} <span className="font-medium">{tr('{{count}}건', { count: deleteWarning.fleetCount })}</span></li>}
+              {deleteWarning && deleteWarning.ownerCount > 0 && <li>{tr('선주')} <span className="font-medium">{tr('{{count}}건', { count: deleteWarning.ownerCount })}</span></li>}
             </ul>
-            <p className="text-xs text-gray-500">그래도 삭제하시겠습니까?</p>
+            <p className="text-xs text-gray-500">{tr('그래도 삭제하시겠습니까?')}</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => { setPendingDeleteIds(null); setDeleteWarning(null); }}>취소</Button>
-            <Button size="sm" variant="destructive" onClick={confirmDeleteAnyway}>그래도 삭제</Button>
+            <Button variant="outline" size="sm" onClick={() => { setPendingDeleteIds(null); setDeleteWarning(null); }}>{tr('취소')}</Button>
+            <Button size="sm" variant="destructive" onClick={confirmDeleteAnyway}>{tr('그래도 삭제')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

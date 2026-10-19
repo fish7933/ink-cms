@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/SeaServiceDialog/en.json';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -34,6 +37,8 @@ import type { Rank } from '@/types/models';
 import type { SignOffReason } from '@/types/sign-off-reason';
 import { useToast } from '@/hooks/use-toast';
 
+i18n.addResourceBundle('en', 'SeaServiceDialog', en, true, true);
+
 interface RegisteredShip {
   id: string;
   name: string;
@@ -63,6 +68,7 @@ export default function SeaServiceDialog({
   onSuccess,
 }: SeaServiceDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('SeaServiceDialog');
   const [loading, setLoading] = useState(false);
   const [shipTypes, setShipTypes] = useState<ShipType[]>([]);
   const [shipFlags, setShipFlags] = useState<ShipFlag[]>([]);
@@ -255,14 +261,14 @@ export default function SeaServiceDialog({
       if (record) {
         await updateSeaServiceRecord(record.id, recordData);
         toast({
-          title: '수정 완료',
-          description: '승선 기록이 수정되었습니다.',
+          title: t('수정 완료'),
+          description: t('승선 기록이 수정되었습니다.'),
         });
       } else {
         await addSeaServiceRecord(recordData);
         toast({
-          title: '추가 완료',
-          description: '승선 기록이 추가되었습니다.',
+          title: t('추가 완료'),
+          description: t('승선 기록이 추가되었습니다.'),
         });
       }
 
@@ -271,8 +277,8 @@ export default function SeaServiceDialog({
     } catch (error) {
       console.error('Error saving sea service record:', error);
       toast({
-        title: '저장 실패',
-        description: '승선 기록 저장 중 오류가 발생했습니다.',
+        title: t('저장 실패'),
+        description: t('승선 기록 저장 중 오류가 발생했습니다.'),
         variant: 'destructive',
       });
     } finally {
@@ -285,16 +291,16 @@ export default function SeaServiceDialog({
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">
-            {record ? '승선 기록 수정' : '승선 기록 추가'}
+            {record ? t('승선 기록 수정') : t('승선 기록 추가')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            선원의 승선 이력을 {record ? '수정' : '등록'}합니다
+            {t('선원의 승선 이력을 {{action}}합니다', { action: record ? t('수정') : t('등록') })}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
             <div className="space-y-1.5">
-              <Label htmlFor="record_type" className="text-xs">기록 유형 *</Label>
+              <Label htmlFor="record_type" className="text-xs">{t('기록 유형 *')}</Label>
               <Select
                 value={formData.record_type}
                 onValueChange={(value: 'pre_company' | 'company_assignment') =>
@@ -307,23 +313,23 @@ export default function SeaServiceDialog({
                 required
               >
                 <SelectTrigger className="h-9 text-sm">
-                  <SelectValue placeholder="기록 유형 선택" />
+                  <SelectValue placeholder={t('기록 유형 선택')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pre_company" className="text-sm">입사 전 경력</SelectItem>
-                  <SelectItem value="company_assignment" className="text-sm">회사 배치</SelectItem>
+                  <SelectItem value="pre_company" className="text-sm">{t('입사 전 경력')}</SelectItem>
+                  <SelectItem value="company_assignment" className="text-sm">{t('회사 배치')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="grid grid-cols-4 gap-3 p-3 bg-gray-50 rounded-md">
               <div className="space-y-1.5">
-                <Label htmlFor="owner_company_name" className="text-xs">선주사</Label>
+                <Label htmlFor="owner_company_name" className="text-xs">{t('선주사')}</Label>
                 {isCompanyAssignment ? (
                   <Select value={selectedOwnerId || '_none'} onValueChange={v => v !== '_none' && handleOwnerSelect(v)}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주사 선택" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선주사 선택')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_none" className="text-sm">선주사 선택</SelectItem>
+                      <SelectItem value="_none" className="text-sm">{t('선주사 선택')}</SelectItem>
                       {ownerCompanies.map(c => <SelectItem key={c.id} value={c.id} className="text-sm">{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -332,18 +338,18 @@ export default function SeaServiceDialog({
                     id="owner_company_name"
                     value={formData.owner_company_name}
                     onChange={(e) => setFormData({ ...formData, owner_company_name: e.target.value })}
-                    placeholder="선주사명"
+                    placeholder={t('선주사명')}
                     className="h-9 text-sm"
                   />
                 )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="fleet" className="text-xs">플릿</Label>
+                <Label htmlFor="fleet" className="text-xs">{t('플릿')}</Label>
                 {isCompanyAssignment ? (
                   <Select value={selectedFleetId || '_none'} onValueChange={v => handleFleetSelect(v === '_none' ? '' : v)} disabled={!selectedOwnerId}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="플릿 선택" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('플릿 선택')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_none" className="text-sm">전체 플릿</SelectItem>
+                      <SelectItem value="_none" className="text-sm">{t('전체 플릿')}</SelectItem>
                       {fleetsForSelectedOwner.map(f => <SelectItem key={f.id} value={f.id} className="text-sm">{f.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -352,23 +358,23 @@ export default function SeaServiceDialog({
                 )}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ship_manager_name" className="text-xs">선박관리사</Label>
+                <Label htmlFor="ship_manager_name" className="text-xs">{t('선박관리사')}</Label>
                 <Input
                   id="ship_manager_name"
                   value={formData.ship_manager_name}
                   onChange={(e) => setFormData({ ...formData, ship_manager_name: e.target.value })}
-                  placeholder="선박관리사명"
+                  placeholder={t('선박관리사명')}
                   readOnly={isCompanyAssignment}
                   className={`h-9 text-sm ${isCompanyAssignment ? 'bg-gray-100' : ''}`}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="manning_agency_name" className="text-xs">매닝사</Label>
+                <Label htmlFor="manning_agency_name" className="text-xs">{t('매닝사')}</Label>
                 <Input
                   id="manning_agency_name"
                   value={formData.manning_agency_name}
                   onChange={(e) => setFormData({ ...formData, manning_agency_name: e.target.value })}
-                  placeholder="매닝사명"
+                  placeholder={t('매닝사명')}
                   className="h-9 text-sm"
                 />
               </div>
@@ -376,12 +382,12 @@ export default function SeaServiceDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="ship_name" className="text-xs">선박명 *</Label>
+                <Label htmlFor="ship_name" className="text-xs">{t('선박명 *')}</Label>
                 {isCompanyAssignment ? (
                   <Select value={formData.ship_id || '_none'} onValueChange={v => v !== '_none' && handleShipSelect(v)}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선박 선택')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_none" className="text-sm">선박 선택</SelectItem>
+                      <SelectItem value="_none" className="text-sm">{t('선박 선택')}</SelectItem>
                       {shipsForSelectedOwnerFleet.map(s => (
                         <SelectItem key={s.id} value={s.id} className="text-sm">{s.name}</SelectItem>
                       ))}
@@ -392,7 +398,7 @@ export default function SeaServiceDialog({
                     id="ship_name"
                     value={formData.ship_name}
                     onChange={(e) => setFormData({ ...formData, ship_name: e.target.value })}
-                    placeholder="선박명을 입력하세요"
+                    placeholder={t('선박명을 입력하세요')}
                     required
                     className="h-9 text-sm"
                   />
@@ -400,13 +406,13 @@ export default function SeaServiceDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="ship_type" className="text-xs">선종</Label>
+                <Label htmlFor="ship_type" className="text-xs">{t('선종')}</Label>
                 <Select value={formData.ship_type || '_none'} onValueChange={v => setFormData({ ...formData, ship_type: v === '_none' ? '' : v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선종 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선종 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
-                    {shipTypes.map(t => (
-                      <SelectItem key={t.id} value={t.name_ko || t.name} className="text-sm">{t.name_ko || t.name}</SelectItem>
+                    <SelectItem value="_none" className="text-sm">{t('선택 안함')}</SelectItem>
+                    {shipTypes.map(st => (
+                      <SelectItem key={st.id} value={st.name_ko || st.name} className="text-sm">{st.name_ko || st.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -415,11 +421,11 @@ export default function SeaServiceDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="flag" className="text-xs">국적(선적)</Label>
+                <Label htmlFor="flag" className="text-xs">{t('국적(선적)')}</Label>
                 <Select value={formData.flag || '_none'} onValueChange={v => setFormData({ ...formData, flag: v === '_none' ? '' : v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선적 국가 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선적 국가 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
+                    <SelectItem value="_none" className="text-sm">{t('선택 안함')}</SelectItem>
                     {shipFlags.map(f => (
                       <SelectItem key={f.id} value={f.name_ko} className="text-sm">{f.name_ko} ({f.code})</SelectItem>
                     ))}
@@ -428,34 +434,34 @@ export default function SeaServiceDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="rank" className="text-xs">직급 * {isCompanyAssignment && <span className="text-gray-400 font-normal">(급여템플릿 등록 직급만)</span>}</Label>
+                <Label htmlFor="rank" className="text-xs">{t('직급 *')} {isCompanyAssignment && <span className="text-gray-400 font-normal">{t('(급여템플릿 등록 직급만)')}</span>}</Label>
                 <Select
                   value={formData.rank || '_none'}
                   onValueChange={v => setFormData({ ...formData, rank: v === '_none' ? '' : v, rank_grade: '' })}
                   required
                   disabled={isCompanyAssignment && !!formData.ship_id && rankOptions.length === 0}
                 >
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('직급 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
+                    <SelectItem value="_none" className="text-sm">{t('선택 안함')}</SelectItem>
                     {rankOptions.map(r => (
                       <SelectItem key={r.id} value={r.rank_code} className="text-sm">{r.rank_code}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {isCompanyAssignment && formData.ship_id && rankOptions.length === 0 && (
-                  <p className="text-xs text-red-500">이 선박에 배정된 급여템플릿이 없어 직급을 선택할 수 없습니다.</p>
+                  <p className="text-xs text-red-500">{t('이 선박에 배정된 급여템플릿이 없어 직급을 선택할 수 없습니다.')}</p>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="rank_grade" className="text-xs">등급 (Grade) {isCompanyAssignment && <span className="text-gray-400 font-normal">(급여템플릿 등록 등급만)</span>}</Label>
+                <Label htmlFor="rank_grade" className="text-xs">{t('등급 (Grade)')} {isCompanyAssignment && <span className="text-gray-400 font-normal">{t('(급여템플릿 등록 등급만)')}</span>}</Label>
                 <Select value={formData.rank_grade || '_none'} onValueChange={v => setFormData({ ...formData, rank_grade: v === '_none' ? '' : v })} disabled={isCompanyAssignment && gradeOptions.length === 0}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Grade 선택" /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('Grade 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none" className="text-sm">Grade 없음</SelectItem>
+                    <SelectItem value="_none" className="text-sm">{t('Grade 없음')}</SelectItem>
                     {gradeOptions.map(g => (
                       <SelectItem key={g} value={g} className="text-sm">{g}</SelectItem>
                     ))}
@@ -466,25 +472,25 @@ export default function SeaServiceDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="gross_tonnage" className="text-xs">총톤수 (GT)</Label>
+                <Label htmlFor="gross_tonnage" className="text-xs">{t('총톤수 (GT)')}</Label>
                 <Input
                   id="gross_tonnage"
                   type="number"
                   value={formData.gross_tonnage}
                   onChange={(e) => setFormData({ ...formData, gross_tonnage: e.target.value })}
-                  placeholder="총톤수"
+                  placeholder={t('총톤수')}
                   className="h-9 text-sm"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="engine_power" className="text-xs">주기관 출력 (KW)</Label>
+                <Label htmlFor="engine_power" className="text-xs">{t('주기관 출력 (KW)')}</Label>
                 <Input
                   id="engine_power"
                   type="number"
                   value={formData.engine_power}
                   onChange={(e) => setFormData({ ...formData, engine_power: e.target.value })}
-                  placeholder="주기관 출력"
+                  placeholder={t('주기관 출력')}
                   className="h-9 text-sm"
                 />
               </div>
@@ -492,7 +498,7 @@ export default function SeaServiceDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="sign_on_date" className="text-xs">승선일 *</Label>
+                <Label htmlFor="sign_on_date" className="text-xs">{t('승선일 *')}</Label>
                 <Input
                   id="sign_on_date"
                   type="date"
@@ -504,7 +510,7 @@ export default function SeaServiceDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="sign_off_date" className="text-xs">하선일</Label>
+                <Label htmlFor="sign_off_date" className="text-xs">{t('하선일')}</Label>
                 <Input
                   id="sign_off_date"
                   type="date"
@@ -516,11 +522,11 @@ export default function SeaServiceDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="sign_off_reason" className="text-xs">하선 사유</Label>
+              <Label htmlFor="sign_off_reason" className="text-xs">{t('하선 사유')}</Label>
               <Select value={formData.sign_off_reason_id || '_none'} onValueChange={v => setFormData({ ...formData, sign_off_reason_id: v === '_none' ? '' : v })}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="하선 사유 선택" /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('하선 사유 선택')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none" className="text-sm">선택 안함</SelectItem>
+                  <SelectItem value="_none" className="text-sm">{t('선택 안함')}</SelectItem>
                   {signOffReasons.map(r => (
                     <SelectItem key={r.id} value={r.id} className="text-sm">{r.name}</SelectItem>
                   ))}
@@ -529,12 +535,12 @@ export default function SeaServiceDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="notes" className="text-xs">비고</Label>
+              <Label htmlFor="notes" className="text-xs">{t('비고')}</Label>
               <Textarea
                 id="notes"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="추가 정보를 입력하세요"
+                placeholder={t('추가 정보를 입력하세요')}
                 rows={3}
                 className="text-sm resize-none"
               />
@@ -549,7 +555,7 @@ export default function SeaServiceDialog({
               disabled={loading}
               className="h-8"
             >
-              취소
+              {t('취소')}
             </Button>
             <Button
               type="submit"
@@ -557,7 +563,7 @@ export default function SeaServiceDialog({
               className="h-8"
               disabled={loading}
             >
-              {loading ? '저장 중...' : (record ? '수정' : '추가')}
+              {loading ? t('저장 중...') : (record ? t('수정') : t('추가'))}
             </Button>
           </DialogFooter>
         </form>

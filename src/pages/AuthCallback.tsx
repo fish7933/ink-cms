@@ -1,8 +1,13 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/AuthCallback/en.json';
+i18n.addResourceBundle('en', 'AuthCallback', en, true, true);
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const { t } = useTranslation('AuthCallback');
 
   useEffect(() => {
     // This project uses custom auth, redirect to login
@@ -13,7 +18,7 @@ export default function AuthCallback() {
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-        <p className="text-sm text-gray-600">리디렉션 중...</p>
+        <p className="text-sm text-gray-600">{t('리디렉션 중...')}</p>
       </div>
     </div>
   );

@@ -1,11 +1,17 @@
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewResumePage/en.json';
 import CrewResumeSheet from '@/components/crew/CrewResumeSheet';
+
+i18n.addResourceBundle('en', 'CrewResumePage', en, true, true);
 
 // 사이드바/헤더 없이 순수 문서만 렌더링되는 독립 인쇄 페이지 (App.tsx 최상위 라우트, Layout 우회).
 export default function CrewResumePage() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation('CrewResumePage');
 
-  if (!id) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: 'red' }}>선원 ID 없음</div>;
+  if (!id) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: 'red' }}>{t('선원 ID 없음')}</div>;
 
   return (
     <>
@@ -33,7 +39,7 @@ export default function CrewResumePage() {
       `}</style>
 
       <button className="print-btn" onClick={() => window.print()}>
-        인쇄 / PDF 저장
+        {t('인쇄 / PDF 저장')}
       </button>
 
       <div className="resume-page-wrapper">

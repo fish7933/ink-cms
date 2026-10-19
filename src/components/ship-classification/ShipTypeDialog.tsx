@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipTypeDialog/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +24,8 @@ import {
 import type { ShipType } from '@/types/ship-classification';
 import { SHIP_CATEGORIES } from '@/types/ship-classification';
 
+i18n.addResourceBundle('en', 'ShipTypeDialog', en, true, true);
+
 interface ShipTypeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,6 +39,7 @@ export default function ShipTypeDialog({
   shipType,
   onSave,
 }: ShipTypeDialogProps) {
+  const { t } = useTranslation('ShipTypeDialog');
   const [formData, setFormData] = useState({
     name: '',
     name_ko: '',
@@ -62,7 +68,7 @@ export default function ShipTypeDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.category) {
-      alert('카테고리를 선택해주세요.');
+      alert(t('카테고리를 선택해주세요.'));
       return;
     }
     onSave(formData);
@@ -73,45 +79,45 @@ export default function ShipTypeDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="text-base">
-            {shipType ? '선종 수정' : '선종 추가'}
+            {shipType ? t('선종 수정') : t('선종 추가')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            선종 정보를 입력하세요
+            {t('선종 정보를 입력하세요')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-xs">선종명 (영문) *</Label>
+            <Label htmlFor="name" className="text-xs">{t('선종명 (영문) *')}</Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
               className="h-9 text-sm"
-              placeholder="예: Bulk Carrier"
+              placeholder={t('예: Bulk Carrier')}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="name_ko" className="text-xs">선종명 (한글) *</Label>
+            <Label htmlFor="name_ko" className="text-xs">{t('선종명 (한글) *')}</Label>
             <Input
               id="name_ko"
               value={formData.name_ko}
               onChange={(e) => setFormData({ ...formData, name_ko: e.target.value })}
               required
               className="h-9 text-sm"
-              placeholder="예: 벌크선"
+              placeholder={t('예: 벌크선')}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="category" className="text-xs">카테고리 *</Label>
+            <Label htmlFor="category" className="text-xs">{t('카테고리 *')}</Label>
             <Select
               value={formData.category}
               onValueChange={(value) => setFormData({ ...formData, category: value })}
             >
               <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="카테고리를 선택하세요" />
+                <SelectValue placeholder={t('카테고리를 선택하세요')} />
               </SelectTrigger>
               <SelectContent>
                 {SHIP_CATEGORIES.map((cat) => (
@@ -124,14 +130,14 @@ export default function ShipTypeDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="description" className="text-xs">설명</Label>
+            <Label htmlFor="description" className="text-xs">{t('설명')}</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
               className="text-sm resize-none"
-              placeholder="선종에 대한 설명을 입력하세요"
+              placeholder={t('선종에 대한 설명을 입력하세요')}
             />
           </div>
 
@@ -142,10 +148,10 @@ export default function ShipTypeDialog({
               onClick={() => onOpenChange(false)}
               className="h-9 text-sm"
             >
-              취소
+              {t('취소')}
             </Button>
             <Button type="submit" className="h-9 text-sm">
-              {shipType ? '수정' : '추가'}
+              {shipType ? t('수정') : t('추가')}
             </Button>
           </DialogFooter>
         </form>
