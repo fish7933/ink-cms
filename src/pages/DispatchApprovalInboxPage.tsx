@@ -117,16 +117,17 @@ const FILTER_LABELS: { value: Filter; label: string }[] = [
 const hierarchyLabel = (owner?: string, fleet?: string, ship?: string) =>
   [owner, fleet, ship].filter(Boolean).join(' > ') || '-';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status) {
-    case 'pending': return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200"><Clock className="w-3 h-3 mr-1" />결재중</Badge>;
-    case 'approved': return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200"><CheckCircle2 className="w-3 h-3 mr-1" />승인</Badge>;
-    case 'rejected': return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><XCircle className="w-3 h-3 mr-1" />반려</Badge>;
+    case 'pending': return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200"><Clock className="w-3 h-3 mr-1" />{t('결재중')}</Badge>;
+    case 'approved': return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200"><CheckCircle2 className="w-3 h-3 mr-1" />{t('승인')}</Badge>;
+    case 'rejected': return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200"><XCircle className="w-3 h-3 mr-1" />{t('반려')}</Badge>;
     default: return <Badge variant="outline">{status}</Badge>;
   }
 };
 
 export default function DispatchApprovalInboxPage() {
+  const { t } = useTranslation('DispatchApprovalInboxPage');
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -295,19 +296,19 @@ export default function DispatchApprovalInboxPage() {
       setDeletionLogs(merged);
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '삭제 이력을 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('삭제 이력을 불러오는 중 오류가 발생했습니다.'), variant: 'destructive' });
     }
   };
 
   const handlePurgeLog = async (log: UnifiedDeletionLog) => {
-    if (!confirm(`"${log.subjectLabel}" 이력을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('"{{label}}" 이력을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.', { label: log.subjectLabel }))) return;
     try {
       if (log.domain === 'crew') await approvalService.deleteApprovalDeletionLog(log.id);
       else await dispatchApprovalLogService.deleteDeletionLog(log.id);
-      toast({ title: '삭제되었습니다.' });
+      toast({ title: t('삭제되었습니다.') });
       await loadDeletionLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -320,18 +321,18 @@ export default function DispatchApprovalInboxPage() {
 
   const handleBulkPurgeLogs = async () => {
     if (logSelectedIds.length === 0) return;
-    if (!confirm(`선택한 ${logSelectedIds.length}건의 삭제 이력을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('선택한 {{count}}건의 삭제 이력을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.', { count: logSelectedIds.length }))) return;
     setBulkPurging(true);
     try {
       const targets = deletionLogs.filter(l => logSelectedIds.includes(l.id));
       await Promise.all(targets.map(log =>
         log.domain === 'crew' ? approvalService.deleteApprovalDeletionLog(log.id) : dispatchApprovalLogService.deleteDeletionLog(log.id)
       ));
-      toast({ title: '삭제되었습니다.' });
+      toast({ title: t('삭제되었습니다.') });
       setLogSelectedIds([]);
       await loadDeletionLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setBulkPurging(false);
     }
@@ -376,7 +377,7 @@ export default function DispatchApprovalInboxPage() {
       setCrewApprovals(merged as unknown as ApprovalWithRecommendation[]);
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '채용 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('채용 결재를 불러오는 중 오류가 발생했습니다.'), variant: 'destructive' });
     }
   };
 
@@ -410,7 +411,7 @@ export default function DispatchApprovalInboxPage() {
       setRotationApprovals(merged);
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '배승 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('배승 결재를 불러오는 중 오류가 발생했습니다.'), variant: 'destructive' });
     }
   };
 
@@ -455,7 +456,7 @@ export default function DispatchApprovalInboxPage() {
       setContractApprovals(merged);
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '계약 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('계약 결재를 불러오는 중 오류가 발생했습니다.'), variant: 'destructive' });
     }
   };
 
@@ -513,7 +514,7 @@ export default function DispatchApprovalInboxPage() {
       setDispatchApprovals(merged);
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '승진/강등 발령 결재를 불러오는 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('승진/강등 발령 결재를 불러오는 중 오류가 발생했습니다.'), variant: 'destructive' });
     }
   };
 
@@ -547,7 +548,7 @@ export default function DispatchApprovalInboxPage() {
 
   const handleCrewAction = async () => {
     if (!selectedCrew || !crewAction) return;
-    if (crewAction === 'reject' && !crewComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+    if (crewAction === 'reject' && !crewComment.trim()) { toast({ title: t('오류'), description: t('반려 사유를 입력해주세요.'), variant: 'destructive' }); return; }
     try {
       setCrewProcessing(true);
       if (crewForce) {
@@ -557,28 +558,28 @@ export default function DispatchApprovalInboxPage() {
         if (crewAction === 'reject') await approvalService.rejectStep(selectedCrew.id, currentUserId, crewComment);
         else await approvalService.approveStep(selectedCrew.id, currentUserId, crewComment || undefined);
       }
-      toast({ title: '성공', description: crewAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
+      toast({ title: t('성공'), description: crewAction === 'approve' ? t('승인되었습니다.') : t('반려되었습니다.') });
       setCrewViewMode('list'); setSelectedCrew(null); setCrewAction(null); setCrewComment(''); setCrewForce(false);
       await loadCrewApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('결재 처리 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setCrewProcessing(false);
     }
   };
 
   const handleDeleteCrew = async (approval: ApprovalWithRecommendation) => {
-    if (!confirm('이 결재 이력을 삭제하시겠습니까? 이미 등록된 선원 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
+    if (!confirm(t('이 결재 이력을 삭제하시겠습니까? 이미 등록된 선원 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.'))) return;
     try {
-      await approvalService.deleteApproval(approval, `${approval.recommendation?.crew_name || '알 수 없음'}${approval.recommendation?.ranks?.rank_code ? ` (${approval.recommendation.ranks.rank_code})` : ''}`, currentUserId, currentUserName);
-      toast({ title: '삭제되었습니다.' });
+      await approvalService.deleteApproval(approval, `${approval.recommendation?.crew_name || t('알 수 없음')}${approval.recommendation?.ranks?.rank_code ? ` (${approval.recommendation.ranks.rank_code})` : ''}`, currentUserId, currentUserName);
+      toast({ title: t('삭제되었습니다.') });
       setSelectedCrew(null);
       await loadCrewApprovals(currentUserId, isAdmin);
       await loadDeletionLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -586,7 +587,7 @@ export default function DispatchApprovalInboxPage() {
 
   const handleRotationAction = async () => {
     if (!selectedRotation || !rotationAction) return;
-    if (rotationAction === 'reject' && !rotationComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+    if (rotationAction === 'reject' && !rotationComment.trim()) { toast({ title: t('오류'), description: t('반려 사유를 입력해주세요.'), variant: 'destructive' }); return; }
     try {
       setRotationProcessing(true);
       if (rotationForce) {
@@ -596,13 +597,13 @@ export default function DispatchApprovalInboxPage() {
         if (rotationAction === 'reject') await rotationApprovalService.rejectStep(selectedRotation.id, currentUserId, rotationComment);
         else await rotationApprovalService.approveStep(selectedRotation.id, currentUserId, rotationComment || undefined);
       }
-      toast({ title: '성공', description: rotationAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
+      toast({ title: t('성공'), description: rotationAction === 'approve' ? t('승인되었습니다.') : t('반려되었습니다.') });
       setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); setRotationComment(''); setRotationForce(false);
       await loadRotationApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('결재 처리 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setRotationProcessing(false);
     }
@@ -612,7 +613,7 @@ export default function DispatchApprovalInboxPage() {
 
   const handleContractAction = async () => {
     if (!selectedContract || !contractAction) return;
-    if (contractAction === 'reject' && !contractComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+    if (contractAction === 'reject' && !contractComment.trim()) { toast({ title: t('오류'), description: t('반려 사유를 입력해주세요.'), variant: 'destructive' }); return; }
     try {
       setContractProcessing(true);
       if (contractForce) {
@@ -622,13 +623,13 @@ export default function DispatchApprovalInboxPage() {
         if (contractAction === 'reject') await contractApprovalService.rejectStep(selectedContract.id, currentUserId, contractComment);
         else await contractApprovalService.approveStep(selectedContract.id, currentUserId, contractComment || undefined);
       }
-      toast({ title: '성공', description: contractAction === 'approve' ? '승인되었습니다.' : '반려되었습니다.' });
+      toast({ title: t('성공'), description: contractAction === 'approve' ? t('승인되었습니다.') : t('반려되었습니다.') });
       setContractViewMode('list'); setSelectedContract(null); setContractAction(null); setContractComment(''); setContractForce(false);
       await loadContractApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('결재 처리 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setContractProcessing(false);
     }
@@ -638,7 +639,7 @@ export default function DispatchApprovalInboxPage() {
 
   const handleDispatchAction = async () => {
     if (!selectedDispatch || !dispatchAction) return;
-    if (dispatchAction === 'reject' && !dispatchComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+    if (dispatchAction === 'reject' && !dispatchComment.trim()) { toast({ title: t('오류'), description: t('반려 사유를 입력해주세요.'), variant: 'destructive' }); return; }
     try {
       setDispatchProcessing(true);
       if (dispatchForce) {
@@ -648,13 +649,13 @@ export default function DispatchApprovalInboxPage() {
         if (dispatchAction === 'reject') await dispatchOrderApprovalService.rejectStep(selectedDispatch.id, currentUserId, dispatchComment);
         else await dispatchOrderApprovalService.approveStep(selectedDispatch.id, currentUserId, dispatchComment || undefined);
       }
-      toast({ title: '성공', description: dispatchAction === 'approve' ? '승인되었습니다. 승인 즉시 계약/승선경력에 반영됩니다.' : '반려되었습니다.' });
+      toast({ title: t('성공'), description: dispatchAction === 'approve' ? t('승인되었습니다. 승인 즉시 계약/승선경력에 반영됩니다.') : t('반려되었습니다.') });
       setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); setDispatchComment(''); setDispatchForce(false);
       await loadDispatchApprovals(currentUserId, isAdmin);
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('결재 처리 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setDispatchProcessing(false);
     }
@@ -663,45 +664,45 @@ export default function DispatchApprovalInboxPage() {
   // --- 결재 이력 삭제 (승인/반려로 종결된 건만) ---
 
   const handleDeleteRotation = async (approval: RotationApprovalWithPlan) => {
-    if (!confirm('이 배승 결재 이력을 삭제하시겠습니까? 이미 반영된 교대계획/승선기록 등은 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
+    if (!confirm(t('이 배승 결재 이력을 삭제하시겠습니까? 이미 반영된 교대계획/승선기록 등은 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.'))) return;
     try {
-      await rotationApprovalService.deleteApproval(approval, `${approval.plan_name || '교대계획'} (${approval.ship_name || '-'})`, currentUserId, currentUserName);
-      toast({ title: '삭제되었습니다.' });
+      await rotationApprovalService.deleteApproval(approval, `${approval.plan_name || t('교대계획')} (${approval.ship_name || '-'})`, currentUserId, currentUserName);
+      toast({ title: t('삭제되었습니다.') });
       setSelectedRotation(null);
       await loadRotationApprovals(currentUserId, isAdmin);
       await loadDeletionLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
   const handleDeleteContract = async (approval: ContractApprovalWithContract) => {
-    if (!confirm('이 계약 결재 이력을 삭제하시겠습니까? 이미 반영된 계약 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
+    if (!confirm(t('이 계약 결재 이력을 삭제하시겠습니까? 이미 반영된 계약 정보는 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.'))) return;
     try {
       await contractApprovalService.deleteApproval(approval, `${approval.crew_name || '-'} (${approval.rank_code || '-'})`, currentUserId, currentUserName);
-      toast({ title: '삭제되었습니다.' });
+      toast({ title: t('삭제되었습니다.') });
       setSelectedContract(null);
       await loadContractApprovals(currentUserId, isAdmin);
       await loadDeletionLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
   const handleDeleteDispatch = async (approval: DispatchApprovalWithOrder) => {
-    if (!confirm('이 승진/강등 발령 결재 이력을 삭제하시겠습니까? 이미 반영된 계약/승선경력 등은 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.')) return;
+    if (!confirm(t('이 승진/강등 발령 결재 이력을 삭제하시겠습니까? 이미 반영된 계약/승선경력 등은 유지되며, 결재 이력만 삭제되어 되돌릴 수 없습니다.'))) return;
     try {
       await dispatchOrderApprovalService.deleteApproval(
         approval,
-        `${approval.crew_name || '-'} (${approval.dispatch_type === 'promotion' ? '승진' : '강등'})`,
+        `${approval.crew_name || '-'} (${approval.dispatch_type === 'promotion' ? t('승진') : t('강등')})`,
         currentUserId, currentUserName
       );
-      toast({ title: '삭제되었습니다.' });
+      toast({ title: t('삭제되었습니다.') });
       setSelectedDispatch(null);
       await loadDispatchApprovals(currentUserId, isAdmin);
       await loadDeletionLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
@@ -723,7 +724,7 @@ export default function DispatchApprovalInboxPage() {
       load: () => loadCrewApprovals(currentUserId, isAdmin),
       deleteOne: (a) => {
         const rec = a as ApprovalWithRecommendation;
-        return approvalService.deleteApproval(rec, `${rec.recommendation?.crew_name || '알 수 없음'}${rec.recommendation?.ranks?.rank_code ? ` (${rec.recommendation.ranks.rank_code})` : ''}`, currentUserId, currentUserName);
+        return approvalService.deleteApproval(rec, `${rec.recommendation?.crew_name || t('알 수 없음')}${rec.recommendation?.ranks?.rank_code ? ` (${rec.recommendation.ranks.rank_code})` : ''}`, currentUserId, currentUserName);
       },
     };
     if (domain === 'rotation') return {
@@ -731,7 +732,7 @@ export default function DispatchApprovalInboxPage() {
       load: () => loadRotationApprovals(currentUserId, isAdmin),
       deleteOne: (a) => {
         const r = a as RotationApprovalWithPlan;
-        return rotationApprovalService.deleteApproval(r, `${r.plan_name || '교대계획'} (${r.ship_name || '-'})`, currentUserId, currentUserName);
+        return rotationApprovalService.deleteApproval(r, `${r.plan_name || t('교대계획')} (${r.ship_name || '-'})`, currentUserId, currentUserName);
       },
     };
     if (domain === 'contract') return {
@@ -747,7 +748,7 @@ export default function DispatchApprovalInboxPage() {
       load: () => loadDispatchApprovals(currentUserId, isAdmin),
       deleteOne: (a) => {
         const d = a as DispatchApprovalWithOrder;
-        return dispatchOrderApprovalService.deleteApproval(d, `${d.crew_name || '-'} (${d.dispatch_type === 'promotion' ? '승진' : '강등'})`, currentUserId, currentUserName);
+        return dispatchOrderApprovalService.deleteApproval(d, `${d.crew_name || '-'} (${d.dispatch_type === 'promotion' ? t('승진') : t('강등')})`, currentUserId, currentUserName);
       },
     };
   };
@@ -758,16 +759,16 @@ export default function DispatchApprovalInboxPage() {
     const cfg = domainConfig(domain);
     const targets = cfg.approvals.filter(a => cfg.selectedIds.includes(a.id) && isDeletable(a));
     if (targets.length === 0) return;
-    if (!confirm(`선택한 결재 이력 ${targets.length}건을 삭제하시겠습니까? 실제 반영된 데이터는 유지되며, 결재 이력만 삭제 이력함으로 이관되어 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('선택한 결재 이력 {{count}}건을 삭제하시겠습니까? 실제 반영된 데이터는 유지되며, 결재 이력만 삭제 이력함으로 이관되어 되돌릴 수 없습니다.', { count: targets.length }))) return;
     setBulkDeleteProcessing(true);
     try {
       await Promise.all(targets.map(a => cfg.deleteOne(a)));
-      toast({ title: '삭제되었습니다.', description: `${targets.length}건이 삭제 이력함으로 이관되었습니다.` });
+      toast({ title: t('삭제되었습니다.'), description: t('{{count}}건이 삭제 이력함으로 이관되었습니다.', { count: targets.length }) });
       cfg.setSelectedIds([]);
       await cfg.load();
       await loadDeletionLogs();
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setBulkDeleteProcessing(false);
     }
@@ -781,7 +782,7 @@ export default function DispatchApprovalInboxPage() {
   const submitBulkAction = async () => {
     if (!bulkDialog) return;
     const { domain, action } = bulkDialog;
-    if (action === 'reject' && !bulkComment.trim()) { toast({ title: '오류', description: '반려 사유를 입력해주세요.', variant: 'destructive' }); return; }
+    if (action === 'reject' && !bulkComment.trim()) { toast({ title: t('오류'), description: t('반려 사유를 입력해주세요.'), variant: 'destructive' }); return; }
     const cfg = domainConfig(domain);
     const targets = cfg.approvals.filter(a => cfg.selectedIds.includes(a.id) && isMyTurn(a));
     if (targets.length === 0) return;
@@ -794,7 +795,7 @@ export default function DispatchApprovalInboxPage() {
           ? cfg.service.approveStep(a.id, currentUserId, bulkComment || undefined)
           : cfg.service.rejectStep(a.id, currentUserId, bulkComment)
       ));
-      toast({ title: '성공', description: `${targets.length}건 ${action === 'approve' ? '승인' : '반려'}되었습니다.` });
+      toast({ title: t('성공'), description: t('{{count}}건 {{action}}되었습니다.', { count: targets.length, action: action === 'approve' ? t('승인') : t('반려') }) });
       cfg.setSelectedIds([]);
       setBulkDialog(null);
       setBulkComment('');
@@ -802,7 +803,7 @@ export default function DispatchApprovalInboxPage() {
       window.dispatchEvent(new CustomEvent('dispatch-approval-inbox-data-changed'));
     } catch (e) {
       console.error(e);
-      toast({ title: '오류', description: '일괄 처리 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('오류'), description: t('일괄 처리 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setBulkProcessing(false);
     }
@@ -814,7 +815,7 @@ export default function DispatchApprovalInboxPage() {
   // 결재중인 단계는 파란색으로 강조하고, 이미 승인/반려된 단계는 각각 초록/빨강으로 표시한다.
   const renderChainCompact = (approval: ApprovalLike) => (
     <div className="flex items-center gap-1 flex-wrap text-xs">
-      <span className="text-gray-500">{approval.requester_name}<span className="text-[10px] text-gray-400 ml-0.5">(요청)</span></span>
+      <span className="text-gray-500">{approval.requester_name}<span className="text-[10px] text-gray-400 ml-0.5">{t('(요청)')}</span></span>
       {approval.approval_line.steps.map((step, i) => {
         const action = approval.actions.find(a => a.step_order === step.step_order);
         const isCurrent = approval.status === 'pending' && approval.current_step === step.step_order;
@@ -833,7 +834,7 @@ export default function DispatchApprovalInboxPage() {
               : 'text-gray-400'
             }>
               {step.approver_name}
-              <span className="text-[10px] ml-0.5">({isFinal ? '최종' : '중간'}{isCurrent ? '·결재중' : isBypassed ? '·생략' : ''})</span>
+              <span className="text-[10px] ml-0.5">({isFinal ? t('최종') : t('중간')}{isCurrent ? t('·결재중') : isBypassed ? t('·생략') : ''})</span>
             </span>
           </span>
         );
@@ -864,7 +865,7 @@ export default function DispatchApprovalInboxPage() {
               </div>
               {canDeleteThis && (
                 <Button size="sm" variant="outline" className="text-red-600 border-red-300 gap-1 shrink-0" onClick={onDelete}>
-                  <Trash2 className="w-3.5 h-3.5" />삭제
+                  <Trash2 className="w-3.5 h-3.5" />{t('삭제')}
                 </Button>
               )}
             </div>
@@ -880,13 +881,13 @@ export default function DispatchApprovalInboxPage() {
 
   const renderProgress = (approval: ApprovalLike) => (
     <div>
-      <h4 className="text-sm font-semibold mb-2">결재 진행</h4>
+      <h4 className="text-sm font-semibold mb-2">{t('결재 진행')}</h4>
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-blue-100 text-blue-700">기안</div>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold bg-blue-100 text-blue-700">{t('기안')}</div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-blue-500 font-medium">신청자</span>
+              <span className="text-[10px] text-blue-500 font-medium">{t('신청자')}</span>
               <span className="font-medium">{approval.requester_name}</span>
               <span className="text-sm text-gray-500">{approval.requester_role}</span>
               <CheckCircle2 className="w-4 h-4 text-blue-600" />
@@ -910,13 +911,13 @@ export default function DispatchApprovalInboxPage() {
               }`}>{index + 1}</div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-500 font-medium">{isFinal ? '최종결재자' : '중간결재자'}</span>
+                  <span className="text-[10px] text-gray-500 font-medium">{isFinal ? t('최종결재자') : t('중간결재자')}</span>
                   <span className="font-medium">{step.approver_name}</span>
                   <span className="text-sm text-gray-500">{step.approver_role}</span>
                   {action?.action === 'approved' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
                   {action?.action === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
-                  {isCurrent && <Badge variant="outline" className="text-xs">대기중</Badge>}
-                  {isBypassed && <Badge variant="outline" className="text-xs text-gray-500">상위 결재권자 승인으로 생략</Badge>}
+                  {isCurrent && <Badge variant="outline" className="text-xs">{t('대기중')}</Badge>}
+                  {isBypassed && <Badge variant="outline" className="text-xs text-gray-500">{t('상위 결재권자 승인으로 생략')}</Badge>}
                 </div>
                 {action?.comment && <p className="text-sm text-gray-600 mt-1">{action.comment}</p>}
                 {action?.created_at && <p className="text-xs text-gray-400 mt-1">{format(new Date(action.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</p>}
@@ -932,7 +933,7 @@ export default function DispatchApprovalInboxPage() {
   const renderRotationAssignmentSummary = () => {
     if (!selectedRotation) return null;
     if (rotationAssignmentsLoading) {
-      return <div className="text-xs text-gray-400 py-2">배정 정보를 불러오는 중...</div>;
+      return <div className="text-xs text-gray-400 py-2">{t('배정 정보를 불러오는 중...')}</div>;
     }
     if (rotationAssignments.length === 0) return null;
     const rankIndexById = new Map(ranks.map((r, i) => [r.id, i]));
@@ -942,22 +943,22 @@ export default function DispatchApprovalInboxPage() {
       .sort((a, b) => rankSortIndex(a.on_rank_id || a.off_rank_id) - rankSortIndex(b.on_rank_id || b.off_rank_id));
     return (
       <div className="mb-4">
-        <h4 className="text-sm font-semibold mb-2">교대 배정 요약</h4>
+        <h4 className="text-sm font-semibold mb-2">{t('교대 배정 요약')}</h4>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 mb-2">
-          <span><span className="text-gray-400">교대일</span> {selectedRotation.rotation_date || '-'}</span>
-          <span><span className="text-gray-400">교대지</span> {selectedRotation.port_label || '-'}</span>
-          {selectedRotation.notes && <span><span className="text-gray-400">비고</span> {selectedRotation.notes}</span>}
+          <span><span className="text-gray-400">{t('교대일')}</span> {selectedRotation.rotation_date || '-'}</span>
+          <span><span className="text-gray-400">{t('교대지')}</span> {selectedRotation.port_label || '-'}</span>
+          {selectedRotation.notes && <span><span className="text-gray-400">{t('비고')}</span> {selectedRotation.notes}</span>}
         </div>
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left p-2 font-medium text-gray-600">On-Signer</th>
-                <th className="text-left p-2 font-medium text-gray-600">승선일</th>
-                <th className="text-left p-2 font-medium text-gray-600">수당/공제</th>
+                <th className="text-left p-2 font-medium text-gray-600">{t('승선일')}</th>
+                <th className="text-left p-2 font-medium text-gray-600">{t('수당/공제')}</th>
                 <th className="text-left p-2 font-medium text-gray-600">Off-Signer</th>
-                <th className="text-left p-2 font-medium text-gray-600">하선일</th>
-                <th className="text-left p-2 font-medium text-gray-600">하선사유</th>
+                <th className="text-left p-2 font-medium text-gray-600">{t('하선일')}</th>
+                <th className="text-left p-2 font-medium text-gray-600">{t('하선사유')}</th>
               </tr>
             </thead>
             <tbody>
@@ -978,7 +979,7 @@ export default function DispatchApprovalInboxPage() {
                   <td className="p-2 text-gray-600">{a.on_crew_id ? (a.embark_date || '-') : '-'}</td>
                   <td className="p-2 text-gray-600 whitespace-normal">
                     {appliedItems.length === 0 ? <span className="text-gray-300">-</span> : appliedItems.map(i => (
-                      <div key={i.allowanceItemId}>{i.allowanceItemName} ({Number(i.amount).toLocaleString()} {i.currency}){selectedIds == null && <span className="text-amber-600"> (예정)</span>}</div>
+                      <div key={i.allowanceItemId}>{i.allowanceItemName} ({Number(i.amount).toLocaleString()} {i.currency}){selectedIds == null && <span className="text-amber-600"> {t('(예정)')}</span>}</div>
                     ))}
                   </td>
                   <td className="p-2">
@@ -1025,11 +1026,11 @@ export default function DispatchApprovalInboxPage() {
                 disabled={selectableIds.length === 0}
               />
             </th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">대상</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">결재 현황</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">요청일</th>
-            <th className="text-right p-2 text-xs font-medium text-gray-600 w-24">작업</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">{t('상태')}</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">{t('대상')}</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">{t('결재 현황')}</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600">{t('요청일')}</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-24">{t('작업')}</th>
           </tr>
         </thead>
         <tbody>
@@ -1044,8 +1045,8 @@ export default function DispatchApprovalInboxPage() {
                 </td>
                 <td className="p-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {getStatusBadge(approval.status)}
-                    {myTurn && <Badge className="bg-blue-500 text-xs">내 차례</Badge>}
+                    {getStatusBadge(approval.status, t)}
+                    {myTurn && <Badge className="bg-blue-500 text-xs">{t('내 차례')}</Badge>}
                   </div>
                 </td>
                 <td className="p-2 font-medium">{subjectLabel(approval)}<div className="text-xs text-gray-400 font-normal">{subLabel(approval)}</div></td>
@@ -1054,14 +1055,14 @@ export default function DispatchApprovalInboxPage() {
                 <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
                   {myTurn && (
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => onApprove(approval)}>승인</Button>
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => onReject(approval)}>반려</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-green-600 border-green-300" onClick={() => onApprove(approval)}>{t('승인')}</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600 border-red-300" onClick={() => onReject(approval)}>{t('반려')}</Button>
                     </div>
                   )}
                   {forceable && (
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => onForceApprove(approval)}>강제승인</Button>
-                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => onForceReject(approval)}>강제반려</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => onForceApprove(approval)}>{t('강제승인')}</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-amber-600 border-amber-300" onClick={() => onForceReject(approval)}>{t('강제반려')}</Button>
                     </div>
                   )}
                 </td>
@@ -1081,7 +1082,7 @@ export default function DispatchApprovalInboxPage() {
           key={f.value} type="button" onClick={() => setFilter(f.value)}
           className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${filter === f.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
         >
-          {f.label}
+          {t(f.label)}
         </button>
       ))}
     </div>
@@ -1118,13 +1119,13 @@ export default function DispatchApprovalInboxPage() {
     if (approvableCount === 0 && deletableCount === 0) return null;
     return (
       <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
-        <span className="text-xs text-blue-800">{selectedIds.length}건 선택됨</span>
+        <span className="text-xs text-blue-800">{t('{{count}}건 선택됨', { count: selectedIds.length })}</span>
         <div className="flex items-center gap-2">
-          {approvableCount > 0 && <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50" onClick={() => openBulkDialog(domain, 'approve')}>일괄 승인 ({approvableCount})</Button>}
-          {approvableCount > 0 && <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => openBulkDialog(domain, 'reject')}>일괄 반려 ({approvableCount})</Button>}
+          {approvableCount > 0 && <Button size="sm" variant="outline" className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50" onClick={() => openBulkDialog(domain, 'approve')}>{t('일괄 승인 ({{count}})', { count: approvableCount })}</Button>}
+          {approvableCount > 0 && <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => openBulkDialog(domain, 'reject')}>{t('일괄 반려 ({{count}})', { count: approvableCount })}</Button>}
           {deletableCount > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-xs text-gray-600 border-gray-300 hover:bg-gray-50" onClick={() => submitBulkDelete(domain)} disabled={bulkDeleteProcessing}>
-              <Trash2 className="w-3.5 h-3.5 mr-1" />{bulkDeleteProcessing ? '삭제 중...' : `선택 삭제 (${deletableCount})`}
+              <Trash2 className="w-3.5 h-3.5 mr-1" />{bulkDeleteProcessing ? t('삭제 중...') : t('선택 삭제 ({{count}})', { count: deletableCount })}
             </Button>
           )}
         </div>
@@ -1143,7 +1144,7 @@ export default function DispatchApprovalInboxPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="w-5 h-5" /></Button>
-        <h2 className="text-lg font-bold">{action === 'approve' ? '결재 승인' : '결재 반려'}</h2>
+        <h2 className="text-lg font-bold">{action === 'approve' ? t('결재 승인') : t('결재 반려')}</h2>
       </div>
       <Card>
         <CardHeader><CardTitle className="text-base">{title}</CardTitle><CardDescription>{subject}</CardDescription></CardHeader>
@@ -1151,17 +1152,17 @@ export default function DispatchApprovalInboxPage() {
           {extraContent}
           {forceMode && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5">
-              관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 건을 즉시 {action === 'approve' ? '승인' : '반려'} 처리합니다. 남은 결재 단계는 진행되지 않습니다.
+              {t('관리자 권한으로 결재라인의 정상 순서를 건너뛰고 이 건을 즉시 {{action}} 처리합니다. 남은 결재 단계는 진행되지 않습니다.', { action: action === 'approve' ? t('승인') : t('반려') })}
             </div>
           )}
           <div>
-            <Label>{action === 'approve' ? '의견 (선택사항)' : '반려 사유 (필수)'}</Label>
+            <Label>{action === 'approve' ? t('의견 (선택사항)') : t('반려 사유 (필수)')}</Label>
             <Textarea value={comment} onChange={e => setComment(e.target.value)} rows={4} className="mt-2" disabled={processing} />
           </div>
           <div className="flex gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={onBack} disabled={processing} className="flex-1">취소</Button>
+            <Button variant="outline" onClick={onBack} disabled={processing} className="flex-1">{t('취소')}</Button>
             <Button onClick={onSubmit} disabled={processing || (action === 'reject' && !comment.trim())} variant={action === 'approve' ? 'default' : 'destructive'} className="flex-1">
-              {processing ? '처리 중...' : action === 'approve' ? '승인' : '반려'}
+              {processing ? t('처리 중...') : action === 'approve' ? t('승인') : t('반려')}
             </Button>
           </div>
         </CardContent>
@@ -1169,7 +1170,7 @@ export default function DispatchApprovalInboxPage() {
     </div>
   );
 
-  if (initializing) return <div className="container mx-auto px-4 py-8 text-center">로딩 중...</div>;
+  if (initializing) return <div className="container mx-auto px-4 py-8 text-center">{t('로딩 중...')}</div>;
 
   const crewFiltered = filterList(crewApprovals, crewFilter);
   const rotationFiltered = filterList(rotationApprovals, rotationFilter);
@@ -1183,23 +1184,23 @@ export default function DispatchApprovalInboxPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Send className="w-6 h-6" />발령 결재함</h1>
-        <p className="text-gray-600 mt-1 text-sm">채용/배승/계약 등 선원 인사 관련 결재를 조회하고 처리합니다.</p>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><Send className="w-6 h-6" />{t('발령 결재함')}</h1>
+        <p className="text-gray-600 mt-1 text-sm">{t('채용/배승/계약 등 선원 인사 관련 결재를 조회하고 처리합니다.')}</p>
       </div>
 
       <Tabs defaultValue="crew">
         <TabsList>
-          <TabsTrigger value="crew" className="gap-1.5">채용 ({crewApprovals.length}){myTurnBadge(crewApprovals.filter(isMyTurn).length)}</TabsTrigger>
-          <TabsTrigger value="rotation" className="gap-1.5">배승 ({rotationApprovals.length}){myTurnBadge(rotationApprovals.filter(isMyTurn).length)}</TabsTrigger>
-          <TabsTrigger value="contract" className="gap-1.5">계약 ({contractApprovals.length}){myTurnBadge(contractApprovals.filter(isMyTurn).length)}</TabsTrigger>
-          <TabsTrigger value="dispatch" className="gap-1.5">승진/강등 ({dispatchApprovals.length}){myTurnBadge(dispatchApprovals.filter(isMyTurn).length)}</TabsTrigger>
-          <TabsTrigger value="salary" disabled>급여지급 (준비중)</TabsTrigger>
-          <TabsTrigger value="deletion-log" className="gap-1.5"><Archive className="w-3.5 h-3.5" />삭제 이력 ({deletionLogs.length})</TabsTrigger>
+          <TabsTrigger value="crew" className="gap-1.5">{t('채용 ({{count}})', { count: crewApprovals.length })}{myTurnBadge(crewApprovals.filter(isMyTurn).length)}</TabsTrigger>
+          <TabsTrigger value="rotation" className="gap-1.5">{t('배승 ({{count}})', { count: rotationApprovals.length })}{myTurnBadge(rotationApprovals.filter(isMyTurn).length)}</TabsTrigger>
+          <TabsTrigger value="contract" className="gap-1.5">{t('계약 ({{count}})', { count: contractApprovals.length })}{myTurnBadge(contractApprovals.filter(isMyTurn).length)}</TabsTrigger>
+          <TabsTrigger value="dispatch" className="gap-1.5">{t('승진/강등 ({{count}})', { count: dispatchApprovals.length })}{myTurnBadge(dispatchApprovals.filter(isMyTurn).length)}</TabsTrigger>
+          <TabsTrigger value="salary" disabled>{t('급여지급 (준비중)')}</TabsTrigger>
+          <TabsTrigger value="deletion-log" className="gap-1.5"><Archive className="w-3.5 h-3.5" />{t('삭제 이력 ({{count}})', { count: deletionLogs.length })}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="crew" className="mt-4">
           {crewViewMode === 'action' && selectedCrew ? renderActionPanel(
-            selectedCrew.recommendation?.crew_name || '선원 추천', `결재선: ${selectedCrew.approval_line.name}`,
+            selectedCrew.recommendation?.crew_name || t('선원 추천'), t('결재선: {{name}}', { name: selectedCrew.approval_line.name }),
             crewComment, setCrewComment, crewAction, crewProcessing,
             () => { setCrewViewMode('list'); setSelectedCrew(null); setCrewAction(null); setCrewForce(false); }, handleCrewAction, crewForce,
           ) : (
@@ -1207,12 +1208,12 @@ export default function DispatchApprovalInboxPage() {
               {renderFilterBar(crewFilter, setCrewFilter)}
               {renderBulkBar('crew', crewSelectedIds)}
               {crewFiltered.length === 0 ? (
-                <Card><CardContent className="py-12 text-center"><Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
+                <Card><CardContent className="py-12 text-center"><Clock className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">{t('해당하는 결재가 없습니다')}</p></CardContent></Card>
               ) : (
                 <>
                   {renderTable(
                     crewPageRecs,
-                    a => `${a.recommendation?.ranks?.rank_code ? `${a.recommendation.ranks.rank_code} ` : ''}${a.recommendation?.crew_name || '선원 추천'}`,
+                    a => `${a.recommendation?.ranks?.rank_code ? `${a.recommendation.ranks.rank_code} ` : ''}${a.recommendation?.crew_name || t('선원 추천')}`,
                     a => hierarchyLabel(a.recommendation?.owner?.name, a.recommendation?.fleet?.name, a.recommendation?.ships?.name),
                     a => { setSelectedCrew(a); setCrewViewMode('list'); },
                     a => { setSelectedCrew(a); setCrewAction('approve'); setCrewForce(false); setCrewViewMode('action'); setCrewComment(''); },
@@ -1228,8 +1229,8 @@ export default function DispatchApprovalInboxPage() {
           )}
           {crewViewMode === 'list' && renderViewDialog(
             selectedCrew, () => setSelectedCrew(null),
-            <User className="w-4 h-4" />, `${selectedCrew?.recommendation?.ranks?.rank_code ? `${selectedCrew.recommendation.ranks.rank_code} ` : ''}${selectedCrew?.recommendation?.crew_name || '선원 추천'}`,
-            `${hierarchyLabel(selectedCrew?.recommendation?.owner?.name, selectedCrew?.recommendation?.fleet?.name, selectedCrew?.recommendation?.ships?.name)} · 요청자: ${selectedCrew?.requester_name || ''}`,
+            <User className="w-4 h-4" />, `${selectedCrew?.recommendation?.ranks?.rank_code ? `${selectedCrew.recommendation.ranks.rank_code} ` : ''}${selectedCrew?.recommendation?.crew_name || t('선원 추천')}`,
+            `${hierarchyLabel(selectedCrew?.recommendation?.owner?.name, selectedCrew?.recommendation?.fleet?.name, selectedCrew?.recommendation?.ships?.name)} · ${t('요청자: {{name}}', { name: selectedCrew?.requester_name || '' })}`,
             !!selectedCrew && selectedCrew.status !== 'pending' && (selectedCrew.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedCrew && handleDeleteCrew(selectedCrew),
           )}
@@ -1237,7 +1238,7 @@ export default function DispatchApprovalInboxPage() {
 
         <TabsContent value="rotation" className="mt-4">
           {rotationViewMode === 'action' && selectedRotation ? renderActionPanel(
-            selectedRotation.plan_name || '교대계획', `결재선: ${selectedRotation.approval_line.name} · ${selectedRotation.ship_name}`,
+            selectedRotation.plan_name || t('교대계획'), t('결재선: {{name}} · {{ship}}', { name: selectedRotation.approval_line.name, ship: selectedRotation.ship_name }),
             rotationComment, setRotationComment, rotationAction, rotationProcessing,
             () => { setRotationViewMode('list'); setSelectedRotation(null); setRotationAction(null); setRotationForce(false); }, handleRotationAction, rotationForce,
             renderRotationAssignmentSummary(),
@@ -1246,12 +1247,12 @@ export default function DispatchApprovalInboxPage() {
               {renderFilterBar(rotationFilter, setRotationFilter)}
               {renderBulkBar('rotation', rotationSelectedIds)}
               {rotationFiltered.length === 0 ? (
-                <Card><CardContent className="py-12 text-center"><ShipIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
+                <Card><CardContent className="py-12 text-center"><ShipIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">{t('해당하는 결재가 없습니다')}</p></CardContent></Card>
               ) : (
                 <>
                   {renderTable(
                     rotationPageRecs,
-                    a => a.plan_name || '교대계획',
+                    a => a.plan_name || t('교대계획'),
                     a => a.ship_name || '',
                     a => { setSelectedRotation(a); setRotationViewMode('list'); },
                     a => { setSelectedRotation(a); setRotationAction('approve'); setRotationForce(false); setRotationViewMode('action'); setRotationComment(''); },
@@ -1267,8 +1268,8 @@ export default function DispatchApprovalInboxPage() {
           )}
           {rotationViewMode === 'list' && renderViewDialog(
             selectedRotation, () => setSelectedRotation(null),
-            <ShipIcon className="w-4 h-4" />, selectedRotation?.plan_name || '교대계획',
-            `${selectedRotation?.ship_name || ''} · 요청자: ${selectedRotation?.requester_name || ''}`,
+            <ShipIcon className="w-4 h-4" />, selectedRotation?.plan_name || t('교대계획'),
+            `${selectedRotation?.ship_name || ''} · ${t('요청자: {{name}}', { name: selectedRotation?.requester_name || '' })}`,
             !!selectedRotation && selectedRotation.status !== 'pending' && (selectedRotation.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedRotation && handleDeleteRotation(selectedRotation),
             renderRotationAssignmentSummary(),
@@ -1278,7 +1279,7 @@ export default function DispatchApprovalInboxPage() {
         <TabsContent value="contract" className="mt-4">
           {contractViewMode === 'action' && selectedContract ? renderActionPanel(
             `${selectedContract.rank_code || ''}${selectedContract.rank_grade ? `(${selectedContract.rank_grade})` : ''} ${selectedContract.crew_name || '-'}`,
-            `결재선: ${selectedContract.approval_line.name} · ${hierarchyLabel(selectedContract.owner_name, selectedContract.fleet_name, selectedContract.ship_name)}`,
+            t('결재선: {{name}} · {{hierarchy}}', { name: selectedContract.approval_line.name, hierarchy: hierarchyLabel(selectedContract.owner_name, selectedContract.fleet_name, selectedContract.ship_name) }),
             contractComment, setContractComment, contractAction, contractProcessing,
             () => { setContractViewMode('list'); setSelectedContract(null); setContractAction(null); setContractForce(false); }, handleContractAction, contractForce,
           ) : (
@@ -1286,7 +1287,7 @@ export default function DispatchApprovalInboxPage() {
               {renderFilterBar(contractFilter, setContractFilter)}
               {renderBulkBar('contract', contractSelectedIds)}
               {contractFiltered.length === 0 ? (
-                <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
+                <Card><CardContent className="py-12 text-center"><FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">{t('해당하는 결재가 없습니다')}</p></CardContent></Card>
               ) : (
                 <>
                   {renderTable(
@@ -1308,7 +1309,7 @@ export default function DispatchApprovalInboxPage() {
           {contractViewMode === 'list' && renderViewDialog(
             selectedContract, () => setSelectedContract(null),
             <User className="w-4 h-4" />, `${selectedContract?.rank_code || ''}${selectedContract?.rank_grade ? `(${selectedContract.rank_grade})` : ''} ${selectedContract?.crew_name || '-'}`,
-            `${hierarchyLabel(selectedContract?.owner_name, selectedContract?.fleet_name, selectedContract?.ship_name)} · 요청자: ${selectedContract?.requester_name || ''}`,
+            `${hierarchyLabel(selectedContract?.owner_name, selectedContract?.fleet_name, selectedContract?.ship_name)} · ${t('요청자: {{name}}', { name: selectedContract?.requester_name || '' })}`,
             !!selectedContract && selectedContract.status !== 'pending' && (selectedContract.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedContract && handleDeleteContract(selectedContract),
           )}
@@ -1316,8 +1317,8 @@ export default function DispatchApprovalInboxPage() {
 
         <TabsContent value="dispatch" className="mt-4">
           {dispatchViewMode === 'action' && selectedDispatch ? renderActionPanel(
-            `${selectedDispatch.new_rank_code || ''}${selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''} ${selectedDispatch.crew_name} — ${selectedDispatch.dispatch_type === 'promotion' ? '승진' : '강등'}`,
-            `결재선: ${selectedDispatch.approval_line.name} · ${hierarchyLabel(selectedDispatch.owner_name, selectedDispatch.fleet_name, selectedDispatch.ship_name)}`,
+            `${selectedDispatch.new_rank_code || ''}${selectedDispatch.new_grade ? `(${selectedDispatch.new_grade})` : ''} ${selectedDispatch.crew_name} — ${selectedDispatch.dispatch_type === 'promotion' ? t('승진') : t('강등')}`,
+            t('결재선: {{name}} · {{hierarchy}}', { name: selectedDispatch.approval_line.name, hierarchy: hierarchyLabel(selectedDispatch.owner_name, selectedDispatch.fleet_name, selectedDispatch.ship_name) }),
             dispatchComment, setDispatchComment, dispatchAction, dispatchProcessing,
             () => { setDispatchViewMode('list'); setSelectedDispatch(null); setDispatchAction(null); setDispatchForce(false); }, handleDispatchAction, dispatchForce,
           ) : (
@@ -1325,12 +1326,12 @@ export default function DispatchApprovalInboxPage() {
               {renderFilterBar(dispatchFilter, setDispatchFilter)}
               {renderBulkBar('dispatch', dispatchSelectedIds)}
               {dispatchFiltered.length === 0 ? (
-                <Card><CardContent className="py-12 text-center"><User className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">해당하는 결재가 없습니다</p></CardContent></Card>
+                <Card><CardContent className="py-12 text-center"><User className="h-12 w-12 mx-auto text-gray-400 mb-4" /><p className="text-gray-600">{t('해당하는 결재가 없습니다')}</p></CardContent></Card>
               ) : (
                 <>
                   {renderTable(
                     dispatchPageRecs,
-                    a => `${a.new_rank_code || ''}${a.new_grade ? `(${a.new_grade})` : ''} ${a.crew_name || '-'} (${a.dispatch_type === 'promotion' ? '승진' : '강등'})`,
+                    a => `${a.new_rank_code || ''}${a.new_grade ? `(${a.new_grade})` : ''} ${a.crew_name || '-'} (${a.dispatch_type === 'promotion' ? t('승진') : t('강등')})`,
                     a => `${hierarchyLabel(a.owner_name, a.fleet_name, a.ship_name)} · ${a.previous_rank_code}${a.previous_grade ? `(${a.previous_grade})` : ''} → ${a.new_rank_code}${a.new_grade ? `(${a.new_grade})` : ''}`,
                     a => { setSelectedDispatch(a); setDispatchViewMode('list'); },
                     a => { setSelectedDispatch(a); setDispatchAction('approve'); setDispatchForce(false); setDispatchViewMode('action'); setDispatchComment(''); },
@@ -1348,35 +1349,35 @@ export default function DispatchApprovalInboxPage() {
             selectedDispatch, () => setSelectedDispatch(null),
             <User className="w-4 h-4" />,
             `${selectedDispatch?.new_rank_code || ''}${selectedDispatch?.new_grade ? `(${selectedDispatch.new_grade})` : ''} ${selectedDispatch?.crew_name || ''} — ${selectedDispatch?.previous_rank_code || ''}${selectedDispatch?.previous_grade ? `(${selectedDispatch.previous_grade})` : ''} → ${selectedDispatch?.new_rank_code || ''}${selectedDispatch?.new_grade ? `(${selectedDispatch.new_grade})` : ''}`,
-            `${hierarchyLabel(selectedDispatch?.owner_name, selectedDispatch?.fleet_name, selectedDispatch?.ship_name)} · 요청자: ${selectedDispatch?.requester_name || ''}`,
+            `${hierarchyLabel(selectedDispatch?.owner_name, selectedDispatch?.fleet_name, selectedDispatch?.ship_name)} · ${t('요청자: {{name}}', { name: selectedDispatch?.requester_name || '' })}`,
             !!selectedDispatch && selectedDispatch.status !== 'pending' && (selectedDispatch.requester_id === currentUserId || isAdmin) && permissions.canDelete,
             () => selectedDispatch && handleDeleteDispatch(selectedDispatch),
           )}
         </TabsContent>
 
         <TabsContent value="salary" className="mt-4">
-          <Card><CardContent className="py-12 text-center text-gray-500">급여지급 결재는 준비중입니다.</CardContent></Card>
+          <Card><CardContent className="py-12 text-center text-gray-500">{t('급여지급 결재는 준비중입니다.')}</CardContent></Card>
         </TabsContent>
 
         <TabsContent value="deletion-log" className="mt-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">삭제 이력함</CardTitle>
+              <CardTitle className="text-base">{t('삭제 이력함')}</CardTitle>
               <CardDescription className="text-xs mt-1">
-                채용/배승/계약/승진강등 결재함에서 삭제된 건의 요청자/결재선/결재자별 승인·반려 이력을 영구 보관합니다.
-                실제 반영된 데이터와는 별개이며, 이 목록 자체는 시스템관리자 이상만 완전히 삭제할 수 있습니다.
+                {t('채용/배승/계약/승진강등 결재함에서 삭제된 건의 요청자/결재선/결재자별 승인·반려 이력을 영구 보관합니다.')}
+                {t('실제 반영된 데이터와는 별개이며, 이 목록 자체는 시스템관리자 이상만 완전히 삭제할 수 있습니다.')}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0">
               {deletionLogs.length === 0 ? (
-                <div className="text-center py-8 text-sm text-gray-400">삭제된 이력이 없습니다.</div>
+                <div className="text-center py-8 text-sm text-gray-400">{t('삭제된 이력이 없습니다.')}</div>
               ) : (
                 <>
                 {isAdmin && logSelectedIds.length > 0 && (
                   <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
-                    <span className="text-xs text-red-800">{logSelectedIds.length}건 선택됨</span>
+                    <span className="text-xs text-red-800">{t('{{count}}건 선택됨', { count: logSelectedIds.length })}</span>
                     <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-100" onClick={handleBulkPurgeLogs} disabled={bulkPurging}>
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkPurging ? '삭제 중...' : `선택 영구 삭제 (${logSelectedIds.length})`}
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkPurging ? t('삭제 중...') : t('선택 영구 삭제 ({{count}})', { count: logSelectedIds.length })}
                     </Button>
                   </div>
                 )}
@@ -1392,20 +1393,20 @@ export default function DispatchApprovalInboxPage() {
                           />
                         </TableHead>
                       )}
-                      <TableHead className="text-xs">구분</TableHead>
-                      <TableHead className="text-xs">대상</TableHead>
-                      <TableHead className="text-xs">요청자</TableHead>
-                      <TableHead className="text-xs">결재선</TableHead>
-                      <TableHead className="text-xs">최종 상태</TableHead>
-                      <TableHead className="text-xs">완료일</TableHead>
-                      <TableHead className="text-xs">삭제한 사람</TableHead>
-                      <TableHead className="text-xs">삭제일</TableHead>
-                      {isAdmin && <TableHead className="text-right text-xs w-16">작업</TableHead>}
+                      <TableHead className="text-xs">{t('구분')}</TableHead>
+                      <TableHead className="text-xs">{t('대상')}</TableHead>
+                      <TableHead className="text-xs">{t('요청자')}</TableHead>
+                      <TableHead className="text-xs">{t('결재선')}</TableHead>
+                      <TableHead className="text-xs">{t('최종 상태')}</TableHead>
+                      <TableHead className="text-xs">{t('완료일')}</TableHead>
+                      <TableHead className="text-xs">{t('삭제한 사람')}</TableHead>
+                      <TableHead className="text-xs">{t('삭제일')}</TableHead>
+                      {isAdmin && <TableHead className="text-right text-xs w-16">{t('작업')}</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {deletionLogs.map(log => {
-                      const status = getStatusBadge(log.final_status);
+                      const status = getStatusBadge(log.final_status, t);
                       const expanded = expandedLogId === log.id;
                       return (
                         <Fragment key={log.id}>
@@ -1416,7 +1417,7 @@ export default function DispatchApprovalInboxPage() {
                                 <Checkbox checked={logSelectedIds.includes(log.id)} onCheckedChange={() => toggleLogSelect(log.id)} />
                               </TableCell>
                             )}
-                            <TableCell><Badge variant="outline" className="text-xs">{DOMAIN_LABEL[log.domain]}</Badge></TableCell>
+                            <TableCell><Badge variant="outline" className="text-xs">{t(DOMAIN_LABEL[log.domain])}</Badge></TableCell>
                             <TableCell className="font-medium text-sm">{log.subjectLabel}</TableCell>
                             <TableCell className="text-sm">{log.requester_name}</TableCell>
                             <TableCell className="text-sm">{log.approval_line_name || '-'}</TableCell>
@@ -1436,15 +1437,15 @@ export default function DispatchApprovalInboxPage() {
                             <TableRow className="bg-gray-50/60">
                               <TableCell colSpan={isAdmin ? 11 : 9} className="text-xs">
                                 {log.actions.length === 0 ? (
-                                  <div className="text-gray-400 py-2">결재 진행 이력이 없습니다.</div>
+                                  <div className="text-gray-400 py-2">{t('결재 진행 이력이 없습니다.')}</div>
                                 ) : (
                                   <div className="py-2 space-y-1.5">
                                     {[...log.actions].sort((a, b) => a.step_order - b.step_order).map((a, i) => (
                                       <div key={i} className="flex items-center gap-2">
-                                        <span className="text-gray-400 w-10">{a.step_order}단계</span>
-                                        <span className="font-medium">{a.approver_name || '알 수 없음'}</span>
+                                        <span className="text-gray-400 w-10">{t('{{step}}단계', { step: a.step_order })}</span>
+                                        <span className="font-medium">{a.approver_name || t('알 수 없음')}</span>
                                         <Badge variant="outline" className={a.action === 'approved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}>
-                                          {a.action === 'approved' ? '승인' : '반려'}
+                                          {a.action === 'approved' ? t('승인') : t('반려')}
                                         </Badge>
                                         {a.comment && <span className="text-gray-500">"{a.comment}"</span>}
                                         <span className="text-gray-400 ml-auto">{format(new Date(a.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>
@@ -1470,25 +1471,25 @@ export default function DispatchApprovalInboxPage() {
       <Dialog open={bulkDialog !== null} onOpenChange={o => !bulkProcessing && !o && setBulkDialog(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{bulkDialog?.action === 'approve' ? '일괄 승인' : '일괄 반려'}</DialogTitle>
+            <DialogTitle>{bulkDialog?.action === 'approve' ? t('일괄 승인') : t('일괄 반려')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              {bulkDialog && domainConfig(bulkDialog.domain).selectedIds.filter(id => domainConfig(bulkDialog.domain).approvals.some(a => a.id === id && isMyTurn(a))).length}건을 {bulkDialog?.action === 'approve' ? '승인' : '반려'}합니다.
+              {t('{{count}}건을 {{action}}합니다.', { count: bulkDialog ? domainConfig(bulkDialog.domain).selectedIds.filter(id => domainConfig(bulkDialog.domain).approvals.some(a => a.id === id && isMyTurn(a))).length : 0, action: bulkDialog?.action === 'approve' ? t('승인') : t('반려') })}
             </p>
             <div>
-              <label className="text-sm font-medium mb-2 block">{bulkDialog?.action === 'approve' ? '의견 (선택사항)' : '반려 사유 (필수)'}</label>
+              <label className="text-sm font-medium mb-2 block">{bulkDialog?.action === 'approve' ? t('의견 (선택사항)') : t('반려 사유 (필수)')}</label>
               <Textarea value={bulkComment} onChange={e => setBulkComment(e.target.value)} rows={4} disabled={bulkProcessing} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkDialog(null)} disabled={bulkProcessing}>취소</Button>
+            <Button variant="outline" onClick={() => setBulkDialog(null)} disabled={bulkProcessing}>{t('취소')}</Button>
             <Button
               onClick={submitBulkAction}
               disabled={bulkProcessing || (bulkDialog?.action === 'reject' && !bulkComment.trim())}
               className={bulkDialog?.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
             >
-              {bulkProcessing ? '처리 중...' : bulkDialog?.action === 'approve' ? '일괄 승인' : '일괄 반려'}
+              {bulkProcessing ? t('처리 중...') : bulkDialog?.action === 'approve' ? t('일괄 승인') : t('일괄 반려')}
             </Button>
           </DialogFooter>
         </DialogContent>

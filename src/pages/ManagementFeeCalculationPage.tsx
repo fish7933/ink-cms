@@ -433,7 +433,7 @@ export default function ManagementFeeCalculationPage() {
                         <span className="inline-flex items-center gap-1">
                           {expanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
                           {group.ownerName}
-                          <span className="font-normal text-slate-500">({group.rows.length}척)</span>
+                          <span className="font-normal text-slate-500">{t('({{count}}척)', { count: group.rows.length })}</span>
                         </span>
                       </TableCell>
                     </TableRow>
@@ -585,7 +585,7 @@ export default function ManagementFeeCalculationPage() {
                                                   <TableBody>
                                                     {actualItems.length > 0 && (
                                                       <TableRow className="bg-gray-50 hover:bg-gray-50">
-                                                        <TableCell colSpan={6} className="py-1 px-2 text-[11px] font-semibold text-gray-500">자동 계산 항목</TableCell>
+                                                        <TableCell colSpan={6} className="py-1 px-2 text-[11px] font-semibold text-gray-500">{t('자동 계산 항목')}</TableCell>
                                                       </TableRow>
                                                     )}
                                                     {autoItems.map(renderRow)}
@@ -594,7 +594,7 @@ export default function ManagementFeeCalculationPage() {
                                                 {actualItems.length > 0 && (
                                                   <TableBody>
                                                     <TableRow className="bg-gray-50 hover:bg-gray-50">
-                                                      <TableCell colSpan={6} className="py-1 px-2 text-[11px] font-semibold text-gray-500">실비 항목</TableCell>
+                                                      <TableCell colSpan={6} className="py-1 px-2 text-[11px] font-semibold text-gray-500">{t('실비 항목')}</TableCell>
                                                     </TableRow>
                                                     {actualItems.map(renderRow)}
                                                   </TableBody>
@@ -602,21 +602,21 @@ export default function ManagementFeeCalculationPage() {
                                               </>
                                             );
                                           })()}
-                                          {ledgerData.item_totals.some(t => t.is_vat_applicable) && (
+                                          {ledgerData.item_totals.some(it => it.is_vat_applicable) && (
                                             <TableFooter>
                                               <TableRow>
-                                                <TableCell colSpan={4} className="py-1 px-2 text-xs text-right font-semibold text-teal-700">부가세 합계</TableCell>
+                                                <TableCell colSpan={4} className="py-1 px-2 text-xs text-right font-semibold text-teal-700">{t('부가세 합계')}</TableCell>
                                                 <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold text-teal-700">
-                                                  {ledgerData.krw_rate_to_usd ? `${fmt(ledgerData.vat_amount_krw)} KRW` : '환율 없음'}
+                                                  {ledgerData.krw_rate_to_usd ? `${fmt(ledgerData.vat_amount_krw)} KRW` : t('환율 없음')}
                                                 </TableCell>
                                                 <TableCell className="py-1 px-2" />
                                               </TableRow>
                                             </TableFooter>
                                           )}
                                         </Table>
-                                        {ledgerData.item_totals.some(t => t.is_vat_applicable) && !ledgerData.krw_rate_to_usd && (
+                                        {ledgerData.item_totals.some(it => it.is_vat_applicable) && !ledgerData.krw_rate_to_usd && (
                                           <div className="px-3 py-1.5 border-t text-xs text-amber-600">
-                                            환율 관리에 이 달 KRW 환율이 없어 부가세를 계산할 수 없습니다.
+                                            {t('환율 관리에 이 달 KRW 환율이 없어 부가세를 계산할 수 없습니다.')}
                                           </div>
                                         )}
                                       </div>
@@ -625,7 +625,7 @@ export default function ManagementFeeCalculationPage() {
 
                                     {/* 실비(수기입력) 항목 기록 — 승·하선 비용상세와 1:1 대응 */}
                                     <div>
-                                      <h3 className="text-sm font-semibold mb-2">실비 청구 항목</h3>
+                                      <h3 className="text-sm font-semibold mb-2">{t('실비 청구 항목')}</h3>
                                       <ManagementFeeActualCostEntriesSection
                                         periodId={ledgerPeriodId}
                                         shipId={ledgerData.period.ship_id}
@@ -640,20 +640,20 @@ export default function ManagementFeeCalculationPage() {
                                         아직 포함되지 않는다(급여는 청구서에서 별도 섹션으로 이미 다뤄짐). */}
                                     {ledgerData.salary_rows.length > 0 && (
                                       <div>
-                                        <h3 className="text-sm font-semibold mb-2">선원 급여 <span className="font-normal text-gray-400 text-xs">(참고용 — 청구서 급여 섹션과 동일 계산)</span></h3>
+                                        <h3 className="text-sm font-semibold mb-2">{t('선원 급여')} <span className="font-normal text-gray-400 text-xs">{t('(참고용 — 청구서 급여 섹션과 동일 계산)')}</span></h3>
                                         <div className="rounded-md border bg-white overflow-x-auto">
                                           <Table>
                                             <TableHeader>
                                               <TableRow>
-                                                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
-                                                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">이름</TableHead>
-                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">선주 청구 급여</TableHead>
-                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">제수당</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('직급')}</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('이름')}</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('선주 청구 급여')}</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('제수당')}</TableHead>
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">OBP</TableHead>
                                                 <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">FKSU</TableHead>
-                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">재고용수당</TableHead>
-                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">상병수당</TableHead>
-                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">합계</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('재고용수당')}</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('상병수당')}</TableHead>
+                                                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('합계')}</TableHead>
                                               </TableRow>
                                             </TableHeader>
                                             <TableBody>
@@ -664,7 +664,7 @@ export default function ManagementFeeCalculationPage() {
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">
                                                     <div>{fmt(s.owner_billed_salary)}</div>
                                                     {s.disembark_lump_sum > 0 && (
-                                                      <div className="text-[10px] text-amber-600 font-normal whitespace-nowrap">(하선정산 {fmt(s.disembark_lump_sum)} 포함)</div>
+                                                      <div className="text-[10px] text-amber-600 font-normal whitespace-nowrap">{t('(하선정산 {{amount}} 포함)', { amount: fmt(s.disembark_lump_sum) })}</div>
                                                     )}
                                                   </TableCell>
                                                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(s.total_allowance)}</TableCell>
@@ -678,7 +678,7 @@ export default function ManagementFeeCalculationPage() {
                                             </TableBody>
                                             <TableFooter>
                                               <TableRow>
-                                                <TableCell colSpan={8} className="py-1 px-2 text-xs text-right font-semibold">급여 합계 (USD)</TableCell>
+                                                <TableCell colSpan={8} className="py-1 px-2 text-xs text-right font-semibold">{t('급여 합계 (USD)')}</TableCell>
                                                 <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(ledgerData.salary_total)}</TableCell>
                                               </TableRow>
                                             </TableFooter>
@@ -704,20 +704,20 @@ export default function ManagementFeeCalculationPage() {
 
       <Dialog open={!!genResult} onOpenChange={o => !o && setGenResult(null)}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle className="text-base">일괄 계산 결과</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-base">{t('일괄 계산 결과')}</DialogTitle></DialogHeader>
           {genResult && (
             <div className="space-y-3 text-sm">
-              <p>성공 {genResult.succeeded.length} / 건너뜀 {genResult.skipped.length} / 실패 {genResult.failed.length}</p>
+              <p>{t('성공 {{succeeded}} / 건너뜀 {{skipped}} / 실패 {{failed}}', { succeeded: genResult.succeeded.length, skipped: genResult.skipped.length, failed: genResult.failed.length })}</p>
               {genResult.skipped.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">건너뜀</p>
+                  <p className="text-xs font-medium text-gray-500 mb-1">{t('건너뜀')}</p>
                   <ul className="text-xs text-gray-500 space-y-0.5">
                     {genResult.skipped.map(s => (
                       <li key={s.shipId}>
                         {ships.find(sh => sh.id === s.shipId)?.name || s.shipId} — {
-                          s.reason === 'no_crew' ? '이번 달 승선 선원 없음'
-                          : s.reason === 'no_template' ? '배정된 관리비 템플릿 없음'
-                          : '이미 회차가 존재함'
+                          s.reason === 'no_crew' ? t('이번 달 승선 선원 없음')
+                          : s.reason === 'no_template' ? t('배정된 관리비 템플릿 없음')
+                          : t('이미 회차가 존재함')
                         }
                       </li>
                     ))}
@@ -726,7 +726,7 @@ export default function ManagementFeeCalculationPage() {
               )}
               {genResult.failed.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-red-500 mb-1">실패</p>
+                  <p className="text-xs font-medium text-red-500 mb-1">{t('실패')}</p>
                   <ul className="text-xs text-red-500 space-y-0.5">
                     {genResult.failed.map(f => (
                       <li key={f.shipId}>{ships.find(sh => sh.id === f.shipId)?.name || f.shipId} — {f.error}</li>
@@ -736,7 +736,7 @@ export default function ManagementFeeCalculationPage() {
               )}
             </div>
           )}
-          <DialogFooter><Button size="sm" onClick={() => setGenResult(null)}>확인</Button></DialogFooter>
+          <DialogFooter><Button size="sm" onClick={() => setGenResult(null)}>{t('확인')}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

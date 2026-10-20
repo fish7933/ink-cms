@@ -458,7 +458,7 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-500">로딩 중...</p>
+        <p className="text-sm text-gray-500">{t('로딩 중...')}</p>
       </div>
     );
   }
@@ -471,22 +471,22 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
             <>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" className="gap-1.5 h-8" onClick={() => setFormView(null)}>
-                  <ArrowLeft className="h-4 w-4" />뒤로
+                  <ArrowLeft className="h-4 w-4" />{t('뒤로')}
                 </Button>
-                <CardTitle className="text-base">템플릿 할당</CardTitle>
+                <CardTitle className="text-base">{t('템플릿 할당')}</CardTitle>
               </div>
               <Button size="sm" className="gap-1.5 h-8" onClick={handleAssign}>
-                <Save className="h-4 w-4" />할당
+                <Save className="h-4 w-4" />{t('할당')}
               </Button>
             </>
           ) : (
             <>
               <div>
-                <CardTitle className="text-base">템플릿 할당 현황</CardTitle>
-                <p className="text-xs text-gray-600 mt-1">선주, 플릿, 선박에 할당된 수당/공제 템플릿을 관리하세요</p>
+                <CardTitle className="text-base">{t('템플릿 할당 현황')}</CardTitle>
+                <p className="text-xs text-gray-600 mt-1">{t('선주, 플릿, 선박에 할당된 수당/공제 템플릿을 관리하세요')}</p>
               </div>
               <Button size="sm" className="gap-1.5 h-8" onClick={openAssignForm}>
-                <Plus className="h-4 w-4" />템플릿 할당
+                <Plus className="h-4 w-4" />{t('템플릿 할당')}
               </Button>
             </>
           )}
@@ -497,26 +497,26 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
           /* ── Inline Form ── */
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-sm">할당 레벨</Label>
+              <Label className="text-sm">{t('할당 레벨')}</Label>
               <div className="grid grid-cols-3 gap-2">
-                {(['owner', 'fleet', 'ship'] as AssignTarget[]).map(t => (
-                  <button key={t} type="button"
-                    onClick={() => { setAssignTarget(t); setAssignOwnerId(''); setAssignFleetId(''); setAssignShipId(''); }}
+                {(['owner', 'fleet', 'ship'] as AssignTarget[]).map(lvl => (
+                  <button key={lvl} type="button"
+                    onClick={() => { setAssignTarget(lvl); setAssignOwnerId(''); setAssignFleetId(''); setAssignShipId(''); }}
                     className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border text-xs font-medium transition-colors
-                      ${assignTarget === t ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                      ${assignTarget === lvl ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                   >
-                    {t === 'owner' && <><Building2 className="h-3.5 w-3.5" />선주</>}
-                    {t === 'fleet' && <><Layers className="h-3.5 w-3.5" />플릿</>}
-                    {t === 'ship' && <><ShipIcon className="h-3.5 w-3.5" />선박</>}
+                    {lvl === 'owner' && <><Building2 className="h-3.5 w-3.5" />{t('선주')}</>}
+                    {lvl === 'fleet' && <><Layers className="h-3.5 w-3.5" />{t('플릿')}</>}
+                    {lvl === 'ship' && <><ShipIcon className="h-3.5 w-3.5" />{t('선박')}</>}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-sm">선주 <span className="text-red-500">*</span></Label>
+              <Label className="text-sm">{t('선주')} <span className="text-red-500">*</span></Label>
               <Select value={assignOwnerId} onValueChange={v => { setAssignOwnerId(v); setAssignFleetId(''); setAssignShipId(''); }}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주 선택" /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선주 선택')} /></SelectTrigger>
                 <SelectContent>
                   {ownerCompanies.map(c => <SelectItem key={c.id} value={String(c.id)} className="text-sm">{c.name}</SelectItem>)}
                 </SelectContent>
@@ -526,13 +526,13 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
             {(assignTarget === 'fleet' || assignTarget === 'ship') && (
               <div className="space-y-1.5">
                 <Label className="text-sm">
-                  플릿 {assignTarget === 'fleet' && <span className="text-red-500">*</span>}
-                  {assignTarget === 'ship' && <span className="text-gray-400 font-normal">(선택)</span>}
+                  {t('플릿')} {assignTarget === 'fleet' && <span className="text-red-500">*</span>}
+                  {assignTarget === 'ship' && <span className="text-gray-400 font-normal">{t('(선택)')}</span>}
                 </Label>
                 <Select value={assignFleetId} onValueChange={v => { setAssignFleetId(v); setAssignShipId(''); }} disabled={!assignOwnerId}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={assignOwnerId ? '플릿 선택' : '선주를 먼저 선택하세요'} /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={assignOwnerId ? t('플릿 선택') : t('선주를 먼저 선택하세요')} /></SelectTrigger>
                   <SelectContent>
-                    {assignTarget === 'ship' && <SelectItem value="none" className="text-sm text-gray-400">플릿 없음</SelectItem>}
+                    {assignTarget === 'ship' && <SelectItem value="none" className="text-sm text-gray-400">{t('플릿 없음')}</SelectItem>}
                     {fleets.filter(f => String(f.owner_id) === assignOwnerId).map(f => (
                       <SelectItem key={f.id} value={String(f.id)} className="text-sm">{f.name}</SelectItem>
                     ))}
@@ -543,9 +543,9 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
 
             {assignTarget === 'ship' && (
               <div className="space-y-1.5">
-                <Label className="text-sm">선박 <span className="text-red-500">*</span></Label>
+                <Label className="text-sm">{t('선박')} <span className="text-red-500">*</span></Label>
                 <Select value={assignShipId} onValueChange={setAssignShipId} disabled={!assignOwnerId}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={assignOwnerId ? '선박 선택' : '선주를 먼저 선택하세요'} /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={assignOwnerId ? t('선박 선택') : t('선주를 먼저 선택하세요')} /></SelectTrigger>
                   <SelectContent>
                     {ships.filter(s => {
                       if (!assignOwnerId) return false;
@@ -560,11 +560,11 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-sm">수당/공제 템플릿 <span className="text-red-500">*</span></Label>
+              <Label className="text-sm">{t('수당/공제 템플릿')} <span className="text-red-500">*</span></Label>
               <Select value={assignTemplateId} onValueChange={setAssignTemplateId}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="템플릿 선택" /></SelectTrigger>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('템플릿 선택')} /></SelectTrigger>
                 <SelectContent>
-                  {templates.map(t => <SelectItem key={t.id} value={String(t.id)} className="text-sm">{t.name}</SelectItem>)}
+                  {templates.map(tpl => <SelectItem key={tpl.id} value={String(tpl.id)} className="text-sm">{tpl.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -572,14 +572,14 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
             {assignTarget !== 'ship' && (
               <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded-md">
                 {assignTarget === 'owner'
-                  ? '선주 레벨 할당 시 소속 플릿/선박의 기존 할당 처리 여부를 확인합니다.'
-                  : '플릿 레벨 할당 시 소속 선박의 기존 할당 처리 여부를 확인합니다.'}
+                  ? t('선주 레벨 할당 시 소속 플릿/선박의 기존 할당 처리 여부를 확인합니다.')
+                  : t('플릿 레벨 할당 시 소속 선박의 기존 할당 처리 여부를 확인합니다.')}
               </p>
             )}
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setFormView(null)} className="h-8">취소</Button>
-              <Button type="button" size="sm" onClick={handleAssign} className="h-8">할당</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setFormView(null)} className="h-8">{t('취소')}</Button>
+              <Button type="button" size="sm" onClick={handleAssign} className="h-8">{t('할당')}</Button>
             </div>
           </div>
         ) : (
@@ -588,8 +588,8 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
             {/* 상위 탭: 대상별 / 템플릿별 */}
             <Tabs defaultValue="by-target" className="w-full">
               <TabsList className="grid w-full grid-cols-2 h-9 mb-4">
-                <TabsTrigger value="by-target" className="text-xs">대상별 (선주 · 플릿 · 선박)</TabsTrigger>
-                <TabsTrigger value="by-template" className="text-xs">템플릿별</TabsTrigger>
+                <TabsTrigger value="by-target" className="text-xs">{t('대상별 (선주 · 플릿 · 선박)')}</TabsTrigger>
+                <TabsTrigger value="by-template" className="text-xs">{t('템플릿별')}</TabsTrigger>
               </TabsList>
 
               {/* ── 대상별 탭 ── */}
@@ -597,46 +597,46 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
                 <div className="flex items-center gap-2 mb-3">
                   <Filter className="h-4 w-4 text-gray-400" />
                   <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                    <SelectTrigger className="w-48 h-8 text-sm"><SelectValue placeholder="템플릿 필터" /></SelectTrigger>
+                    <SelectTrigger className="w-48 h-8 text-sm"><SelectValue placeholder={t('템플릿 필터')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all" className="text-sm">모든 템플릿</SelectItem>
-                      {templates.map(t => <SelectItem key={t.id} value={String(t.id)} className="text-sm">{t.name}</SelectItem>)}
+                      <SelectItem value="all" className="text-sm">{t('모든 템플릿')}</SelectItem>
+                      {templates.map(tpl => <SelectItem key={tpl.id} value={String(tpl.id)} className="text-sm">{tpl.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <span className="text-xs text-gray-400">총 {totalCount}건</span>
+                  <span className="text-xs text-gray-400">{t('총 {{count}}건', { count: totalCount })}</span>
                 </div>
 
                 <Tabs defaultValue="all">
                   <TabsList className="grid w-full grid-cols-4 h-8">
-                    <TabsTrigger value="all" className="text-xs">전체 ({totalCount})</TabsTrigger>
-                    <TabsTrigger value="owner" className="text-xs"><Building2 className="h-3 w-3 mr-1" />선주 ({filteredOwner.length})</TabsTrigger>
-                    <TabsTrigger value="fleet" className="text-xs"><Layers className="h-3 w-3 mr-1" />플릿 ({filteredFleet.length})</TabsTrigger>
-                    <TabsTrigger value="ship" className="text-xs"><ShipIcon className="h-3 w-3 mr-1" />선박 ({filteredShip.length})</TabsTrigger>
+                    <TabsTrigger value="all" className="text-xs">{t('전체 ({{count}})', { count: totalCount })}</TabsTrigger>
+                    <TabsTrigger value="owner" className="text-xs"><Building2 className="h-3 w-3 mr-1" />{t('선주 ({{count}})', { count: filteredOwner.length })}</TabsTrigger>
+                    <TabsTrigger value="fleet" className="text-xs"><Layers className="h-3 w-3 mr-1" />{t('플릿 ({{count}})', { count: filteredFleet.length })}</TabsTrigger>
+                    <TabsTrigger value="ship" className="text-xs"><ShipIcon className="h-3 w-3 mr-1" />{t('선박 ({{count}})', { count: filteredShip.length })}</TabsTrigger>
                   </TabsList>
 
                   {/* 전체 */}
                   <TabsContent value="all" className="mt-3">
                     {totalCount === 0 ? (
-                      <div className="text-center py-8 text-sm text-gray-500">할당된 템플릿이 없습니다.</div>
+                      <div className="text-center py-8 text-sm text-gray-500">{t('할당된 템플릿이 없습니다.')}</div>
                     ) : (
                       <div className="space-y-4">
                         {filteredOwner.length > 0 && (
                           <div>
-                            <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><Building2 className="h-3 w-3" />선주 레벨</h3>
+                            <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><Building2 className="h-3 w-3" />{t('선주 레벨')}</h3>
                             {renderOwnerTable(pageOwner, 'o')}
                             {renderPager(filteredOwner.length, ownerPage, setOwnerPage)}
                           </div>
                         )}
                         {filteredFleet.length > 0 && (
                           <div>
-                            <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><Layers className="h-3 w-3" />플릿 레벨</h3>
+                            <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><Layers className="h-3 w-3" />{t('플릿 레벨')}</h3>
                             {renderFleetTable(pageFleet, 'f')}
                             {renderPager(filteredFleet.length, fleetPage, setFleetPage)}
                           </div>
                         )}
                         {filteredShip.length > 0 && (
                           <div>
-                            <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><ShipIcon className="h-3 w-3" />선박 레벨</h3>
+                            <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1"><ShipIcon className="h-3 w-3" />{t('선박 레벨')}</h3>
                             {renderShipTable(pageShip, 's')}
                             {renderPager(filteredShip.length, shipPage, setShipPage)}
                           </div>
@@ -647,7 +647,7 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
 
                   {/* 선주 */}
                   <TabsContent value="owner" className="mt-3">
-                    {filteredOwner.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">선주 레벨에 할당된 템플릿이 없습니다.</div> : (
+                    {filteredOwner.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">{t('선주 레벨에 할당된 템플릿이 없습니다.')}</div> : (
                       <>
                         {renderOwnerTable(pageOwner, 'o2')}
                         {renderPager(filteredOwner.length, ownerPage, setOwnerPage)}
@@ -657,7 +657,7 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
 
                   {/* 플릿 */}
                   <TabsContent value="fleet" className="mt-3">
-                    {filteredFleet.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">플릿 레벨에 할당된 템플릿이 없습니다.</div> : (
+                    {filteredFleet.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">{t('플릿 레벨에 할당된 템플릿이 없습니다.')}</div> : (
                       <>
                         {renderFleetTable(pageFleet, 'f2')}
                         {renderPager(filteredFleet.length, fleetPage, setFleetPage)}
@@ -667,7 +667,7 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
 
                   {/* 선박 */}
                   <TabsContent value="ship" className="mt-3">
-                    {filteredShip.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">선박 레벨에 할당된 템플릿이 없습니다.</div> : (
+                    {filteredShip.length === 0 ? <div className="text-center py-8 text-sm text-gray-500">{t('선박 레벨에 할당된 템플릿이 없습니다.')}</div> : (
                       <>
                         {renderShipTable(pageShip, 's2')}
                         {renderPager(filteredShip.length, shipPage, setShipPage)}
@@ -680,46 +680,46 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
               {/* ── 템플릿별 탭 ── */}
               <TabsContent value="by-template">
                 {templates.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-500">등록된 템플릿이 없습니다.</div>
+                  <div className="text-center py-8 text-sm text-gray-500">{t('등록된 템플릿이 없습니다.')}</div>
                 ) : (
                   <div className="space-y-4">
-                    {pageTemplates.map(t => {
-                      const tOwner = ownerAssignments.filter(a => String(a.template_id) === String(t.id));
-                      const tFleet = fleetAssignments.filter(a => String(a.template_id) === String(t.id));
-                      const tShip = shipAssignments.filter(a => String(a.template_id) === String(t.id));
+                    {pageTemplates.map(tmpl => {
+                      const tOwner = ownerAssignments.filter(a => String(a.template_id) === String(tmpl.id));
+                      const tFleet = fleetAssignments.filter(a => String(a.template_id) === String(tmpl.id));
+                      const tShip = shipAssignments.filter(a => String(a.template_id) === String(tmpl.id));
                       const tTotal = tOwner.length + tFleet.length + tShip.length;
 
                       return (
-                        <div key={t.id} className="border rounded-lg overflow-hidden">
+                        <div key={tmpl.id} className="border rounded-lg overflow-hidden">
                           {/* 템플릿 헤더 */}
                           <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
                             <div className="flex items-center gap-3">
-                              <Badge variant="default" className="text-xs">{t.name}</Badge>
-                              {t.description && <span className="text-xs text-gray-400">{t.description}</span>}
+                              <Badge variant="default" className="text-xs">{tmpl.name}</Badge>
+                              {tmpl.description && <span className="text-xs text-gray-400">{tmpl.description}</span>}
                             </div>
-                            <span className="text-xs text-gray-400">총 {tTotal}건 할당</span>
+                            <span className="text-xs text-gray-400">{t('총 {{count}}건 할당', { count: tTotal })}</span>
                           </div>
 
                           {/* 최종 적용 선박: 우선순위(선박 > 플릿 > 선주)를 반영해 이 템플릿이 실제로 적용되는 선박 전체 */}
                           <div className="px-4 py-3 bg-orange-50/40 border-b flex items-start gap-2">
                             <span className="text-xs font-semibold text-gray-500 shrink-0 flex items-center gap-1 pt-0.5">
-                              <ShipIcon className="h-3.5 w-3.5" />최종 적용 선박 ({(effectiveShipsByTemplate[String(t.id)] || []).length})
+                              <ShipIcon className="h-3.5 w-3.5" />{t('최종 적용 선박 ({{count}})', { count: (effectiveShipsByTemplate[String(tmpl.id)] || []).length })}
                             </span>
-                            {renderShipBadges(effectiveShipsByTemplate[String(t.id)] || [])}
+                            {renderShipBadges(effectiveShipsByTemplate[String(tmpl.id)] || [])}
                           </div>
 
                           {tTotal === 0 ? (
-                            <div className="text-center py-4 text-xs text-gray-400">할당된 대상 없음</div>
+                            <div className="text-center py-4 text-xs text-gray-400">{t('할당된 대상 없음')}</div>
                           ) : (
                             <div className="divide-y">
                               {/* 선주 레벨 */}
                               {tOwner.length > 0 && (
                                 <div className="px-4 py-3">
-                                  <button type="button" onClick={() => toggleLevelSection(`${t.id}-owner`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
-                                    {expandedLevelSections.has(`${t.id}-owner`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                    <Building2 className="h-3.5 w-3.5" />선주 레벨 ({tOwner.length})
+                                  <button type="button" onClick={() => toggleLevelSection(`${tmpl.id}-owner`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
+                                    {expandedLevelSections.has(`${tmpl.id}-owner`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                    <Building2 className="h-3.5 w-3.5" />{t('선주 레벨 ({{count}})', { count: tOwner.length })}
                                   </button>
-                                  {expandedLevelSections.has(`${t.id}-owner`) && (
+                                  {expandedLevelSections.has(`${tmpl.id}-owner`) && (
                                   <div className="space-y-1.5">
                                     {tOwner.map(a => (
                                       <div key={a.id} className="flex items-center justify-between bg-blue-50 rounded px-3 py-2">
@@ -741,11 +741,11 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
                               {/* 플릿 레벨 */}
                               {tFleet.length > 0 && (
                                 <div className="px-4 py-3">
-                                  <button type="button" onClick={() => toggleLevelSection(`${t.id}-fleet`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
-                                    {expandedLevelSections.has(`${t.id}-fleet`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                    <Layers className="h-3.5 w-3.5" />플릿 레벨 ({tFleet.length})
+                                  <button type="button" onClick={() => toggleLevelSection(`${tmpl.id}-fleet`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
+                                    {expandedLevelSections.has(`${tmpl.id}-fleet`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                    <Layers className="h-3.5 w-3.5" />{t('플릿 레벨 ({{count}})', { count: tFleet.length })}
                                   </button>
-                                  {expandedLevelSections.has(`${t.id}-fleet`) && (
+                                  {expandedLevelSections.has(`${tmpl.id}-fleet`) && (
                                   <div className="space-y-1.5">
                                     {tFleet.map(a => (
                                       <div key={a.id} className="flex items-center justify-between bg-green-50 rounded px-3 py-2">
@@ -769,11 +769,11 @@ export default function AllowanceTemplateAssignmentsSection({ prefillTemplateId,
                               {/* 선박 레벨 */}
                               {tShip.length > 0 && (
                                 <div className="px-4 py-3">
-                                  <button type="button" onClick={() => toggleLevelSection(`${t.id}-ship`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
-                                    {expandedLevelSections.has(`${t.id}-ship`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                                    <ShipIcon className="h-3.5 w-3.5" />선박 레벨 ({tShip.length})
+                                  <button type="button" onClick={() => toggleLevelSection(`${tmpl.id}-ship`)} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-2 hover:text-gray-700">
+                                    {expandedLevelSections.has(`${tmpl.id}-ship`) ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                    <ShipIcon className="h-3.5 w-3.5" />{t('선박 레벨 ({{count}})', { count: tShip.length })}
                                   </button>
-                                  {expandedLevelSections.has(`${t.id}-ship`) && (
+                                  {expandedLevelSections.has(`${tmpl.id}-ship`) && (
                                   <div className="space-y-1.5">
                                     {tShip.map(a => (
                                       <div key={a.id} className="flex items-center justify-between bg-orange-50 rounded px-3 py-2">

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewRotationDetailPage/en.json';
 import { Ship, Users, Download, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +27,8 @@ import type { ApprovalLineWithSteps } from '@/types/approval';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 
+i18n.addResourceBundle('en', 'CrewRotationDetailPage', en, true, true);
+
 const STATUS_CONFIG: Record<string, { label: string; variant: 'secondary' | 'default' | 'destructive' }> = {
   draft: { label: '임시저장', variant: 'secondary' },
   pending_approval: { label: '결재대기', variant: 'default' },
@@ -33,6 +38,7 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'secondary' | 'def
 };
 
 export default function CrewRotationDetailPage() {
+  const { t } = useTranslation('CrewRotationDetailPage');
   const { id } = useParams<{ id: string }>();
   const { activeTabId, updateTab } = useTabContext();
   const { toast } = useToast();
@@ -71,7 +77,7 @@ export default function CrewRotationDetailPage() {
       const port = ports.find(p => p.id === data.port_id);
       if (port) setPortLabel(`${port.country_name} ${port.city_name}`);
     }
-    if (activeTabId && data) updateTab(activeTabId, { title: data.plan_name || '교대계획' });
+    if (activeTabId && data) updateTab(activeTabId, { title: data.plan_name || t('교대계획') });
     setLoading(false);
 
     // 지급 조건 후보 목록은 상태와 무관하게 항상 계산해둔다(항목명/금액 표시용) — 실제로
@@ -152,8 +158,8 @@ export default function CrewRotationDetailPage() {
       for (const [assignmentId, itemIds] of Object.entries(allowanceSelections)) allowancePayload[assignmentId] = [...itemIds];
       if (Object.keys(allowancePayload).length > 0) await rotationService.saveAssignmentAllowanceSelections(plan.id, allowancePayload);
       const result = await rotationService.submitRotationPlanForApproval(plan.id, submitLineId, submitComment || undefined);
-      if (!result.ok) { toast({ title: '결재 상신 실패', description: result.message, variant: 'destructive' }); return; }
-      toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
+      if (!result.ok) { toast({ title: t('결재 상신 실패'), description: result.message, variant: 'destructive' }); return; }
+      toast({ title: t('결재 상신 완료'), description: t('발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.') });
       setSubmitDialogOpen(false);
       loadPlan();
       window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
@@ -175,7 +181,7 @@ export default function CrewRotationDetailPage() {
         setNewNoteText('');
         setAddingNote(false);
       } else {
-        toast({ title: '비고 추가 중 오류가 발생했습니다', variant: 'destructive' });
+        toast({ title: t('비고 추가 중 오류가 발생했습니다'), variant: 'destructive' });
       }
     } finally {
       setSavingNote(false);
@@ -183,11 +189,11 @@ export default function CrewRotationDetailPage() {
   };
 
   const handleExecute = async () => {
-    if (!plan || !confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
+    if (!plan || !confirm(t('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.'))) return;
     // 수당 결정은 상신 시점에 이미 저장되어 있으므로 다시 넘길 필요가 없다.
     const ok = await rotationService.executeRotationPlan(plan.id);
-    if (ok) { toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' }); loadPlan(); window.dispatchEvent(new CustomEvent('rotation-plan-data-changed')); }
-    else toast({ title: '실행 중 오류가 발생했습니다', variant: 'destructive' });
+    if (ok) { toast({ title: t('발령이 실행되었습니다'), description: t('선원 상태가 업데이트되었습니다.') }); loadPlan(); window.dispatchEvent(new CustomEvent('rotation-plan-data-changed')); }
+    else toast({ title: t('실행 중 오류가 발생했습니다'), variant: 'destructive' });
   };
 
   if (loading) {
@@ -201,7 +207,7 @@ export default function CrewRotationDetailPage() {
   if (!plan) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-500">교대 계획을 찾을 수 없습니다.</p>
+        <p className="text-sm text-gray-500">{t('교대 계획을 찾을 수 없습니다.')}</p>
       </div>
     );
   }
@@ -222,18 +228,18 @@ export default function CrewRotationDetailPage() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
+              <Badge variant={statusCfg.variant}>{t(statusCfg.label)}</Badge>
               <Button size="sm" variant="outline" className="h-8" onClick={handleExportExcel} disabled={exporting}>
-                <Download className="w-3.5 h-3.5 mr-1" />{exporting ? '내보내는 중...' : '엑셀 다운로드'}
+                <Download className="w-3.5 h-3.5 mr-1" />{exporting ? t('내보내는 중...') : t('엑셀 다운로드')}
               </Button>
               <Button size="sm" variant="outline" className="h-8" onClick={handlePrint}>
-                <Printer className="w-3.5 h-3.5 mr-1" />PDF 출력
+                <Printer className="w-3.5 h-3.5 mr-1" />{t('PDF 출력')}
               </Button>
               {plan.status === 'draft' && (
-                <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openSubmitDialog}>결재 상신</Button>
+                <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openSubmitDialog}>{t('결재 상신')}</Button>
               )}
               {plan.status === 'approved' && (
-                <Button size="sm" className="h-8" onClick={handleExecute}>발령 실행</Button>
+                <Button size="sm" className="h-8" onClick={handleExecute}>{t('발령 실행')}</Button>
               )}
             </div>
           </div>
@@ -241,45 +247,45 @@ export default function CrewRotationDetailPage() {
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div>
-              <Label className="text-xs text-gray-500">교대일</Label>
+              <Label className="text-xs text-gray-500">{t('교대일')}</Label>
               <div className="mt-0.5">{format(new Date(plan.rotation_date), 'yyyy-MM-dd', { locale: ko })}</div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">기준 교대일</Label>
+              <Label className="text-xs text-gray-500">{t('기준 교대일')}</Label>
               <div className="mt-0.5">{plan.base_departure_date || '-'}</div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">작성자</Label>
+              <Label className="text-xs text-gray-500">{t('작성자')}</Label>
               <div className="mt-0.5">{plan.creator_name || '-'}</div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">작성일시</Label>
+              <Label className="text-xs text-gray-500">{t('작성일시')}</Label>
               <div className="mt-0.5">{format(new Date(plan.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</div>
             </div>
           </div>
           <div>
-            <Label className="text-xs text-gray-500">비고</Label>
+            <Label className="text-xs text-gray-500">{t('비고')}</Label>
             {plan.notes && <p className="text-sm mt-0.5 text-gray-700 whitespace-pre-wrap">{plan.notes}</p>}
             {addingNote ? (
               <div className="mt-2 space-y-2">
                 <Textarea
                   value={newNoteText}
                   onChange={e => setNewNoteText(e.target.value)}
-                  placeholder="대리점 정보, 비자 정보 등 특이사항을 입력하세요"
+                  placeholder={t('대리점 정보, 비자 정보 등 특이사항을 입력하세요')}
                   className="text-sm min-h-[70px]"
                 />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleAddNote} disabled={savingNote || !newNoteText.trim()}>
-                    {savingNote ? '저장 중...' : '추가'}
+                    {savingNote ? t('저장 중...') : t('추가')}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => { setAddingNote(false); setNewNoteText(''); }} disabled={savingNote}>
-                    취소
+                    {t('취소')}
                   </Button>
                 </div>
               </div>
             ) : (
               <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => setAddingNote(true)}>
-                + 비고 추가
+                {t('+ 비고 추가')}
               </Button>
             )}
           </div>
@@ -289,35 +295,35 @@ export default function CrewRotationDetailPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-1.5">
-            <Users className="w-4 h-4" />교대 인원 ({plan.assignments.length}명)
+            <Users className="w-4 h-4" />{t('교대 인원 ({{count}}명)', { count: plan.assignments.length })}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {plan.assignments.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">배정된 선원이 없습니다.</p>
+            <p className="text-xs text-gray-400 text-center py-4">{t('배정된 선원이 없습니다.')}</p>
           ) : (
             plan.assignments.map((a, i) => (
               <div key={a.id} className="border rounded-md p-3 text-sm">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-gray-400">#{i + 1}</span>
-                  <span className="text-xs text-gray-400">계약 {a.contract_months ?? '-'}개월</span>
+                  <span className="text-xs text-gray-400">{t('계약 {{months}}개월', { months: a.contract_months ?? '-' })}</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <div className="text-[11px] font-medium text-emerald-700 mb-1">승선자</div>
+                    <div className="text-[11px] font-medium text-emerald-700 mb-1">{t('승선자')}</div>
                     {a.on_crew_id ? (
                       <>
                         <div className="font-medium">
                           {a.on_crew_name}
                           {a.on_rank_grade && <span className="text-blue-600 text-xs ml-1">({a.on_rank_grade})</span>}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5">출국 {a.on_departure_date || '-'} · 승선 {a.embark_date}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{t('출국 {{departure}} · 승선 {{embark}}', { departure: a.on_departure_date || '-', embark: a.embark_date })}</div>
                       </>
-                    ) : <div className="text-gray-400 text-xs">없음</div>}
+                    ) : <div className="text-gray-400 text-xs">{t('없음')}</div>}
                     {(eligibilityByAssignment.get(a.id) || []).length > 0 && (
                       <div className="mt-2 pt-2 border-t space-y-1">
                         <div className="text-[11px] font-medium text-gray-500">
-                          수당/공제 지급대상{plan.status !== 'draft' && <span className="text-gray-400 font-normal"> (상신 시 결정됨)</span>}
+                          {t('수당/공제 지급대상')}{plan.status !== 'draft' && <span className="text-gray-400 font-normal"> {t('(상신 시 결정됨)')}</span>}
                         </div>
                         {(eligibilityByAssignment.get(a.id) || []).map(item => (
                           <label key={item.allowanceItemId} className={`flex items-start gap-1.5 text-xs ${plan.status === 'draft' ? 'cursor-pointer' : ''}`}>
@@ -341,19 +347,19 @@ export default function CrewRotationDetailPage() {
                     )}
                   </div>
                   <div>
-                    <div className="text-[11px] font-medium text-orange-700 mb-1">하선자</div>
+                    <div className="text-[11px] font-medium text-orange-700 mb-1">{t('하선자')}</div>
                     {a.off_crew_id ? (
                       <>
                         <div className="font-medium">
                           {a.off_crew_name}
                           {a.off_rank_grade && <span className="text-blue-600 text-xs ml-1">({a.off_rank_grade})</span>}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5">하선 {a.off_disembark_date || '-'} · 귀국 {a.off_return_date || '-'}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{t('하선 {{disembark}} · 귀국 {{return}}', { disembark: a.off_disembark_date || '-', return: a.off_return_date || '-' })}</div>
                       </>
-                    ) : <div className="text-gray-400 text-xs">없음</div>}
+                    ) : <div className="text-gray-400 text-xs">{t('없음')}</div>}
                   </div>
                 </div>
-                {a.notes && <p className="text-xs text-gray-500 mt-2 pt-2 border-t">비고: {a.notes}</p>}
+                {a.notes && <p className="text-xs text-gray-500 mt-2 pt-2 border-t">{t('비고: {{notes}}', { notes: a.notes })}</p>}
               </div>
             ))
           )}
@@ -363,35 +369,35 @@ export default function CrewRotationDetailPage() {
       <Dialog open={submitDialogOpen} onOpenChange={o => !submitting && setSubmitDialogOpen(o)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>배승 결재 상신</DialogTitle>
+            <DialogTitle>{t('배승 결재 상신')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <label className="text-sm font-medium mb-2 block">{t('결재 라인 선택 *')}</label>
               <Select value={submitLineId} onValueChange={setSubmitLineId}>
-                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('결재 라인을 선택하세요')} /></SelectTrigger>
                 <SelectContent>
                   {approvalLines.length === 0
-                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
-                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                    ? <SelectItem value="none" disabled>{t('등록된 결재 라인이 없습니다')}</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{t('{{name}} ({{steps}}단계)', { name: l.name, steps: l.steps.length })}</SelectItem>)}
                 </SelectContent>
               </Select>
               {submitLineId && (
                 <div className="flex items-center space-x-2 mt-2">
                   <Checkbox id="save-line-default-rotation-detail" checked={saveLineDefault} onCheckedChange={c => setSaveLineDefault(c as boolean)} />
-                  <label htmlFor="save-line-default-rotation-detail" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                  <label htmlFor="save-line-default-rotation-detail" className="text-sm text-gray-700 cursor-pointer">{t('앞으로도 해당 결재 라인 이용')}</label>
                 </div>
               )}
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
-              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+              <label className="text-sm font-medium mb-2 block">{t('요청 사유 (선택)')}</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder={t('요청 사유를 입력하세요...')} className="min-h-[80px]" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)} disabled={submitting}>취소</Button>
+            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)} disabled={submitting}>{t('취소')}</Button>
             <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
-              {submitting ? '처리 중...' : '결재 상신'}
+              {submitting ? t('처리 중...') : t('결재 상신')}
             </Button>
           </DialogFooter>
         </DialogContent>

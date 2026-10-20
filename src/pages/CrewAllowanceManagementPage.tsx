@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewAllowanceManagementPage/en.json';
 import { BadgeDollarSign, Trash2, ExternalLink } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -27,11 +30,14 @@ const METHOD_LABELS: Record<AllowancePaymentMethod, string> = { ship_direct: '�
 const CONTRACT_STATUS_LABELS: Record<string, string> = { active: '진행중', completed: '종료', terminated: '해지', draft: '초안', pending_approval: '결재중', approved: '승인', rejected: '반려' };
 const PAGE_SIZE = 20;
 
+i18n.addResourceBundle('en', 'CrewAllowanceManagementPage', en, true, true);
+
 // 계약별(선원별)로 흩어져 있는 crew_contract_allowances(재고용수당 등 실제 적용된 수당/공제)를
 // 상병 수당 관리 화면과 동일한 패턴으로 한눈에 모아 보는 전용 화면. 금액/조건 수정은 이미
 // ContractManagementPage.tsx에 완전한 편집 UI가 있으므로 여기서는 별도 수정 폼을 만들지 않고
 // 행 클릭 시 그 계약 편집 화면으로 이동하는 링크만 제공한다.
 export default function CrewAllowanceManagementPage() {
+  const { t } = useTranslation('CrewAllowanceManagementPage');
   const { toast } = useToast();
   const navigate = useNavigate();
   const [ships, setShips] = useState<Ship[]>([]);
@@ -80,7 +86,7 @@ export default function CrewAllowanceManagementPage() {
       const shipIds = new Set(shipList.map(s => s.id));
       setRecords(data.filter(r => shipIds.has(r.ship_id)));
     } catch (e) {
-      toast({ title: '조회 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('조회 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -112,76 +118,76 @@ export default function CrewAllowanceManagementPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`선택한 수당/공제 항목 ${selectedIds.length}건을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('선택한 수당/공제 항목 {{count}}건을 삭제하시겠습니까? 되돌릴 수 없습니다.', { count: selectedIds.length }))) return;
     setDeleting(true);
     try {
       await Promise.all(selectedIds.map(id => allowanceService.deleteContractAllowance(id)));
-      toast({ title: `${selectedIds.length}건을 삭제했습니다.` });
+      toast({ title: t('{{count}}건을 삭제했습니다.', { count: selectedIds.length }) });
       setSelectedIds([]);
       await loadRecords(statusFilter, ships);
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setDeleting(false);
     }
   };
 
   const handleDeleteOne = async (r: CrewContractAllowanceWithFullDetails) => {
-    if (!confirm(`${r.crew_name}의 "${r.allowance_item_name}" 항목을 삭제하시겠습니까?`)) return;
+    if (!confirm(t('{{name}}의 "{{item}}" 항목을 삭제하시겠습니까?', { name: r.crew_name, item: r.allowance_item_name }))) return;
     try {
       await allowanceService.deleteContractAllowance(r.id);
       await loadRecords(statusFilter, ships);
     } catch (e) {
-      toast({ title: '삭제 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     }
   };
 
   return (
     <div className="max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><BadgeDollarSign className="w-5 h-5 text-muted-foreground" />수당 관리</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2"><BadgeDollarSign className="w-5 h-5 text-muted-foreground" />{t('수당 관리')}</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          재고용수당 등 각 계약에 실제 적용된 수당/공제 항목을 모아 봅니다. 금액·조건 수정은 계약 편집 화면(발령 연결)으로 이동해 진행하세요.
+          {t('재고용수당 등 각 계약에 실제 적용된 수당/공제 항목을 모아 봅니다. 금액·조건 수정은 계약 편집 화면(발령 연결)으로 이동해 진행하세요.')}
         </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">계약상태</Label>
+          <Label className="text-xs">{t('계약상태')}</Label>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v as 'active' | 'all')}>
             <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">진행중</SelectItem>
-              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="active">{t('진행중')}</SelectItem>
+              <SelectItem value="all">{t('전체')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">선주</Label>
+          <Label className="text-xs">{t('선주')}</Label>
           <Select value={ownerFilter || '_all'} onValueChange={v => handleOwnerFilterChange(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {[...owners.entries()].map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">플릿</Label>
+          <Label className="text-xs">{t('플릿')}</Label>
           <Select value={fleetFilter || '_all'} onValueChange={v => handleFleetFilterChange(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {fleetsForOwnerFilter.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">선박</Label>
+          <Label className="text-xs">{t('선박')}</Label>
           <Select value={shipFilter || '_all'} onValueChange={v => setShipFilter(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {shipsForFilter.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -190,9 +196,9 @@ export default function CrewAllowanceManagementPage() {
 
       {selectedIds.length > 0 && (
         <div className="flex items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-md px-4 py-2">
-          <span className="text-xs font-medium text-red-800">{selectedIds.length}건 선택됨</span>
+          <span className="text-xs font-medium text-red-800">{t('{{count}}건 선택됨', { count: selectedIds.length })}</span>
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1 bg-white text-red-600 border-red-300" onClick={handleBulkDelete} disabled={deleting}>
-            <Trash2 className="w-3.5 h-3.5" />{deleting ? '삭제 중...' : '선택 삭제'}
+            <Trash2 className="w-3.5 h-3.5" />{deleting ? t('삭제 중...') : t('선택 삭제')}
           </Button>
         </div>
       )}
@@ -200,7 +206,7 @@ export default function CrewAllowanceManagementPage() {
       {loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
       ) : filteredRecords.length === 0 ? (
-        <div className="text-center py-12 text-sm text-gray-400">해당 조건의 수당/공제 항목이 없습니다.</div>
+        <div className="text-center py-12 text-sm text-gray-400">{t('해당 조건의 수당/공제 항목이 없습니다.')}</div>
       ) : (
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <Table>
@@ -212,19 +218,19 @@ export default function CrewAllowanceManagementPage() {
                     onCheckedChange={checked => toggleSelectAll(!!checked)}
                   />
                 </TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[70px]">선주</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[70px]">플릿</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[90px]">선박</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선원</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">항목명</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">종류</TableHead>
-                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">금액</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">지급방식</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">지급주체</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">계약상태</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">비고</TableHead>
-                <TableHead className="py-1 px-2 text-xs text-center whitespace-nowrap">관리</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[70px]">{t('선주')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[70px]">{t('플릿')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap max-w-[90px]">{t('선박')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('직급')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('선원')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('항목명')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('종류')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('금액')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('지급방식')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('지급주체')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('계약상태')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('비고')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-center whitespace-nowrap">{t('관리')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -239,21 +245,21 @@ export default function CrewAllowanceManagementPage() {
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.rank_code}</TableCell>
                   <TableCell className="py-1 px-2 text-xs font-medium">{r.crew_name}</TableCell>
                   <TableCell className="py-1 px-2 text-xs">{r.allowance_item_name}</TableCell>
-                  <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${KIND_COLORS[r.kind]}`}>{KIND_LABELS[r.kind]}</Badge></TableCell>
+                  <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${KIND_COLORS[r.kind]}`}>{t(KIND_LABELS[r.kind])}</Badge></TableCell>
                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(r.amount)} {r.currency}</TableCell>
-                  <TableCell className="py-1 px-2 text-xs text-muted-foreground whitespace-nowrap">{BASIS_LABELS[r.payment_basis]}</TableCell>
-                  <TableCell className="py-1 px-2 text-xs text-muted-foreground whitespace-nowrap">{METHOD_LABELS[r.payment_method]}</TableCell>
-                  <TableCell className="py-1 px-2 text-xs text-muted-foreground whitespace-nowrap">{CONTRACT_STATUS_LABELS[r.contract_status] || r.contract_status || '-'}</TableCell>
+                  <TableCell className="py-1 px-2 text-xs text-muted-foreground whitespace-nowrap">{t(BASIS_LABELS[r.payment_basis])}</TableCell>
+                  <TableCell className="py-1 px-2 text-xs text-muted-foreground whitespace-nowrap">{t(METHOD_LABELS[r.payment_method])}</TableCell>
+                  <TableCell className="py-1 px-2 text-xs text-muted-foreground whitespace-nowrap">{CONTRACT_STATUS_LABELS[r.contract_status] ? t(CONTRACT_STATUS_LABELS[r.contract_status]) : (r.contract_status || '-')}</TableCell>
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground max-w-[140px] truncate" title={r.notes}>{r.notes || '-'}</TableCell>
                   <TableCell className="py-1 px-2 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <Button
-                        size="sm" variant="ghost" className="h-6 w-6 p-0" title="계약 편집 화면으로 이동"
+                        size="sm" variant="ghost" className="h-6 w-6 p-0" title={t('계약 편집 화면으로 이동')}
                         onClick={() => navigate(`/contract-management?contractId=${r.contract_id}`)}
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="삭제" onClick={() => handleDeleteOne(r)}>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title={t('삭제')} onClick={() => handleDeleteOne(r)}>
                         <Trash2 className="w-3.5 h-3.5 text-red-500" />
                       </Button>
                     </div>
@@ -268,7 +274,7 @@ export default function CrewAllowanceManagementPage() {
       {!loading && filteredRecords.length > 0 && (
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
-            총 {filteredRecords.length}건 중 {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredRecords.length)}건 표시
+            {t('총 {{total}}건 중 {{start}}-{{end}}건 표시', { total: filteredRecords.length, start: (page - 1) * PAGE_SIZE + 1, end: Math.min(page * PAGE_SIZE, filteredRecords.length) })}
           </p>
           {totalPages > 1 && (
             <Pagination className="mx-0 w-auto">

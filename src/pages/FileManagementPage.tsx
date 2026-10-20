@@ -172,7 +172,7 @@ export default function FileManagementPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base">{t('파일 목록')}</CardTitle>
-            <span className="text-xs text-gray-400">{filtered.length}개 · 총 {formatBytes(totalSize)}</span>
+            <span className="text-xs text-gray-400">{t('{{count}}개 · 총 {{size}}', { count: filtered.length, size: formatBytes(totalSize) })}</span>
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">

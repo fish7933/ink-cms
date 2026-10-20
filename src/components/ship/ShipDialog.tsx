@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ShipDialog/en.json';
 import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +22,8 @@ import type { SalaryTemplate } from '@/lib/salary-store';
 import SalaryTemplateViewDialog from '@/components/salary/SalaryTemplateViewDialog';
 import { ShipPersonnelTab } from './ShipPersonnelTab';
 import ShipCrewRosterTab from './ShipCrewRosterTab';
+
+i18n.addResourceBundle('en', 'ShipDialog', en, true, true);
 
 interface ShipFormData {
   name: string;
@@ -75,6 +80,7 @@ export default function ShipDialog({
   shipId,
   salaryTemplate,
 }: ShipDialogProps) {
+  const { t } = useTranslation('ShipDialog');
   const [availableFleets, setAvailableFleets] = useState<Fleet[]>([]);
   const [allFleets, setAllFleets] = useState<Fleet[]>([]);
   const [loadingFleets, setLoadingFleets] = useState(false);
@@ -256,7 +262,7 @@ export default function ShipDialog({
     
     // Prevent submission if there's an owner-fleet mismatch
     if (ownerFleetMismatch) {
-      alert('선박 소유주와 플릿 소유주가 일치하지 않습니다. 먼저 이 문제를 해결해주세요.');
+      alert(t('선박 소유주와 플릿 소유주가 일치하지 않습니다. 먼저 이 문제를 해결해주세요.'));
       return;
     }
     
@@ -267,18 +273,18 @@ export default function ShipDialog({
     <form onSubmit={handleSubmit}>
           <Tabs defaultValue="basic" className="w-full">
             <TabsList className="grid w-full grid-cols-5 h-9">
-              <TabsTrigger value="basic" className="text-xs">기본 정보</TabsTrigger>
-              <TabsTrigger value="technical" className="text-xs">기술 정보</TabsTrigger>
-              <TabsTrigger value="capacity" className="text-xs">용량</TabsTrigger>
-              <TabsTrigger value="personnel" className="text-xs">담당자</TabsTrigger>
-              <TabsTrigger value="roster" className="text-xs">승선 현황</TabsTrigger>
+              <TabsTrigger value="basic" className="text-xs">{t('기본 정보')}</TabsTrigger>
+              <TabsTrigger value="technical" className="text-xs">{t('기술 정보')}</TabsTrigger>
+              <TabsTrigger value="capacity" className="text-xs">{t('용량')}</TabsTrigger>
+              <TabsTrigger value="personnel" className="text-xs">{t('담당자')}</TabsTrigger>
+              <TabsTrigger value="roster" className="text-xs">{t('승선 현황')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-3 mt-3">
               {ownerFleetMismatch && (
                 <Alert variant="destructive" className="animate-in slide-in-from-top-2 duration-200">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle className="text-sm font-semibold">소유주 불일치</AlertTitle>
+                  <AlertTitle className="text-sm font-semibold">{t('소유주 불일치')}</AlertTitle>
                   <AlertDescription className="text-xs">
                     {ownerFleetMismatch}
                   </AlertDescription>
@@ -287,14 +293,14 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="owner_id" className="text-xs">선주사 *</Label>
+                  <Label htmlFor="owner_id" className="text-xs">{t('선주사 *')}</Label>
                   <Select
                     value={formData.owner_id}
                     onValueChange={handleOwnerChange}
                     required
                   >
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder="선주사를 선택하세요" />
+                      <SelectValue placeholder={t('선주사를 선택하세요')} />
                     </SelectTrigger>
                     <SelectContent>
                       {ownerCompanies.map(company => (
@@ -307,7 +313,7 @@ export default function ShipDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="fleet_id" className="text-xs">플릿</Label>
+                  <Label htmlFor="fleet_id" className="text-xs">{t('플릿')}</Label>
                   <Select
                     value={formData.fleet_id || '__none__'}
                     onValueChange={handleFleetChange}
@@ -315,14 +321,14 @@ export default function ShipDialog({
                   >
                     <SelectTrigger className="h-9 text-sm">
                       <SelectValue placeholder={
-                        !formData.owner_id ? "먼저 선주사를 선택하세요" :
-                        loadingFleets ? "로딩 중..." :
-                        availableFleets.length === 0 ? "플릿 없음" :
-                        "플릿을 선택하세요"
+                        !formData.owner_id ? t('먼저 선주사를 선택하세요') :
+                        loadingFleets ? t('로딩 중...') :
+                        availableFleets.length === 0 ? t('플릿 없음') :
+                        t('플릿을 선택하세요')
                       } />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__" className="text-sm">플릿 없음</SelectItem>
+                      <SelectItem value="__none__" className="text-sm">{t('플릿 없음')}</SelectItem>
                       {availableFleets.map(fleet => (
                         <SelectItem key={fleet.id} value={String(fleet.id)} className="text-sm">
                           {fleet.name}
@@ -336,23 +342,23 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="name" className="text-xs">선박명 *</Label>
+                  <Label htmlFor="name" className="text-xs">{t('선박명 *')}</Label>
                   <Input
                     id="name"
                     value={formData.name}
                     onChange={(e) => onFormDataChange({...formData, name: e.target.value})}
-                    placeholder="예: MV Ocean Star"
+                    placeholder={t('예: MV Ocean Star')}
                     required
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="imo_number" className="text-xs">IMO 번호</Label>
+                  <Label htmlFor="imo_number" className="text-xs">{t('IMO 번호')}</Label>
                   <Input
                     id="imo_number"
                     value={formData.imo_number}
                     onChange={(e) => onFormDataChange({...formData, imo_number: e.target.value})}
-                    placeholder="예: IMO1234567"
+                    placeholder={t('예: IMO1234567')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -360,12 +366,12 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="call_sign" className="text-xs">호출 부호</Label>
+                  <Label htmlFor="call_sign" className="text-xs">{t('호출 부호')}</Label>
                   <Input
                     id="call_sign"
                     value={formData.call_sign}
                     onChange={(e) => onFormDataChange({...formData, call_sign: e.target.value})}
-                    placeholder="예: VRXY"
+                    placeholder={t('예: VRXY')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -375,12 +381,12 @@ export default function ShipDialog({
                     id="mmsi"
                     value={formData.mmsi}
                     onChange={(e) => onFormDataChange({...formData, mmsi: e.target.value})}
-                    placeholder="예: 123456789"
+                    placeholder={t('예: 123456789')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="flag" className="text-xs">선적 국가 *</Label>
+                  <Label htmlFor="flag" className="text-xs">{t('선적 국가 *')}</Label>
                   <Select
                     value={formData.flag}
                     onValueChange={(value) => onFormDataChange({...formData, flag: value})}
@@ -388,7 +394,7 @@ export default function ShipDialog({
                     disabled={loadingShipFlags}
                   >
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder={loadingShipFlags ? "로딩 중..." : "선적국을 선택하세요"} />
+                      <SelectValue placeholder={loadingShipFlags ? t('로딩 중...') : t('선적국을 선택하세요')} />
                     </SelectTrigger>
                     <SelectContent>
                       {shipFlags.map(flag => (
@@ -406,7 +412,7 @@ export default function ShipDialog({
                   <Alert className="bg-blue-50 border-blue-200">
                     <Info className="h-4 w-4 text-blue-600" />
                     <AlertDescription className="text-xs text-blue-900">
-                      외국적 선박입니다. BBCHP(나용선) 여부를 확인해주세요.
+                      {t('외국적 선박입니다. BBCHP(나용선) 여부를 확인해주세요.')}
                     </AlertDescription>
                   </Alert>
                   
@@ -426,7 +432,7 @@ export default function ShipDialog({
                         BBCHP (Bareboat Charter with Korean Flag)
                       </Label>
                       <p className="text-xs text-gray-500">
-                        나용선 선박의 경우 선적국 증서 외에 한국 선박에 준하는 선원 증서가 필요합니다.
+                        {t('나용선 선박의 경우 선적국 증서 외에 한국 선박에 준하는 선원 증서가 필요합니다.')}
                       </p>
                     </div>
                   </div>
@@ -435,14 +441,14 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="ship_type" className="text-xs">선종 *</Label>
+                  <Label htmlFor="ship_type" className="text-xs">{t('선종 *')}</Label>
                   <Select
                     value={formData.ship_type}
                     onValueChange={(value) => onFormDataChange({...formData, ship_type: value})}
                     disabled={loadingShipTypes}
                   >
                     <SelectTrigger className="h-9 text-sm">
-                      <SelectValue placeholder={loadingShipTypes ? "로딩 중..." : "선종을 선택하세요"} />
+                      <SelectValue placeholder={loadingShipTypes ? t('로딩 중...') : t('선종을 선택하세요')} />
                     </SelectTrigger>
                     <SelectContent>
                       {shipTypes.map(type => (
@@ -454,17 +460,17 @@ export default function ShipDialog({
                   </Select>
                   {shipTypes.length === 0 && !loadingShipTypes && (
                     <p className="text-xs text-amber-600">
-                      선종이 없습니다. 선종/분류 관리에서 추가하세요.
+                      {t('선종이 없습니다. 선종/분류 관리에서 추가하세요.')}
                     </p>
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="port_of_registry" className="text-xs">선적항</Label>
+                  <Label htmlFor="port_of_registry" className="text-xs">{t('선적항')}</Label>
                   <Input
                     id="port_of_registry"
                     value={formData.port_of_registry}
                     onChange={(e) => onFormDataChange({...formData, port_of_registry: e.target.value})}
-                    placeholder="예: Busan"
+                    placeholder={t('예: Busan')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -472,23 +478,23 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="ship_phone" className="text-xs">연락처</Label>
+                  <Label htmlFor="ship_phone" className="text-xs">{t('연락처')}</Label>
                   <Input
                     id="ship_phone"
                     value={formData.phone}
                     onChange={(e) => onFormDataChange({...formData, phone: e.target.value})}
-                    placeholder="예: Sat-Phone 번호"
+                    placeholder={t('예: Sat-Phone 번호')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="ship_email" className="text-xs">이메일</Label>
+                  <Label htmlFor="ship_email" className="text-xs">{t('이메일')}</Label>
                   <Input
                     id="ship_email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => onFormDataChange({...formData, email: e.target.value})}
-                    placeholder="예: master@ship.com"
+                    placeholder={t('예: master@ship.com')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -496,32 +502,32 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="gt" className="text-xs">총톤수 (GT) *</Label>
+                  <Label htmlFor="gt" className="text-xs">{t('총톤수 (GT) *')}</Label>
                   <Input
                     id="gt"
                     type="number"
                     value={formData.gt}
                     onChange={(e) => handleGTChange(e.target.value)}
-                    placeholder="예: 50000"
+                    placeholder={t('예: 50000')}
                     required
                     className="h-9 text-sm"
                   />
                   <p className="text-xs text-gray-500">
-                    GT 입력 시 DWT가 자동 계산됩니다
+                    {t('GT 입력 시 DWT가 자동 계산됩니다')}
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="dwt" className="text-xs">재화중량톤수 (DWT)</Label>
+                  <Label htmlFor="dwt" className="text-xs">{t('재화중량톤수 (DWT)')}</Label>
                   <Input
                     id="dwt"
                     type="number"
                     value={formData.dwt}
                     onChange={(e) => onFormDataChange({...formData, dwt: e.target.value})}
-                    placeholder="예: 80000"
+                    placeholder={t('예: 80000')}
                     className="h-9 text-sm"
                   />
                   <p className="text-xs text-gray-500">
-                    자동 계산되거나 직접 입력 가능
+                    {t('자동 계산되거나 직접 입력 가능')}
                   </p>
                 </div>
               </div>
@@ -529,7 +535,7 @@ export default function ShipDialog({
               {shipClassification && (
                 <div className="p-3 bg-blue-50 rounded-md border border-blue-200">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-blue-900">선박 분류:</span>
+                    <span className="text-xs font-medium text-blue-900">{t('선박 분류:')}</span>
                     <Badge className="bg-blue-600 text-white">
                       {shipClassification.name_ko} ({shipClassification.name})
                     </Badge>
@@ -543,60 +549,60 @@ export default function ShipDialog({
               {shipId && (
                 <div className="p-3 bg-gray-50 rounded-md border">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-700">배정된 급여 템플릿:</span>
+                    <span className="text-xs font-medium text-gray-700">{t('배정된 급여 템플릿:')}</span>
                     {salaryTemplate ? (
                       <button type="button" onClick={() => setSalaryTemplateDialogOpen(true)}>
                         <Badge variant="outline" className="text-xs cursor-pointer hover:bg-gray-100">{salaryTemplate.name}</Badge>
                       </button>
                     ) : (
-                      <span className="text-xs text-gray-400">미배정</span>
+                      <span className="text-xs text-gray-400">{t('미배정')}</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">선박 &gt; 플릿 &gt; 선주 순으로 배정된 템플릿이 적용됩니다. 배정은 급여 템플릿 관리 화면에서 변경할 수 있습니다.</p>
+                  <p className="text-xs text-gray-500 mt-1">{t('선박 > 플릿 > 선주 순으로 배정된 템플릿이 적용됩니다. 배정은 급여 템플릿 관리 화면에서 변경할 수 있습니다.')}</p>
                 </div>
               )}
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="built_year" className="text-xs">건조년도</Label>
+                  <Label htmlFor="built_year" className="text-xs">{t('건조년도')}</Label>
                   <Input
                     id="built_year"
                     type="number"
                     value={formData.built_year}
                     onChange={(e) => onFormDataChange({...formData, built_year: e.target.value})}
-                    placeholder="예: 2020"
+                    placeholder={t('예: 2020')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="builder" className="text-xs">건조사</Label>
+                  <Label htmlFor="builder" className="text-xs">{t('건조사')}</Label>
                   <Input
                     id="builder"
                     value={formData.builder}
                     onChange={(e) => onFormDataChange({...formData, builder: e.target.value})}
-                    placeholder="예: Hyundai Heavy Industries"
+                    placeholder={t('예: Hyundai Heavy Industries')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="shipyard" className="text-xs">조선소</Label>
+                  <Label htmlFor="shipyard" className="text-xs">{t('조선소')}</Label>
                   <Input
                     id="shipyard"
                     value={formData.shipyard}
                     onChange={(e) => onFormDataChange({...formData, shipyard: e.target.value})}
-                    placeholder="예: Ulsan Shipyard"
+                    placeholder={t('예: Ulsan Shipyard')}
                     className="h-9 text-sm"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="classification_society" className="text-xs">선급</Label>
+                <Label htmlFor="classification_society" className="text-xs">{t('선급')}</Label>
                 <Input
                   id="classification_society"
                   value={formData.classification_society}
                   onChange={(e) => onFormDataChange({...formData, classification_society: e.target.value})}
-                  placeholder="예: Korean Register, Lloyd's Register"
+                  placeholder={t("예: Korean Register, Lloyd's Register")}
                   className="h-9 text-sm"
                 />
               </div>
@@ -605,24 +611,24 @@ export default function ShipDialog({
             <TabsContent value="technical" className="space-y-3 mt-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="engine_type" className="text-xs">엔진 종류</Label>
+                  <Label htmlFor="engine_type" className="text-xs">{t('엔진 종류')}</Label>
                   <Input
                     id="engine_type"
                     value={formData.engine_type}
                     onChange={(e) => onFormDataChange({...formData, engine_type: e.target.value})}
-                    placeholder="예: Diesel"
+                    placeholder={t('예: Diesel')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="engine_power" className="text-xs">엔진 출력 (kW)</Label>
+                  <Label htmlFor="engine_power" className="text-xs">{t('엔진 출력 (kW)')}</Label>
                   <Input
                     id="engine_power"
                     type="number"
                     step="0.01"
                     value={formData.engine_power}
                     onChange={(e) => onFormDataChange({...formData, engine_power: e.target.value})}
-                    placeholder="예: 15000"
+                    placeholder={t('예: 15000')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -630,38 +636,38 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="speed_max" className="text-xs">최대 속력 (knots)</Label>
+                  <Label htmlFor="speed_max" className="text-xs">{t('최대 속력 (knots)')}</Label>
                   <Input
                     id="speed_max"
                     type="number"
                     step="0.1"
                     value={formData.speed_max}
                     onChange={(e) => onFormDataChange({...formData, speed_max: e.target.value})}
-                    placeholder="예: 18.5"
+                    placeholder={t('예: 18.5')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="speed_service" className="text-xs">항해 속력 (knots)</Label>
+                  <Label htmlFor="speed_service" className="text-xs">{t('항해 속력 (knots)')}</Label>
                   <Input
                     id="speed_service"
                     type="number"
                     step="0.1"
                     value={formData.speed_service}
                     onChange={(e) => onFormDataChange({...formData, speed_service: e.target.value})}
-                    placeholder="예: 15.0"
+                    placeholder={t('예: 15.0')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="fuel_consumption" className="text-xs">연료 소비량 (ton/day)</Label>
+                  <Label htmlFor="fuel_consumption" className="text-xs">{t('연료 소비량 (ton/day)')}</Label>
                   <Input
                     id="fuel_consumption"
                     type="number"
                     step="0.01"
                     value={formData.fuel_consumption}
                     onChange={(e) => onFormDataChange({...formData, fuel_consumption: e.target.value})}
-                    placeholder="예: 35.5"
+                    placeholder={t('예: 35.5')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -669,26 +675,26 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="length_overall" className="text-xs">전장 (m)</Label>
+                  <Label htmlFor="length_overall" className="text-xs">{t('전장 (m)')}</Label>
                   <Input
                     id="length_overall"
                     type="number"
                     step="0.01"
                     value={formData.length_overall}
                     onChange={(e) => onFormDataChange({...formData, length_overall: e.target.value})}
-                    placeholder="예: 225.50"
+                    placeholder={t('예: 225.50')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="breadth" className="text-xs">선폭 (m)</Label>
+                  <Label htmlFor="breadth" className="text-xs">{t('선폭 (m)')}</Label>
                   <Input
                     id="breadth"
                     type="number"
                     step="0.01"
                     value={formData.breadth}
                     onChange={(e) => onFormDataChange({...formData, breadth: e.target.value})}
-                    placeholder="예: 32.26"
+                    placeholder={t('예: 32.26')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -696,26 +702,26 @@ export default function ShipDialog({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="depth" className="text-xs">형심 (m)</Label>
+                  <Label htmlFor="depth" className="text-xs">{t('형심 (m)')}</Label>
                   <Input
                     id="depth"
                     type="number"
                     step="0.01"
                     value={formData.depth}
                     onChange={(e) => onFormDataChange({...formData, depth: e.target.value})}
-                    placeholder="예: 18.80"
+                    placeholder={t('예: 18.80')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="draft" className="text-xs">흘수 (m)</Label>
+                  <Label htmlFor="draft" className="text-xs">{t('흘수 (m)')}</Label>
                   <Input
                     id="draft"
                     type="number"
                     step="0.01"
                     value={formData.draft}
                     onChange={(e) => onFormDataChange({...formData, draft: e.target.value})}
-                    placeholder="예: 12.50"
+                    placeholder={t('예: 12.50')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -725,36 +731,36 @@ export default function ShipDialog({
             <TabsContent value="capacity" className="space-y-3 mt-3">
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="crew_capacity" className="text-xs">선원 정원</Label>
+                  <Label htmlFor="crew_capacity" className="text-xs">{t('선원 정원')}</Label>
                   <Input
                     id="crew_capacity"
                     type="number"
                     value={formData.crew_capacity}
                     onChange={(e) => onFormDataChange({...formData, crew_capacity: e.target.value})}
-                    placeholder="예: 25"
+                    placeholder={t('예: 25')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="passenger_capacity" className="text-xs">승객 정원</Label>
+                  <Label htmlFor="passenger_capacity" className="text-xs">{t('승객 정원')}</Label>
                   <Input
                     id="passenger_capacity"
                     type="number"
                     value={formData.passenger_capacity}
                     onChange={(e) => onFormDataChange({...formData, passenger_capacity: e.target.value})}
-                    placeholder="예: 12"
+                    placeholder={t('예: 12')}
                     className="h-9 text-sm"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="cargo_capacity" className="text-xs">화물 용량 (ton)</Label>
+                  <Label htmlFor="cargo_capacity" className="text-xs">{t('화물 용량 (ton)')}</Label>
                   <Input
                     id="cargo_capacity"
                     type="number"
                     step="0.01"
                     value={formData.cargo_capacity}
                     onChange={(e) => onFormDataChange({...formData, cargo_capacity: e.target.value})}
-                    placeholder="예: 75000"
+                    placeholder={t('예: 75000')}
                     className="h-9 text-sm"
                   />
                 </div>
@@ -780,10 +786,10 @@ export default function ShipDialog({
               className="flex-1 h-9"
               disabled={!!ownerFleetMismatch}
             >
-              {isEditing ? '수정' : '등록'}
+              {isEditing ? t('수정') : t('등록')}
             </Button>
             <Button type="button" variant="outline" onClick={onClose} className="h-9">
-              취소
+              {t('취소')}
             </Button>
           </div>
 

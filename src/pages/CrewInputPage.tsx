@@ -464,7 +464,7 @@ const addCert = (name?: string) => {
                 <TabsContent value="certificates" className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-gray-600">
-                      보유 증서 ({certificates.filter(c => c.number || c.issued_date || c.expiry_date).length}건 입력됨 / {certificates.length}건)
+                      {t('보유 증서 ({{filled}}건 입력됨 / {{total}}건)', { filled: certificates.filter(c => c.number || c.issued_date || c.expiry_date).length, total: certificates.length })}
                     </p>
                     <div className="flex gap-2">
                       {certificateTypes.length > 0 && certificates.length === 0 && (
@@ -473,7 +473,7 @@ const addCert = (name?: string) => {
                             name: `${ct.type_name_en}`,
                             number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct),
                           })));
-                        }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />전체 증서 불러오기</Button>
+                        }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />{t('전체 증서 불러오기')}</Button>
                       )}
                       {certificateTypes.length > 0 && certificates.length > 0 && (
                         <Button type="button" variant="outline" size="sm" onClick={() => {
@@ -482,24 +482,24 @@ const addCert = (name?: string) => {
                             .filter(ct => !existingNames.has(`${ct.type_name_en}`))
                             .map(ct => ({ name: `${ct.type_name_en}`, number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct) }));
                           if (newCerts.length > 0) setCertificates(prev => [...prev, ...newCerts]);
-                        }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />누락 증서 추가</Button>
+                        }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />{t('누락 증서 추가')}</Button>
                       )}
                       <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1">
-                        <Plus className="h-3 w-3" />직접 입력
+                        <Plus className="h-3 w-3" />{t('직접 입력')}
                       </Button>
                     </div>
                   </div>
 
                   {certificates.length === 0 ? (
                     <div className="text-center py-8 border-2 border-dashed rounded-md">
-                      <p className="text-sm text-gray-400 mb-2">증서를 추가하세요.</p>
+                      <p className="text-sm text-gray-400 mb-2">{t('증서를 추가하세요.')}</p>
                       {certificateTypes.length > 0 && (
                         <Button type="button" variant="outline" size="sm" onClick={() => {
                           setCertificates(certificateTypes.map(ct => ({
                             name: `${ct.type_name_en}`,
                             number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct),
                           })));
-                        }} className="text-xs gap-1"><Plus className="h-3 w-3" />등록된 증서 유형 전체 불러오기 ({certificateTypes.length}건)</Button>
+                        }} className="text-xs gap-1"><Plus className="h-3 w-3" />{t('등록된 증서 유형 전체 불러오기 ({{count}}건)', { count: certificateTypes.length })}</Button>
                       )}
                     </div>
                   ) : (
@@ -517,19 +517,19 @@ const addCert = (name?: string) => {
                           <div key={category} className="space-y-1.5">
                             <div className="flex items-center gap-2 pt-2">
                               <Badge variant="outline" className="text-xs font-semibold">
-                                {category === 'custom' ? '직접 입력' : certificateCategories.find(c => c.code === category)?.name || category}
+                                {category === 'custom' ? t('직접 입력') : certificateCategories.find(c => c.code === category)?.name || category}
                               </Badge>
                               <div className="flex-1 border-t border-gray-200" />
                             </div>
                             <div className="overflow-x-auto">
                               <table className="w-full text-xs">
                                 <thead><tr className="border-b bg-gray-50/50">
-                                  <th className="text-left p-1.5 w-[200px]">증서명</th>
-                                  <th className="text-left p-1.5 w-[120px]">증서번호</th>
-                                  <th className="text-left p-1.5 w-[110px]">발급일</th>
-                                  <th className="text-left p-1.5 w-[110px]">만료일</th>
-                                  <th className="text-left p-1.5 w-[120px]">발급기관</th>
-                                  <th className="text-left p-1.5 w-[100px]">파일</th>
+                                  <th className="text-left p-1.5 w-[200px]">{t('증서명')}</th>
+                                  <th className="text-left p-1.5 w-[120px]">{t('증서번호')}</th>
+                                  <th className="text-left p-1.5 w-[110px]">{t('발급일')}</th>
+                                  <th className="text-left p-1.5 w-[110px]">{t('만료일')}</th>
+                                  <th className="text-left p-1.5 w-[120px]">{t('발급기관')}</th>
+                                  <th className="text-left p-1.5 w-[100px]">{t('파일')}</th>
                                   <th className="text-center p-1.5 w-[36px]"></th>
                                 </tr></thead>
                                 <tbody>
@@ -539,21 +539,21 @@ const addCert = (name?: string) => {
                                       <tr key={idx} className={`border-b ${hasData ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
                                         <td className="p-1">
                                           {category === 'custom' ? (
-                                            <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-7 text-xs" placeholder="증서명" />
+                                            <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-7 text-xs" placeholder={t('증서명')} />
                                           ) : (
                                             <span className="text-xs px-1 truncate block" title={cert.name}>{cert.name}</span>
                                           )}
                                         </td>
-                                        <td className="p-1"><Input value={cert.number} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs" placeholder="번호" /></td>
+                                        <td className="p-1"><Input value={cert.number} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs" placeholder={t('번호')} /></td>
                                         <td className="p-1"><Input type="date" value={cert.issued_date} onChange={e => handleIssuedDateChange(idx, e.target.value)} className="h-7 text-xs" /></td>
                                         <td className="p-1">
                                           {cert.no_expiry ? (
-                                            <span className="text-xs text-gray-400 px-1 cursor-pointer" onClick={() => handleNoExpiryChange(idx, false)}>무기한</span>
+                                            <span className="text-xs text-gray-400 px-1 cursor-pointer" onClick={() => handleNoExpiryChange(idx, false)}>{t('무기한')}</span>
                                           ) : (
                                             <Input type="date" value={cert.expiry_date} onChange={e => updateCert(idx, 'expiry_date', e.target.value)} className="h-7 text-xs" />
                                           )}
                                         </td>
-                                        <td className="p-1"><Input value={cert.issuing_authority} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-7 text-xs" placeholder="기관" /></td>
+                                        <td className="p-1"><Input value={cert.issuing_authority} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-7 text-xs" placeholder={t('기관')} /></td>
                                         <td className="p-1">
                                           {cert.file_name ? (
                                             <div className="flex items-center gap-1 text-xs text-blue-600">
@@ -567,11 +567,11 @@ const addCert = (name?: string) => {
                                             </div>
                                           ) : (
                                             <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer hover:text-gray-600">
-                                              <Upload className="h-3 w-3 shrink-0" /><span>파일</span>
+                                              <Upload className="h-3 w-3 shrink-0" /><span>{t('파일')}</span>
                                               <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => {
                                                 const file = e.target.files?.[0];
                                                 if (file) {
-                                                  if (file.size > 10 * 1024 * 1024) { alert('10MB 초과'); return; }
+                                                  if (file.size > 10 * 1024 * 1024) { alert(t('10MB 초과')); return; }
                                                   setCertFiles(prev => ({ ...prev, [idx]: file }));
                                                 }
                                               }} />
@@ -598,17 +598,17 @@ const addCert = (name?: string) => {
           </Card>
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={finish} disabled={loading}>취소</Button>
+            <Button type="button" variant="outline" onClick={finish} disabled={loading}>{t('취소')}</Button>
             <Button type="submit" disabled={loading} className="min-w-[100px]">
               {loading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>저장 중...</span>
+                  <span>{t('저장 중...')}</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
                   <Save className="w-4 h-4" />
-                  <span>저장 및 등록</span>
+                  <span>{t('저장 및 등록')}</span>
                 </div>
               )}
             </Button>

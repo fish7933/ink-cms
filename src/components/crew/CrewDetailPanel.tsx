@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/CrewDetailPanel/en.json';
 import { Save, Upload, User, X, Plus, Trash2, FileText, FileSpreadsheet, Edit2, Star, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +52,8 @@ import type { CrewPayrollHistoryRow, CrewPayslipWithDetails } from '@/types/crew
 import CrewPayslipDetailView from '@/components/crew-payroll/CrewPayslipDetailView';
 import { sickPayService } from '@/services/sick-pay.service';
 import type { CrewSickPayHistoryRow } from '@/types/sick-pay';
+
+i18n.addResourceBundle('en', 'CrewDetailPanel', en, true, true);
 
 const REC_LABELS: Record<string, string> = { highly_recommend: '강력 추천', recommend: '추천', neutral: '보통', not_recommend: '비추천' };
 
@@ -133,6 +138,7 @@ function calculateAge(dateOfBirth: string): number {
 }
 
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
+  const { t } = useTranslation('CrewDetailPanel');
   const { toast } = useToast();
   const { activeTabId, updateTab, tabs } = useTabContext();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -250,7 +256,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setLoading(true);
       const { data, error } = await supabase.from('crew_members').select('*').eq('id', crewId).single();
       if (error) throw error;
-      if (!data) { toast({ title: '선원을 찾을 수 없습니다.', variant: 'destructive' }); onBack(); return; }
+      if (!data) { toast({ title: t('선원을 찾을 수 없습니다.'), variant: 'destructive' }); onBack(); return; }
 
       setIdentityFieldsLocked(!REGISTERED_STATUSES.has(data.current_status || data.status || 'registered'));
       rotationService.getCrewReservationsByIds([crewId]).then(map => setCrewReservations(map.get(crewId) || []));
@@ -316,7 +322,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       loadExtendedRecords(crewId);
     } catch (e) {
       console.error(e);
-      toast({ title: '데이터 로드 실패', variant: 'destructive' });
+      toast({ title: t('데이터 로드 실패'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -354,35 +360,35 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   };
 
   const handleDeleteSeaService = async (recordId: string) => {
-    if (!confirm('이 승선 기록을 삭제하시겠습니까?')) return;
-    try { await deleteSeaServiceRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 승선 기록을 삭제하시겠습니까?'))) return;
+    try { await deleteSeaServiceRecord(recordId); loadExtendedRecords(id!); toast({ title: t('삭제 완료') }); } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
   const handleDeleteTraining = async (recordId: string) => {
-    if (!confirm('이 교육 기록을 삭제하시겠습니까?')) return;
-    try { await deleteTrainingRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 교육 기록을 삭제하시겠습니까?'))) return;
+    try { await deleteTrainingRecord(recordId); loadExtendedRecords(id!); toast({ title: t('삭제 완료') }); } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
   const handleDeleteMedical = async (recordId: string) => {
-    if (!confirm('이 상병 기록을 삭제하시겠습니까?')) return;
-    try { await deleteMedicalRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 상병 기록을 삭제하시겠습니까?'))) return;
+    try { await deleteMedicalRecord(recordId); loadExtendedRecords(id!); toast({ title: t('삭제 완료') }); } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
   const handleDeleteEvaluation = async (recordId: string) => {
-    if (!confirm('이 고과 기록을 삭제하시겠습니까?')) return;
-    try { await deleteEvaluation(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 고과 기록을 삭제하시겠습니까?'))) return;
+    try { await deleteEvaluation(recordId); loadExtendedRecords(id!); toast({ title: t('삭제 완료') }); } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
   const handleDeleteInterview = async (recordId: string) => {
-    if (!confirm('이 면담 일지를 삭제하시겠습니까?')) return;
-    try { await deleteCrewInterviewLog(recordId); loadExtendedRecords(id!); loadCrew(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 면담 일지를 삭제하시겠습니까?'))) return;
+    try { await deleteCrewInterviewLog(recordId); loadExtendedRecords(id!); loadCrew(id!); toast({ title: t('삭제 완료') }); } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
   const handleDeleteSalary = async (recordId: string) => {
-    if (!confirm('이 급여 기록을 삭제하시겠습니까?')) return;
-    try { await deleteCrewSalaryRecord(recordId); loadExtendedRecords(id!); toast({ title: '삭제 완료' }); } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    if (!confirm(t('이 급여 기록을 삭제하시겠습니까?'))) return;
+    try { await deleteCrewSalaryRecord(recordId); loadExtendedRecords(id!); toast({ title: t('삭제 완료') }); } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
-      if (!['image/jpeg','image/jpg','image/png','image/webp'].includes(file.type)) { alert('JPG, PNG, WEBP 형식만 가능합니다.'); return; }
-      if (file.size > 5 * 1024 * 1024) { alert('5MB 이하만 가능합니다.'); return; }
+      if (!['image/jpeg','image/jpg','image/png','image/webp'].includes(file.type)) { alert(t('JPG, PNG, WEBP 형식만 가능합니다.')); return; }
+      if (file.size > 5 * 1024 * 1024) { alert(t('5MB 이하만 가능합니다.')); return; }
       setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setPreviewUrl(reader.result as string);
@@ -432,7 +438,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
   const handleSave = async () => {
     if (!formData.name_english || !formData.rank_id) {
-      toast({ title: '필수 항목 누락', description: '이름(영문)과 직급은 필수입니다.', variant: 'destructive' });
+      toast({ title: t('필수 항목 누락'), description: t('이름(영문)과 직급은 필수입니다.'), variant: 'destructive' });
       return;
     }
     try {
@@ -514,7 +520,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           .insert({ ...updateData, current_status: 'registered', status: 'registered', created_at: new Date().toISOString() })
           .select().single();
         if (error) throw new Error(error.message);
-        toast({ title: '등록 완료', description: '선원이 등록되었습니다.' });
+        toast({ title: t('등록 완료'), description: t('선원이 등록되었습니다.') });
         onSaved(newCrew.id);
       } else {
         const { error } = await supabase.from('crew_members').update(updateData).eq('id', id!);
@@ -522,12 +528,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         await loadCrew(id!);
         setSelectedFile(null);
         setCertFiles({});
-        toast({ title: '저장 완료', description: '선원 정보가 수정되었습니다.' });
+        toast({ title: t('저장 완료'), description: t('선원 정보가 수정되었습니다.') });
         onSaved(id!);
       }
     } catch (error) {
       console.error(error);
-      toast({ title: '저장 실패', description: String(error instanceof Error ? error.message : error), variant: 'destructive' });
+      toast({ title: t('저장 실패'), description: String(error instanceof Error ? error.message : error), variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -631,7 +637,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           )}
           <Label htmlFor="photo-input" className="cursor-pointer">
             <div className="inline-flex items-center gap-1 px-2 py-1 bg-white border rounded-md hover:bg-gray-50 text-[11px]">
-              <Upload className="w-3 h-3" />사진 업로드
+              <Upload className="w-3 h-3" />{t('사진 업로드')}
             </div>
           </Label>
           <Input id="photo-input" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileSelect} className="hidden" />
@@ -649,7 +655,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           )}
           <div className="text-xl font-bold text-gray-900">
             {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
-            {crewDisplayName(formData) || (isNew ? '새 선원 등록' : '선원 정보 수정')}
+            {crewDisplayName(formData) || (isNew ? t('새 선원 등록') : t('선원 정보 수정'))}
             {formData.nationality && <span className="text-gray-400 font-normal ml-1.5">({formData.nationality})</span>}
           </div>
         </div>
@@ -657,7 +663,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
       <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
         <DialogContent className="max-w-2xl p-2 bg-transparent border-none shadow-none">
-          <DialogTitle className="sr-only">선원 사진</DialogTitle>
+          <DialogTitle className="sr-only">{t('선원 사진')}</DialogTitle>
           <img src={previewUrl} alt="" className="w-full h-auto rounded-lg" />
         </DialogContent>
       </Dialog>
@@ -668,31 +674,31 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       <Tabs defaultValue="basic" onValueChange={scrollToTop}>
         <div className="space-y-1">
           <TabsList className="grid w-full grid-cols-3 h-8">
-            <TabsTrigger value="basic" className="text-xs">기본정보</TabsTrigger>
+            <TabsTrigger value="basic" className="text-xs">{t('기본정보')}</TabsTrigger>
             <TabsTrigger value="certificates" className="text-xs">
-              증서{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
+              {t('증서')}{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
             </TabsTrigger>
-            <TabsTrigger value="emergency" className="text-xs">비상연락망</TabsTrigger>
+            <TabsTrigger value="emergency" className="text-xs">{t('비상연락망')}</TabsTrigger>
           </TabsList>
           {!isNew && (
             <TabsList className="grid w-full grid-cols-6 h-8">
               <TabsTrigger value="sea_service" className="text-xs">
-                승선경력{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
+                {t('승선경력')}{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="training" className="text-xs">
-                교육이력{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
+                {t('교육이력')}{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="evaluations" className="text-xs">
-                고과{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
+                {t('고과')}{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="medical" className="text-xs">
-                상병기록{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
+                {t('상병기록')}{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="salary_records" className="text-xs">
-                급여이력{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
+                {t('급여이력')}{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
               </TabsTrigger>
               <TabsTrigger value="interviews" className="text-xs">
-                면담일지{interviewLogs.length > 0 && <span className="ml-1 bg-teal-100 text-teal-700 rounded-full px-1.5">{interviewLogs.length}</span>}
+                {t('면담일지')}{interviewLogs.length > 0 && <span className="ml-1 bg-teal-100 text-teal-700 rounded-full px-1.5">{interviewLogs.length}</span>}
               </TabsTrigger>
             </TabsList>
           )}
@@ -702,144 +708,144 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         <TabsContent value="basic" className="space-y-3 mt-3 data-[state=inactive]:hidden">
           {identityFieldsLocked && (
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-              대기/승선/하선 단계로 넘어간 선원은 이름·직급·국적·생년월일을 수정할 수 없습니다.
+              {t('대기/승선/하선 단계로 넘어간 선원은 이름·직급·국적·생년월일을 수정할 수 없습니다.')}
             </p>
           )}
           <div className="grid grid-cols-3 gap-3">
-            <div><Label className="text-xs">이름 (영문) *</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></div>
+            <div><Label className="text-xs">{t('이름 (영문) *')}</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></div>
             <div>
-              <Label className="text-xs">직급 *</Label>
+              <Label className="text-xs">{t('직급 *')}</Label>
               <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={identityFieldsLocked}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="직급 선택" /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('직급 선택')} /></SelectTrigger>
                 <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">등급</Label>
-              <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder="배정된 선박의 급여표 기준" />
+              <Label className="text-xs">{t('등급')}</Label>
+              <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder={t('배정된 선박의 급여표 기준')} />
             </div>
           </div>
 
           {formData.nationality === 'KR' && (
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">이름 (한국어)</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" disabled={identityFieldsLocked} /></div>
-              <div><Label className="text-xs">이름 (한자)</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" disabled={identityFieldsLocked} /></div>
+              <div><Label className="text-xs">{t('이름 (한국어)')}</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" disabled={identityFieldsLocked} /></div>
+              <div><Label className="text-xs">{t('이름 (한자)')}</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" disabled={identityFieldsLocked} /></div>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">국적</Label>
+              <Label className="text-xs">{t('국적')}</Label>
               <Select value={formData.nationality} onValueChange={v => f('nationality', v)} disabled={identityFieldsLocked}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
                 <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">생년월일{formData.date_of_birth && <span className="text-gray-400 font-normal"> (만 {calculateAge(formData.date_of_birth)}세)</span>}</Label>
+              <Label className="text-xs">{t('생년월일')}{formData.date_of_birth && <span className="text-gray-400 font-normal"> {t('(만 {{age}}세)', { age: calculateAge(formData.date_of_birth) })}</span>}</Label>
               <Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1 h-9" disabled={identityFieldsLocked} />
             </div>
-            <div><Label className="text-xs">연락처</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
-            <div><Label className="text-xs">이메일</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
+            <div><Label className="text-xs">{t('연락처')}</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
+            <div><Label className="text-xs">{t('이메일')}</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
             <div>
-              <Label className="text-xs">승선 희망일</Label>
+              <Label className="text-xs">{t('승선 희망일')}</Label>
               <Input type="date" value={formData.desired_embark_date} onChange={e => f('desired_embark_date', e.target.value)} className="mt-1 h-9" />
             </div>
           </div>
 
           <div className="border-t pt-3">
-          <p className="text-xs font-semibold text-gray-600">신체 정보</p>
+          <p className="text-xs font-semibold text-gray-600">{t('신체 정보')}</p>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">출생지</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1 h-9" placeholder="예: Jakarta, Indonesia" /></div>
+            <div><Label className="text-xs">{t('출생지')}</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1 h-9" placeholder="예: Jakarta, Indonesia" /></div>
             <div>
-              <Label className="text-xs">혈액형</Label>
+              <Label className="text-xs">{t('혈액형')}</Label>
               <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
                 <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">선택 안함</SelectItem>
-                  {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  <SelectItem value="none">{t('선택 안함')}</SelectItem>
+                  {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bt => <SelectItem key={bt} value={bt}>{bt}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label className="text-xs">키 (cm)</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1 h-9" placeholder="170" /></div>
-            <div><Label className="text-xs">몸무게 (kg)</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1 h-9" placeholder="70" /></div>
+            <div><Label className="text-xs">{t('키 (cm)')}</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1 h-9" placeholder="170" /></div>
+            <div><Label className="text-xs">{t('몸무게 (kg)')}</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1 h-9" placeholder="70" /></div>
             <div>
-              <Label className="text-xs">눈 색</Label>
+              <Label className="text-xs">{t('눈 색')}</Label>
               <Select value={formData.eye_color || '_none'} onValueChange={v => f('eye_color', v === '_none' ? '' : v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="눈 색 선택" /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('눈 색 선택')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">선택 안함</SelectItem>
-                  {EYE_COLORS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  <SelectItem value="_none">{t('선택 안함')}</SelectItem>
+                  {EYE_COLORS.map(c => <SelectItem key={c} value={c}>{t(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">신발 사이즈 (mm)</Label>
+              <Label className="text-xs">{t('신발 사이즈 (mm)')}</Label>
               <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="신발 사이즈" /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('신발 사이즈')} /></SelectTrigger>
                 <SelectContent>{SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s} mm</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">작업복 사이즈</Label>
+              <Label className="text-xs">{t('작업복 사이즈')}</Label>
               <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="작업복 사이즈" /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('작업복 사이즈')} /></SelectTrigger>
                 <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>
-              <Label className="text-xs">의류 사이즈</Label>
+              <Label className="text-xs">{t('의류 사이즈')}</Label>
               <Select value={formData.clothing_size} onValueChange={v => f('clothing_size', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="의류 사이즈" /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('의류 사이즈')} /></SelectTrigger>
                 <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="border-t pt-3">
-            <p className="text-xs font-semibold text-gray-600 mb-2">인적사항</p>
+            <p className="text-xs font-semibold text-gray-600 mb-2">{t('인적사항')}</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">종교</Label>
+                <Label className="text-xs">{t('종교')}</Label>
                 <Select value={formData.religion || '_none'} onValueChange={v => f('religion', v === '_none' ? '' : v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="종교 선택" /></SelectTrigger>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('종교 선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">선택 안함</SelectItem>
-                    {RELIGIONS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    <SelectItem value="_none">{t('선택 안함')}</SelectItem>
+                    {RELIGIONS.map(r => <SelectItem key={r} value={r}>{t(r)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">결혼 여부</Label>
+                <Label className="text-xs">{t('결혼 여부')}</Label>
                 <Select value={formData.marital_status} onValueChange={v => f('marital_status', v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="선택" /></SelectTrigger>
+                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('선택')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">선택 안함</SelectItem>
-                    {MARITAL_STATUSES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    <SelectItem value="none">{t('선택 안함')}</SelectItem>
+                    {MARITAL_STATUSES.map(m => <SelectItem key={m.value} value={m.value}>{t(m.label)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs">자녀 수</Label><Input type="number" min="0" value={formData.children_count} onChange={e => f('children_count', e.target.value)} className="mt-1 h-9" placeholder="0" /></div>
+              <div><Label className="text-xs">{t('자녀 수')}</Label><Input type="number" min="0" value={formData.children_count} onChange={e => f('children_count', e.target.value)} className="mt-1 h-9" placeholder="0" /></div>
               <div />
               <div>
-                <Label className="text-xs">흡연</Label>
+                <Label className="text-xs">{t('흡연')}</Label>
                 <Select value={formData.smoking} onValueChange={v => f('smoking', v)}>
                   <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">선택 안함</SelectItem>
-                    <SelectItem value="yes">흡연</SelectItem>
-                    <SelectItem value="no">비흡연</SelectItem>
+                    <SelectItem value="none">{t('선택 안함')}</SelectItem>
+                    <SelectItem value="yes">{t('흡연')}</SelectItem>
+                    <SelectItem value="no">{t('비흡연')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs">음주</Label>
+                <Label className="text-xs">{t('음주')}</Label>
                 <Select value={formData.drinking} onValueChange={v => f('drinking', v)}>
                   <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">선택 안함</SelectItem>
-                    <SelectItem value="yes">음주</SelectItem>
-                    <SelectItem value="no">비음주</SelectItem>
+                    <SelectItem value="none">{t('선택 안함')}</SelectItem>
+                    <SelectItem value="yes">{t('음주')}</SelectItem>
+                    <SelectItem value="no">{t('비음주')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -852,30 +858,30 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         <TabsContent value="emergency" className="mt-3 data-[state=inactive]:hidden">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold">비상 연락처 및 가족 연락처</span>
+              <span className="text-sm font-semibold">{t('비상 연락처 및 가족 연락처')}</span>
               <Button type="button" variant="outline" size="sm" onClick={addContact} className="h-7 text-xs gap-1">
-                <Plus className="h-3 w-3" />추가
+                <Plus className="h-3 w-3" />{t('추가')}
               </Button>
             </div>
             {emergencyContacts.length === 0 ? (
-              <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">연락처를 추가하세요.</div>
+              <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('연락처를 추가하세요.')}</div>
             ) : emergencyContacts.map((contact, idx) => (
               <div key={idx} className="p-3 border rounded-md bg-gray-50">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-gray-600">연락처 {idx + 1}</span>
+                  <span className="text-xs font-semibold text-gray-600">{t('연락처 {{n}}', { n: idx + 1 })}</span>
                   <Button type="button" variant="ghost" size="sm" onClick={() => removeContact(idx)} className="h-6 w-6 p-0 text-red-500"><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-xs text-gray-500">이름</Label><Input value={contact.name} onChange={e => updateContact(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
+                  <div><Label className="text-xs text-gray-500">{t('이름')}</Label><Input value={contact.name} onChange={e => updateContact(idx, 'name', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
                   <div>
-                    <Label className="text-xs text-gray-500">관계</Label>
+                    <Label className="text-xs text-gray-500">{t('관계')}</Label>
                     <Select value={contact.relationship} onValueChange={v => updateContact(idx, 'relationship', v)}>
-                      <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue placeholder="관계 선택" /></SelectTrigger>
-                      <SelectContent>{RELATIONSHIPS.map(r => <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>)}</SelectContent>
+                      <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue placeholder={t('관계 선택')} /></SelectTrigger>
+                      <SelectContent>{RELATIONSHIPS.map(r => <SelectItem key={r} value={r} className="text-xs">{t(r)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div><Label className="text-xs text-gray-500">연락처</Label><Input value={contact.phone} onChange={e => updateContact(idx, 'phone', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
-                  <div><Label className="text-xs text-gray-500">비고</Label><Input value={contact.note || ''} onChange={e => updateContact(idx, 'note', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
+                  <div><Label className="text-xs text-gray-500">{t('연락처')}</Label><Input value={contact.phone} onChange={e => updateContact(idx, 'phone', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
+                  <div><Label className="text-xs text-gray-500">{t('비고')}</Label><Input value={contact.note || ''} onChange={e => updateContact(idx, 'note', e.target.value)} className="h-8 text-xs mt-0.5" /></div>
                 </div>
               </div>
             ))}
@@ -887,7 +893,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold">
-                보유 증서 ({certificates.filter(c => c.number || c.issued_date || c.expiry_date).length}건 입력됨 / {certificates.length}건)
+                {t('보유 증서 ({{filled}}건 입력됨 / {{total}}건)', { filled: certificates.filter(c => c.number || c.issued_date || c.expiry_date).length, total: certificates.length })}
               </span>
               <div className="flex gap-2">
                 {certificateTypes.length > 0 && certificates.length === 0 && (
@@ -897,7 +903,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                       number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct),
                     }));
                     setCertificates(newCerts);
-                  }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />전체 증서 불러오기</Button>
+                  }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />{t('전체 증서 불러오기')}</Button>
                 )}
                 {certificateTypes.length > 0 && certificates.length > 0 && (
                   <Button type="button" variant="outline" size="sm" onClick={() => {
@@ -906,23 +912,23 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                       .filter(ct => !existingNames.has(`${ct.type_name_en}`))
                       .map(ct => ({ name: `${ct.type_name_en}`, number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct) }));
                     if (newCerts.length > 0) setCertificates(prev => [...prev, ...newCerts]);
-                    else toast({ title: '모든 증서 유형이 이미 추가되어 있습니다.' });
-                  }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />누락 증서 추가</Button>
+                    else toast({ title: t('모든 증서 유형이 이미 추가되어 있습니다.') });
+                  }} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />{t('누락 증서 추가')}</Button>
                 )}
-                <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />직접 입력</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => addCert()} className="h-8 text-xs gap-1"><Plus className="h-3 w-3" />{t('직접 입력')}</Button>
               </div>
             </div>
 
             {certificates.length === 0 ? (
               <div className="text-center py-8 border-2 border-dashed rounded-md">
-                <p className="text-sm text-gray-400 mb-2">증서를 추가하세요.</p>
+                <p className="text-sm text-gray-400 mb-2">{t('증서를 추가하세요.')}</p>
                 {certificateTypes.length > 0 && (
                   <Button type="button" variant="outline" size="sm" onClick={() => {
                     setCertificates(certificateTypes.map(ct => ({
                       name: `${ct.type_name_en}`,
                       number: '', issued_date: '', expiry_date: '', issuing_authority: '', no_expiry: !hasExpiryForNationality(ct),
                     })));
-                  }} className="text-xs gap-1"><Plus className="h-3 w-3" />등록된 증서 유형 전체 불러오기 ({certificateTypes.length}건)</Button>
+                  }} className="text-xs gap-1"><Plus className="h-3 w-3" />{t('등록된 증서 유형 전체 불러오기 ({{count}}건)', { count: certificateTypes.length })}</Button>
                 )}
               </div>
             ) : (
@@ -941,19 +947,19 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     <div key={category} className="space-y-1.5">
                       <div className="flex items-center gap-2 pt-2">
                         <Badge variant="outline" className="text-xs font-semibold">
-                          {category === 'custom' ? '직접 입력' : certificateCategories.find(c => c.code === category)?.name || category}
+                          {category === 'custom' ? t('직접 입력') : certificateCategories.find(c => c.code === category)?.name || category}
                         </Badge>
                         <div className="flex-1 border-t border-gray-200" />
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead><tr className="border-b bg-gray-50/50">
-                            <th className="text-left p-1.5 w-[200px]">증서명</th>
-                            <th className="text-left p-1.5 w-[120px]">증서번호</th>
-                            <th className="text-left p-1.5 w-[110px]">발급일</th>
-                            <th className="text-left p-1.5 w-[110px]">만료일</th>
-                            <th className="text-left p-1.5 w-[120px]">발급기관</th>
-                            <th className="text-left p-1.5 w-[100px]">파일</th>
+                            <th className="text-left p-1.5 w-[200px]">{t('증서명')}</th>
+                            <th className="text-left p-1.5 w-[120px]">{t('증서번호')}</th>
+                            <th className="text-left p-1.5 w-[110px]">{t('발급일')}</th>
+                            <th className="text-left p-1.5 w-[110px]">{t('만료일')}</th>
+                            <th className="text-left p-1.5 w-[120px]">{t('발급기관')}</th>
+                            <th className="text-left p-1.5 w-[100px]">{t('파일')}</th>
                             <th className="text-center p-1.5 w-[36px]"></th>
                           </tr></thead>
                           <tbody>
@@ -963,21 +969,21 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                                 <tr key={idx} className={`border-b ${hasData ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
                                   <td className="p-1">
                                     {category === 'custom' ? (
-                                      <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-7 text-xs" placeholder="증서명" />
+                                      <Input value={cert.name} onChange={e => updateCert(idx, 'name', e.target.value)} className="h-7 text-xs" placeholder={t('증서명')} />
                                     ) : (
                                       <span className="text-xs px-1 truncate block" title={cert.name}>{cert.name}</span>
                                     )}
                                   </td>
-                                  <td className="p-1"><Input value={cert.number || ''} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs" placeholder="번호" /></td>
+                                  <td className="p-1"><Input value={cert.number || ''} onChange={e => updateCert(idx, 'number', e.target.value)} className="h-7 text-xs" placeholder={t('번호')} /></td>
                                   <td className="p-1"><Input type="date" value={cert.issued_date || ''} onChange={e => handleIssuedDate(idx, e.target.value)} className="h-7 text-xs" /></td>
                                   <td className="p-1">
                                     {cert.no_expiry ? (
-                                      <span className="text-xs text-gray-400 px-1 cursor-pointer" onClick={() => handleNoExpiry(idx, false)}>무기한</span>
+                                      <span className="text-xs text-gray-400 px-1 cursor-pointer" onClick={() => handleNoExpiry(idx, false)}>{t('무기한')}</span>
                                     ) : (
                                       <Input type="date" value={cert.expiry_date || ''} onChange={e => updateCert(idx, 'expiry_date', e.target.value)} className="h-7 text-xs" />
                                     )}
                                   </td>
-                                  <td className="p-1"><Input value={cert.issuing_authority || ''} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-7 text-xs" placeholder="기관" /></td>
+                                  <td className="p-1"><Input value={cert.issuing_authority || ''} onChange={e => updateCert(idx, 'issuing_authority', e.target.value)} className="h-7 text-xs" placeholder={t('기관')} /></td>
                                   <td className="p-1">
                                     {cert.file_name ? (
                                       <div className="flex items-center gap-1 text-xs text-blue-600">
@@ -991,8 +997,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                                       </div>
                                     ) : (
                                       <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer hover:text-gray-600">
-                                        <Upload className="h-3 w-3 shrink-0" /><span>파일</span>
-                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) { if (file.size > 10 * 1024 * 1024) { alert('10MB 초과'); return; } setCertFiles(prev => ({ ...prev, [idx]: file })); } }} />
+                                        <Upload className="h-3 w-3 shrink-0" /><span>{t('파일')}</span>
+                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) { if (file.size > 10 * 1024 * 1024) { alert(t('10MB 초과')); return; } setCertFiles(prev => ({ ...prev, [idx]: file })); } }} />
                                       </label>
                                     )}
                                   </td>
@@ -1017,16 +1023,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <TabsContent value="sea_service" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">승선 경력 ({seaServiceRecords.length}건)</span>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSeaService(undefined); setSeaServiceDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                <span className="text-sm font-semibold">{t('승선 경력 ({{count}}건)', { count: seaServiceRecords.length })}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSeaService(undefined); setSeaServiceDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />{t('추가')}</Button>
               </div>
               {seaServiceRecords.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">승선 경력을 추가하세요.</div>
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('승선 경력을 추가하세요.')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">선주사</th><th className="text-left p-2">선박관리사</th><th className="text-left p-2">매닝사</th><th className="text-left p-2">선박명</th><th className="text-left p-2">직급</th><th className="text-left p-2">승선일</th><th className="text-left p-2">하선일</th><th className="text-left p-2">하선사유</th><th className="text-left p-2">유형</th><th className="text-center p-2">고과</th><th className="text-center p-2">상병기록</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">{t('선주사')}</th><th className="text-left p-2">{t('선박관리사')}</th><th className="text-left p-2">{t('매닝사')}</th><th className="text-left p-2">{t('선박명')}</th><th className="text-left p-2">{t('직급')}</th><th className="text-left p-2">{t('승선일')}</th><th className="text-left p-2">{t('하선일')}</th><th className="text-left p-2">{t('하선사유')}</th><th className="text-left p-2">{t('유형')}</th><th className="text-center p-2">{t('고과')}</th><th className="text-center p-2">{t('상병기록')}</th><th className="text-center p-2">{t('작업')}</th>
                     </tr></thead>
                     <tbody>
                       {seaServiceRecords.map(r => (
@@ -1039,26 +1045,26 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                           <td className="p-2">{r.sign_on_date}</td>
                           <td className="p-2">{r.sign_off_date || '-'}</td>
                           <td className="p-2">{r.sign_off_reason_name || r.sign_off_reason || '-'}</td>
-                          <td className="p-2"><Badge variant="outline" className="text-xs">{r.record_type === 'pre_company' ? '입사 전' : '회사 배치'}</Badge></td>
+                          <td className="p-2"><Badge variant="outline" className="text-xs">{r.record_type === 'pre_company' ? t('입사 전') : t('회사 배치')}</Badge></td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             {evaluationCounts[r.id] ? (
                               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-yellow-700 bg-yellow-50 hover:bg-yellow-100" onClick={() => { setEvaluationDialogRecord(r); setEvaluationDialogOpen(true); }}>
-                                <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />고과 {evaluationCounts[r.id]}건
+                                <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />{t('고과 {{count}}건', { count: evaluationCounts[r.id] })}
                               </Button>
                             ) : (
                               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-gray-400" onClick={() => { setEvaluationDialogRecord(r); setEvaluationDialogOpen(true); }}>
-                                <Star className="h-3 w-3" />고과
+                                <Star className="h-3 w-3" />{t('고과')}
                               </Button>
                             )}
                           </td>
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             {medicalCounts[r.id] ? (
                               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-orange-700 bg-orange-50 hover:bg-orange-100" onClick={() => { setSeaServiceMedicalDialogRecord(r); setSeaServiceMedicalDialogOpen(true); }}>
-                                <Stethoscope className="h-3 w-3" />상병기록 {medicalCounts[r.id]}건
+                                <Stethoscope className="h-3 w-3" />{t('상병기록 {{count}}건', { count: medicalCounts[r.id] })}
                               </Button>
                             ) : (
                               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-gray-400" onClick={() => { setSeaServiceMedicalDialogRecord(r); setSeaServiceMedicalDialogOpen(true); }}>
-                                <Stethoscope className="h-3 w-3" />상병기록
+                                <Stethoscope className="h-3 w-3" />{t('상병기록')}
                               </Button>
                             )}
                           </td>
@@ -1083,28 +1089,28 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <TabsContent value="training" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">교육 이력 ({trainingRecords.length}건)</span>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingTraining(undefined); setTrainingDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                <span className="text-sm font-semibold">{t('교육 이력 ({{count}}건)', { count: trainingRecords.length })}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingTraining(undefined); setTrainingDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />{t('추가')}</Button>
               </div>
               {trainingRecords.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">교육 이력을 추가하세요.</div>
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('교육 이력을 추가하세요.')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">교육명</th><th className="text-left p-2">유형</th><th className="text-left p-2">시작일</th><th className="text-left p-2">종료일</th><th className="text-left p-2">결과</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">{t('교육명')}</th><th className="text-left p-2">{t('유형')}</th><th className="text-left p-2">{t('시작일')}</th><th className="text-left p-2">{t('종료일')}</th><th className="text-left p-2">{t('결과')}</th><th className="text-center p-2">{t('작업')}</th>
                     </tr></thead>
                     <tbody>
                       {trainingRecords.map(r => (
                         <tr key={r.id} className="border-b hover:bg-gray-50">
                           <td className="p-2 font-medium">{r.training_name}</td>
-                          <td className="p-2">{r.training_type === 'safety' ? '안전' : r.training_type === 'technical' ? '기술' : r.training_type === 'management' ? '관리' : r.training_type === 'certification' ? '자격증' : r.training_type || '-'}</td>
+                          <td className="p-2">{r.training_type === 'safety' ? t('안전') : r.training_type === 'technical' ? t('기술') : r.training_type === 'management' ? t('관리') : r.training_type === 'certification' ? t('자격증') : r.training_type || '-'}</td>
                           <td className="p-2">{r.start_date}</td>
                           <td className="p-2">{r.end_date || '-'}</td>
                           <td className="p-2">
-                            {r.result === 'passed' ? <Badge className="bg-green-100 text-green-700 text-xs">합격</Badge>
-                              : r.result === 'failed' ? <Badge className="bg-red-100 text-red-700 text-xs">불합격</Badge>
-                              : r.result === 'in_progress' ? <Badge className="bg-blue-100 text-blue-700 text-xs">진행 중</Badge>
+                            {r.result === 'passed' ? <Badge className="bg-green-100 text-green-700 text-xs">{t('합격')}</Badge>
+                              : r.result === 'failed' ? <Badge className="bg-red-100 text-red-700 text-xs">{t('불합격')}</Badge>
+                              : r.result === 'in_progress' ? <Badge className="bg-blue-100 text-blue-700 text-xs">{t('진행 중')}</Badge>
                               : '-'}
                           </td>
                           <td className="p-2 text-center">
@@ -1129,16 +1135,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <TabsContent value="evaluations" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">고과 ({evaluations.length}건)</span>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingCrewEvaluation(undefined); setCrewEvaluationDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                <span className="text-sm font-semibold">{t('고과 ({{count}}건)', { count: evaluations.length })}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingCrewEvaluation(undefined); setCrewEvaluationDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />{t('추가')}</Button>
               </div>
               {evaluations.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">등록된 고과가 없습니다.</div>
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('등록된 고과가 없습니다.')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">평가 기간</th><th className="text-left p-2">선박</th><th className="text-center p-2">평균점수</th><th className="text-center p-2">추천</th><th className="text-left p-2">평가자</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">{t('평가 기간')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-center p-2">{t('평균점수')}</th><th className="text-center p-2">{t('추천')}</th><th className="text-left p-2">{t('평가자')}</th><th className="text-center p-2">{t('작업')}</th>
                     </tr></thead>
                     <tbody>
                       {evaluations.map(e => (
@@ -1146,7 +1152,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                           <td className="p-2">{e.evaluation_period_start} ~ {e.evaluation_period_end}</td>
                           <td className="p-2">{e.ship_name || '-'}</td>
                           <td className="p-2 text-center">{e.overall_rating ? <span className="inline-flex items-center gap-0.5 font-semibold"><Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />{e.overall_rating}</span> : '-'}</td>
-                          <td className="p-2 text-center">{e.recommendation ? <Badge className="text-xs">{REC_LABELS[e.recommendation] || e.recommendation}</Badge> : '-'}</td>
+                          <td className="p-2 text-center">{e.recommendation ? <Badge className="text-xs">{t(REC_LABELS[e.recommendation] || e.recommendation)}</Badge> : '-'}</td>
                           <td className="p-2 text-gray-500">{e.evaluator_rank ? `${e.evaluator_rank} ` : ''}{e.evaluator_name || '-'}</td>
                           <td className="p-2 text-center" onClick={ev => ev.stopPropagation()}>
                             <div className="flex justify-center gap-1">
@@ -1174,32 +1180,32 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <TabsContent value="medical" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">상병 기록 ({medicalRecords.length}건)</span>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingMedical(undefined); setMedicalDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                <span className="text-sm font-semibold">{t('상병 기록 ({{count}}건)', { count: medicalRecords.length })}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingMedical(undefined); setMedicalDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />{t('추가')}</Button>
               </div>
               {medicalRecords.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">등록된 상병 기록이 없습니다.</div>
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('등록된 상병 기록이 없습니다.')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">일자</th><th className="text-left p-2">유형</th><th className="text-left p-2">선박</th><th className="text-left p-2">진단</th><th className="text-left p-2">적합성</th><th className="text-left p-2">추적</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">{t('일자')}</th><th className="text-left p-2">{t('유형')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('진단')}</th><th className="text-left p-2">{t('적합성')}</th><th className="text-left p-2">{t('추적')}</th><th className="text-center p-2">{t('작업')}</th>
                     </tr></thead>
                     <tbody>
                       {medicalRecords.map(r => (
                         <tr key={r.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => { setEditingMedical(r); setMedicalDialogOpen(true); }}>
                           <td className="p-2">{r.record_date}</td>
-                          <td className="p-2">{r.record_type === 'illness' ? '질병' : '부상'}</td>
+                          <td className="p-2">{r.record_type === 'illness' ? t('질병') : t('부상')}</td>
                           <td className="p-2">{r.ship_name || '-'}</td>
                           <td className="p-2 font-medium max-w-[200px] truncate">{r.diagnosis}</td>
                           <td className="p-2">
-                            {r.fitness_status === 'fit' ? <Badge className="bg-green-100 text-green-700 text-xs">적합</Badge>
-                              : r.fitness_status === 'fit_with_restrictions' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">조건부</Badge>
-                              : r.fitness_status === 'unfit' ? <Badge className="bg-red-100 text-red-700 text-xs">부적합</Badge>
-                              : r.fitness_status === 'pending' ? <Badge className="bg-gray-100 text-gray-700 text-xs">대기</Badge>
+                            {r.fitness_status === 'fit' ? <Badge className="bg-green-100 text-green-700 text-xs">{t('적합')}</Badge>
+                              : r.fitness_status === 'fit_with_restrictions' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">{t('조건부')}</Badge>
+                              : r.fitness_status === 'unfit' ? <Badge className="bg-red-100 text-red-700 text-xs">{t('부적합')}</Badge>
+                              : r.fitness_status === 'pending' ? <Badge className="bg-gray-100 text-gray-700 text-xs">{t('대기')}</Badge>
                               : '-'}
                           </td>
-                          <td className="p-2">{r.follow_up_required ? <Badge className="bg-orange-100 text-orange-700 text-xs">필요</Badge> : '-'}</td>
+                          <td className="p-2">{r.follow_up_required ? <Badge className="bg-orange-100 text-orange-700 text-xs">{t('필요')}</Badge> : '-'}</td>
                           <td className="p-2 text-center" onClick={ev => ev.stopPropagation()}>
                             <div className="flex justify-center gap-1">
                               <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingMedical(r); setMedicalDialogOpen(true); }}><Edit2 className="h-3 w-3" /></Button>
@@ -1223,10 +1229,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             <Tabs value={payrollSubTab} onValueChange={v => setPayrollSubTab(v as 'onboard' | 'sick')}>
               <TabsList className="h-8">
                 <TabsTrigger value="onboard" className="text-xs">
-                  승선중 급여{(payrollHistory.length + salaryRecords.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length}</span>}
+                  {t('승선중 급여')}{(payrollHistory.length + salaryRecords.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length}</span>}
                 </TabsTrigger>
                 <TabsTrigger value="sick" className="text-xs">
-                  상병 급여{sickPayHistory.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{sickPayHistory.length}</span>}
+                  {t('상병 급여')}{sickPayHistory.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{sickPayHistory.length}</span>}
                 </TabsTrigger>
               </TabsList>
 
@@ -1234,20 +1240,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <div className="space-y-3">
                   <div className="space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-sm font-semibold">지급된 급여명세 ({payrollHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 선원 급여명세 메뉴에서 생성된 실제 급여명세, 행을 클릭하면 명세서를 볼 수 있습니다</span></span>
+                      <span className="text-sm font-semibold">{t('지급된 급여명세 ({{count}}건)', { count: payrollHistory.length })} <span className="text-xs text-gray-400 font-normal">— {t('선원 급여명세 메뉴에서 생성된 실제 급여명세, 행을 클릭하면 명세서를 볼 수 있습니다')}</span></span>
                       {payrollHistory.length > 0 && (
                         <div className="flex items-center gap-1.5">
                           <Select value={payrollYearFilter} onValueChange={setPayrollYearFilter}>
-                            <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="연도" /></SelectTrigger>
+                            <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder={t('연도')} /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="all" className="text-xs">전체 연도</SelectItem>
+                              <SelectItem value="all" className="text-xs">{t('전체 연도')}</SelectItem>
                               {payrollYearOptions.map(y => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
                             </SelectContent>
                           </Select>
                           <Select value={payrollShipFilter} onValueChange={setPayrollShipFilter}>
-                            <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="선박" /></SelectTrigger>
+                            <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder={t('선박')} /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="all" className="text-xs">전체 선박</SelectItem>
+                              <SelectItem value="all" className="text-xs">{t('전체 선박')}</SelectItem>
                               {payrollShipOptions.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
                             </SelectContent>
                           </Select>
@@ -1255,15 +1261,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                       )}
                     </div>
                     {payrollHistory.length === 0 ? (
-                      <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">생성된 급여명세가 없습니다.</div>
+                      <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('생성된 급여명세가 없습니다.')}</div>
                     ) : filteredPayrollHistory.length === 0 ? (
-                      <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">조건에 맞는 급여명세가 없습니다.</div>
+                      <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('조건에 맞는 급여명세가 없습니다.')}</div>
                     ) : (
                       <>
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs">
                             <thead><tr className="border-b bg-gray-50">
-                              <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">기간</th><th className="text-right p-2">근무일수</th><th className="text-right p-2">실지급액</th><th className="text-left p-2">상태</th>
+                              <th className="text-left p-2">{t('회차')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('기간')}</th><th className="text-right p-2">{t('근무일수')}</th><th className="text-right p-2">{t('실지급액')}</th><th className="text-left p-2">{t('상태')}</th>
                             </tr></thead>
                             <tbody>
                               {pagedPayrollHistory.map(r => (
@@ -1271,12 +1277,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                                   <td className="p-2">{r.year_month}</td>
                                   <td className="p-2">{r.ship_name}</td>
                                   <td className="p-2">{r.period_start_date} ~ {r.period_end_date}</td>
-                                  <td className="p-2 text-right">{r.days_served}/{r.days_in_month}일</td>
+                                  <td className="p-2 text-right">{t('{{a}}/{{b}}일', { a: r.days_served, b: r.days_in_month })}</td>
                                   <td className="p-2 text-right font-mono font-semibold">{r.net_amount.toLocaleString()}</td>
                                   <td className="p-2">
-                                    {r.status === 'confirmed' ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
-                                      : r.status === 'pending_approval' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">상신중</Badge>
-                                      : <Badge className="bg-gray-100 text-gray-600 text-xs">작성중</Badge>}
+                                    {r.status === 'confirmed' ? <Badge className="bg-green-100 text-green-700 text-xs">{t('확정')}</Badge>
+                                      : r.status === 'pending_approval' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">{t('상신중')}</Badge>
+                                      : <Badge className="bg-gray-100 text-gray-600 text-xs">{t('작성중')}</Badge>}
                                   </td>
                                 </tr>
                               ))}
@@ -1286,7 +1292,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                         {payrollTotalPages > 1 && (
                           <div className="flex items-center justify-between">
                             <p className="text-xs text-gray-400">
-                              총 {filteredPayrollHistory.length}건 중 {(payrollPage - 1) * PAYROLL_PAGE_SIZE + 1}-{Math.min(payrollPage * PAYROLL_PAGE_SIZE, filteredPayrollHistory.length)}건 표시
+                              {t('총 {{total}}건 중 {{start}}-{{end}}건 표시', { total: filteredPayrollHistory.length, start: (payrollPage - 1) * PAYROLL_PAGE_SIZE + 1, end: Math.min(payrollPage * PAYROLL_PAGE_SIZE, filteredPayrollHistory.length) })}
                             </p>
                             <Pagination className="mx-0 w-auto">
                               <PaginationContent>
@@ -1308,16 +1314,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     )}
                   </div>
                   <div className="flex items-center justify-between border-t pt-3">
-                    <span className="text-sm font-semibold">수동 등록 급여 이력 ({salaryRecords.length}건) <span className="text-xs text-gray-400 font-normal">— 직접 입력한 기록</span></span>
-                    <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSalary(undefined); setSalaryDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                    <span className="text-sm font-semibold">{t('수동 등록 급여 이력 ({{count}}건)', { count: salaryRecords.length })} <span className="text-xs text-gray-400 font-normal">— {t('직접 입력한 기록')}</span></span>
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setEditingSalary(undefined); setSalaryDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />{t('추가')}</Button>
                   </div>
                   {salaryRecords.length === 0 ? (
-                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">급여 이력을 추가하세요.</div>
+                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('급여 이력을 추가하세요.')}</div>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead><tr className="border-b bg-gray-50">
-                          <th className="text-left p-2">기간</th><th className="text-right p-2">기본급</th><th className="text-right p-2">순수령</th><th className="text-left p-2">통화</th><th className="text-left p-2">상태</th><th className="text-center p-2">작업</th>
+                          <th className="text-left p-2">{t('기간')}</th><th className="text-right p-2">{t('기본급')}</th><th className="text-right p-2">{t('순수령')}</th><th className="text-left p-2">{t('통화')}</th><th className="text-left p-2">{t('상태')}</th><th className="text-center p-2">{t('작업')}</th>
                         </tr></thead>
                         <tbody>
                           {salaryRecords.map(r => (
@@ -1327,9 +1333,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                               <td className="p-2 text-right font-mono font-semibold">{r.net_salary.toLocaleString()}</td>
                               <td className="p-2">{r.currency}</td>
                               <td className="p-2">
-                                {r.payment_status === 'paid' ? <Badge className="bg-green-100 text-green-700 text-xs">지급완료</Badge>
-                                  : r.payment_status === 'pending' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">대기</Badge>
-                                  : <Badge className="bg-red-100 text-red-700 text-xs">취소</Badge>}
+                                {r.payment_status === 'paid' ? <Badge className="bg-green-100 text-green-700 text-xs">{t('지급완료')}</Badge>
+                                  : r.payment_status === 'pending' ? <Badge className="bg-yellow-100 text-yellow-700 text-xs">{t('대기')}</Badge>
+                                  : <Badge className="bg-red-100 text-red-700 text-xs">{t('취소')}</Badge>}
                               </td>
                               <td className="p-2 text-center">
                                 <div className="flex justify-center gap-1">
@@ -1350,20 +1356,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               <TabsContent value="sick" className="mt-3 data-[state=inactive]:hidden">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-sm font-semibold">상병급여 이력 ({sickPayHistory.length}건) <span className="text-xs text-gray-400 font-normal">— 지급된 급여명세와 동일한 방식, 행을 클릭하면 월별 내역을 볼 수 있습니다</span></span>
+                    <span className="text-sm font-semibold">{t('상병급여 이력 ({{count}}건)', { count: sickPayHistory.length })} <span className="text-xs text-gray-400 font-normal">— {t('지급된 급여명세와 동일한 방식, 행을 클릭하면 월별 내역을 볼 수 있습니다')}</span></span>
                     {sickPayHistory.length > 0 && (
                       <div className="flex items-center gap-1.5">
                         <Select value={sickPayHistoryYearFilter} onValueChange={setSickPayHistoryYearFilter}>
-                          <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder="연도" /></SelectTrigger>
+                          <SelectTrigger className="h-7 text-xs w-24"><SelectValue placeholder={t('연도')} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all" className="text-xs">전체 연도</SelectItem>
+                            <SelectItem value="all" className="text-xs">{t('전체 연도')}</SelectItem>
                             {sickPayHistoryYearOptions.map(y => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
                           </SelectContent>
                         </Select>
                         <Select value={sickPayHistoryShipFilter} onValueChange={setSickPayHistoryShipFilter}>
-                          <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="선박" /></SelectTrigger>
+                          <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder={t('선박')} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all" className="text-xs">전체 선박</SelectItem>
+                            <SelectItem value="all" className="text-xs">{t('전체 선박')}</SelectItem>
                             {sickPayHistoryShipOptions.map(s => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}
                           </SelectContent>
                         </Select>
@@ -1371,15 +1377,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     )}
                   </div>
                   {sickPayHistory.length === 0 ? (
-                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">상병급여 이력이 없습니다.</div>
+                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('상병급여 이력이 없습니다.')}</div>
                   ) : filteredSickPayHistory.length === 0 ? (
-                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">조건에 맞는 상병급여 이력이 없습니다.</div>
+                    <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('조건에 맞는 상병급여 이력이 없습니다.')}</div>
                   ) : (
                     <>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead><tr className="border-b bg-gray-50">
-                            <th className="text-left p-2">회차</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-right p-2">금액</th><th className="text-left p-2">상태</th>
+                            <th className="text-left p-2">{t('회차')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('직급')}</th><th className="text-right p-2">{t('금액')}</th><th className="text-left p-2">{t('상태')}</th>
                           </tr></thead>
                           <tbody>
                             {pagedSickPayHistory.map(r => (
@@ -1390,9 +1396,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                                 <td className="p-2 text-right font-mono font-semibold">{r.amount.toLocaleString()} {r.currency}</td>
                                 <td className="p-2">
                                   {r.status === 'closed'
-                                    ? <Badge className="bg-green-100 text-green-700 text-xs">종결</Badge>
-                                    : <Badge className="bg-blue-100 text-blue-700 text-xs">진행중</Badge>}
-                                  {!r.confirmed && <Badge variant="outline" className="text-[10px] ml-1 text-gray-400 border-gray-300">미확정</Badge>}
+                                    ? <Badge className="bg-green-100 text-green-700 text-xs">{t('종결')}</Badge>
+                                    : <Badge className="bg-blue-100 text-blue-700 text-xs">{t('진행중')}</Badge>}
+                                  {!r.confirmed && <Badge variant="outline" className="text-[10px] ml-1 text-gray-400 border-gray-300">{t('미확정')}</Badge>}
                                 </td>
                               </tr>
                             ))}
@@ -1402,7 +1408,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                       {sickPayHistoryTotalPages > 1 && (
                         <div className="flex items-center justify-between">
                           <p className="text-xs text-gray-400">
-                            총 {filteredSickPayHistory.length}건 중 {(sickPayHistoryPage - 1) * SICK_PAY_PAGE_SIZE + 1}-{Math.min(sickPayHistoryPage * SICK_PAY_PAGE_SIZE, filteredSickPayHistory.length)}건 표시
+                            {t('총 {{total}}건 중 {{start}}-{{end}}건 표시', { total: filteredSickPayHistory.length, start: (sickPayHistoryPage - 1) * SICK_PAY_PAGE_SIZE + 1, end: Math.min(sickPayHistoryPage * SICK_PAY_PAGE_SIZE, filteredSickPayHistory.length) })}
                           </p>
                           <Pagination className="mx-0 w-auto">
                             <PaginationContent>
@@ -1432,16 +1438,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <TabsContent value="interviews" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">면담 일지 ({interviewLogs.length}건) <span className="text-xs text-gray-400 font-normal">— 가장 최근 면담의 승선 희망일이 기본정보에 반영됩니다</span></span>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingInterview(undefined); setInterviewDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />추가</Button>
+                <span className="text-sm font-semibold">{t('면담 일지 ({{count}}건)', { count: interviewLogs.length })} <span className="text-xs text-gray-400 font-normal">— {t('가장 최근 면담의 승선 희망일이 기본정보에 반영됩니다')}</span></span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { setEditingInterview(undefined); setInterviewDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />{t('추가')}</Button>
               </div>
               {interviewLogs.length === 0 ? (
-                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">등록된 면담 일지가 없습니다.</div>
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('등록된 면담 일지가 없습니다.')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
-                      <th className="text-left p-2">면담일</th><th className="text-left p-2">면담자</th><th className="text-left p-2">승선 희망 선주/플릿/선박</th><th className="text-left p-2">승선 희망일</th><th className="text-center p-2">작업</th>
+                      <th className="text-left p-2">{t('면담일')}</th><th className="text-left p-2">{t('면담자')}</th><th className="text-left p-2">{t('승선 희망 선주/플릿/선박')}</th><th className="text-left p-2">{t('승선 희망일')}</th><th className="text-center p-2">{t('작업')}</th>
                     </tr></thead>
                     <tbody>
                       {interviewLogs.map(log => (
@@ -1477,13 +1483,13 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       {/* 지급된 급여명세 상세 — 새 탭 대신 모달로 보여준다. */}
       <Dialog open={payslipModalOpen} onOpenChange={o => { setPayslipModalOpen(o); if (!o) setViewingPayslip(null); }}>
         <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
-          <DialogTitle className="sr-only">급여명세서</DialogTitle>
+          <DialogTitle className="sr-only">{t('급여명세서')}</DialogTitle>
           {viewingPayslipLoading ? (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-400">불러오는 중...</div>
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400">{t('불러오는 중...')}</div>
           ) : viewingPayslip ? (
             <CrewPayslipDetailView payslip={viewingPayslip} shipName={viewingPayslip.ship_name} />
           ) : (
-            <div className="flex items-center justify-center h-32 text-sm text-gray-400">명세서를 찾을 수 없습니다.</div>
+            <div className="flex items-center justify-center h-32 text-sm text-gray-400">{t('명세서를 찾을 수 없습니다.')}</div>
           )}
         </DialogContent>
       </Dialog>
@@ -1491,11 +1497,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       {/* 상병급여 케이스 월별 내역 — 이미 불러온 sickPayHistory에서 같은 케이스만 걸러서 보여준다. */}
       <Dialog open={!!viewingSickPayRecordId} onOpenChange={o => !o && setViewingSickPayRecordId(null)}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-          <DialogTitle className="text-base flex items-center gap-1.5"><Stethoscope className="w-4 h-4 text-muted-foreground" />상병급여 월별 내역</DialogTitle>
+          <DialogTitle className="text-base flex items-center gap-1.5"><Stethoscope className="w-4 h-4 text-muted-foreground" />{t('상병급여 월별 내역')}</DialogTitle>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr className="border-b bg-gray-50">
-                <th className="text-left p-2">회차</th><th className="text-right p-2">금액</th><th className="text-left p-2">상태</th>
+                <th className="text-left p-2">{t('회차')}</th><th className="text-right p-2">{t('금액')}</th><th className="text-left p-2">{t('상태')}</th>
               </tr></thead>
               <tbody>
                 {viewingSickPayEntries.map(e => (
@@ -1504,8 +1510,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     <td className="p-2 text-right font-mono">{e.amount.toLocaleString()} {e.currency}</td>
                     <td className="p-2">
                       {e.confirmed
-                        ? <Badge className="bg-green-100 text-green-700 text-xs">확정</Badge>
-                        : <Badge variant="outline" className="text-xs text-gray-400 border-gray-300">미확정(계산값)</Badge>}
+                        ? <Badge className="bg-green-100 text-green-700 text-xs">{t('확정')}</Badge>
+                        : <Badge variant="outline" className="text-xs text-gray-400 border-gray-300">{t('미확정(계산값)')}</Badge>}
                     </td>
                   </tr>
                 ))}
@@ -1522,8 +1528,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       {crewReservations.map((r, i) => (
         <div key={i} className="flex items-center justify-between text-xs gap-2">
           <span className="text-violet-700">
-            <span className="font-medium">{r.role === 'on' ? '승선 예정' : '하선 예정'}</span>
-            {' — '}{r.planName} ({r.status === 'draft' ? '임시저장' : r.status === 'pending_approval' ? '결재중' : '승인됨'})
+            <span className="font-medium">{r.role === 'on' ? t('승선 예정') : t('하선 예정')}</span>
+            {' — '}{r.planName} ({r.status === 'draft' ? t('임시저장') : r.status === 'pending_approval' ? t('결재중') : t('승인됨')})
             {r.shipName ? ` · ${r.shipName}` : ''}
           </span>
           {r.role === 'on' && r.salaryAmount != null && (
@@ -1539,11 +1545,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       <div ref={panelRef} className="space-y-4 pt-3 border-t">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-500">
-            {isNew ? '새 선원 등록' : crewDisplayName(formData) || '선원 정보 수정'}
+            {isNew ? t('새 선원 등록') : crewDisplayName(formData) || t('선원 정보 수정')}
           </span>
           <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
             <Save className="w-4 h-4" />
-            {saving ? '저장 중...' : isNew ? '등록' : '저장'}
+            {saving ? t('저장 중...') : isNew ? t('등록') : t('저장')}
           </Button>
         </div>
         {reservationBanner}
@@ -1563,7 +1569,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </Button>
               <div>
                 <CardTitle className="text-base">
-                  {isNew ? '선원 등록' : '선원 카드'}
+                  {isNew ? t('선원 등록') : t('선원 카드')}
                 </CardTitle>
               </div>
             </div>
@@ -1576,7 +1582,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                   onClick={() => setResumeDialogOpen(true)}
                 >
                   <FileText className="w-4 h-4" />
-                  이력서 출력
+                  {t('이력서 출력')}
                 </Button>
               )}
               {!isNew && (
@@ -1591,19 +1597,19 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                       await exportCrewResumeToExcel(id!);
                     } catch (e) {
                       console.error(e);
-                      toast({ title: '엑셀 저장 실패', description: '선원 정보를 엑셀로 저장하는 중 오류가 발생했습니다.', variant: 'destructive' });
+                      toast({ title: t('엑셀 저장 실패'), description: t('선원 정보를 엑셀로 저장하는 중 오류가 발생했습니다.'), variant: 'destructive' });
                     } finally {
                       setExportingExcel(false);
                     }
                   }}
                 >
                   <FileSpreadsheet className="w-4 h-4" />
-                  {exportingExcel ? '저장 중...' : '엑셀로 저장'}
+                  {exportingExcel ? t('저장 중...') : t('엑셀로 저장')}
                 </Button>
               )}
               <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
                 <Save className="w-4 h-4" />
-                {saving ? '저장 중...' : isNew ? '등록' : '저장'}
+                {saving ? t('저장 중...') : isNew ? t('등록') : t('저장')}
               </Button>
             </div>
           </div>

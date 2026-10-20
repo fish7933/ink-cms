@@ -93,7 +93,7 @@ export default function CrewSickPayManagementPage() {
       const shipIds = new Set(shipList.map(s => s.id));
       setRecords(data.filter(r => shipIds.has(r.ship_id)));
     } catch (e) {
-      toast({ title: '조회 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('조회 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setLoading(false);
     }

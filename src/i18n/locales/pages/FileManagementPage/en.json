@@ -31,5 +31,6 @@
   "경로": "Path",
   "크기": "Size",
   "수정일": "Modified",
-  "파일이 없습니다.": "No files."
+  "파일이 없습니다.": "No files.",
+  "{{count}}개 · 총 {{size}}": "{{count}} files · {{size}} total"
 }

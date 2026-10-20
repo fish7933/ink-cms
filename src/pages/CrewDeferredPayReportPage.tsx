@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewDeferredPayReportPage/en.json';
 import { PiggyBank, History } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -22,6 +25,8 @@ const fmtDate = (d: string) => d?.slice(5).replace('-', '/') || '';
 const fmt = (n: number) => n.toLocaleString('ko-KR');
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 const PAGE_SIZE = 20;
+i18n.addResourceBundle('en', 'CrewDeferredPayReportPage', en, true, true);
+
 const STATUS_LABELS: Record<string, string> = { draft: '작성중', pending_approval: '결재중', confirmed: '확정' };
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -33,6 +38,7 @@ const STATUS_COLORS: Record<string, string> = {
 // 승선일부터 지금까지 얼마나 쌓여있는지(=우리가 나중에 지급해야 할 부채성 잔액), 하선 등으로
 // 그 달에 실제 얼마나 지급됐는지를 한눈에 본다. 선주/매닝사와 공유하지 않는 내부 전용 화면.
 export default function CrewDeferredPayReportPage() {
+  const { t } = useTranslation('CrewDeferredPayReportPage');
   const { toast } = useToast();
   const [ships, setShips] = useState<Ship[]>([]);
   const [owners, setOwners] = useState<Map<string, string>>(new Map());
@@ -90,7 +96,7 @@ export default function CrewDeferredPayReportPage() {
       })));
       setRows(data);
     } catch (e) {
-      toast({ title: '조회 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('조회 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -179,53 +185,53 @@ export default function CrewDeferredPayReportPage() {
   return (
     <div className="max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-6 py-4 space-y-4">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><PiggyBank className="w-5 h-5 text-muted-foreground" />선원 후불성 급여 현황</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2"><PiggyBank className="w-5 h-5 text-muted-foreground" />{t('선원 후불성 급여 현황')}</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          휴가비 등 후불성 급여 항목이 선원별로 매달 얼마나 적립되고, 현재 잔액이 얼마이며, 하선 등으로 그 달에 실제 얼마나 지급됐는지 보여줍니다.
+          {t('휴가비 등 후불성 급여 항목이 선원별로 매달 얼마나 적립되고, 현재 잔액이 얼마이며, 하선 등으로 그 달에 실제 얼마나 지급됐는지 보여줍니다.')}
         </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">기준 월</Label>
+          <Label className="text-xs">{t('기준 월')}</Label>
           <Input type="month" value={yearMonth} onChange={e => setYearMonth(e.target.value)} className="h-7 text-xs w-40" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">선주</Label>
+          <Label className="text-xs">{t('선주')}</Label>
           <Select value={ownerFilter || '_all'} onValueChange={v => handleOwnerFilterChange(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {[...owners.entries()].map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">플릿</Label>
+          <Label className="text-xs">{t('플릿')}</Label>
           <Select value={fleetFilter || '_all'} onValueChange={v => handleFleetFilterChange(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-36"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {fleetsForOwnerFilter.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">선박</Label>
+          <Label className="text-xs">{t('선박')}</Label>
           <Select value={shipFilter || '_all'} onValueChange={v => setShipFilter(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {shipsForFilter.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">항목</Label>
+          <Label className="text-xs">{t('항목')}</Label>
           <Select value={itemFilter || '_all'} onValueChange={v => setItemFilter(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {itemOptions.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -234,15 +240,15 @@ export default function CrewDeferredPayReportPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">이번 달 적립액 합계</p>
+          <p className="text-xs text-muted-foreground">{t('이번 달 적립액 합계')}</p>
           <p className="text-lg font-bold mt-1">{fmt(totals.accrual)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">현재 누적 잔액(미지급) 합계</p>
+          <p className="text-xs text-muted-foreground">{t('현재 누적 잔액(미지급) 합계')}</p>
           <p className="text-lg font-bold mt-1 text-amber-700">{fmt(totals.balance)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">이번 달 일괄 지급액 합계</p>
+          <p className="text-xs text-muted-foreground">{t('이번 달 일괄 지급액 합계')}</p>
           <p className="text-lg font-bold mt-1 text-green-700">{fmt(totals.payout)}</p>
         </CardContent></Card>
       </div>
@@ -251,25 +257,25 @@ export default function CrewDeferredPayReportPage() {
         <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
       ) : filteredRows.length === 0 ? (
         <div className="text-center py-12 text-sm text-gray-400">
-          {rows.length === 0 ? '이 달에 후불성 급여 항목이 있는 명세서가 없습니다.' : '현재 필터 조건에 맞는 항목이 없습니다.'}
+          {rows.length === 0 ? t('이 달에 후불성 급여 항목이 있는 명세서가 없습니다.') : t('현재 필터 조건에 맞는 항목이 없습니다.')}
         </div>
       ) : (
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선주</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">플릿</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선박</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선원</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">항목</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">승선일</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">하선일</TableHead>
-                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">이번 달 적립액</TableHead>
-                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">누적 잔액</TableHead>
-                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">이번 달 지급액</TableHead>
-                <TableHead className="py-1 px-2 text-xs text-center whitespace-nowrap">이력</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('선주')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('플릿')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('선박')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('직급')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('선원')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('항목')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('승선일')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('하선일')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('이번 달 적립액')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('누적 잔액')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('이번 달 지급액')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-center whitespace-nowrap">{t('이력')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -285,11 +291,11 @@ export default function CrewDeferredPayReportPage() {
                   <TableCell className="py-1 px-2 text-xs text-muted-foreground">{r.disembark_date ? fmtDate(r.disembark_date) : '-'}</TableCell>
                   <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(r.monthly_accrual)}</TableCell>
                   <TableCell className="py-1 px-2 text-xs text-right font-mono text-amber-700">
-                    {r.payout_this_month > 0 ? '0 (지급완료)' : fmt(r.accrued_to_date)}
+                    {r.payout_this_month > 0 ? t('0 (지급완료)') : fmt(r.accrued_to_date)}
                   </TableCell>
                   <TableCell className="py-1 px-2 text-xs text-right font-mono text-green-700">{r.payout_this_month > 0 ? fmt(r.payout_this_month) : '-'}</TableCell>
                   <TableCell className="py-1 px-2 text-center">
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="급여명세/적립 히스토리" onClick={() => openCrewHistory(r)}>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title={t('급여명세/적립 히스토리')} onClick={() => openCrewHistory(r)}>
                       <History className="w-3.5 h-3.5 text-muted-foreground" />
                     </Button>
                   </TableCell>
@@ -303,7 +309,7 @@ export default function CrewDeferredPayReportPage() {
       {!loading && filteredRows.length > 0 && (
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
-            총 {filteredRows.length}건 중 {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredRows.length)}건 표시
+            {t('총 {{total}}건 중 {{start}}-{{end}}건 표시', { total: filteredRows.length, start: (page - 1) * PAGE_SIZE + 1, end: Math.min(page * PAGE_SIZE, filteredRows.length) })}
           </p>
           {totalPages > 1 && (
             <Pagination className="mx-0 w-auto">
@@ -329,7 +335,7 @@ export default function CrewDeferredPayReportPage() {
           <DialogHeader>
             <DialogTitle className="text-base flex items-center gap-1.5">
               <History className="w-4 h-4 text-muted-foreground" />
-              {historyMode === 'crew' ? `${historyCrewName} — 급여명세 / 후불성 적립 히스토리` : `${historyCrewName} — ${historyItemName} 적립 히스토리`}
+              {historyMode === 'crew' ? t('{{name}} — 급여명세 / 후불성 적립 히스토리', { name: historyCrewName }) : t('{{name}} — {{item}} 적립 히스토리', { name: historyCrewName, item: historyItemName })}
             </DialogTitle>
           </DialogHeader>
           {historyLoading ? (
@@ -338,24 +344,24 @@ export default function CrewDeferredPayReportPage() {
             <div className="space-y-5">
               {historyMode === 'crew' && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">급여명세 히스토리</p>
+                  <p className="text-xs font-medium text-gray-500 mb-1.5">{t('급여명세 히스토리')}</p>
                   {payrollHistoryRows.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-6">급여명세 이력이 없습니다.</p>
+                    <p className="text-sm text-gray-400 text-center py-6">{t('급여명세 이력이 없습니다.')}</p>
                   ) : (
                     <div className="rounded-md border overflow-hidden overflow-x-auto">
                       <table className="w-full text-xs whitespace-nowrap">
                         <thead className="bg-gray-50 border-b">
                           <tr>
-                            <th className="text-left p-2 font-medium text-gray-600">월</th>
-                            <th className="text-left p-2 font-medium text-gray-600">선박</th>
-                            <th className="text-left p-2 font-medium text-gray-600">상태</th>
-                            <th className="text-left p-2 font-medium text-gray-600">급여적용기간</th>
-                            <th className="text-left p-2 font-medium text-gray-600">적용일수</th>
+                            <th className="text-left p-2 font-medium text-gray-600">{t('월')}</th>
+                            <th className="text-left p-2 font-medium text-gray-600">{t('선박')}</th>
+                            <th className="text-left p-2 font-medium text-gray-600">{t('상태')}</th>
+                            <th className="text-left p-2 font-medium text-gray-600">{t('급여적용기간')}</th>
+                            <th className="text-left p-2 font-medium text-gray-600">{t('적용일수')}</th>
                             {payrollHistoryAllowanceColumns.map(name => <th key={name} className="text-right p-2 font-medium text-gray-600">{name}</th>)}
-                            <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">지급 합계</th>
+                            <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">{t('지급 합계')}</th>
                             {payrollHistoryDeductionColumns.map(name => <th key={name} className="text-right p-2 font-medium text-red-600">{name}</th>)}
-                            <th className="text-right p-2 font-medium text-red-700 bg-gray-100">공제 합계</th>
-                            <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">실지급액</th>
+                            <th className="text-right p-2 font-medium text-red-700 bg-gray-100">{t('공제 합계')}</th>
+                            <th className="text-right p-2 font-medium text-gray-700 bg-gray-100">{t('실지급액')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -363,7 +369,7 @@ export default function CrewDeferredPayReportPage() {
                             <tr key={r.period_id} className="border-b">
                               <td className="py-1 px-2">{r.year_month}</td>
                               <td className="py-1 px-2 text-gray-600">{r.ship_name}</td>
-                              <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
+                              <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{t(STATUS_LABELS[r.status])}</Badge></td>
                               <td className="py-1 px-2 text-gray-600">{r.period_start_date}~{r.period_end_date}</td>
                               <td className="py-1 px-2 text-gray-600">{r.days_served}/{r.days_in_month}</td>
                               {payrollHistoryAllowanceColumns.map(name => <td key={name} className="py-1 px-2 text-right font-mono">{fmt(r.allowance_by_name[name] || 0)}</td>)}
@@ -376,7 +382,7 @@ export default function CrewDeferredPayReportPage() {
                           {/* (Accrued) 열은 월별 적립액만 표기 대상이라 합산하면 곧 누적 적립 총액이 되어버린다 —
                               급여대장에는 총적립액을 노출하지 않기로 했으므로 합계 칸은 비워둔다. */}
                           <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                            <td className="py-1 px-2" colSpan={5}>합계 ({payrollHistoryRows.length}개월)</td>
+                            <td className="py-1 px-2" colSpan={5}>{t('합계 ({{count}}개월)', { count: payrollHistoryRows.length })}</td>
                             {payrollHistoryAllowanceColumns.map(name => (
                               <td key={name} className="py-1 px-2 text-right font-mono">
                                 {name.endsWith('(Accrued)') ? <span className="text-gray-300">-</span> : fmt(payrollHistoryTotals.allowanceByName[name] || 0)}
@@ -395,21 +401,21 @@ export default function CrewDeferredPayReportPage() {
               )}
 
               <div>
-                {historyMode === 'crew' && <p className="text-xs font-medium text-gray-500 mb-1.5">후불성 적립 히스토리</p>}
+                {historyMode === 'crew' && <p className="text-xs font-medium text-gray-500 mb-1.5">{t('후불성 적립 히스토리')}</p>}
                 {deferredHistoryRows.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">후불성 적립 이력이 없습니다.</p>
+                  <p className="text-sm text-gray-400 text-center py-6">{t('후불성 적립 이력이 없습니다.')}</p>
                 ) : (
                   <div className="rounded-md border overflow-hidden overflow-x-auto">
                     <table className="w-full text-xs whitespace-nowrap">
                       <thead className="bg-gray-50 border-b">
                         <tr>
-                          <th className="text-left p-2 font-medium text-gray-600">월</th>
-                          <th className="text-left p-2 font-medium text-gray-600">선박</th>
-                          <th className="text-left p-2 font-medium text-gray-600">상태</th>
-                          {historyMode === 'crew' && <th className="text-left p-2 font-medium text-gray-600">항목</th>}
-                          <th className="text-right p-2 font-medium text-gray-600">적립액</th>
-                          <th className="text-right p-2 font-medium text-amber-700">누적 잔액</th>
-                          <th className="text-right p-2 font-medium text-green-700">지급액</th>
+                          <th className="text-left p-2 font-medium text-gray-600">{t('월')}</th>
+                          <th className="text-left p-2 font-medium text-gray-600">{t('선박')}</th>
+                          <th className="text-left p-2 font-medium text-gray-600">{t('상태')}</th>
+                          {historyMode === 'crew' && <th className="text-left p-2 font-medium text-gray-600">{t('항목')}</th>}
+                          <th className="text-right p-2 font-medium text-gray-600">{t('적립액')}</th>
+                          <th className="text-right p-2 font-medium text-amber-700">{t('누적 잔액')}</th>
+                          <th className="text-right p-2 font-medium text-green-700">{t('지급액')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -417,15 +423,15 @@ export default function CrewDeferredPayReportPage() {
                           <tr key={`${r.period_id}-${r.item_name}-${idx}`} className="border-b">
                             <td className="py-1 px-2">{r.year_month}</td>
                             <td className="py-1 px-2 text-gray-600">{r.ship_name}</td>
-                            <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge></td>
+                            <td className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[r.status]}`}>{t(STATUS_LABELS[r.status])}</Badge></td>
                             {historyMode === 'crew' && <td className="py-1 px-2">{r.item_name}</td>}
                             <td className="py-1 px-2 text-right font-mono">{fmt(r.monthly_accrual)}</td>
-                            <td className="py-1 px-2 text-right font-mono text-amber-700">{r.payout_this_month > 0 ? '0 (지급완료)' : fmt(r.accrued_to_date)}</td>
+                            <td className="py-1 px-2 text-right font-mono text-amber-700">{r.payout_this_month > 0 ? t('0 (지급완료)') : fmt(r.accrued_to_date)}</td>
                             <td className="py-1 px-2 text-right font-mono text-green-700">{r.payout_this_month > 0 ? fmt(r.payout_this_month) : '-'}</td>
                           </tr>
                         ))}
                         <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                          <td className="py-1 px-2" colSpan={historyMode === 'crew' ? 4 : 3}>합계 ({deferredHistoryRows.length}건)</td>
+                          <td className="py-1 px-2" colSpan={historyMode === 'crew' ? 4 : 3}>{t('합계 ({{count}}건)', { count: deferredHistoryRows.length })}</td>
                           <td className="py-1 px-2 text-right font-mono">{fmt(deferredHistoryRows.reduce((s, r) => s + r.monthly_accrual, 0))}</td>
                           <td className="py-1 px-2 text-right font-mono"><span className="text-gray-300">-</span></td>
                           <td className="py-1 px-2 text-right font-mono text-green-700">{fmt(deferredHistoryRows.reduce((s, r) => s + r.payout_this_month, 0))}</td>

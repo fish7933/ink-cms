@@ -160,17 +160,17 @@ export default function CompanyManagementPage() {
               <CardTitle className="text-base">{formTitle}</CardTitle>
               {isFormMode ? (
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>취소</Button>
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => closeTab(activeTabId!)}>{t('취소')}</Button>
                   {(editId ? permissions.canEdit : permissions.canCreate) && (
                     <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}>
-                      <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+                      <Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}
                     </Button>
                   )}
                 </div>
               ) : (
                 permissions.canCreate && (
-                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/companies?type=${companyType}&mode=new`, `${companyType === 'owner' ? '선주사' : '매닝사'} 등록`, true)}>
-                    <Plus className="w-4 h-4" />등록
+                  <Button size="sm" className="gap-1.5 h-8" onClick={() => openNewTab(`/companies?type=${companyType}&mode=new`, companyType === 'owner' ? t('선주사 등록') : t('매닝사 등록'), true)}>
+                    <Plus className="w-4 h-4" />{t('등록')}
                   </Button>
                 )
               )}
@@ -180,39 +180,39 @@ export default function CompanyManagementPage() {
             {isFormMode ? (
               <div className="space-y-3 py-2 max-w-md">
                 <div className="space-y-1">
-                  <Label className="text-xs">회사명 *</Label>
-                  <Input className="h-8 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="회사명 입력" />
+                  <Label className="text-xs">{t('회사명 *')}</Label>
+                  <Input className="h-8 text-sm" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('회사명 입력')} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">국가</Label>
+                    <Label className="text-xs">{t('국가')}</Label>
                     <Select value={form.country || '_none'} onValueChange={v => setForm(f => ({ ...f, country: v === '_none' ? '' : v }))}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="국가 선택" /></SelectTrigger>
+                      <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('국가 선택')} /></SelectTrigger>
                       <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">이메일</Label>
-                    <Input className="h-8 text-sm" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="이메일" />
+                    <Label className="text-xs">{t('이메일')}</Label>
+                    <Input className="h-8 text-sm" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder={t('이메일')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label className="text-xs">연락처</Label><Input className="h-8 text-sm" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="전화번호" /></div>
+                  <div className="space-y-1"><Label className="text-xs">{t('연락처')}</Label><Input className="h-8 text-sm" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder={t('전화번호')} /></div>
                   <div className="space-y-1">
-                    <Label className="text-xs">사관 기본 계약(월)</Label>
-                    <Input className="h-8 text-sm" type="number" min={1} value={form.officer_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, officer_contract_months: e.target.value ? +e.target.value : null }))} placeholder="예: 6" />
+                    <Label className="text-xs">{t('사관 기본 계약(월)')}</Label>
+                    <Input className="h-8 text-sm" type="number" min={1} value={form.officer_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, officer_contract_months: e.target.value ? +e.target.value : null }))} placeholder={t('예: 6')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label className="text-xs">부원 기본 계약(월)</Label><Input className="h-8 text-sm" type="number" min={1} value={form.rating_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, rating_contract_months: e.target.value ? +e.target.value : null }))} placeholder="예: 9" /></div>
+                  <div className="space-y-1"><Label className="text-xs">{t('부원 기본 계약(월)')}</Label><Input className="h-8 text-sm" type="number" min={1} value={form.rating_contract_months ?? ''} onChange={e => setForm(f => ({ ...f, rating_contract_months: e.target.value ? +e.target.value : null }))} placeholder={t('예: 9')} /></div>
                   {companyType === 'owner' && (
                     <div className="space-y-1">
-                      <Label className="text-xs">급여 월 계산 기준</Label>
+                      <Label className="text-xs">{t('급여 월 계산 기준')}</Label>
                       <Select value={form.month_days_basis} onValueChange={v => setForm(f => ({ ...f, month_days_basis: v as '30' | 'actual' }))}>
                         <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="30">30일 고정</SelectItem>
-                          <SelectItem value="actual">실제 일수</SelectItem>
+                          <SelectItem value="30">{t('30일 고정')}</SelectItem>
+                          <SelectItem value="actual">{t('실제 일수')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -221,21 +221,21 @@ export default function CompanyManagementPage() {
                 {companyType === 'owner' && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-xs">관리비 계산 기준</Label>
+                      <Label className="text-xs">{t('관리비 계산 기준')}</Label>
                       <Select value={form.management_fee_days_basis} onValueChange={v => setForm(f => ({ ...f, management_fee_days_basis: v as '30' | 'actual' }))}>
                         <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="30">30일 고정</SelectItem>
-                          <SelectItem value="actual">실제 일수</SelectItem>
+                          <SelectItem value="30">{t('30일 고정')}</SelectItem>
+                          <SelectItem value="actual">{t('실제 일수')}</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-[11px] text-gray-400">급여는 30일 고정이어도 관리비는 실제 일수로 계산하는 등, 급여 기준과 별도로 적용됩니다.</p>
+                      <p className="text-[11px] text-gray-400">{t('급여는 30일 고정이어도 관리비는 실제 일수로 계산하는 등, 급여 기준과 별도로 적용됩니다.')}</p>
                     </div>
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-xs pt-1 cursor-pointer">
                   <input type="checkbox" checked={form.is_ship_manager} onChange={e => setForm(f => ({ ...f, is_ship_manager: e.target.checked }))} className="h-3.5 w-3.5" />
-                  <span>우리 회사(선박관리사)로 지정 <span className="text-gray-400">— 승선경력 회사배치 시 선박관리사 정보로 자동 사용됩니다</span></span>
+                  <span>{t('우리 회사(선박관리사)로 지정')} <span className="text-gray-400">{t('— 승선경력 회사배치 시 선박관리사 정보로 자동 사용됩니다')}</span></span>
                 </label>
               </div>
             ) : (
@@ -243,9 +243,9 @@ export default function CompanyManagementPage() {
                 <div className="flex gap-2 mb-4">
                   <div className="relative flex-1 max-w-xs">
                     <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
-                    <Input className="pl-8 h-8 text-sm" placeholder="회사명, 국가 검색..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <Input className="pl-8 h-8 text-sm" placeholder={t('회사명, 국가 검색...')} value={search} onChange={e => setSearch(e.target.value)} />
                   </div>
-                  <span className="text-xs text-gray-500 self-center">총 {filtered.length}개</span>
+                  <span className="text-xs text-gray-500 self-center">{t('총 {{count}}개', { count: filtered.length })}</span>
                 </div>
                 {loading ? (
                   <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
@@ -255,26 +255,26 @@ export default function CompanyManagementPage() {
                       <thead className="bg-gray-50 border-b">
                         <tr>
                           <th className="w-8 px-3 py-2 text-center text-xs font-medium text-gray-400">#</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">회사명</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">국가</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">이메일</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">연락처</th>
-                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">사관(월)</th>
-                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">부원(월)</th>
-                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">급여 월 계산</th>}
-                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">관리비 계산</th>}
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">{t('회사명')}</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">{t('국가')}</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">{t('이메일')}</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">{t('연락처')}</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">{t('사관(월)')}</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">{t('부원(월)')}</th>
+                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">{t('급여 월 계산')}</th>}
+                          {companyType === 'owner' && <th className="px-3 py-2 text-center text-xs font-medium text-gray-600">{t('관리비 계산')}</th>}
                           <th className="px-3 py-2"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {filtered.length === 0 ? (
-                          <tr><td colSpan={companyType === 'owner' ? 10 : 8} className="text-center py-10 text-sm text-gray-400">등록된 회사가 없습니다</td></tr>
+                          <tr><td colSpan={companyType === 'owner' ? 10 : 8} className="text-center py-10 text-sm text-gray-400">{t('등록된 회사가 없습니다')}</td></tr>
                         ) : filtered.map((c, i) => (
-                          <tr key={c.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
+                          <tr key={c.id} className={`border-b hover:bg-gray-50 ${permissions.canEdit ? 'cursor-pointer' : ''}`} onClick={() => permissions.canEdit && openNewTab(`/companies?type=${companyType}&id=${c.id}`, t('{{name}} 수정', { name: c.name }))}>
                             <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
                             <td className="px-3 py-2 font-medium">
                               {c.name}
-                              {c.company_type === '선박관리사' && <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">선박관리사</span>}
+                              {c.company_type === '선박관리사' && <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{t('선박관리사')}</span>}
                             </td>
                             <td className="px-3 py-2 text-gray-600">{c.country ? (natByCode.get(c.country)?.country_name_ko ?? c.country) : '-'}</td>
                             <td className="px-3 py-2 text-gray-600 text-xs">{c.email || '-'}</td>
@@ -284,21 +284,21 @@ export default function CompanyManagementPage() {
                             {companyType === 'owner' && (
                               <td className="px-3 py-2 text-center">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${c.month_days_basis === 'actual' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                                  {MONTH_BASIS_LABELS[c.month_days_basis] || '30일 고정'}
+                                  {t(MONTH_BASIS_LABELS[c.month_days_basis] || '30일 고정')}
                                 </span>
                               </td>
                             )}
                             {companyType === 'owner' && (
                               <td className="px-3 py-2 text-center">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${c.management_fee_days_basis === '30' ? 'bg-gray-100 text-gray-600' : 'bg-teal-100 text-teal-700'}`}>
-                                  {MONTH_BASIS_LABELS[c.management_fee_days_basis] || '실제 일수'}
+                                  {t(MONTH_BASIS_LABELS[c.management_fee_days_basis] || '실제 일수')}
                                 </span>
                               </td>
                             )}
                             <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}>
                               <div className="flex justify-end gap-1">
                                 {permissions.canEdit && (
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, `${c.name} 수정`)}>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openNewTab(`/companies?type=${companyType}&id=${c.id}`, t('{{name}} 수정', { name: c.name }))}>
                                     <Pencil className="w-3.5 h-3.5" />
                                   </Button>
                                 )}
@@ -324,12 +324,12 @@ export default function CompanyManagementPage() {
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>삭제 확인</AlertDialogTitle>
-            <AlertDialogDescription>이 회사를 삭제하면 복구할 수 없습니다. 계속하시겠습니까?</AlertDialogDescription>
+            <AlertDialogTitle>{t('삭제 확인')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('이 회사를 삭제하면 복구할 수 없습니다. 계속하시겠습니까?')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">삭제</AlertDialogAction>
+            <AlertDialogCancel>{t('취소')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">{t('삭제')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

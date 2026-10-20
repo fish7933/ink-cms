@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/JobPostingForm/en.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +15,8 @@ import type { Company, Fleet, Ship, JobPostingGroupWithDetails } from '@/types/m
 import type { Nationality } from '@/types/nationality';
 import type { RankWithSalary, SelectedRankDetail, DuplicateWarning } from './types';
 import { departmentLabels, departmentColors } from './utils';
+
+i18n.addResourceBundle('en', 'JobPostingForm', en, true, true);
 
 interface JobPostingFormProps {
   formData: {
@@ -81,6 +86,7 @@ export function JobPostingForm({
   onSubmit,
   onCancel,
 }: JobPostingFormProps) {
+  const { t } = useTranslation('JobPostingForm');
   const [rankSearch, setRankSearch] = useState('');
 
   const filteredRanks = useMemo(() => {
@@ -124,9 +130,9 @@ export function JobPostingForm({
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <Label>선주사 *</Label>
+          <Label>{t('선주사 *')}</Label>
           <Select value={companyValue} onValueChange={onCompanyChange}>
-            <SelectTrigger><SelectValue placeholder="선주사 선택" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t('선주사 선택')} /></SelectTrigger>
             <SelectContent>
               {filteredCompanies.map(company => (
                 <SelectItem key={String(company.id)} value={String(company.id)}>{company.name}</SelectItem>
@@ -136,11 +142,11 @@ export function JobPostingForm({
         </div>
 
         <div>
-          <Label>선대</Label>
+          <Label>{t('선대')}</Label>
           <Select value={fleetValue} onValueChange={onFleetChange} disabled={!formData.company_id || filteredFleets.length === 0}>
-            <SelectTrigger><SelectValue placeholder="선대 선택 (선택사항)" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t('선대 선택 (선택사항)')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">선대 없음</SelectItem>
+              <SelectItem value="none">{t('선대 없음')}</SelectItem>
               {filteredFleets.map(fleet => (
                 <SelectItem key={String(fleet.id)} value={String(fleet.id)}>{fleet.name}</SelectItem>
               ))}
@@ -149,9 +155,9 @@ export function JobPostingForm({
         </div>
 
         <div>
-          <Label>선박 *</Label>
+          <Label>{t('선박 *')}</Label>
           <Select value={shipValue} onValueChange={onShipChange} disabled={!formData.company_id || filteredShips.length === 0}>
-            <SelectTrigger><SelectValue placeholder="선박 선택" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t('선박 선택')} /></SelectTrigger>
             <SelectContent>
               {filteredShips.map(ship => (
                 <SelectItem key={String(ship.id)} value={String(ship.id)}>{ship.name}</SelectItem>
@@ -164,14 +170,14 @@ export function JobPostingForm({
       {hasTemplate === false && formData.ship_id && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>선택한 선박에 할당된 급여 템플릿이 없습니다. 직급별 급여는 직접 입력해주세요.</AlertDescription>
+          <AlertDescription>{t('선택한 선박에 할당된 급여 템플릿이 없습니다. 직급별 급여는 직접 입력해주세요.')}</AlertDescription>
         </Alert>
       )}
 
       {showDuplicateWarning && duplicateWarnings.length > 0 && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>중복 공고 경고 (동일 선박)</AlertTitle>
+          <AlertTitle>{t('중복 공고 경고 (동일 선박)')}</AlertTitle>
           <AlertDescription>
             <div className="space-y-2 mt-2">
               {duplicateWarnings.map((warning) => (
@@ -181,7 +187,7 @@ export function JobPostingForm({
                     {warning.existing_postings.map((existing) => (
                       <li key={existing.id}>
                         {new Date(existing.embarkation_date).toLocaleDateString('ko-KR')}
-                        {' '}({existing.days_difference}일 차이)
+                        {' '}{t('{{days}}일 차이', { days: existing.days_difference })}
                       </li>
                     ))}
                   </ul>
@@ -196,21 +202,21 @@ export function JobPostingForm({
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <Label className="mb-0">
-              구인 직급 선택 * <span className="text-xs font-normal text-muted-foreground">(여러 직급 선택 가능)</span>
+              {t('구인 직급 선택 *')} <span className="text-xs font-normal text-muted-foreground">{t('(여러 직급 선택 가능)')}</span>
             </Label>
             <div className="flex items-center gap-1.5">
               {selectedRankDetails.length > 0 && (
-                <Badge variant="secondary" className="text-xs font-medium">{selectedRankDetails.length}개 선택됨</Badge>
+                <Badge variant="secondary" className="text-xs font-medium">{t('{{count}}개 선택됨', { count: selectedRankDetails.length })}</Badge>
               )}
               <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => onSelectAllRanks(filteredRanks)}>
-                <CheckCheck className="h-3.5 w-3.5" />전체 선택
+                <CheckCheck className="h-3.5 w-3.5" />{t('전체 선택')}
               </Button>
               <Button
                 type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-muted-foreground"
                 onClick={() => onClearRanks(filteredRanks.map(r => r.id))}
                 disabled={selectedRankDetails.length === 0}
               >
-                <CircleSlash className="h-3.5 w-3.5" />전체 해제
+                <CircleSlash className="h-3.5 w-3.5" />{t('전체 해제')}
               </Button>
             </div>
           </div>
@@ -221,13 +227,13 @@ export function JobPostingForm({
               <Input
                 value={rankSearch}
                 onChange={(e) => setRankSearch(e.target.value)}
-                placeholder="직급 코드/이름 검색..."
+                placeholder={t('직급 코드/이름 검색...')}
                 className="h-8 pl-8 text-xs"
               />
             </div>
 
             {Object.keys(groupedRanks).length === 0 ? (
-              <p className="text-xs text-center text-muted-foreground py-3">검색 결과가 없습니다.</p>
+              <p className="text-xs text-center text-muted-foreground py-3">{t('검색 결과가 없습니다.')}</p>
             ) : (
               Object.entries(groupedRanks).map(([department, departmentRanks]) => {
                 const deptSelectedCount = departmentRanks.filter(r => selectedRankIds.has(r.id)).length;
@@ -245,7 +251,7 @@ export function JobPostingForm({
                           ? onClearRanks(departmentRanks.map(r => r.id))
                           : onSelectAllRanks(departmentRanks)}
                       >
-                        {deptSelectedCount === departmentRanks.length ? '부서 해제' : '부서 전체'}
+                        {deptSelectedCount === departmentRanks.length ? t('부서 해제') : t('부서 전체')}
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -256,7 +262,7 @@ export function JobPostingForm({
                             type="button"
                             key={rank.id}
                             onClick={() => onRankToggle(rank)}
-                            title={rank.has_salary ? `${rank.name} · 템플릿 급여 적용됨` : `${rank.name} · 급여 직접 입력 필요`}
+                            title={rank.has_salary ? t('{{name}} · 템플릿 급여 적용됨', { name: rank.name }) : t('{{name}} · 급여 직접 입력 필요', { name: rank.name })}
                             className={`group relative flex items-center gap-1 pl-2.5 pr-2 py-1 rounded-full text-xs font-medium border transition-all ${
                               isSelected
                                 ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
@@ -280,15 +286,15 @@ export function JobPostingForm({
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />급여 템플릿 적용됨
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-300 ml-2" />직접 입력 필요
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />{t('급여 템플릿 적용됨')}
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-300 ml-2" />{t('직접 입력 필요')}
           </p>
         </div>
       )}
 
       {selectedRankDetails.length > 0 && (
         <div>
-          <Label>선택된 직급 상세 ({selectedRankDetails.length}개 직급)</Label>
+          <Label>{t('선택된 직급 상세 ({{count}}개 직급)', { count: selectedRankDetails.length })}</Label>
           <div className="border rounded-md divide-y">
             {sortedRankDetails.map((detail) => {
               const grades = rankById.get(detail.rank_id)?.grades || [];
@@ -301,9 +307,9 @@ export function JobPostingForm({
                   <div className={`flex-1 grid gap-2 ${grades.length > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                     {grades.length > 0 && (
                       <div>
-                        <Label className="text-xs">등급</Label>
+                        <Label className="text-xs">{t('등급')}</Label>
                         <Select value={detail.salary_grade || ''} onValueChange={(g) => onUpdateRankGrade(detail.rank_id, g)}>
-                          <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="등급" /></SelectTrigger>
+                          <SelectTrigger className="h-7 text-xs"><SelectValue placeholder={t('등급')} /></SelectTrigger>
                           <SelectContent>
                             {grades.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                           </SelectContent>
@@ -311,7 +317,7 @@ export function JobPostingForm({
                       </div>
                     )}
                     <div>
-                      <Label className="text-xs">급여</Label>
+                      <Label className="text-xs">{t('급여')}</Label>
                       <Input
                         type="number"
                         value={detail.base_salary}
@@ -320,7 +326,7 @@ export function JobPostingForm({
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">계약(월)</Label>
+                      <Label className="text-xs">{t('계약(월)')}</Label>
                       <Input
                         type="number"
                         min="1"
@@ -330,7 +336,7 @@ export function JobPostingForm({
                       />
                     </div>
                     <div>
-                      <Label className="text-xs">인원</Label>
+                      <Label className="text-xs">{t('인원')}</Label>
                       <Input
                         type="number"
                         min="1"
@@ -353,10 +359,10 @@ export function JobPostingForm({
 
                 {/* 선호 국적 선택 — 한 줄에 다 들어가도록 세로로 안 늘어나고 가로 스크롤 */}
                 <div className="flex items-center gap-2 min-w-0">
-                  <Label className="text-xs text-gray-500 shrink-0 whitespace-nowrap">선호 국적</Label>
+                  <Label className="text-xs text-gray-500 shrink-0 whitespace-nowrap">{t('선호 국적')}</Label>
                   <div className="flex items-center gap-1.5 overflow-x-auto flex-nowrap py-0.5 min-w-0">
                     {nationalities.length === 0 && (
-                      <p className="text-xs text-muted-foreground whitespace-nowrap">등록된 주요 송출국이 없습니다. "선원 국적 관리"에서 등록해주세요.</p>
+                      <p className="text-xs text-muted-foreground whitespace-nowrap">{t('등록된 주요 송출국이 없습니다. "선원 국적 관리"에서 등록해주세요.')}</p>
                     )}
                     {nationalities.map(nat => {
                       const selected = (detail.preferred_nationalities || []).includes(nat.country_name_ko);
@@ -386,7 +392,7 @@ export function JobPostingForm({
 
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <Label>승선예정일 *</Label>
+          <Label>{t('승선예정일 *')}</Label>
           <Input
             type="date"
             value={formData.embarkation_date}
@@ -394,7 +400,7 @@ export function JobPostingForm({
           />
         </div>
         <div>
-          <Label>공고마감일</Label>
+          <Label>{t('공고마감일')}</Label>
           <Input
             type="date"
             value={formData.application_deadline}
@@ -402,7 +408,7 @@ export function JobPostingForm({
           />
         </div>
         <div>
-          <Label>긴급 여부</Label>
+          <Label>{t('긴급 여부')}</Label>
           <div className="flex items-center space-x-2 h-10">
             <Checkbox
               id="urgency"
@@ -410,40 +416,40 @@ export function JobPostingForm({
               onCheckedChange={(checked) => onFormDataChange('urgency', checked ? 'urgent' : 'normal')}
             />
             <label htmlFor="urgency" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-              긴급 구인
+              {t('긴급 구인')}
             </label>
           </div>
         </div>
       </div>
 
       <div>
-        <Label>비고</Label>
+        <Label>{t('비고')}</Label>
         <Textarea
           value={formData.remarks}
           onChange={(e) => onFormDataChange('remarks', e.target.value)}
-          placeholder="자격증, 경력, 특이사항 등"
+          placeholder={t('자격증, 경력, 특이사항 등')}
           rows={3}
         />
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <Label className="mb-0">공개 대상 매닝사 * (필수)</Label>
+          <Label className="mb-0">{t('공개 대상 매닝사 * (필수)')}</Label>
           {manningAgencies.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <Badge variant="secondary" className="text-xs font-medium">{formData.visible_to_agencies.length}개 선택됨</Badge>
+              <Badge variant="secondary" className="text-xs font-medium">{t('{{count}}개 선택됨', { count: formData.visible_to_agencies.length })}</Badge>
               <Button
                 type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1"
                 onClick={() => onFormDataChange('visible_to_agencies', manningAgencies.map(a => String(a.id)))}
               >
-                <CheckCheck className="h-3.5 w-3.5" />전체 선택
+                <CheckCheck className="h-3.5 w-3.5" />{t('전체 선택')}
               </Button>
               <Button
                 type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1 text-muted-foreground"
                 onClick={() => onFormDataChange('visible_to_agencies', [])}
                 disabled={formData.visible_to_agencies.length === 0}
               >
-                <CircleSlash className="h-3.5 w-3.5" />전체 해제
+                <CircleSlash className="h-3.5 w-3.5" />{t('전체 해제')}
               </Button>
             </div>
           )}
@@ -467,18 +473,18 @@ export function JobPostingForm({
             })}
           </div>
           {manningAgencies.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-2">등록된 매닝사가 없습니다.</p>
+            <p className="text-sm text-muted-foreground text-center py-2">{t('등록된 매닝사가 없습니다.')}</p>
           )}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          최소 1개 이상의 매닝사를 선택해야 합니다. 선택한 매닝사에만 공개됩니다.
+          {t('최소 1개 이상의 매닝사를 선택해야 합니다. 선택한 매닝사에만 공개됩니다.')}
         </p>
       </div>
 
       <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>취소</Button>
+        <Button type="button" variant="outline" onClick={onCancel}>{t('취소')}</Button>
         <Button type="submit" disabled={selectedRankDetails.length === 0 || isLoadingExistingData}>
-          {posting ? '수정' : `${selectedRankDetails.length}개 직급 공고 등록`}
+          {posting ? t('수정') : t('{{count}}개 직급 공고 등록', { count: selectedRankDetails.length })}
         </Button>
       </div>
     </form>

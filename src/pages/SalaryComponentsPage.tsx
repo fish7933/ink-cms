@@ -277,7 +277,7 @@ export default function SalaryComponentsPage() {
                             : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
                         }`}
                       >
-                        {type === 'monthly' ? '매월 지급' : '후불성 (하선 후)'}
+                        {type === 'monthly' ? t('매월 지급') : t('후불성 (하선 후)')}
                       </button>
                     ))}
                   </div>
@@ -285,7 +285,7 @@ export default function SalaryComponentsPage() {
               )}
               {activeTab === 'earning' && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">선주 청구 시점</Label>
+                  <Label className="text-xs">{t('선주 청구 시점')}</Label>
                   <div className="flex gap-2">
                     {(['monthly', 'on_disembark'] as const).map(basis => (
                       <button
@@ -299,12 +299,12 @@ export default function SalaryComponentsPage() {
                             : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
                         }`}
                       >
-                        {OWNER_BILLING_LABEL[basis]}
+                        {t(OWNER_BILLING_LABEL[basis])}
                       </button>
                     ))}
                   </div>
                   <p className="text-xs text-gray-400">
-                    선원 지급 방식과 독립적인 설정입니다. 예: L/P는 선원에게는 하선 후 지급(후불성)이지만 선주에게는 매달 적립분을 청구합니다.
+                    {t('선원 지급 방식과 독립적인 설정입니다. 예: L/P는 선원에게는 하선 후 지급(후불성)이지만 선주에게는 매달 적립분을 청구합니다.')}
                   </p>
                 </div>
               )}
@@ -317,17 +317,17 @@ export default function SalaryComponentsPage() {
                     className="mt-0.5 accent-red-600 w-3.5 h-3.5"
                   />
                   <span>
-                    <span className="font-medium">승/하선 등 부분월에는 공제 안 함</span>
-                    <span className="block text-gray-400 mt-0.5">체크하면 일할계산 대신 승선/하선 달(일부만 근무한 달)에는 이 항목을 0원으로 처리합니다.</span>
+                    <span className="font-medium">{t('승/하선 등 부분월에는 공제 안 함')}</span>
+                    <span className="block text-gray-400 mt-0.5">{t('체크하면 일할계산 대신 승선/하선 달(일부만 근무한 달)에는 이 항목을 0원으로 처리합니다.')}</span>
                   </span>
                 </label>
               )}
               <div className="space-y-1.5">
-                <Label className="text-xs">설명</Label>
+                <Label className="text-xs">{t('설명')}</Label>
                 <Textarea
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="항목에 대한 설명을 입력하세요"
+                  placeholder={t('항목에 대한 설명을 입력하세요')}
                   rows={2}
                   className="text-sm"
                 />
@@ -346,12 +346,12 @@ export default function SalaryComponentsPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm">
-                {activeTab === 'earning' ? '급여 구성 항목' : '공제 항목'}
+                {activeTab === 'earning' ? t('급여 구성 항목') : t('공제 항목')}
               </CardTitle>
               {formView === null && permissions.canCreate && (
                 <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => openForm()}>
                   <Plus className="w-3.5 h-3.5" />
-                  항목 추가
+                  {t('항목 추가')}
                 </Button>
               )}
             </div>
@@ -360,8 +360,8 @@ export default function SalaryComponentsPage() {
             {tabComponents.length === 0 ? (
               <div className="text-center py-8 text-sm text-gray-400">
                 {activeTab === 'earning'
-                  ? '등록된 급여 구성 항목이 없습니다.'
-                  : '등록된 공제 항목이 없습니다. (예: 본선불, 노조비)'}
+                  ? t('등록된 급여 구성 항목이 없습니다.')
+                  : t('등록된 공제 항목이 없습니다. (예: 본선불, 노조비)')}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -369,19 +369,19 @@ export default function SalaryComponentsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12 text-xs"></TableHead>
-                    <TableHead className="text-xs">항목명</TableHead>
+                    <TableHead className="text-xs">{t('항목명')}</TableHead>
                     {activeTab === 'earning' && (
-                      <TableHead className="text-xs w-24 whitespace-nowrap">지급 방식</TableHead>
+                      <TableHead className="text-xs w-24 whitespace-nowrap">{t('지급 방식')}</TableHead>
                     )}
                     {activeTab === 'earning' && (
-                      <TableHead className="text-xs w-24 whitespace-nowrap">선주 청구</TableHead>
+                      <TableHead className="text-xs w-24 whitespace-nowrap">{t('선주 청구')}</TableHead>
                     )}
                     {activeTab === 'deduction' && (
-                      <TableHead className="text-xs w-32">부분월 처리</TableHead>
+                      <TableHead className="text-xs w-32">{t('부분월 처리')}</TableHead>
                     )}
-                    <TableHead className="text-xs">설명</TableHead>
+                    <TableHead className="text-xs">{t('설명')}</TableHead>
                     {(permissions.canEdit || permissions.canDelete) && (
-                      <TableHead className="text-right text-xs w-16">작업</TableHead>
+                      <TableHead className="text-right text-xs w-16">{t('작업')}</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
@@ -394,23 +394,23 @@ export default function SalaryComponentsPage() {
                           {activeTab === 'earning' && (
                             <TableCell>
                               <span className={`text-xs px-2 py-0.5 rounded border whitespace-nowrap ${PAYMENT_TYPE_COLOR[component.payment_type]}`}>
-                                {PAYMENT_TYPE_LABEL[component.payment_type]}
+                                {t(PAYMENT_TYPE_LABEL[component.payment_type])}
                               </span>
                             </TableCell>
                           )}
                           {activeTab === 'earning' && (
                             <TableCell>
                               <span className={`text-xs px-2 py-0.5 rounded border whitespace-nowrap ${OWNER_BILLING_COLOR[component.owner_billing_basis || 'monthly']}`}>
-                                {OWNER_BILLING_LABEL[component.owner_billing_basis || 'monthly']}
+                                {t(OWNER_BILLING_LABEL[component.owner_billing_basis || 'monthly'])}
                               </span>
                             </TableCell>
                           )}
                           {activeTab === 'deduction' && (
                             <TableCell>
                               {component.skip_deduction_on_partial_month ? (
-                                <span className="text-xs px-2 py-0.5 rounded border bg-gray-50 text-gray-600 border-gray-200">부분월 미공제</span>
+                                <span className="text-xs px-2 py-0.5 rounded border bg-gray-50 text-gray-600 border-gray-200">{t('부분월 미공제')}</span>
                               ) : (
-                                <span className="text-xs text-gray-400">일할계산</span>
+                                <span className="text-xs text-gray-400">{t('일할계산')}</span>
                               )}
                             </TableCell>
                           )}
@@ -443,35 +443,35 @@ export default function SalaryComponentsPage() {
         {/* 급여 구조 요약 */}
         <Card className="border-dashed">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-gray-600">급여 구조 요약</CardTitle>
+            <CardTitle className="text-sm text-gray-600">{t('급여 구조 요약')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="text-center p-3 bg-blue-50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-700">{monthlyEarningCount}</div>
-                <div className="text-xs text-blue-600 mt-0.5">매월 지급 항목</div>
+                <div className="text-xs text-blue-600 mt-0.5">{t('매월 지급 항목')}</div>
               </div>
               <div className="text-center p-3 bg-amber-50 rounded-lg">
                 <div className="text-2xl font-bold text-amber-700">{deferredEarningCount}</div>
-                <div className="text-xs text-amber-600 mt-0.5">후불성 항목 (하선 후)</div>
+                <div className="text-xs text-amber-600 mt-0.5">{t('후불성 항목 (하선 후)')}</div>
               </div>
               <div className="text-center p-3 bg-red-50 rounded-lg">
                 <div className="text-2xl font-bold text-red-700">{deductionComponents.length}</div>
-                <div className="text-xs text-red-600 mt-0.5">공제 항목</div>
+                <div className="text-xs text-red-600 mt-0.5">{t('공제 항목')}</div>
               </div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>
-                <span><strong>월 실지급액</strong> = 매월 지급 항목 합계 − 공제 항목 합계</span>
+                <span><strong>{t('월 실지급액')}</strong> {t('= 매월 지급 항목 합계 − 공제 항목 합계')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0"></span>
-                <span>후불성 항목은 월 급여 총액에는 포함되지만 매월 실지급에서는 제외됩니다.</span>
+                <span>{t('후불성 항목은 월 급여 총액에는 포함되지만 매월 실지급에서는 제외됩니다.')}</span>
               </div>
               <div className="flex items-center gap-2 pt-1 text-gray-400">
                 <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0"></span>
-                <span>실제 금액은 <strong>급여 템플릿</strong>에서 항목별 금액 설정 후 자동 계산됩니다.</span>
+                <span>{t('실제 금액은 ')}<strong>{t('급여 템플릿')}</strong>{t('에서 항목별 금액 설정 후 자동 계산됩니다.')}</span>
               </div>
             </div>
           </CardContent>

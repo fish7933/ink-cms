@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewRecommendationPage/en.json';
 import { msg } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +22,8 @@ import { useTabContext } from '@/contexts/TabContext';
 import type { Rank, JobPostingGroupWithDetails, CrewRecommendationResumeFile } from '@/types/models';
 import type { Nationality } from '@/types/nationality';
 
+i18n.addResourceBundle('en', 'CrewRecommendationPage', en, true, true);
+
 const EDUCATION_OPTIONS = [
   '고등학교 졸업', '해양고등학교 졸업', '전문대학 졸업',
   '해양대학교 졸업', '대학교 졸업', '대학원 졸업', '기타',
@@ -31,6 +36,7 @@ const DEPT_COLORS: Record<string, string> = {
 };
 
 export default function CrewRecommendationPage() {
+  const { t } = useTranslation('CrewRecommendationPage');
   const { groupId, rankId } = useParams<{ groupId: string; rankId: string }>();
   const [searchParams] = useSearchParams();
   const sourceRecommendationId = searchParams.get('from');
@@ -117,7 +123,7 @@ export default function CrewRecommendationPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files).filter(f => {
-        if (f.size > 10 * 1024 * 1024) { alert(`${f.name}은 10MB를 초과합니다.`); return false; }
+        if (f.size > 10 * 1024 * 1024) { alert(t('{{name}}은 10MB를 초과합니다.', { name: f.name })); return false; }
         return true;
       });
       setUploadedFiles(prev => [...prev, ...files]);
@@ -140,17 +146,17 @@ export default function CrewRecommendationPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!posting || !rankDetail) { alert('구인 공고 정보가 없습니다.'); return; }
-    if (!formData.crew_name.trim()) { alert('선원 성명을 입력해주세요.'); return; }
-    if (!formData.crew_birth_date) { alert('생년월일을 입력해주세요.'); return; }
-    if (!formData.nationality_id) { alert('국적을 선택해주세요.'); return; }
-    if (!formData.available_date) { alert('출국 가능일을 입력해주세요.'); return; }
-    if (uploadedFiles.length === 0 && carriedResumeFiles.length === 0) { alert('선원 이력서를 첨부해주세요.'); return; }
+    if (!posting || !rankDetail) { alert(t('구인 공고 정보가 없습니다.')); return; }
+    if (!formData.crew_name.trim()) { alert(t('선원 성명을 입력해주세요.')); return; }
+    if (!formData.crew_birth_date) { alert(t('생년월일을 입력해주세요.')); return; }
+    if (!formData.nationality_id) { alert(t('국적을 선택해주세요.')); return; }
+    if (!formData.available_date) { alert(t('출국 가능일을 입력해주세요.')); return; }
+    if (uploadedFiles.length === 0 && carriedResumeFiles.length === 0) { alert(t('선원 이력서를 첨부해주세요.')); return; }
 
     try {
       setUploading(true);
       const currentUser = await getCurrentUser();
-      if (!currentUser?.company_id) throw new Error('사용자 정보를 찾을 수 없습니다.');
+      if (!currentUser?.company_id) throw new Error(t('사용자 정보를 찾을 수 없습니다.'));
 
       const paths = await uploadFiles(uploadedFiles);
       const resumeFilesData = [
@@ -180,12 +186,12 @@ export default function CrewRecommendationPage() {
       }).select().single();
       if (error) throw new Error(error.message);
 
-      alert('선원 추천이 성공적으로 제출되었습니다.');
+      alert(t('선원 추천이 성공적으로 제출되었습니다.'));
       window.dispatchEvent(new CustomEvent('job-posting-data-changed'));
       finish();
     } catch (error) {
       console.error('Failed to submit crew recommendation:', error);
-      alert(error instanceof Error ? error.message : '선원 추천 제출에 실패했습니다.');
+      alert(error instanceof Error ? error.message : t('선원 추천 제출에 실패했습니다.'));
     } finally {
       setUploading(false);
     }
@@ -202,7 +208,7 @@ export default function CrewRecommendationPage() {
   if (!posting || !rankDetail) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-500">구인 공고 정보를 찾을 수 없습니다.</p>
+        <p className="text-sm text-gray-500">{t('구인 공고 정보를 찾을 수 없습니다.')}</p>
       </div>
     );
   }
@@ -211,84 +217,84 @@ export default function CrewRecommendationPage() {
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <div className="mb-3">
         <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={finish}>
-          <ArrowLeft className="w-4 h-4" />취소
+          <ArrowLeft className="w-4 h-4" />{t('취소')}
         </Button>
       </div>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{sourceRecommendationId ? '선원 재추천' : '선원 추천'}</CardTitle>
+          <CardTitle className="text-base">{sourceRecommendationId ? t('선원 재추천') : t('선원 추천')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             {sourceRecommendationId && (
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-800">
-                이전에 추천했던 선원의 정보를 그대로 불러왔습니다. 필요한 내용을 확인/수정한 뒤 다시 제출해주세요.
+                {t('이전에 추천했던 선원의 정보를 그대로 불러왔습니다. 필요한 내용을 확인/수정한 뒤 다시 제출해주세요.')}
               </div>
             )}
             <div>
-              <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">선원 기본 정보</h3>
+              <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">{t('선원 기본 정보')}</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label className="text-xs">성명 *</Label><Input value={formData.crew_name} onChange={e => setFormData(p => ({ ...p, crew_name: e.target.value }))} placeholder="Full Name" className="h-9 mt-1" disabled={uploading} /></div>
-                <div><Label className="text-xs">생년월일 *</Label><Input type="date" value={formData.crew_birth_date} onChange={e => setFormData(p => ({ ...p, crew_birth_date: e.target.value }))} className="h-9 mt-1" disabled={uploading} /></div>
+                <div><Label className="text-xs">{t('성명 *')}</Label><Input value={formData.crew_name} onChange={e => setFormData(p => ({ ...p, crew_name: e.target.value }))} placeholder="Full Name" className="h-9 mt-1" disabled={uploading} /></div>
+                <div><Label className="text-xs">{t('생년월일 *')}</Label><Input type="date" value={formData.crew_birth_date} onChange={e => setFormData(p => ({ ...p, crew_birth_date: e.target.value }))} className="h-9 mt-1" disabled={uploading} /></div>
                 <div>
-                  <Label className="text-xs">국적 *</Label>
+                  <Label className="text-xs">{t('국적 *')}</Label>
                   <Select value={formData.nationality_id} onValueChange={v => setFormData(p => ({ ...p, nationality_id: v }))} disabled={uploading}>
-                    <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="국적 선택" /></SelectTrigger>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
                     <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">최종 학력</Label>
+                  <Label className="text-xs">{t('최종 학력')}</Label>
                   <Select value={formData.education} onValueChange={v => setFormData(p => ({ ...p, education: v }))} disabled={uploading}>
-                    <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="학력 선택" /></SelectTrigger>
-                    <SelectContent>{EDUCATION_OPTIONS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t('학력 선택')} /></SelectTrigger>
+                    <SelectContent>{EDUCATION_OPTIONS.map(e => <SelectItem key={e} value={e}>{t(e)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">선박 정보</h3>
+              <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">{t('선박 정보')}</h3>
               <div className="p-3 bg-gray-50 rounded-md space-y-1 text-sm">
-                <div><span className="text-gray-500">선주사:</span> <span className="font-medium">{posting.company_name}</span></div>
-                {posting.fleet_name && <div><span className="text-gray-500">선대:</span> <span className="font-medium">{posting.fleet_name}</span></div>}
-                <div><span className="text-gray-500">선박:</span> <span className="font-medium">{posting.ship_name}</span></div>
+                <div><span className="text-gray-500">{t('선주사:')}</span> <span className="font-medium">{posting.company_name}</span></div>
+                {posting.fleet_name && <div><span className="text-gray-500">{t('선대:')}</span> <span className="font-medium">{posting.fleet_name}</span></div>}
+                <div><span className="text-gray-500">{t('선박:')}</span> <span className="font-medium">{posting.ship_name}</span></div>
               </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">직급 정보</h3>
+              <h3 className="text-sm font-semibold mb-2 text-gray-700 border-b pb-1">{t('직급 정보')}</h3>
               <div className="p-3 bg-gray-50 rounded-md">
                 <div className="flex items-center gap-2 mb-2">
                   <Badge className={DEPT_COLORS[selectedRank?.department || ''] || ''}>{rankDetail.rank_code}</Badge>
                   <span className="text-sm">{rankDetail.rank_name}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div><span className="text-gray-500">제시 급여:</span> <span className="font-medium">{rankDetail.salary_currency} {rankDetail.salary_amount?.toLocaleString()}</span></div>
-                  <div><span className="text-gray-500">계약 기간:</span> <span className="font-medium">{rankDetail.contract_months}개월</span></div>
+                  <div><span className="text-gray-500">{t('제시 급여:')}</span> <span className="font-medium">{rankDetail.salary_currency} {rankDetail.salary_amount?.toLocaleString()}</span></div>
+                  <div><span className="text-gray-500">{t('계약 기간:')}</span> <span className="font-medium">{t('{{months}}개월', { months: rankDetail.contract_months })}</span></div>
                 </div>
               </div>
             </div>
 
             <div>
-              <Label>출국 가능일 *</Label>
+              <Label>{t('출국 가능일 *')}</Label>
               <Input type="date" value={formData.available_date} onChange={e => setFormData(p => ({ ...p, available_date: e.target.value }))} className="mt-1" disabled={uploading} />
             </div>
 
             <div>
-              <Label>비고</Label>
-              <Textarea value={formData.remarks} onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))} placeholder="추가 정보나 특이사항을 입력하세요" rows={3} className="mt-1" disabled={uploading} />
+              <Label>{t('비고')}</Label>
+              <Textarea value={formData.remarks} onChange={e => setFormData(p => ({ ...p, remarks: e.target.value }))} placeholder={t('추가 정보나 특이사항을 입력하세요')} rows={3} className="mt-1" disabled={uploading} />
             </div>
 
             <div>
-              <Label>선원 이력서 *</Label>
+              <Label>{t('선원 이력서 *')}</Label>
               <div className="mt-1 space-y-2">
                 <div className="border-2 border-dashed rounded-md p-4 text-center">
                   <input type="file" id="resume-upload" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" disabled={uploading} />
                   <label htmlFor="resume-upload" className={`cursor-pointer flex flex-col items-center gap-2 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                     <Upload className="w-8 h-8 text-gray-400" />
-                    <div className="text-sm text-gray-600"><span className="text-blue-600 font-medium">파일 선택</span> 또는 드래그 앤 드롭</div>
-                    <div className="text-xs text-gray-500">PDF, DOC, DOCX, JPG, PNG (최대 10MB)</div>
+                    <div className="text-sm text-gray-600"><span className="text-blue-600 font-medium">{t('파일 선택')}</span> {t('또는 드래그 앤 드롭')}</div>
+                    <div className="text-xs text-gray-500">{t('PDF, DOC, DOCX, JPG, PNG (최대 10MB)')}</div>
                   </label>
                 </div>
                 {carriedResumeFiles.length > 0 && (
@@ -298,7 +304,7 @@ export default function CrewRecommendationPage() {
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                           <span className="text-sm truncate">{file.name}</span>
-                          <span className="text-xs text-gray-500 shrink-0">({(file.size / 1024).toFixed(1)} KB · 이전 첨부)</span>
+                          <span className="text-xs text-gray-500 shrink-0">{t('({{kb}} KB · 이전 첨부)', { kb: (file.size / 1024).toFixed(1) })}</span>
                         </div>
                         <Button type="button" variant="ghost" size="sm" onClick={() => setCarriedResumeFiles(prev => prev.filter((_, i) => i !== idx))} className="h-7 w-7 p-0 shrink-0" disabled={uploading}>
                           <X className="h-4 w-4" />
@@ -326,12 +332,12 @@ export default function CrewRecommendationPage() {
             </div>
 
             <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md text-xs text-yellow-800">
-              ※ 증서 등록은 선박관리사 승인 후 가능합니다.
+              {t('※ 증서 등록은 선박관리사 승인 후 가능합니다.')}
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={finish} disabled={uploading}>취소</Button>
-              <Button type="submit" disabled={uploading}>{uploading ? '제출 중...' : '선원 추천 제출'}</Button>
+              <Button type="button" variant="outline" onClick={finish} disabled={uploading}>{t('취소')}</Button>
+              <Button type="submit" disabled={uploading}>{uploading ? t('제출 중...') : t('선원 추천 제출')}</Button>
             </div>
           </form>
         </CardContent>

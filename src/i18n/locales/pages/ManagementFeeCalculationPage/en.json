@@ -77,5 +77,6 @@
   "배정된 관리비 템플릿 없음": "No management fee template assigned",
   "이미 회차가 존재함": "Period already exists",
   "실패": "Failed",
-  "확인": "Confirm"
+  "확인": "Confirm",
+  "({{count}}척)": "({{count}} ships)"
 }

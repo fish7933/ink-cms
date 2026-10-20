@@ -109,5 +109,7 @@
   "{{step}}단계": "Step {{step}}",
   "일괄 승인": "Bulk Approve",
   "일괄 반려": "Bulk Reject",
-  "{{count}}건을 {{action}}합니다.": "Processing {{count}} item(s) as {{action}}."
+  "{{count}}건을 {{action}}합니다.": "Processing {{count}} item(s) as {{action}}.",
+  "{{count}}건 선택됨": "{{count}} selected",
+  "승인되었습니다. 승인 즉시 계약/승선경력에 반영됩니다.": "Approved. The approval is immediately reflected in the contract/sea service record."
 }

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/MyRecommendationsPage/en.json';
 import { Search, Filter, Eye, ExternalLink, UserPlus, Award, ArrowLeft, Undo2, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +18,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import type { CrewRecommendationWithDetails, User as UserType, Company, Fleet, Ship, Rank } from '@/types/models';
 import { useTabContext } from '@/contexts/TabContext';
 
+i18n.addResourceBundle('en', 'MyRecommendationsPage', en, true, true);
+
 const ITEMS_PER_PAGE = 20;
 
 const calcAge = (birthDate: string): number => {
@@ -29,6 +34,7 @@ const calcAge = (birthDate: string): number => {
 const ALLOWED_ROLES = ['manning_agency', 'admin', 'system_admin'];
 
 export default function MyRecommendationsPage() {
+  const { t } = useTranslation('MyRecommendationsPage');
   const navigate = useNavigate();
   const { openNewTab } = useTabContext();
   const [recommendations, setRecommendations] = useState<CrewRecommendationWithDetails[]>([]);
@@ -105,11 +111,11 @@ export default function MyRecommendationsPage() {
   const applyFilters = () => {
     let data = [...recommendations];
     if (search) {
-      const t = search.toLowerCase();
+      const q = search.toLowerCase();
       data = data.filter(r =>
-        r.crew_name.toLowerCase().includes(t) ||
-        r.ship_name.toLowerCase().includes(t) ||
-        r.rank_code?.toLowerCase().includes(t)
+        r.crew_name.toLowerCase().includes(q) ||
+        r.ship_name.toLowerCase().includes(q) ||
+        r.rank_code?.toLowerCase().includes(q)
       );
     }
     if (statusF !== 'all') data = data.filter(r => r.status === statusF);
@@ -131,49 +137,49 @@ export default function MyRecommendationsPage() {
   const openDetail = (r: CrewRecommendationWithDetails) => { setSelectedRec(r); setViewMode('detail'); };
 
   const handleWithdraw = async (r: CrewRecommendationWithDetails) => {
-    if (!confirm(`${r.crew_name}님의 추천을 철회하시겠습니까? 철회 이력은 목록에 남고, 같은 직급에 언제든 다시 추천할 수 있습니다.`)) return;
+    if (!confirm(t('{{name}}님의 추천을 철회하시겠습니까? 철회 이력은 목록에 남고, 같은 직급에 언제든 다시 추천할 수 있습니다.', { name: r.crew_name }))) return;
     try {
       await crewRecommendationService.updateStatus(r.id, 'withdrawn');
       if (selectedRec?.id === r.id) setSelectedRec({ ...selectedRec, status: 'withdrawn' });
       await loadData();
     } catch (e) {
       console.error(e);
-      alert('철회 처리 중 오류가 발생했습니다.');
+      alert(t('철회 처리 중 오류가 발생했습니다.'));
     }
   };
 
   const handleDelete = async (r: CrewRecommendationWithDetails) => {
-    if (!confirm(`${r.crew_name}님의 추천 건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('{{name}}님의 추천 건을 완전히 삭제하시겠습니까? 되돌릴 수 없습니다.', { name: r.crew_name }))) return;
     try {
       await crewRecommendationService.delete(r.id);
       if (selectedRec?.id === r.id) { setViewMode('list'); setSelectedRec(null); }
       await loadData();
     } catch (e) {
       console.error(e);
-      alert('삭제 중 오류가 발생했습니다.');
+      alert(t('삭제 중 오류가 발생했습니다.'));
     }
   };
 
   const handleReRecommend = (r: CrewRecommendationWithDetails) => {
-    if (!r.job_posting_group_id) { alert('연결된 구인 공고를 찾을 수 없습니다.'); return; }
+    if (!r.job_posting_group_id) { alert(t('연결된 구인 공고를 찾을 수 없습니다.')); return; }
     // 재추천은 새 추천과 달리 이전에 추천했던 선원의 정보를 그대로 이어받아야 하므로,
     // 원본 추천 id를 넘겨 그 데이터를 불러와 채우게 한다.
-    openNewTab(`/job-postings/${r.job_posting_group_id}/recommend/${r.rank_id}?from=${r.id}`, `${r.rank_code || ''} 선원 재추천`.trim(), true);
+    openNewTab(`/job-postings/${r.job_posting_group_id}/recommend/${r.rank_id}?from=${r.id}`, t('{{rank}} 선원 재추천', { rank: r.rank_code || '' }).trim(), true);
   };
 
   const openResume = async (r: CrewRecommendationWithDetails) => {
-    if (!r.resume_files?.length) { alert('첨부된 이력서가 없습니다.'); return; }
+    if (!r.resume_files?.length) { alert(t('첨부된 이력서가 없습니다.')); return; }
     for (const f of r.resume_files) {
       window.open(getFileUrl('documents', f.path), '_blank');
     }
   };
 
   const sBadge = (s: string) => {
-    if (s === 'pending') return <Badge variant="secondary" className="text-xs">검토 대기</Badge>;
-    if (s === 'reviewed') return <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">결재중</Badge>;
-    if (s === 'accepted') return <Badge variant="default" className="text-xs bg-green-600">수락</Badge>;
-    if (s === 'rejected') return <Badge variant="destructive" className="text-xs">거절</Badge>;
-    if (s === 'withdrawn') return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-500 border-gray-300">철회됨</Badge>;
+    if (s === 'pending') return <Badge variant="secondary" className="text-xs">{t('검토 대기')}</Badge>;
+    if (s === 'reviewed') return <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-300">{t('결재중')}</Badge>;
+    if (s === 'accepted') return <Badge variant="default" className="text-xs bg-green-600">{t('수락')}</Badge>;
+    if (s === 'rejected') return <Badge variant="destructive" className="text-xs">{t('거절')}</Badge>;
+    if (s === 'withdrawn') return <Badge variant="outline" className="text-xs bg-gray-100 text-gray-500 border-gray-300">{t('철회됨')}</Badge>;
     return null;
   };
 
@@ -196,7 +202,7 @@ export default function MyRecommendationsPage() {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const pageRecs = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  if (loading) return <><div className="p-8 text-sm text-gray-500">로딩 중...</div></>;
+  if (loading) return <><div className="p-8 text-sm text-gray-500">{t('로딩 중...')}</div></>;
 
   return (
     <>
@@ -205,24 +211,24 @@ export default function MyRecommendationsPage() {
           <>
             <div className="mb-4 flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-bold">내 추천 선원 관리</h1>
-                <p className="text-sm text-muted-foreground mt-1">우리 회사가 추천한 선원 목록을 관리합니다</p>
+                <h1 className="text-2xl font-bold">{t('내 추천 선원 관리')}</h1>
+                <p className="text-sm text-muted-foreground mt-1">{t('우리 회사가 추천한 선원 목록을 관리합니다')}</p>
               </div>
               <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                새로고침
+                {t('새로고침')}
               </Button>
             </div>
 
             {/* 통계 */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
               {[
-                { label: '전체 추천', value: stats.total, color: 'border-blue-500', text: 'text-blue-600' },
-                { label: '검토 대기', value: stats.pending, color: 'border-gray-400', text: 'text-gray-600' },
-                { label: '결재중', value: stats.reviewed, color: 'border-blue-400', text: 'text-blue-500' },
-                { label: '수락', value: stats.accepted, color: 'border-green-500', text: 'text-green-600' },
-                { label: '거절', value: stats.rejected, color: 'border-red-500', text: 'text-red-600' },
-                { label: '철회됨', value: stats.withdrawn, color: 'border-gray-300', text: 'text-gray-500' },
+                { label: t('전체 추천'), value: stats.total, color: 'border-blue-500', text: 'text-blue-600' },
+                { label: t('검토 대기'), value: stats.pending, color: 'border-gray-400', text: 'text-gray-600' },
+                { label: t('결재중'), value: stats.reviewed, color: 'border-blue-400', text: 'text-blue-500' },
+                { label: t('수락'), value: stats.accepted, color: 'border-green-500', text: 'text-green-600' },
+                { label: t('거절'), value: stats.rejected, color: 'border-red-500', text: 'text-red-600' },
+                { label: t('철회됨'), value: stats.withdrawn, color: 'border-gray-300', text: 'text-gray-500' },
               ].map(s => (
                 <div key={s.label} className={`bg-white rounded-lg shadow-sm p-3 border-l-4 ${s.color}`}>
                   <div className="text-xs text-gray-600">{s.label}</div>
@@ -233,20 +239,20 @@ export default function MyRecommendationsPage() {
 
             {/* 필터 */}
             <div className="bg-white rounded-lg shadow-sm p-3 mb-3">
-              <div className="flex items-center gap-2 mb-2"><Filter className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-sm font-medium">필터</span></div>
+              <div className="flex items-center gap-2 mb-2"><Filter className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-sm font-medium">{t('필터')}</span></div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <div className="md:col-span-4">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input placeholder="선원명, 선박명, 직급 검색..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
+                    <Input placeholder={t('선원명, 선박명, 직급 검색...')} value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-9 text-sm" />
                   </div>
                 </div>
-                <Select value={ownerF} onValueChange={setOwnerF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선주사" /></SelectTrigger><SelectContent><SelectItem value="all">전체 선주사</SelectItem>{companies.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent></Select>
-                <Select value={fleetF} onValueChange={setFleetF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="플릿" /></SelectTrigger><SelectContent><SelectItem value="all">전체 플릿</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent></Select>
-                <Select value={shipF} onValueChange={setShipF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박" /></SelectTrigger><SelectContent><SelectItem value="all">전체 선박</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select>
-                <Select value={rankF} onValueChange={setRankF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="직급" /></SelectTrigger><SelectContent><SelectItem value="all">전체 직급</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code} - {r.name}</SelectItem>)}</SelectContent></Select>
-                <Select value={statusF} onValueChange={setStatusF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="상태" /></SelectTrigger><SelectContent><SelectItem value="all">전체 상태</SelectItem><SelectItem value="pending">검토 대기</SelectItem><SelectItem value="reviewed">결재중</SelectItem><SelectItem value="accepted">수락</SelectItem><SelectItem value="rejected">거절</SelectItem><SelectItem value="withdrawn">철회됨</SelectItem></SelectContent></Select>
-                <Select value={dateF} onValueChange={setDateF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="기간" /></SelectTrigger><SelectContent><SelectItem value="all">전체 기간</SelectItem><SelectItem value="week">최근 1주일</SelectItem><SelectItem value="month">최근 1개월</SelectItem><SelectItem value="quarter">최근 3개월</SelectItem></SelectContent></Select>
+                <Select value={ownerF} onValueChange={setOwnerF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선주사')} /></SelectTrigger><SelectContent><SelectItem value="all">{t('전체 선주사')}</SelectItem>{companies.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={fleetF} onValueChange={setFleetF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('플릿')} /></SelectTrigger><SelectContent><SelectItem value="all">{t('전체 플릿')}</SelectItem>{fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={shipF} onValueChange={setShipF} disabled={ownerF === 'all'}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선박')} /></SelectTrigger><SelectContent><SelectItem value="all">{t('전체 선박')}</SelectItem>{ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={rankF} onValueChange={setRankF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('직급')} /></SelectTrigger><SelectContent><SelectItem value="all">{t('전체 직급')}</SelectItem>{ranks.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.rank_code} - {r.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={statusF} onValueChange={setStatusF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('상태')} /></SelectTrigger><SelectContent><SelectItem value="all">{t('전체 상태')}</SelectItem><SelectItem value="pending">{t('검토 대기')}</SelectItem><SelectItem value="reviewed">{t('결재중')}</SelectItem><SelectItem value="accepted">{t('수락')}</SelectItem><SelectItem value="rejected">{t('거절')}</SelectItem><SelectItem value="withdrawn">{t('철회됨')}</SelectItem></SelectContent></Select>
+                <Select value={dateF} onValueChange={setDateF}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('기간')} /></SelectTrigger><SelectContent><SelectItem value="all">{t('전체 기간')}</SelectItem><SelectItem value="week">{t('최근 1주일')}</SelectItem><SelectItem value="month">{t('최근 1개월')}</SelectItem><SelectItem value="quarter">{t('최근 3개월')}</SelectItem></SelectContent></Select>
               </div>
             </div>
 
@@ -255,15 +261,15 @@ export default function MyRecommendationsPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50">
-                    <TableHead className="text-xs py-2 w-20">상태</TableHead>
-                    <TableHead className="text-xs py-2 w-32">선박 정보</TableHead>
-                    <TableHead className="text-xs py-2 w-20">직급</TableHead>
-                    <TableHead className="text-xs py-2">선원명</TableHead>
-                    <TableHead className="text-xs py-2 w-12">나이</TableHead>
-                    <TableHead className="text-xs py-2">희망 조건</TableHead>
-                    <TableHead className="text-xs py-2 w-24">출국가능일</TableHead>
-                    <TableHead className="text-xs py-2 w-24">추천일</TableHead>
-                    <TableHead className="text-right text-xs py-2 w-48">작업</TableHead>
+                    <TableHead className="text-xs py-2 w-20">{t('상태')}</TableHead>
+                    <TableHead className="text-xs py-2 w-32">{t('선박 정보')}</TableHead>
+                    <TableHead className="text-xs py-2 w-20">{t('직급')}</TableHead>
+                    <TableHead className="text-xs py-2">{t('선원명')}</TableHead>
+                    <TableHead className="text-xs py-2 w-12">{t('나이')}</TableHead>
+                    <TableHead className="text-xs py-2">{t('희망 조건')}</TableHead>
+                    <TableHead className="text-xs py-2 w-24">{t('출국가능일')}</TableHead>
+                    <TableHead className="text-xs py-2 w-24">{t('추천일')}</TableHead>
+                    <TableHead className="text-right text-xs py-2 w-48">{t('작업')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -282,10 +288,10 @@ export default function MyRecommendationsPage() {
                           : <Badge variant="outline" className="text-xs bg-gray-100 text-gray-400">-</Badge>}
                       </TableCell>
                       <TableCell className="py-2"><div className="text-sm font-medium">{rec.crew_name}</div></TableCell>
-                      <TableCell className="py-2"><div className="text-xs text-muted-foreground">{calcAge(rec.crew_birth_date)}세</div></TableCell>
+                      <TableCell className="py-2"><div className="text-xs text-muted-foreground">{t('{{age}}세', { age: calcAge(rec.crew_birth_date) })}</div></TableCell>
                       <TableCell className="py-2">
                         <div className="text-sm">{rec.desired_currency} {rec.desired_salary.toLocaleString()}</div>
-                        <div className="text-xs text-muted-foreground">{rec.desired_contract_months}개월</div>
+                        <div className="text-xs text-muted-foreground">{t('{{months}}개월', { months: rec.desired_contract_months })}</div>
                       </TableCell>
                       <TableCell className="text-xs py-2">{new Date(rec.available_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}</TableCell>
                       <TableCell className="text-xs py-2">{new Date(rec.created_at).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}</TableCell>
@@ -293,35 +299,35 @@ export default function MyRecommendationsPage() {
                         <div className="flex justify-end gap-1.5" onClick={e => e.stopPropagation()}>
                           {rec.status === 'accepted' && permissions.canEdit && (
                             <>
-                              <Button variant="default" size="sm" onClick={() => openNewTab(`/crew/input/${rec.id}`, '선원 상세입력', true)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
-                                <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
+                              <Button variant="default" size="sm" onClick={() => openNewTab(`/crew/input/${rec.id}`, t('선원 상세입력'), true)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
+                                <UserPlus className="w-3.5 h-3.5 mr-1.5" />{t('상세입력')}
                               </Button>
                               <Button variant="outline" size="sm" onClick={() => { setSelectedRecForCert(rec); setCertDialogOpen(true); }} className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50">
-                                <Award className="w-3.5 h-3.5 mr-1.5" />증서 등록
+                                <Award className="w-3.5 h-3.5 mr-1.5" />{t('증서 등록')}
                               </Button>
                             </>
                           )}
                           <Button variant="outline" size="sm" onClick={() => openDetail(rec)} className="h-8 px-3 text-xs">
-                            <Eye className="w-3.5 h-3.5 mr-1.5" />상세
+                            <Eye className="w-3.5 h-3.5 mr-1.5" />{t('상세')}
                           </Button>
                           {rec.resume_files?.length > 0 && (
                             <Button variant="outline" size="sm" onClick={() => openResume(rec)} className="h-8 px-3 text-xs">
-                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />이력서
+                              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />{t('이력서')}
                             </Button>
                           )}
                           {rec.status === 'pending' && permissions.canEdit && (
                             <Button variant="outline" size="sm" onClick={() => handleWithdraw(rec)} className="h-8 px-3 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
-                              <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
+                              <Undo2 className="w-3.5 h-3.5 mr-1.5" />{t('철회')}
                             </Button>
                           )}
                           {(rec.status === 'withdrawn' || rec.status === 'rejected') && permissions.canCreate && (
                             <Button variant="default" size="sm" onClick={() => handleReRecommend(rec)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
-                              <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
+                              <UserPlus className="w-3.5 h-3.5 mr-1.5" />{t('재추천')}
                             </Button>
                           )}
                           {(rec.status === 'accepted' || rec.status === 'rejected' || rec.status === 'withdrawn') && (
                             <Button variant="outline" size="sm" onClick={() => handleDelete(rec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
-                              <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
+                              <Trash2 className="w-3.5 h-3.5 mr-1.5" />{t('삭제')}
                             </Button>
                           )}
                         </div>
@@ -332,7 +338,7 @@ export default function MyRecommendationsPage() {
               </Table>
               {pageRecs.length === 0 && (
                 <div className="py-12 text-center text-sm text-muted-foreground">
-                  {search || statusF !== 'all' ? '검색 결과가 없습니다.' : '아직 추천한 선원이 없습니다.'}
+                  {search || statusF !== 'all' ? t('검색 결과가 없습니다.') : t('아직 추천한 선원이 없습니다.')}
                 </div>
               )}
             </div>
@@ -362,10 +368,10 @@ export default function MyRecommendationsPage() {
             {/* Detail view header */}
             <div className="flex items-center gap-3 mb-4">
               <Button variant="ghost" size="sm" onClick={() => { setViewMode('list'); setSelectedRec(null); }}>
-                <ArrowLeft className="w-4 h-4 mr-1" />뒤로
+                <ArrowLeft className="w-4 h-4 mr-1" />{t('뒤로')}
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">추천 선원 상세 정보</h1>
+                <h1 className="text-2xl font-bold">{t('추천 선원 상세 정보')}</h1>
               </div>
             </div>
 
@@ -374,47 +380,47 @@ export default function MyRecommendationsPage() {
               <div className="bg-white rounded-lg shadow-sm p-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                    <span className="text-sm font-medium">현재 상태</span>{sBadge(selectedRec.status)}
+                    <span className="text-sm font-medium">{t('현재 상태')}</span>{sBadge(selectedRec.status)}
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-semibold mb-2">선원 정보</h3>
+                    <h3 className="text-sm font-semibold mb-2">{t('선원 정보')}</h3>
                     <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                      <div><span className="text-xs text-gray-600">직급</span><div className="mt-1">{selectedRec.rank_code ? <Badge className={dc(selectedRec.department)}>{selectedRec.rank_code}</Badge> : '-'}</div></div>
-                      <div><span className="text-xs text-gray-600">성명</span><p className="text-sm font-medium">{selectedRec.crew_name}</p></div>
-                      <div><span className="text-xs text-gray-600">생년월일</span><p className="text-sm font-medium">{new Date(selectedRec.crew_birth_date).toLocaleDateString('ko-KR')}</p></div>
-                      <div><span className="text-xs text-gray-600">나이</span><p className="text-sm font-medium">{calcAge(selectedRec.crew_birth_date)}세</p></div>
-                      <div><span className="text-xs text-gray-600">출국 가능일</span><p className="text-sm font-medium">{new Date(selectedRec.available_date).toLocaleDateString('ko-KR')}</p></div>
+                      <div><span className="text-xs text-gray-600">{t('직급')}</span><div className="mt-1">{selectedRec.rank_code ? <Badge className={dc(selectedRec.department)}>{selectedRec.rank_code}</Badge> : '-'}</div></div>
+                      <div><span className="text-xs text-gray-600">{t('성명')}</span><p className="text-sm font-medium">{selectedRec.crew_name}</p></div>
+                      <div><span className="text-xs text-gray-600">{t('생년월일')}</span><p className="text-sm font-medium">{new Date(selectedRec.crew_birth_date).toLocaleDateString('ko-KR')}</p></div>
+                      <div><span className="text-xs text-gray-600">{t('나이')}</span><p className="text-sm font-medium">{t('{{age}}세', { age: calcAge(selectedRec.crew_birth_date) })}</p></div>
+                      <div><span className="text-xs text-gray-600">{t('출국 가능일')}</span><p className="text-sm font-medium">{new Date(selectedRec.available_date).toLocaleDateString('ko-KR')}</p></div>
                     </div>
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-semibold mb-2">선박 정보</h3>
+                    <h3 className="text-sm font-semibold mb-2">{t('선박 정보')}</h3>
                     <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                      <div><span className="text-xs text-gray-600">선주사</span><p className="text-sm font-medium">{selectedRec.company_name}</p></div>
-                      <div><span className="text-xs text-gray-600">선박명</span><p className="text-sm font-medium">{selectedRec.ship_name}</p></div>
-                      {selectedRec.fleet_name && <div><span className="text-xs text-gray-600">선대</span><p className="text-sm font-medium">{selectedRec.fleet_name}</p></div>}
+                      <div><span className="text-xs text-gray-600">{t('선주사')}</span><p className="text-sm font-medium">{selectedRec.company_name}</p></div>
+                      <div><span className="text-xs text-gray-600">{t('선박명')}</span><p className="text-sm font-medium">{selectedRec.ship_name}</p></div>
+                      {selectedRec.fleet_name && <div><span className="text-xs text-gray-600">{t('선대')}</span><p className="text-sm font-medium">{selectedRec.fleet_name}</p></div>}
                     </div>
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-semibold mb-2">희망 계약 조건</h3>
+                    <h3 className="text-sm font-semibold mb-2">{t('희망 계약 조건')}</h3>
                     <div className="grid grid-cols-2 gap-3 p-3 bg-gray-50 rounded-md">
-                      <div><span className="text-xs text-gray-600">희망 급여</span><p className="text-sm font-medium">{selectedRec.desired_currency} {selectedRec.desired_salary.toLocaleString()}</p></div>
-                      <div><span className="text-xs text-gray-600">희망 계약기간</span><p className="text-sm font-medium">{selectedRec.desired_contract_months}개월</p></div>
+                      <div><span className="text-xs text-gray-600">{t('희망 급여')}</span><p className="text-sm font-medium">{selectedRec.desired_currency} {selectedRec.desired_salary.toLocaleString()}</p></div>
+                      <div><span className="text-xs text-gray-600">{t('희망 계약기간')}</span><p className="text-sm font-medium">{t('{{months}}개월', { months: selectedRec.desired_contract_months })}</p></div>
                     </div>
                   </div>
 
                   {selectedRec.remarks && (
                     <div>
-                      <h3 className="text-sm font-semibold mb-2">비고</h3>
+                      <h3 className="text-sm font-semibold mb-2">{t('비고')}</h3>
                       <div className="p-3 bg-gray-50 rounded-md"><p className="text-sm whitespace-pre-wrap">{selectedRec.remarks}</p></div>
                     </div>
                   )}
 
                   {selectedRec.resume_files?.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-semibold mb-2">첨부 이력서</h3>
+                      <h3 className="text-sm font-semibold mb-2">{t('첨부 이력서')}</h3>
                       <div className="space-y-2">
                         {selectedRec.resume_files.map((f: { name: string; size: number; path: string }, i: number) => (
                           <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
@@ -423,7 +429,7 @@ export default function MyRecommendationsPage() {
                               <span className="text-sm">{f.name}</span>
                               <span className="text-xs text-gray-500">({(f.size / 1024).toFixed(1)} KB)</span>
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => openResume(selectedRec)} className="h-7">열기</Button>
+                            <Button variant="ghost" size="sm" onClick={() => openResume(selectedRec)} className="h-7">{t('열기')}</Button>
                           </div>
                         ))}
                       </div>
@@ -434,27 +440,27 @@ export default function MyRecommendationsPage() {
                   <div className="flex justify-end gap-2 pt-4">
                     {selectedRec.status === 'accepted' && permissions.canEdit && (
                       <>
-                        <Button variant="default" size="sm" onClick={() => openNewTab(`/crew/input/${selectedRec.id}`, '선원 상세입력', true)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
-                          <UserPlus className="w-3.5 h-3.5 mr-1.5" />상세입력
+                        <Button variant="default" size="sm" onClick={() => openNewTab(`/crew/input/${selectedRec.id}`, t('선원 상세입력'), true)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
+                          <UserPlus className="w-3.5 h-3.5 mr-1.5" />{t('상세입력')}
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => { setSelectedRecForCert(selectedRec); setCertDialogOpen(true); }} className="h-8 px-3 text-xs text-green-700 border-green-400 hover:bg-green-50">
-                          <Award className="w-3.5 h-3.5 mr-1.5" />증서 등록
+                          <Award className="w-3.5 h-3.5 mr-1.5" />{t('증서 등록')}
                         </Button>
                       </>
                     )}
                     {selectedRec.status === 'pending' && permissions.canEdit && (
                       <Button variant="outline" size="sm" onClick={() => handleWithdraw(selectedRec)} className="h-8 px-3 text-xs text-orange-600 border-orange-300 hover:bg-orange-50">
-                        <Undo2 className="w-3.5 h-3.5 mr-1.5" />철회
+                        <Undo2 className="w-3.5 h-3.5 mr-1.5" />{t('철회')}
                       </Button>
                     )}
                     {(selectedRec.status === 'withdrawn' || selectedRec.status === 'rejected') && permissions.canCreate && (
                       <Button variant="default" size="sm" onClick={() => handleReRecommend(selectedRec)} className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700">
-                        <UserPlus className="w-3.5 h-3.5 mr-1.5" />재추천
+                        <UserPlus className="w-3.5 h-3.5 mr-1.5" />{t('재추천')}
                       </Button>
                     )}
                     {(selectedRec.status === 'accepted' || selectedRec.status === 'rejected' || selectedRec.status === 'withdrawn') && (
                       <Button variant="outline" size="sm" onClick={() => handleDelete(selectedRec)} className="h-8 px-3 text-xs text-red-600 border-red-300 hover:bg-red-50">
-                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />삭제
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />{t('삭제')}
                       </Button>
                     )}
                   </div>

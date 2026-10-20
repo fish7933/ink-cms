@@ -91,7 +91,7 @@ export default function AllotmentManagementPage() {
 
   const handleDelete = async (id: string) => { if (!confirm(t('삭제하시겠습니까?'))) return; try { await deleteAllotment(id); toast({ title: t('삭제 완료') }); loadData(); } catch { toast({ title: t('실패'), variant: 'destructive' }); } };
 
-  const filtered = allotments.filter(a => { if (!searchTerm) return true; const t = searchTerm.toLowerCase(); return a.crew_name.toLowerCase().includes(t) || a.beneficiary_name.toLowerCase().includes(t); });
+  const filtered = allotments.filter(a => { if (!searchTerm) return true; const q = searchTerm.toLowerCase(); return a.crew_name.toLowerCase().includes(q) || a.beneficiary_name.toLowerCase().includes(q); });
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
 

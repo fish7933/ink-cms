@@ -1,5 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewManagementPage/en.json';
 import { msg } from '@/lib/messages';
 import { crewDisplayName } from '@/lib/utils';
 import {
@@ -33,6 +36,8 @@ import { getEvaluations } from '@/services/evaluation.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
 
+i18n.addResourceBundle('en', 'CrewManagementPage', en, true, true);
+
 type CategoryTab = 'all' | 'registered' | 'standby' | 'onboard' | 'disembarked';
 
 // 탭별 날짜 컬럼 헤더 — registered는 승선가능일 하나만, 나머지는 두 컬럼
@@ -64,6 +69,7 @@ const matchesCategory = (c: CrewWithDetails & { status?: string }, cat: Category
 };
 
 export function CrewManagementPage() {
+  const { t } = useTranslation('CrewManagementPage');
   const { toast } = useToast();
   const { openNewTab } = useTabContext();
   const navigate = useNavigate();
@@ -143,13 +149,13 @@ export function CrewManagementPage() {
   const filtered = useMemo(() => {
     let list = crew.filter(c => matchesCategory(c, category));
     if (searchTerm) {
-      const t = searchTerm.toLowerCase();
+      const q = searchTerm.toLowerCase();
       list = list.filter(c =>
-        c.name?.toLowerCase().includes(t) ||
-        c.name_english?.toLowerCase().includes(t) ||
-        c.rank_name?.toLowerCase().includes(t) ||
-        c.passport_number?.toLowerCase().includes(t) ||
-        c.seaman_book_number?.toLowerCase().includes(t)
+        c.name?.toLowerCase().includes(q) ||
+        c.name_english?.toLowerCase().includes(q) ||
+        c.rank_name?.toLowerCase().includes(q) ||
+        c.passport_number?.toLowerCase().includes(q) ||
+        c.seaman_book_number?.toLowerCase().includes(q)
       );
     }
     if (filterOwner !== 'all') list = list.filter(c => effOwnerId(c) === filterOwner);
@@ -166,13 +172,13 @@ export function CrewManagementPage() {
   const facetCrew = useMemo(() => {
     let list = crew.filter(c => matchesCategory(c, category));
     if (searchTerm) {
-      const t = searchTerm.toLowerCase();
+      const q = searchTerm.toLowerCase();
       list = list.filter(c =>
-        c.name?.toLowerCase().includes(t) ||
-        c.name_english?.toLowerCase().includes(t) ||
-        c.rank_name?.toLowerCase().includes(t) ||
-        c.passport_number?.toLowerCase().includes(t) ||
-        c.seaman_book_number?.toLowerCase().includes(t)
+        c.name?.toLowerCase().includes(q) ||
+        c.name_english?.toLowerCase().includes(q) ||
+        c.rank_name?.toLowerCase().includes(q) ||
+        c.passport_number?.toLowerCase().includes(q) ||
+        c.seaman_book_number?.toLowerCase().includes(q)
       );
     }
     return list;
@@ -213,28 +219,28 @@ export function CrewManagementPage() {
 
   const ownerFacet = useMemo(() => {
     const base = facetFilter(facetCrew, 'owner');
-    const options = buildFacetOptions(base, effOwnerId, c => effOwnerName(c) || '(이름없음)')
+    const options = buildFacetOptions(base, effOwnerId, c => effOwnerName(c) || t('(이름없음)'))
       .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
     return { total: base.length, options };
   }, [facetCrew, filterFleet, filterShip, filterRank, filterManning, filterNationality, filterSource]);
 
   const fleetFacet = useMemo(() => {
     const base = facetFilter(facetCrew, 'fleet');
-    const options = buildFacetOptions(base, effFleetId, c => effFleetName(c) || '(이름없음)')
+    const options = buildFacetOptions(base, effFleetId, c => effFleetName(c) || t('(이름없음)'))
       .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
     return { total: base.length, options };
   }, [facetCrew, filterOwner, filterShip, filterRank, filterManning, filterNationality, filterSource]);
 
   const shipFacet = useMemo(() => {
     const base = facetFilter(facetCrew, 'ship');
-    const options = buildFacetOptions(base, effShipId, c => effShipName(c) || '(이름없음)')
+    const options = buildFacetOptions(base, effShipId, c => effShipName(c) || t('(이름없음)'))
       .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
     return { total: base.length, options };
   }, [facetCrew, filterOwner, filterFleet, filterRank, filterManning, filterNationality, filterSource]);
 
   const manningFacet = useMemo(() => {
     const base = facetFilter(facetCrew, 'manning');
-    const options = buildFacetOptions(base, c => c.manning_agency_id, c => c.manning_agency_name || '(이름없음)')
+    const options = buildFacetOptions(base, c => c.manning_agency_id, c => c.manning_agency_name || t('(이름없음)'))
       .sort((a, b) => a.label.localeCompare(b.label, 'ko'));
     return { total: base.length, options };
   }, [facetCrew, filterOwner, filterFleet, filterShip, filterRank, filterNationality, filterSource]);
@@ -243,7 +249,7 @@ export function CrewManagementPage() {
     const base = facetFilter(facetCrew, 'rank');
     const rankLabel = (c: CrewWithDetails) => {
       const code = c.is_active_onboard ? c.rank_code : (c.pending_rank_code || c.rank_code);
-      return code ? `${code} (${c.rank_name})` : (c.rank_name || '(이름없음)');
+      return code ? `${code} (${c.rank_name})` : (c.rank_name || t('(이름없음)'));
     };
     const options = buildFacetOptions(base, effRankId, rankLabel);
     const orderIndex = new Map(ranks.map((r, i) => [r.id, i]));
@@ -265,7 +271,7 @@ export function CrewManagementPage() {
     const options = buildFacetOptions(
       base,
       c => (c as CrewWithDetails & { registration_source?: string }).registration_source,
-      c => REGISTRATION_SOURCE_LABELS[(c as CrewWithDetails & { registration_source?: RegistrationSource }).registration_source as RegistrationSource] || '기타',
+      c => t(REGISTRATION_SOURCE_LABELS[(c as CrewWithDetails & { registration_source?: RegistrationSource }).registration_source as RegistrationSource] || '기타'),
     );
     const orderIndex = new Map((Object.keys(REGISTRATION_SOURCE_LABELS) as RegistrationSource[]).map((k, i) => [k, i]));
     options.sort((a, b) => (orderIndex.get(a.value as RegistrationSource) ?? 999) - (orderIndex.get(b.value as RegistrationSource) ?? 999));
@@ -383,10 +389,10 @@ export function CrewManagementPage() {
 
     if (groups.size === 0) {
       toast({
-        title: '하선 계획을 만들 수 없습니다',
+        title: t('하선 계획을 만들 수 없습니다'),
         description: notSupervised.length > 0
-          ? '선택한 선원 모두 본인 담당 선박이 아닙니다.'
-          : '선택한 선원 모두 승선 선박 또는 하선예정일 정보가 없습니다.',
+          ? t('선택한 선원 모두 본인 담당 선박이 아닙니다.')
+          : t('선택한 선원 모두 승선 선박 또는 하선예정일 정보가 없습니다.'),
         variant: 'destructive',
       });
       return;
@@ -428,32 +434,32 @@ export function CrewManagementPage() {
     }
 
     const skipReasons = [
-      unassignable.length > 0 ? `승선 선박/하선예정일 없음: ${unassignable.join(', ')}` : '',
-      notSupervised.length > 0 ? `본인 담당 선박 아님: ${notSupervised.join(', ')}` : '',
+      unassignable.length > 0 ? t('승선 선박/하선예정일 없음: {{names}}', { names: unassignable.join(', ') }) : '',
+      notSupervised.length > 0 ? t('본인 담당 선박 아님: {{names}}', { names: notSupervised.join(', ') }) : '',
     ].filter(Boolean).join(' / ');
     toast({
-      title: `${created}개 선박 하선계획 임시저장 완료`,
-      description: skipReasons ? `제외됨 — ${skipReasons}` : '교대계획(선원 발령) 목록에서 확인하세요.',
+      title: t('{{count}}개 선박 하선계획 임시저장 완료', { count: created }),
+      description: skipReasons ? t('제외됨 — {{reasons}}', { reasons: skipReasons }) : t('교대계획(선원 발령) 목록에서 확인하세요.'),
     });
     setSelectedIds([]);
     await loadData();
   };
 
   const openRotationPlan = (mode: 'boarding' | 'disembark') => {
-    if (selectedIds.length === 0) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
+    if (selectedIds.length === 0) { toast({ title: t('선원을 선택하세요'), variant: 'destructive' }); return; }
 
     if (mode === 'disembark') {
-      if (!confirm(`선택한 ${selectedIds.length}명의 하선예정일을 기준 교대일로 하여 승선 선박별로 하선계획을 임시저장하시겠습니까?`)) return;
+      if (!confirm(t('선택한 {{count}}명의 하선예정일을 기준 교대일로 하여 승선 선박별로 하선계획을 임시저장하시겠습니까?', { count: selectedIds.length }))) return;
       createBulkDisembarkDrafts();
       return;
     }
 
-    openNewTab(`/crew-rotation/new?${mode}=${selectedIds.join(',')}`, '교대계획 작성', true);
+    openNewTab(`/crew-rotation/new?${mode}=${selectedIds.join(',')}`, t('교대계획 작성'), true);
   };
 
   const openDispatchOrder = () => {
-    if (selectedIds.length === 0) { toast({ title: '선원을 선택하세요', variant: 'destructive' }); return; }
-    openNewTab(`/crew-dispatch/new?crew=${selectedIds.join(',')}`, '승진/강등 발령', true);
+    if (selectedIds.length === 0) { toast({ title: t('선원을 선택하세요'), variant: 'destructive' }); return; }
+    openNewTab(`/crew-dispatch/new?crew=${selectedIds.join(',')}`, t('승진/강등 발령'), true);
   };
 
   const confirmDelete = async () => {
@@ -464,16 +470,16 @@ export function CrewManagementPage() {
       const { error } = await crewService.softDelete(ids, me.id);
       if (error) {
         console.error('선원 삭제 오류:', error);
-        toast({ title: '삭제 실패', description: error, variant: 'destructive' });
+        toast({ title: t('삭제 실패'), description: error, variant: 'destructive' });
         return;
       }
-      toast({ title: '삭제 완료', description: `${ids.length}명이 삭제 선원 리스트로 이동되었습니다.` });
+      toast({ title: t('삭제 완료'), description: t('{{count}}명이 삭제 선원 리스트로 이동되었습니다.', { count: ids.length }) });
       setSelectedIds([]);
       setShowDeleteDialog(false);
       await loadData();
     } catch (err) {
       console.error('삭제 중 예외:', err);
-      toast({ title: '삭제 실패', description: '예기치 않은 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('삭제 실패'), description: t('예기치 않은 오류가 발생했습니다.'), variant: 'destructive' });
     }
   };
 
@@ -490,7 +496,7 @@ export function CrewManagementPage() {
     <div className="flex items-center justify-center h-64">
       <div className="text-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
-        <p className="text-sm text-gray-600">로딩 중...</p>
+        <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
       </div>
     </div>
   );
@@ -502,41 +508,41 @@ export function CrewManagementPage() {
           <CardHeader className="pb-3">
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="text-base">선원 관리</CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">등록부터 하선까지 선원 현황을 관리합니다</p>
+                <CardTitle className="text-base">{t('선원 관리')}</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">{t('등록부터 하선까지 선원 현황을 관리합니다')}</p>
               </div>
               <div className="flex gap-2">
                 {selectedIds.length > 0 && (
                   <>
                     {(category === 'standby' || category === 'registered' || category === 'disembarked') && (
                       <Button onClick={() => openRotationPlan('boarding')} size="sm" className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700">
-                        <Ship className="w-4 h-4" />교대계획(승선) ({selectedIds.length})
+                        <Ship className="w-4 h-4" />{t('교대계획(승선) ({{count}})', { count: selectedIds.length })}
                       </Button>
                     )}
                     {category === 'onboard' && (
                       <>
                         <Button onClick={() => openRotationPlan('disembark')} size="sm" className="gap-1.5 h-8 bg-orange-500 hover:bg-orange-600">
-                          <UserMinus className="w-4 h-4" />교대계획(하선) ({selectedIds.length})
+                          <UserMinus className="w-4 h-4" />{t('교대계획(하선) ({{count}})', { count: selectedIds.length })}
                         </Button>
                         <Button onClick={openDispatchOrder} size="sm" variant="outline" className="gap-1.5 h-8">
-                          <ArrowUpCircle className="w-4 h-4" />승진/강등 발령
+                          <ArrowUpCircle className="w-4 h-4" />{t('승진/강등 발령')}
                         </Button>
                       </>
                     )}
                     {permissions.canDelete && (
                       <Button onClick={() => setShowDeleteDialog(true)} size="sm" variant="destructive" className="gap-1.5 h-8">
-                        <Trash2 className="w-4 h-4" />삭제 ({selectedIds.length})
+                        <Trash2 className="w-4 h-4" />{t('삭제 ({{count}})', { count: selectedIds.length })}
                       </Button>
                     )}
                   </>
                 )}
                 {permissions.canCreate && (
-                  <Button onClick={() => openNewTab('/crew/new', '선원 등록', true)} size="sm" className="gap-1.5 h-8">
-                    <Plus className="w-4 h-4" />선원 등록
+                  <Button onClick={() => openNewTab('/crew/new', t('선원 등록'), true)} size="sm" className="gap-1.5 h-8">
+                    <Plus className="w-4 h-4" />{t('선원 등록')}
                   </Button>
                 )}
                 <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={loadData} disabled={loading}>
-                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />새로고침
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />{t('새로고침')}
                 </Button>
               </div>
             </div>
@@ -547,7 +553,7 @@ export function CrewManagementPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
               <Input
-                placeholder="이름, 직급, 여권번호, 선원수첩번호로 검색..."
+                placeholder={t('이름, 직급, 여권번호, 선원수첩번호로 검색...')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="pl-10 h-9 text-sm"
@@ -557,59 +563,59 @@ export function CrewManagementPage() {
             {/* 필터 */}
             <div className="flex flex-wrap gap-2">
               <Select value={filterOwner} onValueChange={setFilterOwner}>
-                <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="선주사" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder={t('선주사')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체 선주사 ({ownerFacet.total})</SelectItem>
+                  <SelectItem value="all">{t('전체 선주사 ({{count}})', { count: ownerFacet.total })}</SelectItem>
                   {ownerFacet.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label} ({o.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterFleet} onValueChange={setFilterFleet} disabled={filterOwner === 'all'}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="플릿" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('플릿')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체 플릿 ({fleetFacet.total})</SelectItem>
+                  <SelectItem value="all">{t('전체 플릿 ({{count}})', { count: fleetFacet.total })}</SelectItem>
                   {fleetFacet.options.map(f => <SelectItem key={f.value} value={f.value}>{f.label} ({f.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterShip} onValueChange={setFilterShip} disabled={filterOwner === 'all'}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="선박" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('선박')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체 선박 ({shipFacet.total})</SelectItem>
+                  <SelectItem value="all">{t('전체 선박 ({{count}})', { count: shipFacet.total })}</SelectItem>
                   {shipFacet.options.map(s => <SelectItem key={s.value} value={s.value}>{s.label} ({s.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterRank} onValueChange={setFilterRank}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="직급" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('직급')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체 직급 ({rankFacet.total})</SelectItem>
+                  <SelectItem value="all">{t('전체 직급 ({{count}})', { count: rankFacet.total })}</SelectItem>
                   {rankFacet.options.map(r => <SelectItem key={r.value} value={r.value}>{r.label} ({r.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterManning} onValueChange={setFilterManning}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="매닝사" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('매닝사')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체 매닝사 ({manningFacet.total})</SelectItem>
+                  <SelectItem value="all">{t('전체 매닝사 ({{count}})', { count: manningFacet.total })}</SelectItem>
                   {manningFacet.options.map(a => <SelectItem key={a.value} value={a.value}>{a.label} ({a.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterNationality} onValueChange={setFilterNationality}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="국적" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('국적')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">전체 국적 ({nationalityFacet.total})</SelectItem>
+                  <SelectItem value="all">{t('전체 국적 ({{count}})', { count: nationalityFacet.total })}</SelectItem>
                   {nationalityFacet.options.map(n => <SelectItem key={n.value} value={n.value}>{n.label} ({n.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               {category === 'registered' && (
                 <Select value={filterSource} onValueChange={setFilterSource}>
-                  <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="등록출처" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder={t('등록출처')} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체 출처 ({sourceFacet.total})</SelectItem>
+                    <SelectItem value="all">{t('전체 출처 ({{count}})', { count: sourceFacet.total })}</SelectItem>
                     {sourceFacet.options.map(s => <SelectItem key={s.value} value={s.value}>{s.label} ({s.count})</SelectItem>)}
                   </SelectContent>
                 </Select>
               )}
               {isFiltered && (
                 <Button variant="outline" size="sm" onClick={clearFilters} className="h-8 text-xs gap-1">
-                  <X className="w-3 h-3" />초기화
+                  <X className="w-3 h-3" />{t('초기화')}
                 </Button>
               )}
             </div>
@@ -618,27 +624,27 @@ export function CrewManagementPage() {
             <Tabs value={category} onValueChange={v => setCategory(v as CategoryTab)}>
               <TabsList className="h-9 gap-1">
                 <TabsTrigger value="all" className="text-xs h-8 gap-1.5">
-                  <LayoutList className="w-3.5 h-3.5" />전체
+                  <LayoutList className="w-3.5 h-3.5" />{t('전체')}
                   <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('all')}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="registered" className="text-xs h-8 gap-1.5">
                   <Users className="w-3.5 h-3.5" />
-                  {CREW_CATEGORY_LABELS.registered}
+                  {t(CREW_CATEGORY_LABELS.registered)}
                   <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('registered')}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="standby" className="text-xs h-8 gap-1.5">
                   <UserCheck className="w-3.5 h-3.5" />
-                  {CREW_CATEGORY_LABELS.standby}
+                  {t(CREW_CATEGORY_LABELS.standby)}
                   <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('standby')}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="onboard" className="text-xs h-8 gap-1.5">
                   <Ship className="w-3.5 h-3.5" />
-                  {CREW_CATEGORY_LABELS.onboard}
+                  {t(CREW_CATEGORY_LABELS.onboard)}
                   <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('onboard')}</Badge>
                 </TabsTrigger>
                 <TabsTrigger value="disembarked" className="text-xs h-8 gap-1.5">
                   <UserMinus className="w-3.5 h-3.5" />
-                  {CREW_CATEGORY_LABELS.disembarked}
+                  {t(CREW_CATEGORY_LABELS.disembarked)}
                   <Badge variant="secondary" className="text-xs px-1.5 py-0 h-4">{countOf('disembarked')}</Badge>
                 </TabsTrigger>
               </TabsList>
@@ -648,11 +654,11 @@ export function CrewManagementPage() {
                   {/* 카운트 + 페이지당 설정 */}
                   <div className="flex justify-between items-center mb-2">
                     <p className="text-xs text-gray-500">
-                      총 {filtered.length}명
+                      {t('총 {{count}}명', { count: filtered.length })}
                       {selectedIds.length > 0 && msg.crew.selectedCount(selectedIds.length)}
                     </p>
                     <div className="flex items-center gap-2">
-                      <Label className="text-xs">페이지당:</Label>
+                      <Label className="text-xs">{t('페이지당:')}</Label>
                       <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
                         <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -674,74 +680,74 @@ export function CrewManagementPage() {
                             />
                           </th>
                           <th className="w-8 px-2 py-2 text-center font-medium text-gray-400">#</th>
-                          <th className="px-2 py-2 text-center font-medium text-gray-600">상태</th>
+                          <th className="px-2 py-2 text-center font-medium text-gray-600">{t('상태')}</th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('owner')}>
-                            <span className="flex items-center gap-1">선주사<SortIcon field="owner" /></span>
+                            <span className="flex items-center gap-1">{t('선주사')}<SortIcon field="owner" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('fleet')}>
-                            <span className="flex items-center gap-1">플릿<SortIcon field="fleet" /></span>
+                            <span className="flex items-center gap-1">{t('플릿')}<SortIcon field="fleet" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('ship')}>
-                            <span className="flex items-center gap-1">선박<SortIcon field="ship" /></span>
+                            <span className="flex items-center gap-1">{t('선박')}<SortIcon field="ship" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('manning')}>
-                            <span className="flex items-center gap-1">매닝사<SortIcon field="manning" /></span>
+                            <span className="flex items-center gap-1">{t('매닝사')}<SortIcon field="manning" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('rank')}>
-                            <span className="flex items-center gap-1">직급(등급)<SortIcon field="rank" /></span>
+                            <span className="flex items-center gap-1">{t('직급(등급)')}<SortIcon field="rank" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('name')}>
-                            <span className="flex items-center gap-1">이름<SortIcon field="name" /></span>
+                            <span className="flex items-center gap-1">{t('이름')}<SortIcon field="name" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('nationality')}>
-                            <span className="flex items-center gap-1">국적<SortIcon field="nationality" /></span>
+                            <span className="flex items-center gap-1">{t('국적')}<SortIcon field="nationality" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('birth')}>
-                            <span className="flex items-center gap-1">생년월일(나이)<SortIcon field="birth" /></span>
+                            <span className="flex items-center gap-1">{t('생년월일(나이)')}<SortIcon field="birth" /></span>
                           </th>
                           <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('date1')}>
-                            <span className="flex items-center gap-1">{DATE_COLUMN_LABELS[cat].col1}<SortIcon field="date1" /></span>
+                            <span className="flex items-center gap-1">{t(DATE_COLUMN_LABELS[cat].col1)}<SortIcon field="date1" /></span>
                           </th>
                           {DATE_COLUMN_LABELS[cat].col2 && (
                             <th className="px-2 py-2 text-left font-medium text-gray-600 cursor-pointer select-none" onClick={() => handleSort('date2')}>
-                              <span className="flex items-center gap-1">{DATE_COLUMN_LABELS[cat].col2}<SortIcon field="date2" /></span>
+                              <span className="flex items-center gap-1">{t(DATE_COLUMN_LABELS[cat].col2!)}<SortIcon field="date2" /></span>
                             </th>
                           )}
                           {cat === 'registered' ? (
                             <>
-                              <th className="px-2 py-2 text-right font-medium text-gray-600">제시급여</th>
-                              <th className="px-2 py-2 text-right font-medium text-gray-600">희망급여</th>
+                              <th className="px-2 py-2 text-right font-medium text-gray-600">{t('제시급여')}</th>
+                              <th className="px-2 py-2 text-right font-medium text-gray-600">{t('희망급여')}</th>
                             </>
                           ) : (
-                            <th className="px-2 py-2 text-center font-medium text-gray-600">급여표</th>
+                            <th className="px-2 py-2 text-center font-medium text-gray-600">{t('급여표')}</th>
                           )}
-                          <th className="px-2 py-2 text-center font-medium text-gray-600">고과</th>
+                          <th className="px-2 py-2 text-center font-medium text-gray-600">{t('고과')}</th>
                           <th className="px-2 py-2"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {paginated.length === 0 ? (
-                          <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 16 : 15) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">선원이 없습니다</td></tr>
+                          <tr><td colSpan={(DATE_COLUMN_LABELS[cat].col2 ? 16 : 15) + (cat === 'registered' ? 1 : 0)} className="text-center py-8 text-sm text-gray-400">{t('선원이 없습니다')}</td></tr>
                         ) : paginated.map((c, idx) => {
                           const crewExt = c as CrewWithDetails & { status?: string; registration_source?: string; current_grade?: string };
                           // 국적은 코드로 표기 (레거시로 한글 국가명이 그대로 저장된 데이터는 코드로 정규화)
                           const natEntry = nationalities.find(n => n.country_code === c.nationality || n.country_name_ko === c.nationality);
                           const nationalityDisplay = natEntry ? natEntry.country_code : (c.nationality || '-');
                           return (
-                            <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || '선원 정보')}>
+                            <tr key={c.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => openNewTab(`/crew/${c.id}`, [c.rank_code, crewDisplayName(c)].filter(Boolean).join(' ') || t('선원 정보'))}>
                               <td className="px-2 py-1.5" onClick={e => e.stopPropagation()}>
                                 <Checkbox checked={selectedIds.includes(c.id)} onCheckedChange={() => toggleSelect(c.id)} />
                               </td>
                               <td className="px-2 py-1.5 text-center text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                               <td className="px-2 py-1.5 text-center">
                                 {c.pending_plan_status === 'draft' && (
-                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-gray-500 border-gray-300">임시저장</Badge>
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-gray-500 border-gray-300">{t('임시저장')}</Badge>
                                 )}
                                 {c.pending_plan_status === 'pending_approval' && (
-                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">결재중</Badge>
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-amber-600 border-amber-300">{t('결재중')}</Badge>
                                 )}
                                 {c.pending_plan_status === 'approved' && (
-                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-emerald-600 border-emerald-300">발령대기중</Badge>
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 text-emerald-600 border-emerald-300">{t('발령대기중')}</Badge>
                                 )}
                               </td>
                               <td className="px-2 py-1.5 max-w-[90px] truncate" title={c.is_active_onboard ? crewExt.owner_name : (c.pending_owner_name || crewExt.owner_name)}>
@@ -785,7 +791,7 @@ export function CrewManagementPage() {
                               <td className="px-2 py-1.5 text-gray-500">{nationalityDisplay}</td>
                               <td className="px-2 py-1.5 text-gray-500">
                                 {c.date_of_birth
-                                  ? <span>{c.date_of_birth}<span className="text-gray-400 ml-1">({c.age}세)</span></span>
+                                  ? <span>{c.date_of_birth}<span className="text-gray-400 ml-1">{t('(Age {{age}})', { age: c.age })}</span></span>
                                   : '-'}
                               </td>
                               {cat === 'registered' && (
@@ -851,7 +857,7 @@ export function CrewManagementPage() {
                               )}
                               <td className="px-2 py-1.5 text-center">
                                 {evaluationScores.has(c.id) ? (
-                                  <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium" title={`최근 고과 ${evaluationScores.get(c.id)!.toFixed(1)}점`}>
+                                  <span className="inline-flex items-center gap-0.5 text-amber-500 font-medium" title={t('최근 고과 {{score}}점', { score: evaluationScores.get(c.id)!.toFixed(1) })}>
                                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                                     {evaluationScores.get(c.id)!.toFixed(1)}
                                   </span>
@@ -909,15 +915,15 @@ export function CrewManagementPage() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>선원 삭제 확인</AlertDialogTitle>
+            <AlertDialogTitle>{t('선원 삭제 확인')}</AlertDialogTitle>
             <AlertDialogDescription>
-              선택한 {selectedIds.length}명의 선원을 삭제 선원 리스트로 이동하시겠습니까?
-              선원 관리 설정 &gt; 삭제 선원 리스트에서 다시 복구하거나(시스템관리자 이상은 영구 삭제) 할 수 있습니다.
+              {t('선택한 {{count}}명의 선원을 삭제 선원 리스트로 이동하시겠습니까?', { count: selectedIds.length })}
+              {t('선원 관리 설정 > 삭제 선원 리스트에서 다시 복구하거나(시스템관리자 이상은 영구 삭제) 할 수 있습니다.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">삭제</AlertDialogAction>
+            <AlertDialogCancel>{t('취소')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">{t('삭제')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
