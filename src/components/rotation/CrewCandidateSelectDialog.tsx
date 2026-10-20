@@ -295,7 +295,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
                       <td className="px-3 py-2">
                         {boardingScore ? (
                           <div onClick={() => setFitnessModalCrewId(c.id)}>
-                            <button type="button" className="font-semibold text-emerald-700 hover:underline">{boardingScore.score}점</button>
+                            <button type="button" className="font-semibold text-emerald-700 hover:underline">{t('{{score}}점', { score: boardingScore.score })}</button>
                             {boardingScore.reasons.length > 0 && (
                               <div className="text-[10px] text-gray-400 mt-0.5">{boardingScore.reasons.slice(0, 2).join(' · ')}</div>
                             )}

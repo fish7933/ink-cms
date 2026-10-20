@@ -22,8 +22,13 @@ import { getNationalities } from '@/services/nationality.service';
 import { getShips } from '@/services/ship.service';
 import type { Nationality } from '@/types/nationality';
 import ManagementFeeTemplateItemsSummary from '@/components/management-fee/ManagementFeeTemplateItemsSummary';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ManagementFeeTemplateDetailPage/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeTemplateDetailPage', en, true, true);
 
 export default function ManagementFeeTemplateDetailPage() {
+  const { t } = useTranslation('ManagementFeeTemplateDetailPage');
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const { openNewTab, activeTabId, updateTab } = useTabContext();
@@ -57,7 +62,7 @@ export default function ManagementFeeTemplateDetailPage() {
       ]);
       setData(full);
       setNationalities(nats);
-      if (isInitial && activeTabId && full) updateTab(activeTabId, { title: `관리비 템플릿 상세: ${full.name}` });
+      if (isInitial && activeTabId && full) updateTab(activeTabId, { title: t('관리비 템플릿 상세: {{name}}', { name: full.name }) });
 
       const templateMap = await getEffectiveTemplateMapForShips(ships);
       setAssignedShips(
@@ -67,7 +72,7 @@ export default function ManagementFeeTemplateDetailPage() {
       setHistory(hist.filter(h => h.id !== resolvedId));
     } catch (e) {
       console.error(e);
-      toast({ title: '불러오기 실패', variant: 'destructive' });
+      toast({ title: t('불러오기 실패'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -93,13 +98,13 @@ export default function ManagementFeeTemplateDetailPage() {
   };
 
   const handleDeleteHistory = async (h: ManagementFeeTemplate) => {
-    if (!confirm(`${h.effective_from} ~ ${h.effective_until} 버전을 삭제하시겠습니까?\n앞뒤 버전의 유효기간이 자동으로 이어붙습니다.`)) return;
+    if (!confirm(t('{{from}} ~ {{until}} 버전을 삭제하시겠습니까?\n앞뒤 버전의 유효기간이 자동으로 이어붙습니다.', { from: h.effective_from, until: h.effective_until }))) return;
     const ok = await deleteManagementFeeTemplateHistoryVersion(h.id);
     if (!ok) {
-      toast({ title: '삭제 실패', variant: 'destructive' });
+      toast({ title: t('삭제 실패'), variant: 'destructive' });
       return;
     }
-    toast({ title: '삭제 완료' });
+    toast({ title: t('삭제 완료') });
     window.dispatchEvent(new CustomEvent('management-fee-template-data-changed'));
   };
 
@@ -114,13 +119,13 @@ export default function ManagementFeeTemplateDetailPage() {
     try {
       const newTemplate = await renewManagementFeeTemplate(data.id, renewDate);
       if (!newTemplate) {
-        toast({ title: '갱신 실패', description: '적용 시작일은 기존 유효기간 이후여야 합니다.', variant: 'destructive' });
+        toast({ title: t('갱신 실패'), description: t('적용 시작일은 기존 유효기간 이후여야 합니다.'), variant: 'destructive' });
         return;
       }
-      toast({ title: '갱신 완료', description: '새 버전이 생성되었습니다. 인상분 금액을 수정해주세요.' });
+      toast({ title: t('갱신 완료'), description: t('새 버전이 생성되었습니다. 인상분 금액을 수정해주세요.') });
       window.dispatchEvent(new CustomEvent('management-fee-template-data-changed'));
       setRenewOpen(false);
-      openNewTab(`/management-fee/templates/${newTemplate.id}/edit`, `템플릿 수정: ${newTemplate.name}`);
+      openNewTab(`/management-fee/templates/${newTemplate.id}/edit`, t('템플릿 수정: {{name}}', { name: newTemplate.name }));
     } finally {
       setRenewing(false);
     }
@@ -129,7 +134,7 @@ export default function ManagementFeeTemplateDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-500">로딩 중...</p>
+        <p className="text-sm text-gray-500">{t('로딩 중...')}</p>
       </div>
     );
   }
@@ -137,7 +142,7 @@ export default function ManagementFeeTemplateDetailPage() {
   if (!data) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-sm text-gray-500">템플릿을 찾을 수 없습니다.</p>
+        <p className="text-sm text-gray-500">{t('템플릿을 찾을 수 없습니다.')}</p>
       </div>
     );
   }
@@ -151,12 +156,12 @@ export default function ManagementFeeTemplateDetailPage() {
             <div className="flex gap-2">
               <Button
                 size="sm" variant="outline" className="gap-1.5 h-8"
-                onClick={() => openNewTab(`/management-fee/templates/${data.id}/edit`, `템플릿 수정: ${data.name}`)}
+                onClick={() => openNewTab(`/management-fee/templates/${data.id}/edit`, t('템플릿 수정: {{name}}', { name: data.name }))}
               >
-                <Edit2 className="h-4 w-4" />수정
+                <Edit2 className="h-4 w-4" />{t('수정')}
               </Button>
               <Button size="sm" className="gap-1.5 h-8" onClick={openRenew}>
-                <RefreshCw className="h-4 w-4" />갱신
+                <RefreshCw className="h-4 w-4" />{t('갱신')}
               </Button>
             </div>
           </div>
@@ -165,43 +170,43 @@ export default function ManagementFeeTemplateDetailPage() {
           {/* 기본 정보 */}
           <div className="grid grid-cols-4 gap-3 text-sm">
             <div>
-              <Label className="text-xs text-gray-500">기본 통화</Label>
+              <Label className="text-xs text-gray-500">{t('기본 통화')}</Label>
               <div className="mt-0.5">{data.currency}</div>
             </div>
             <div className="col-span-2">
-              <Label className="text-xs text-gray-500">유효기간</Label>
-              <div className="mt-0.5">{data.effective_from} ~ {data.effective_until || '현재'}</div>
+              <Label className="text-xs text-gray-500">{t('유효기간')}</Label>
+              <div className="mt-0.5">{data.effective_from} ~ {data.effective_until || t('현재')}</div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500">상태</Label>
+              <Label className="text-xs text-gray-500">{t('상태')}</Label>
               <div className="mt-0.5">
                 <Badge variant={data.is_active ? 'default' : 'secondary'} className="text-xs">
-                  {data.is_active ? '활성' : '비활성'}
+                  {data.is_active ? t('활성') : t('비활성')}
                 </Badge>
               </div>
             </div>
           </div>
           {data.description && (
             <div>
-              <Label className="text-xs text-gray-500">설명</Label>
+              <Label className="text-xs text-gray-500">{t('설명')}</Label>
               <div className="mt-0.5 text-sm text-gray-700">{data.description}</div>
             </div>
           )}
 
           {/* 청구 항목 구성 */}
           <div>
-            <Label className="text-sm">청구 항목 구성</Label>
+            <Label className="text-sm">{t('청구 항목 구성')}</Label>
             <div className="mt-1.5"><ManagementFeeTemplateItemsSummary items={data.items} nationalities={nationalities} /></div>
           </div>
 
           {/* 할당된 선박 */}
           <div>
             <Label className="text-sm flex items-center gap-1.5">
-              <ShipIcon className="h-3.5 w-3.5" />할당된 선박 ({assignedShips.length})
+              <ShipIcon className="h-3.5 w-3.5" />{t('할당된 선박 ({{count}})', { count: assignedShips.length })}
             </Label>
             <div className="mt-1.5">
               {assignedShips.length === 0 ? (
-                <p className="text-xs text-gray-400">할당된 선박이 없습니다.</p>
+                <p className="text-xs text-gray-400">{t('할당된 선박이 없습니다.')}</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {assignedShips.map(name => (
@@ -217,11 +222,11 @@ export default function ManagementFeeTemplateDetailPage() {
       {/* 갱신 히스토리 */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">갱신 히스토리 ({history.length})</CardTitle>
+          <CardTitle className="text-base">{t('갱신 히스토리 ({{count}})', { count: history.length })}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {history.length === 0 ? (
-            <p className="text-xs text-gray-400 py-2 text-center">이전 버전이 없습니다.</p>
+            <p className="text-xs text-gray-400 py-2 text-center">{t('이전 버전이 없습니다.')}</p>
           ) : (
             history.map(h => (
               <div key={h.id} className="border rounded-md">
@@ -231,12 +236,12 @@ export default function ManagementFeeTemplateDetailPage() {
                     {h.effective_from} ~ {h.effective_until}
                   </button>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">종료된 버전</Badge>
+                    <Badge variant="secondary" className="text-xs">{t('종료된 버전')}</Badge>
                     <button
                       type="button"
                       onClick={() => handleDeleteHistory(h)}
                       className="text-gray-400 hover:text-red-600"
-                      title="이 버전 삭제"
+                      title={t('이 버전 삭제')}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -247,7 +252,7 @@ export default function ManagementFeeTemplateDetailPage() {
                     {historyDetails[h.id] ? (
                       <ManagementFeeTemplateItemsSummary items={historyDetails[h.id]!.items} nationalities={nationalities} />
                     ) : (
-                      <p className="text-xs text-gray-400 py-2 text-center">불러오는 중...</p>
+                      <p className="text-xs text-gray-400 py-2 text-center">{t('불러오는 중...')}</p>
                     )}
                   </div>
                 )}
@@ -261,21 +266,21 @@ export default function ManagementFeeTemplateDetailPage() {
       <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base">템플릿 갱신 — {data.name}</DialogTitle>
+            <DialogTitle className="text-base">{t('템플릿 갱신 — {{name}}', { name: data.name })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-xs text-gray-500">
-              새 유효기간 버전을 생성합니다. 기존 금액이 그대로 복사되며, 이 템플릿을 사용 중인 선박/플릿/선주 배정은 자동으로 새 버전으로 이전됩니다.
+              {t('새 유효기간 버전을 생성합니다. 기존 금액이 그대로 복사되며, 이 템플릿을 사용 중인 선박/플릿/선주 배정은 자동으로 새 버전으로 이전됩니다.')}
             </p>
             <div className="space-y-1.5">
-              <Label className="text-sm">적용 시작일</Label>
+              <Label className="text-sm">{t('적용 시작일')}</Label>
               <Input type="date" value={renewDate} onChange={e => setRenewDate(e.target.value)} className="h-9 text-sm" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setRenewOpen(false)}>취소</Button>
+            <Button variant="outline" size="sm" onClick={() => setRenewOpen(false)}>{t('취소')}</Button>
             <Button size="sm" onClick={handleRenew} disabled={renewing || !renewDate}>
-              {renewing ? '갱신 중...' : '갱신'}
+              {renewing ? t('갱신 중...') : t('갱신')}
             </Button>
           </DialogFooter>
         </DialogContent>

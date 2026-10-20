@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/RotationPlanLedgerPrintPage/en.json';
 import { rotationService } from '@/services/rotation.service';
 import { getPorts } from '@/services/port.service';
 import { getCurrentUser } from '@/lib/store';
 import type { CrewRotationPlanWithDetails } from '@/types/rotation';
 import RotationPlanLedgerSheet from '@/components/rotation/RotationPlanLedgerSheet';
+i18n.addResourceBundle('en', 'RotationPlanLedgerPrintPage', en, true, true);
 
 // 사이드바/헤더/탭바 없이 순수 문서만 렌더링되는 독립 인쇄 페이지 (App.tsx 최상위 라우트, Layout 우회).
 // ?months=2026-07,2026-08 (여러 달, 선주/선박 필터 무관 전체 선박) 또는
 // ?ids=uuid1,uuid2 (교대계획 목록에서 직접 선택한 계획만) 둘 중 하나로 대상을 지정한다.
 export default function RotationPlanLedgerPrintPage() {
+  const { t } = useTranslation('RotationPlanLedgerPrintPage');
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
@@ -46,10 +51,10 @@ export default function RotationPlanLedgerPrintPage() {
   }, [searchParams]);
 
   if (loading) {
-    return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>불러오는 중...</div>;
+    return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>{t('불러오는 중...')}</div>;
   }
   if (unauthorized) {
-    return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>로그인이 필요합니다.</div>;
+    return <div style={{ padding: 40, fontSize: 14, color: '#666' }}>{t('로그인이 필요합니다.')}</div>;
   }
 
   return (
@@ -64,7 +69,7 @@ export default function RotationPlanLedgerPrintPage() {
           onClick={() => window.print()}
           style={{ padding: '8px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, fontSize: 14, cursor: 'pointer' }}
         >
-          인쇄 / PDF 저장
+          {t('인쇄 / PDF 저장')}
         </button>
       </div>
       <RotationPlanLedgerSheet plans={plans} portLabelByPlanId={portLabelByPlanId} periodLabel={periodLabel} />

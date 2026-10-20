@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewAssignmentPage/en.json';
 import {
   getCurrentUser,
   getCrewAssignments,
@@ -34,7 +37,10 @@ const STATUS_OPTIONS = [
   { value: 'terminated', label: '계약종료', color: 'bg-red-100 text-red-700' }
 ];
 
+i18n.addResourceBundle('en', 'CrewAssignmentPage', en, true, true);
+
 export default function CrewAssignmentPage() {
+  const { t } = useTranslation('CrewAssignmentPage');
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [assignments, setAssignments] = useState<CrewAssignment[]>([]);
@@ -100,7 +106,7 @@ export default function CrewAssignmentPage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-            <p className="text-sm text-gray-600">로딩 중...</p>
+            <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
           </div>
         </div>
       </>
@@ -156,7 +162,7 @@ export default function CrewAssignmentPage() {
       resetForm();
     } catch (error) {
       console.error('Error saving assignment:', error);
-      alert('발령 저장 중 오류가 발생했습니다.');
+      alert(t('발령 저장 중 오류가 발생했습니다.'));
     }
   };
 
@@ -192,7 +198,7 @@ export default function CrewAssignmentPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('이 발령을 삭제하시겠습니까?')) {
+    if (confirm(t('이 발령을 삭제하시겠습니까?'))) {
       await deleteCrewAssignment(id);
       await loadData();
     }
@@ -213,7 +219,7 @@ export default function CrewAssignmentPage() {
     const statusOption = STATUS_OPTIONS.find(s => s.value === status);
     return statusOption ? (
       <Badge className={`${statusOption.color} text-xs`}>
-        {statusOption.label}
+        {t(statusOption.label)}
       </Badge>
     ) : null;
   };
@@ -229,24 +235,24 @@ export default function CrewAssignmentPage() {
                   <>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm" className="gap-1.5 h-8" onClick={() => { setFormView(null); resetForm(); }}>
-                        <ArrowLeft className="w-4 h-4" />뒤로
+                        <ArrowLeft className="w-4 h-4" />{t('뒤로')}
                       </Button>
-                      <CardTitle className="text-base">{formView.id ? '발령 수정' : '발령 등록'}</CardTitle>
+                      <CardTitle className="text-base">{formView.id ? t('발령 수정') : t('발령 등록')}</CardTitle>
                     </div>
                     <Button size="sm" className="gap-1.5 h-8" type="submit" form="assignment-form">
-                      <Save className="w-4 h-4" />저장
+                      <Save className="w-4 h-4" />{t('저장')}
                     </Button>
                   </>
                 ) : (
                   <>
-                    <CardTitle className="text-base">선원 발령 관리</CardTitle>
+                    <CardTitle className="text-base">{t('선원 발령 관리')}</CardTitle>
                     <Button
                       size="sm"
                       className="gap-1.5 h-8"
                       onClick={() => { resetForm(); setFormView({}); }}
                     >
                       <Plus className="w-4 h-4" />
-                      발령 등록
+                      {t('발령 등록')}
                     </Button>
                   </>
                 )}
@@ -258,14 +264,14 @@ export default function CrewAssignmentPage() {
                 <form id="assignment-form" onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="ship_id">선박 *</Label>
+                      <Label htmlFor="ship_id">{t('선박 *')}</Label>
                       <Select
                         value={formData.ship_id}
                         onValueChange={(value) => setFormData({ ...formData, ship_id: value })}
                         required
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="선박 선택" />
+                          <SelectValue placeholder={t('선박 선택')} />
                         </SelectTrigger>
                         <SelectContent>
                           {ships.map(ship => (
@@ -278,14 +284,14 @@ export default function CrewAssignmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="crew_member_id">선원 *</Label>
+                      <Label htmlFor="crew_member_id">{t('선원 *')}</Label>
                       <Select
                         value={formData.crew_member_id}
                         onValueChange={(value) => setFormData({ ...formData, crew_member_id: value })}
                         required
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="선원 선택" />
+                          <SelectValue placeholder={t('선원 선택')} />
                         </SelectTrigger>
                         <SelectContent>
                           {crewMembers.map(crew => (
@@ -298,14 +304,14 @@ export default function CrewAssignmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="rank">직급 *</Label>
+                      <Label htmlFor="rank">{t('직급 *')}</Label>
                       <Select
                         value={formData.rank}
                         onValueChange={(value) => setFormData({ ...formData, rank: value })}
                         required
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="직급 선택" />
+                          <SelectValue placeholder={t('직급 선택')} />
                         </SelectTrigger>
                         <SelectContent>
                           {RANKS.map(rank => (
@@ -318,19 +324,19 @@ export default function CrewAssignmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="status">상태 *</Label>
+                      <Label htmlFor="status">{t('상태 *')}</Label>
                       <Select
                         value={formData.status}
                         onValueChange={(value) => setFormData({ ...formData, status: value as 'active' | 'completed' | 'terminated' })}
                         required
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="상태 선택" />
+                          <SelectValue placeholder={t('상태 선택')} />
                         </SelectTrigger>
                         <SelectContent>
                           {STATUS_OPTIONS.map(status => (
                             <SelectItem key={status.value} value={status.value}>
-                              {status.label}
+                              {t(status.label)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -338,7 +344,7 @@ export default function CrewAssignmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="sign_on_date">승선일 *</Label>
+                      <Label htmlFor="sign_on_date">{t('승선일 *')}</Label>
                       <Input
                         id="sign_on_date"
                         type="date"
@@ -349,7 +355,7 @@ export default function CrewAssignmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="sign_off_date">하선일</Label>
+                      <Label htmlFor="sign_off_date">{t('하선일')}</Label>
                       <Input
                         id="sign_off_date"
                         type="date"
@@ -359,7 +365,7 @@ export default function CrewAssignmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="contract_duration_months">계약기간 (개월) *</Label>
+                      <Label htmlFor="contract_duration_months">{t('계약기간 (개월) *')}</Label>
                       <Input
                         id="contract_duration_months"
                         type="number"
@@ -371,7 +377,7 @@ export default function CrewAssignmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="salary">급여</Label>
+                      <Label htmlFor="salary">{t('급여')}</Label>
                       <div className="flex gap-2">
                         <Input
                           id="salary"
@@ -379,7 +385,7 @@ export default function CrewAssignmentPage() {
                           min="0"
                           value={formData.salary}
                           onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                          placeholder="금액"
+                          placeholder={t('금액')}
                           className="flex-1"
                         />
                         <Select
@@ -400,22 +406,22 @@ export default function CrewAssignmentPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="notes">비고</Label>
+                    <Label htmlFor="notes">{t('비고')}</Label>
                     <Textarea
                       id="notes"
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="추가 정보나 특이사항을 입력하세요"
+                      placeholder={t('추가 정보나 특이사항을 입력하세요')}
                       rows={3}
                     />
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
                     <Button type="button" variant="outline" onClick={() => { setFormView(null); resetForm(); }}>
-                      취소
+                      {t('취소')}
                     </Button>
                     <Button type="submit">
-                      {formView.id ? '수정' : '등록'}
+                      {formView.id ? t('수정') : t('등록')}
                     </Button>
                   </div>
                 </form>
@@ -426,7 +432,7 @@ export default function CrewAssignmentPage() {
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-2">
                       <Input
-                        placeholder="선박명, 선원명, 직급으로 검색..."
+                        placeholder={t('선박명, 선원명, 직급으로 검색...')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="max-w-xs h-9 text-sm"
@@ -434,10 +440,10 @@ export default function CrewAssignmentPage() {
 
                       <Select value={selectedShip} onValueChange={setSelectedShip}>
                         <SelectTrigger className="w-48 h-9 text-sm">
-                          <SelectValue placeholder="선박 선택" />
+                          <SelectValue placeholder={t('선박 선택')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all" className="text-sm">전체 선박</SelectItem>
+                          <SelectItem value="all" className="text-sm">{t('전체 선박')}</SelectItem>
                           {ships.map(ship => (
                             <SelectItem key={ship.id} value={String(ship.id)} className="text-sm">
                               {ship.name}
@@ -448,13 +454,13 @@ export default function CrewAssignmentPage() {
 
                       <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                         <SelectTrigger className="w-40 h-9 text-sm">
-                          <SelectValue placeholder="상태 선택" />
+                          <SelectValue placeholder={t('상태 선택')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all" className="text-sm">전체 상태</SelectItem>
+                          <SelectItem value="all" className="text-sm">{t('전체 상태')}</SelectItem>
                           {STATUS_OPTIONS.map(status => (
                             <SelectItem key={status.value} value={status.value} className="text-sm">
-                              {status.label}
+                              {t(status.label)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -462,10 +468,10 @@ export default function CrewAssignmentPage() {
 
                       <Select value={selectedRank} onValueChange={setSelectedRank}>
                         <SelectTrigger className="w-40 h-9 text-sm">
-                          <SelectValue placeholder="직급 선택" />
+                          <SelectValue placeholder={t('직급 선택')} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all" className="text-sm">전체 직급</SelectItem>
+                          <SelectItem value="all" className="text-sm">{t('전체 직급')}</SelectItem>
                           {RANKS.map(rank => (
                             <SelectItem key={rank} value={rank} className="text-sm">
                               {rank}
@@ -482,7 +488,7 @@ export default function CrewAssignmentPage() {
                           className="h-9 gap-1.5 text-sm"
                         >
                           <X className="w-3.5 h-3.5" />
-                          필터 초기화
+                          {t('필터 초기화')}
                         </Button>
                       )}
                     </div>
@@ -492,22 +498,22 @@ export default function CrewAssignmentPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {searchTerm && (
                           <Badge variant="secondary" className="text-xs">
-                            검색: {searchTerm}
+                            {t('검색: {{term}}', { term: searchTerm })}
                           </Badge>
                         )}
                         {selectedShip !== 'all' && (
                           <Badge variant="secondary" className="text-xs">
-                            선박: {getShipName(selectedShip)}
+                            {t('선박: {{name}}', { name: getShipName(selectedShip) })}
                           </Badge>
                         )}
                         {selectedStatus !== 'all' && (
                           <Badge variant="secondary" className="text-xs">
-                            상태: {STATUS_OPTIONS.find(s => s.value === selectedStatus)?.label}
+                            {t('상태: {{status}}', { status: t(STATUS_OPTIONS.find(s => s.value === selectedStatus)?.label ?? '') })}
                           </Badge>
                         )}
                         {selectedRank !== 'all' && (
                           <Badge variant="secondary" className="text-xs">
-                            직급: {selectedRank}
+                            {t('직급: {{rank}}', { rank: selectedRank })}
                           </Badge>
                         )}
                       </div>
@@ -515,7 +521,7 @@ export default function CrewAssignmentPage() {
 
                     {/* Results Count */}
                     <p className="text-xs text-gray-500">
-                      총 {filteredAssignments.length}건의 발령
+                      {t('총 {{count}}건의 발령', { count: filteredAssignments.length })}
                     </p>
                   </div>
 
@@ -524,21 +530,21 @@ export default function CrewAssignmentPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="text-xs">선박명</TableHead>
-                          <TableHead className="text-xs">선원명</TableHead>
-                          <TableHead className="text-xs">직급</TableHead>
-                          <TableHead className="text-xs">승선일</TableHead>
-                          <TableHead className="text-xs">하선일</TableHead>
-                          <TableHead className="text-xs">계약기간</TableHead>
-                          <TableHead className="text-xs">상태</TableHead>
-                          <TableHead className="text-right text-xs w-32">작업</TableHead>
+                          <TableHead className="text-xs">{t('선박명')}</TableHead>
+                          <TableHead className="text-xs">{t('선원명')}</TableHead>
+                          <TableHead className="text-xs">{t('직급')}</TableHead>
+                          <TableHead className="text-xs">{t('승선일')}</TableHead>
+                          <TableHead className="text-xs">{t('하선일')}</TableHead>
+                          <TableHead className="text-xs">{t('계약기간')}</TableHead>
+                          <TableHead className="text-xs">{t('상태')}</TableHead>
+                          <TableHead className="text-right text-xs w-32">{t('작업')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredAssignments.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={8} className="text-center py-8 text-sm text-gray-500">
-                              등록된 발령이 없습니다
+                              {t('등록된 발령이 없습니다')}
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -559,7 +565,7 @@ export default function CrewAssignmentPage() {
                               <TableCell className="text-sm font-medium">{assignment.rank}</TableCell>
                               <TableCell className="text-sm">{assignment.sign_on_date}</TableCell>
                               <TableCell className="text-sm">{assignment.sign_off_date || '-'}</TableCell>
-                              <TableCell className="text-sm">{assignment.contract_duration_months}개월</TableCell>
+                              <TableCell className="text-sm">{t('{{count}}개월', { count: assignment.contract_duration_months })}</TableCell>
                               <TableCell className="text-sm">{getStatusBadge(assignment.status)}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">

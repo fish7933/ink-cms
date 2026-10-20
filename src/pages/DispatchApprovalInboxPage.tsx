@@ -1,4 +1,7 @@
 import { useState, useEffect, Fragment } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/DispatchApprovalInboxPage/en.json';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { CheckCircle2, XCircle, Clock, User, ArrowLeft, Trash2, FileText, Ship as ShipIcon, Send, Archive, ChevronDown, ChevronRight } from 'lucide-react';
@@ -74,6 +77,8 @@ interface ApprovalLike {
 type Filter = 'all' | 'mine' | 'pending' | 'approved' | 'rejected';
 type Domain = 'crew' | 'rotation' | 'contract' | 'dispatch';
 const PAGE_SIZE = 20;
+
+i18n.addResourceBundle('en', 'DispatchApprovalInboxPage', en, true, true);
 
 const DOMAIN_LABEL: Record<Domain, string> = { crew: '채용', rotation: '배승', contract: '계약', dispatch: '승진/강등' };
 

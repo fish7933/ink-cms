@@ -1,0 +1,22 @@
+{
+  "월정기(일할)": "Monthly (Prorated)",
+  "월정기(전액)": "Monthly (Full Amount)",
+  "1회성(승선월)": "One-time (Boarding Month)",
+  "실비(수기)": "Actual Cost (Manual)",
+  "추가된 청구 항목이 없습니다. 아래에서 항목을 선택해 조건을 추가하세요.": "No billing items added yet. Select an item below to add a condition.",
+  "청구 항목": "Billing Item",
+  "직급구분": "Rank Category",
+  "국적": "Nationality",
+  "과금 방식": "Billing Basis",
+  "금액": "Amount",
+  "통화": "Currency",
+  "선박당 월 상한": "Monthly Cap per Ship",
+  "부가세": "VAT",
+  "조건 추가": "Add condition",
+  "전체": "All",
+  "사관": "Officer",
+  "부원": "Rating",
+  "수기 입력": "Manual entry",
+  "추가할 청구 항목 선택": "Select a billing item to add",
+  "항목 추가": "Add Item"
+}

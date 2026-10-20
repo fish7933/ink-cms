@@ -21,6 +21,10 @@ import {
 import { addTrainingRecord, updateTrainingRecord } from '@/services/crew-extended.service';
 import type { TrainingRecord } from '@/types/crew-extended';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/TrainingRecordDialog/en.json';
+i18n.addResourceBundle('en', 'TrainingRecordDialog', en, true, true);
 
 interface TrainingRecordDialogProps {
   open: boolean;
@@ -52,6 +56,7 @@ export default function TrainingRecordDialog({
   onSuccess,
 }: TrainingRecordDialogProps) {
   const { toast } = useToast();
+  const { t } = useTranslation('TrainingRecordDialog');
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -125,16 +130,16 @@ export default function TrainingRecordDialog({
 
       if (record) {
         await updateTrainingRecord(record.id, data);
-        toast({ title: '수정 완료', description: '교육 기록이 수정되었습니다.' });
+        toast({ title: t('수정 완료'), description: t('교육 기록이 수정되었습니다.') });
       } else {
         await addTrainingRecord(data);
-        toast({ title: '추가 완료', description: '교육 기록이 추가되었습니다.' });
+        toast({ title: t('추가 완료'), description: t('교육 기록이 추가되었습니다.') });
       }
       onSuccess();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast({ title: '저장 실패', description: '교육 기록 저장 중 오류가 발생했습니다.', variant: 'destructive' });
+      toast({ title: t('저장 실패'), description: t('교육 기록 저장 중 오류가 발생했습니다.'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -144,86 +149,86 @@ export default function TrainingRecordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base">{record ? '교육 기록 수정' : '교육 기록 추가'}</DialogTitle>
-          <DialogDescription className="text-xs">선원의 교육 이력을 {record ? '수정' : '등록'}합니다</DialogDescription>
+          <DialogTitle className="text-base">{record ? t('교육 기록 수정') : t('교육 기록 추가')}</DialogTitle>
+          <DialogDescription className="text-xs">{record ? t('선원의 교육 이력을 수정합니다') : t('선원의 교육 이력을 등록합니다')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-3 py-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">교육명 *</Label>
-                <Input value={formData.training_name} onChange={e => setFormData({ ...formData, training_name: e.target.value })} placeholder="교육 과정명" required className="h-9 text-sm" />
+                <Label className="text-xs">{t('교육명 *')}</Label>
+                <Input value={formData.training_name} onChange={e => setFormData({ ...formData, training_name: e.target.value })} placeholder={t('교육 과정명')} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">교육 유형</Label>
+                <Label className="text-xs">{t('교육 유형')}</Label>
                 <Select value={formData.training_type} onValueChange={v => setFormData({ ...formData, training_type: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="유형 선택" /></SelectTrigger>
-                  <SelectContent>{TRAINING_TYPES.map(t => <SelectItem key={t.value} value={t.value} className="text-sm">{t.label}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('유형 선택')} /></SelectTrigger>
+                  <SelectContent>{TRAINING_TYPES.map(tt => <SelectItem key={tt.value} value={tt.value} className="text-sm">{t(tt.label)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">교육 기관</Label>
-                <Input value={formData.training_provider} onChange={e => setFormData({ ...formData, training_provider: e.target.value })} placeholder="교육 실시 기관" className="h-9 text-sm" />
+                <Label className="text-xs">{t('교육 기관')}</Label>
+                <Input value={formData.training_provider} onChange={e => setFormData({ ...formData, training_provider: e.target.value })} placeholder={t('교육 실시 기관')} className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">교육 장소</Label>
-                <Input value={formData.training_location} onChange={e => setFormData({ ...formData, training_location: e.target.value })} placeholder="교육 장소" className="h-9 text-sm" />
+                <Label className="text-xs">{t('교육 장소')}</Label>
+                <Input value={formData.training_location} onChange={e => setFormData({ ...formData, training_location: e.target.value })} placeholder={t('교육 장소')} className="h-9 text-sm" />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">시작일 *</Label>
+                <Label className="text-xs">{t('시작일 *')}</Label>
                 <Input type="date" value={formData.start_date} onChange={e => setFormData({ ...formData, start_date: e.target.value })} required className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">종료일</Label>
+                <Label className="text-xs">{t('종료일')}</Label>
                 <Input type="date" value={formData.end_date} onChange={e => setFormData({ ...formData, end_date: e.target.value })} className="h-9 text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">교육 시간</Label>
-                <Input type="number" value={formData.duration_hours} onChange={e => setFormData({ ...formData, duration_hours: e.target.value })} placeholder="시간" className="h-9 text-sm" />
+                <Label className="text-xs">{t('교육 시간')}</Label>
+                <Input type="number" value={formData.duration_hours} onChange={e => setFormData({ ...formData, duration_hours: e.target.value })} placeholder={t('시간')} className="h-9 text-sm" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">결과</Label>
+                <Label className="text-xs">{t('결과')}</Label>
                 <Select value={formData.result} onValueChange={v => setFormData({ ...formData, result: v })}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="결과 선택" /></SelectTrigger>
-                  <SelectContent>{RESULT_OPTIONS.map(r => <SelectItem key={r.value} value={r.value} className="text-sm">{r.label}</SelectItem>)}</SelectContent>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('결과 선택')} /></SelectTrigger>
+                  <SelectContent>{RESULT_OPTIONS.map(r => <SelectItem key={r.value} value={r.value} className="text-sm">{t(r.label)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="flex items-end space-x-2 pb-1">
                 <input type="checkbox" id="cert_issued" checked={formData.certificate_issued} onChange={e => setFormData({ ...formData, certificate_issued: e.target.checked })} className="accent-blue-600 w-4 h-4" />
-                <Label htmlFor="cert_issued" className="text-xs cursor-pointer">수료증/자격증 발급</Label>
+                <Label htmlFor="cert_issued" className="text-xs cursor-pointer">{t('수료증/자격증 발급')}</Label>
               </div>
             </div>
 
             {formData.certificate_issued && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">수료증/자격증 번호</Label>
+                  <Label className="text-xs">{t('수료증/자격증 번호')}</Label>
                   <Input value={formData.certificate_number} onChange={e => setFormData({ ...formData, certificate_number: e.target.value })} className="h-9 text-sm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">유효 만료일</Label>
+                  <Label className="text-xs">{t('유효 만료일')}</Label>
                   <Input type="date" value={formData.certificate_expiry} onChange={e => setFormData({ ...formData, certificate_expiry: e.target.value })} className="h-9 text-sm" />
                 </div>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">비고</Label>
-              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="추가 정보" rows={3} className="text-sm resize-none" />
+              <Label className="text-xs">{t('비고')}</Label>
+              <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder={t('추가 정보')} rows={3} className="text-sm resize-none" />
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">취소</Button>
-            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? '저장 중...' : (record ? '수정' : '추가')}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-8">{t('취소')}</Button>
+            <Button type="submit" size="sm" className="h-8" disabled={loading}>{loading ? t('저장 중...') : (record ? t('수정') : t('추가'))}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

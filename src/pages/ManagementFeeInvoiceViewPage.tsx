@@ -15,6 +15,10 @@ import { exportManagementFeeInvoiceToExcel, DETAIL_GROUPS } from '@/utils/manage
 import { buildActualCostEntriesByShip } from '@/pages/ManagementFeeInvoicePage';
 import type { BankAccountWithBalance } from '@/types/accounting';
 import type { CompanyInfo } from '@/services/company-info.service';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ManagementFeeInvoiceViewPage/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeInvoiceViewPage', en, true, true);
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 const fmt2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -23,6 +27,7 @@ const fmt2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2
 // 승하선 비용상세 3개 시트)와 최대한 동일한 내용을 앱 안에서 바로 확인할 수 있게 한다.
 // 저장·인쇄가 필요하면 "엑셀 다운로드" 버튼으로 실제 엑셀 파일을 받는다.
 export default function ManagementFeeInvoiceViewPage() {
+  const { t } = useTranslation('ManagementFeeInvoiceViewPage');
   const { ownerId, yearMonth } = useParams<{ ownerId: string; yearMonth: string }>();
   const { toast } = useToast();
   const { openNewTab } = useTabContext();
@@ -59,7 +64,7 @@ export default function ManagementFeeInvoiceViewPage() {
 
   const handleExport = async () => {
     if (!data || !settings) return;
-    if (!data.krw_rate_to_usd) { toast({ title: '환율 관리에서 이 달의 KRW 환율을 먼저 입력하세요.', variant: 'destructive' }); return; }
+    if (!data.krw_rate_to_usd) { toast({ title: t('환율 관리에서 이 달의 KRW 환율을 먼저 입력하세요.'), variant: 'destructive' }); return; }
     setExporting(true);
     try {
       const usdAccount = bankAccounts.find(a => a.id === settings.usd_bank_account_id) || null;
@@ -76,18 +81,18 @@ export default function ManagementFeeInvoiceViewPage() {
       await managementFeeInvoiceService.markIssued(settings.id, data.krw_rate_to_usd);
       const refreshed = await managementFeeInvoiceService.getInvoiceSettings(ownerId!, yearMonth!);
       setSettings(refreshed);
-      toast({ title: '엑셀 다운로드 완료' });
+      toast({ title: t('엑셀 다운로드 완료') });
     } finally {
       setExporting(false);
     }
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><p className="text-sm text-gray-500">불러오는 중...</p></div>;
+    return <div className="flex items-center justify-center h-64"><p className="text-sm text-gray-500">{t('불러오는 중...')}</p></div>;
   }
 
   if (!data || !ownerId || !yearMonth) {
-    return <div className="max-w-4xl mx-auto px-4 py-8"><p className="text-sm text-gray-500 text-center">청구서를 찾을 수 없습니다.</p></div>;
+    return <div className="max-w-4xl mx-auto px-4 py-8"><p className="text-sm text-gray-500 text-center">{t('청구서를 찾을 수 없습니다.')}</p></div>;
   }
 
   const usdAccount = bankAccounts.find(a => a.id === settings?.usd_bank_account_id) || null;
@@ -99,14 +104,14 @@ export default function ManagementFeeInvoiceViewPage() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <FileText className="w-5 h-5 text-muted-foreground" />
-            {data.owner_name} — {data.year_month} 관리비 청구서
+            {data.owner_name} — {t('{{yearMonth}} 관리비 청구서', { yearMonth: data.year_month })}
           </h1>
           <div className="flex items-center gap-2 mt-1">
             {settings && (
               <>
                 <span className="text-xs text-gray-500 font-mono">{settings.doc_number}</span>
                 <Badge variant={settings.status === 'issued' ? 'default' : 'secondary'} className="text-xs">
-                  {settings.status === 'issued' ? '발행됨' : '임시저장'}
+                  {settings.status === 'issued' ? t('발행됨') : t('임시저장')}
                 </Badge>
               </>
             )}
@@ -115,34 +120,34 @@ export default function ManagementFeeInvoiceViewPage() {
         <div className="flex items-center gap-2">
           <Button
             size="sm" variant="outline" className="gap-1.5 h-8"
-            onClick={() => openNewTab(`/management-fee-calculation?owner=${ownerId}&month=${yearMonth}`, `관리비 계산: ${data.owner_name} ${yearMonth}`, true)}
+            onClick={() => openNewTab(`/management-fee-calculation?owner=${ownerId}&month=${yearMonth}`, t('관리비 계산: {{owner}} {{month}}', { owner: data.owner_name, month: yearMonth }), true)}
           >
-            <Calculator className="h-4 w-4" />관리비 계산 보기
+            <Calculator className="h-4 w-4" />{t('관리비 계산 보기')}
           </Button>
           <Button size="sm" className="gap-1.5 h-8" onClick={handleExport} disabled={exporting || !data.krw_rate_to_usd}>
-            <FileSpreadsheet className="h-4 w-4" />{exporting ? '생성 중...' : '엑셀 다운로드'}
+            <FileSpreadsheet className="h-4 w-4" />{exporting ? t('생성 중...') : t('엑셀 다운로드')}
           </Button>
         </div>
       </div>
 
       {!data.krw_rate_to_usd && (
         <Alert variant="destructive">
-          <AlertDescription className="text-xs">이 달의 KRW 환율이 환율 관리에 등록되어 있지 않아 엑셀 다운로드를 할 수 없습니다.</AlertDescription>
+          <AlertDescription className="text-xs">{t('이 달의 KRW 환율이 환율 관리에 등록되어 있지 않아 엑셀 다운로드를 할 수 없습니다.')}</AlertDescription>
         </Alert>
       )}
       {data.ships_missing_calc.length > 0 && (
         <Alert variant="destructive">
           <AlertDescription className="text-xs">
-            아직 관리비 계산이 안 된 선박 {data.ships_missing_calc.length}척은 0원으로 표시됩니다: {data.ships_missing_calc.map(s => s.ship_name).join(', ')}
+            {t('아직 관리비 계산이 안 된 선박 {{count}}척은 0원으로 표시됩니다: {{ships}}', { count: data.ships_missing_calc.length, ships: data.ships_missing_calc.map(s => s.ship_name).join(', ') })}
           </AlertDescription>
         </Alert>
       )}
 
       <Tabs defaultValue="cover">
         <TabsList className="h-9">
-          <TabsTrigger value="cover" className="text-xs">표지</TabsTrigger>
-          <TabsTrigger value="detail" className="text-xs">비용상세내역</TabsTrigger>
-          <TabsTrigger value="actualcost" className="text-xs">승하선 비용상세</TabsTrigger>
+          <TabsTrigger value="cover" className="text-xs">{t('표지')}</TabsTrigger>
+          <TabsTrigger value="detail" className="text-xs">{t('비용상세내역')}</TabsTrigger>
+          <TabsTrigger value="actualcost" className="text-xs">{t('승하선 비용상세')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="cover" className="mt-3">
@@ -173,6 +178,7 @@ function CoverSheetView({
   usdAccount: BankAccountWithBalance | null;
   krwAccount: BankAccountWithBalance | null;
 }) {
+  const { t } = useTranslation('ManagementFeeInvoiceViewPage');
   return (
     <div className="bg-white border rounded-md p-6 space-y-4 text-sm">
       <div className="text-center space-y-0.5">
@@ -184,15 +190,15 @@ function CoverSheetView({
       </div>
 
       <div className="space-y-1 text-xs">
-        <div><span className="text-gray-500 inline-block w-20">문서번호 :</span><span className="font-semibold">{docNumber}</span></div>
-        <div><span className="text-gray-500 inline-block w-20">수&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;신 :</span><span className="font-semibold">{data.owner_name}</span></div>
-        <div><span className="text-gray-500 inline-block w-20">발&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;신 :</span><span className="font-semibold">{companyInfo?.name || ''}</span></div>
-        <div><span className="text-gray-500 inline-block w-20">제&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;목 :</span><span className="font-semibold">{data.year_month} 선원 관리비 및 기타 발생 경비 청구</span></div>
+        <div><span className="text-gray-500 inline-block w-20">{t('문서번호 :')}</span><span className="font-semibold">{docNumber}</span></div>
+        <div><span className="text-gray-500 inline-block w-20">{t('수      신 :')}</span><span className="font-semibold">{data.owner_name}</span></div>
+        <div><span className="text-gray-500 inline-block w-20">{t('발      신 :')}</span><span className="font-semibold">{companyInfo?.name || ''}</span></div>
+        <div><span className="text-gray-500 inline-block w-20">{t('제      목 :')}</span><span className="font-semibold">{t('{{yearMonth}} 선원 관리비 및 기타 발생 경비 청구', { yearMonth: data.year_month })}</span></div>
       </div>
 
       <div className="text-xs space-y-1.5">
-        <p>1. 귀사의 일익 번창하심을 기원합니다.</p>
-        <p>2. {data.year_month} 관리비 청구서를 제출하오니 아래의 계좌로 송금해 주시면 감사하겠습니다.</p>
+        <p>{t('1. 귀사의 일익 번창하심을 기원합니다.')}</p>
+        <p>{t('2. {{yearMonth}} 관리비 청구서를 제출하오니 아래의 계좌로 송금해 주시면 감사하겠습니다.', { yearMonth: data.year_month })}</p>
       </div>
 
       <div className="overflow-x-auto">
@@ -201,8 +207,8 @@ function CoverSheetView({
             <tr>
               <th className={th}>MONTH</th>
               <th className={`${th} text-left`} colSpan={4}>VESSEL</th>
-              <th className={th}>외화청구 상세내역</th>
-              <th className={th}>원화청구 상세내역</th>
+              <th className={th}>{t('외화청구 상세내역')}</th>
+              <th className={th}>{t('원화청구 상세내역')}</th>
             </tr>
           </thead>
           <tbody>
@@ -225,29 +231,29 @@ function CoverSheetView({
       </div>
 
       {data.krw_rate_to_usd && (
-        <p className="text-[11px] text-gray-400">적용 환율: 1 USD = {fmt(data.krw_rate_to_usd)} KRW</p>
+        <p className="text-[11px] text-gray-400">{t('적용 환율: 1 USD = {{rate}} KRW', { rate: fmt(data.krw_rate_to_usd) })}</p>
       )}
 
       <div className="grid grid-cols-2 gap-6 pt-2">
         <div>
-          <div className="text-xs font-semibold mb-1">&lt; 외화계좌 &gt;</div>
+          <div className="text-xs font-semibold mb-1">{t('< 외화계좌 >')}</div>
           {usdAccount ? (
             <div className="text-xs text-gray-600 space-y-0.5">
-              <div>예금주: {usdAccount.account_holder}</div>
-              <div>은행명: {usdAccount.bank_name}</div>
-              <div>계좌번호: {usdAccount.account_number}</div>
+              <div>{t('예금주:')} {usdAccount.account_holder}</div>
+              <div>{t('은행명:')} {usdAccount.bank_name}</div>
+              <div>{t('계좌번호:')} {usdAccount.account_number}</div>
             </div>
-          ) : <div className="text-xs text-gray-400">등록된 계좌 없음</div>}
+          ) : <div className="text-xs text-gray-400">{t('등록된 계좌 없음')}</div>}
         </div>
         <div>
-          <div className="text-xs font-semibold mb-1">&lt; 원화계좌 &gt;</div>
+          <div className="text-xs font-semibold mb-1">{t('< 원화계좌 >')}</div>
           {krwAccount ? (
             <div className="text-xs text-gray-600 space-y-0.5">
-              <div>예금주: {krwAccount.account_holder}</div>
-              <div>은행명: {krwAccount.bank_name}</div>
-              <div>계좌번호: {krwAccount.account_number}</div>
+              <div>{t('예금주:')} {krwAccount.account_holder}</div>
+              <div>{t('은행명:')} {krwAccount.bank_name}</div>
+              <div>{t('계좌번호:')} {krwAccount.account_number}</div>
             </div>
-          ) : <div className="text-xs text-gray-400">등록된 계좌 없음</div>}
+          ) : <div className="text-xs text-gray-400">{t('등록된 계좌 없음')}</div>}
         </div>
       </div>
 
@@ -260,9 +266,10 @@ function CoverSheetView({
 }
 
 function DetailSheetView({ data }: { data: ManagementFeeInvoiceData }) {
+  const { t } = useTranslation('ManagementFeeInvoiceViewPage');
   return (
     <div className="bg-white border rounded-md p-4">
-      <div className="text-center font-bold text-sm mb-3">비용 상세 내역서</div>
+      <div className="text-center font-bold text-sm mb-3">{t('비용 상세 내역서')}</div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -287,12 +294,12 @@ function DetailSheetView({ data }: { data: ManagementFeeInvoiceData }) {
               );
             }))}
             <tr className={totalRow}>
-              <td className={td} colSpan={2}>외화 총액</td>
+              <td className={td} colSpan={2}>{t('외화 총액')}</td>
               {data.ships.map(s => <td key={s.ship_id} className={tdRight}>{fmt2(s.usd_total)}</td>)}
               <td className={tdRight}>{fmt2(data.grand_total_usd)}</td>
             </tr>
             <tr className={totalRow}>
-              <td className={td} colSpan={2}>원화 총액</td>
+              <td className={td} colSpan={2}>{t('원화 총액')}</td>
               {data.ships.map(s => <td key={s.ship_id} className={tdRight}>{fmt(s.krw_total)}</td>)}
               <td className={tdRight}>{fmt(data.grand_total_krw)}</td>
             </tr>
@@ -309,14 +316,15 @@ function ActualCostSheetView({
   data: ManagementFeeInvoiceData;
   actualCostEntriesByShip: Record<string, ManagementFeeLedgerActualCostEntry[]>;
 }) {
-  const headerLabels = ['선박', '비용', '화폐단위', '개별 금액', '개수/인원', '금액(USD)', '비고'];
+  const { t } = useTranslation('ManagementFeeInvoiceViewPage');
+  const headerLabels = [t('선박'), t('비용'), t('화폐단위'), t('개별 금액'), t('개수/인원'), t('금액(USD)'), t('비고')];
   const rows = data.ships.flatMap(ship => (actualCostEntriesByShip[ship.ship_id] || []).map(e => ({ ship, e })));
 
   return (
     <div className="bg-white border rounded-md p-4">
-      <div className="text-center font-bold text-sm mb-3">승/하선 비용내역서</div>
+      <div className="text-center font-bold text-sm mb-3">{t('승/하선 비용내역서')}</div>
       {rows.length === 0 ? (
-        <div className="text-center py-6 text-sm text-gray-400">실비 기록이 없습니다.</div>
+        <div className="text-center py-6 text-sm text-gray-400">{t('실비 기록이 없습니다.')}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">

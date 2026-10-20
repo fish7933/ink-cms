@@ -1,0 +1,9 @@
+{
+  "이 선적국을 삭제하시겠습니까?": "Are you sure you want to delete this flag state?",
+  "선적국 삭제 중 오류가 발생했습니다.": "An error occurred while deleting the flag state.",
+  "선적국 저장 중 오류가 발생했습니다.": "An error occurred while saving the flag state.",
+  "로딩 중...": "Loading...",
+  "선적국 관리": "Flag State Management",
+  "선박 등록 국가를 관리하세요": "Manage ship registration countries",
+  "선적국 추가": "Add Flag State"
+}

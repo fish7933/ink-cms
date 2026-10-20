@@ -22,9 +22,14 @@ import ShipTypeTable from '@/components/ship-classification/ShipTypeTable';
 import ShipTypeDialog from '@/components/ship-classification/ShipTypeDialog';
 import SizeClassificationTable from '@/components/ship-classification/SizeClassificationTable';
 import SizeClassificationDialog from '@/components/ship-classification/SizeClassificationDialog';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ShipTypeManagementPage/en.json';
+i18n.addResourceBundle('en', 'ShipTypeManagementPage', en, true, true);
 
 export default function ShipTypeManagementPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('ShipTypeManagementPage');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [shipTypes, setShipTypes] = useState<ShipType[]>([]);
   const [sizeClassifications, setSizeClassifications] = useState<ShipSizeClassification[]>([]);
@@ -78,14 +83,14 @@ export default function ShipTypeManagementPage() {
   };
 
   const handleDeleteShipType = async (id: string) => {
-    if (!confirm('이 선종을 삭제하시겠습니까?')) return;
-    
+    if (!confirm(t('이 선종을 삭제하시겠습니까?'))) return;
+
     try {
       await deleteShipType(id);
       await loadData();
     } catch (error) {
       console.error('Error deleting ship type:', error);
-      alert('선종 삭제 중 오류가 발생했습니다.');
+      alert(t('선종 삭제 중 오류가 발생했습니다.'));
     }
   };
 
@@ -100,7 +105,7 @@ export default function ShipTypeManagementPage() {
       setIsShipTypeDialogOpen(false);
     } catch (error) {
       console.error('Error saving ship type:', error);
-      alert('선종 저장 중 오류가 발생했습니다.');
+      alert(t('선종 저장 중 오류가 발생했습니다.'));
     }
   };
 
@@ -115,14 +120,14 @@ export default function ShipTypeManagementPage() {
   };
 
   const handleDeleteSizeClassification = async (id: string) => {
-    if (!confirm('이 분류를 삭제하시겠습니까?')) return;
-    
+    if (!confirm(t('이 분류를 삭제하시겠습니까?'))) return;
+
     try {
       await deleteSizeClassification(id);
       await loadData();
     } catch (error) {
       console.error('Error deleting classification:', error);
-      alert('분류 삭제 중 오류가 발생했습니다.');
+      alert(t('분류 삭제 중 오류가 발생했습니다.'));
     }
   };
 
@@ -137,7 +142,7 @@ export default function ShipTypeManagementPage() {
       setIsSizeDialogOpen(false);
     } catch (error) {
       console.error('Error saving classification:', error);
-      alert('분류 저장 중 오류가 발생했습니다.');
+      alert(t('분류 저장 중 오류가 발생했습니다.'));
     }
   };
 
@@ -147,7 +152,7 @@ export default function ShipTypeManagementPage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-            <p className="text-sm text-gray-600">로딩 중...</p>
+            <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
           </div>
         </div>
       </>
@@ -165,20 +170,20 @@ export default function ShipTypeManagementPage() {
                 <div>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Ship className="w-5 h-5" />
-                    선종 관리
+                    {t('선종 관리')}
                   </CardTitle>
                   <CardDescription className="text-xs mt-1">
-                    선박의 종류를 관리하세요
+                    {t('선박의 종류를 관리하세요')}
                   </CardDescription>
                 </div>
                 {permissions.canCreate && (
-                  <Button 
+                  <Button
                     size="sm"
                     className="gap-1.5 h-8"
                     onClick={handleAddShipType}
                   >
                     <Plus className="w-4 h-4" />
-                    선종 추가
+                    {t('선종 추가')}
                   </Button>
                 )}
               </div>
@@ -201,20 +206,20 @@ export default function ShipTypeManagementPage() {
                 <div>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Ruler className="w-5 h-5" />
-                    선박 크기 분류 관리
+                    {t('선박 크기 분류 관리')}
                   </CardTitle>
                   <CardDescription className="text-xs mt-1">
-                    GT/DWT 기준 선박 크기 분류를 관리하세요
+                    {t('GT/DWT 기준 선박 크기 분류를 관리하세요')}
                   </CardDescription>
                 </div>
                 {permissions.canCreate && (
-                  <Button 
+                  <Button
                     size="sm"
                     className="gap-1.5 h-8"
                     onClick={handleAddSizeClassification}
                   >
                     <Plus className="w-4 h-4" />
-                    분류 추가
+                    {t('분류 추가')}
                   </Button>
                 )}
               </div>

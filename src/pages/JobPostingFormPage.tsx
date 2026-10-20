@@ -13,10 +13,15 @@ import { JobPostingForm } from '@/components/job-postings/JobPostingForm';
 import { useJobPostingData } from '@/components/job-postings/useJobPostingData';
 import type { JobPostingGroupWithDetails } from '@/types/models';
 import type { RankWithSalary, SelectedRankDetail, SalaryTemplateItem } from '@/components/job-postings/types';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/JobPostingFormPage/en.json';
+i18n.addResourceBundle('en', 'JobPostingFormPage', en, true, true);
 
 export default function JobPostingFormPage() {
   const { id } = useParams<{ id?: string }>();
   const { closeTab, activeTabId, updateTab, openTab, openNewTab } = useTabContext();
+  const { t } = useTranslation('JobPostingFormPage');
 
   const [posting, setPosting] = useState<JobPostingGroupWithDetails | null>(null);
   const [loadingPosting, setLoadingPosting] = useState(Boolean(id));
@@ -28,7 +33,7 @@ export default function JobPostingFormPage() {
       const data = await jobPostingGroupService.getById(id);
       setPosting(data);
       if (data && activeTabId) {
-        updateTab(activeTabId, { title: `공고 수정: ${data.ship_name}` });
+        updateTab(activeTabId, { title: t('공고 수정: {{shipName}}', { shipName: data.ship_name }) });
       }
       setLoadingPosting(false);
     })();
@@ -70,7 +75,7 @@ export default function JobPostingFormPage() {
     // 항상 구인 공고 목록 탭으로 명시적으로 돌아가면서 새로고침한다(이전에 열려있던 목록의
     // 인라인 추천 현황 등 잔여 상태가 남아있는 것처럼 보이는 문제를 방지).
     if (activeTabId) closeTab(activeTabId);
-    openTab('/job-postings', '구인 공고');
+    openTab('/job-postings', t('구인 공고'));
   };
 
   const handleCompanyChange = async (companyId: string) => {
@@ -207,30 +212,30 @@ export default function JobPostingFormPage() {
 
   const handleRecommendCrew = (rankDetail: SelectedRankDetail) => {
     if (!posting) return;
-    openNewTab(`/job-postings/${posting.id}/recommend/${rankDetail.rank_id}`, `${rankDetail.rank_code} 선원 추천`, true);
+    openNewTab(`/job-postings/${posting.id}/recommend/${rankDetail.rank_id}`, t('{{code}} 선원 추천', { code: rankDetail.rank_code }), true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.company_id || !formData.ship_id || !formData.embarkation_date) {
-      alert('필수 항목을 모두 입력해주세요.');
+      alert(t('필수 항목을 모두 입력해주세요.'));
       return;
     }
 
     if (selectedRankDetails.length === 0) {
-      alert('구인할 직급을 최소 1개 이상 선택해주세요.');
+      alert(t('구인할 직급을 최소 1개 이상 선택해주세요.'));
       return;
     }
 
     if (formData.visible_to_agencies.length === 0) {
-      alert('공개 대상 매닝사를 최소 1개 이상 선택해주세요.');
+      alert(t('공개 대상 매닝사를 최소 1개 이상 선택해주세요.'));
       return;
     }
 
     if (duplicateWarnings.length > 0) {
       const warningMessage = duplicateWarnings.map(w =>
-        `${w.rank_code}: ${w.existing_postings.length}개의 유사한 공고 존재`
+        t('{{code}}: {{count}}개의 유사한 공고 존재', { code: w.rank_code, count: w.existing_postings.length })
       ).join('\n');
       const confirmed = confirm(msg.jobPosting.duplicateWarning(warningMessage));
       if (!confirmed) return;
@@ -303,7 +308,7 @@ export default function JobPostingFormPage() {
       finish(true);
     } catch (error) {
       console.error('Failed to save job posting:', error);
-      alert(msg.jobPosting.saveFailed(error instanceof Error ? error.message : '알 수 없는 오류'));
+      alert(msg.jobPosting.saveFailed(error instanceof Error ? error.message : t('알 수 없는 오류')));
     }
   };
 
@@ -312,7 +317,7 @@ export default function JobPostingFormPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
-          <p className="text-sm text-gray-600">로딩 중...</p>
+          <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
         </div>
       </div>
     );
@@ -323,7 +328,7 @@ export default function JobPostingFormPage() {
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
         <div className="mb-3">
           <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={() => finish(false)}>
-            <ArrowLeft className="w-4 h-4" />목록
+            <ArrowLeft className="w-4 h-4" />{t('목록')}
           </Button>
         </div>
         <JobPostingReadOnlyView
@@ -342,16 +347,16 @@ export default function JobPostingFormPage() {
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4">
       <div className="mb-3">
         <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={() => finish(false)}>
-          <ArrowLeft className="w-4 h-4" />목록
+          <ArrowLeft className="w-4 h-4" />{t('목록')}
         </Button>
       </div>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{posting ? '구인 공고 수정' : '다직급 구인 공고 등록'}</CardTitle>
+          <CardTitle className="text-base">{posting ? t('구인 공고 수정') : t('다직급 구인 공고 등록')}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoadingExistingData && (
-            <div className="text-center py-4 text-muted-foreground">기존 데이터를 불러오는 중...</div>
+            <div className="text-center py-4 text-muted-foreground">{t('기존 데이터를 불러오는 중...')}</div>
           )}
 
           <JobPostingForm

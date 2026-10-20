@@ -1,0 +1,19 @@
+{
+  "월정기(일할)": "Monthly (Prorated)",
+  "월정기(전액)": "Monthly (Full Amount)",
+  "1회성(승선월)": "One-time (Boarding Month)",
+  "실비(수기)": "Actual Cost (Manual)",
+  "등록된 청구 항목이 없습니다.": "No billing items registered.",
+  "청구 항목": "Billing Item",
+  "직급구분": "Rank Category",
+  "국적": "Nationality",
+  "과금 방식": "Billing Basis",
+  "금액": "Amount",
+  "상한": "Cap",
+  "부가세": "VAT",
+  "사관": "Officer",
+  "부원": "Rating",
+  "전체": "All",
+  "수기 입력": "Manual entry",
+  "대상": "Applicable"
+}

@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/SalaryComponentsPage/en.json';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +48,10 @@ const OWNER_BILLING_COLOR: Record<string, string> = {
   on_disembark: 'bg-orange-50 text-orange-700 border-orange-200',
 };
 
+i18n.addResourceBundle('en', 'SalaryComponentsPage', en, true, true);
+
 export default function SalaryComponentsPage() {
+  const { t } = useTranslation('SalaryComponentsPage');
   const navigate = useNavigate();
   const [components, setComponents] = useState<SalaryComponent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,27 +136,27 @@ export default function SalaryComponentsPage() {
 
   const handleSave = async () => {
     setError('');
-    if (!formData.name.trim()) { setError('항목명을 입력해주세요.'); return; }
+    if (!formData.name.trim()) { setError(t('항목명을 입력해주세요.')); return; }
     try {
       setSaving(true);
       if (formView?.id) {
         const updated = await updateSalaryComponent(formView.id, formData);
         if (updated) { await loadComponents(); closeForm(); }
-        else setError('수정에 실패했습니다.');
+        else setError(t('수정에 실패했습니다.'));
       } else {
         const added = await addSalaryComponent({ ...formData, is_active: true });
         if (added) { await loadComponents(); closeForm(); }
-        else setError('추가에 실패했습니다.');
+        else setError(t('추가에 실패했습니다.'));
       }
-    } catch { setError('오류가 발생했습니다.'); }
+    } catch { setError(t('오류가 발생했습니다.')); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('이 항목을 삭제하시겠습니까?')) return;
+    if (!confirm(t('이 항목을 삭제하시겠습니까?'))) return;
     const success = await deleteSalaryComponent(id);
     if (success) await loadComponents();
-    else alert('삭제에 실패했습니다.');
+    else alert(t('삭제에 실패했습니다.'));
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -177,7 +183,7 @@ export default function SalaryComponentsPage() {
     try {
       await Promise.all(updates.map(u => updateSalaryComponent(u.id, { display_order: u.display_order })));
     } catch {
-      alert('순서 저장 중 오류가 발생했습니다.');
+      alert(t('순서 저장 중 오류가 발생했습니다.'));
       await loadComponents();
     }
   };
@@ -186,7 +192,7 @@ export default function SalaryComponentsPage() {
     return (
       <ProtectedRoute resource="salary_components">
         <div className="flex items-center justify-center h-64">
-          <p className="text-sm text-gray-500">로딩 중...</p>
+          <p className="text-sm text-gray-500">{t('로딩 중...')}</p>
         </div>
       </ProtectedRoute>
     );
@@ -206,7 +212,7 @@ export default function SalaryComponentsPage() {
             }`}
             onClick={() => { setActiveTab('earning'); setFormView(null); }}
           >
-            급여 구성
+            {t('급여 구성')}
             <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
               {earningComponents.length}
             </span>
@@ -219,7 +225,7 @@ export default function SalaryComponentsPage() {
             }`}
             onClick={() => { setActiveTab('deduction'); setFormView(null); }}
           >
-            공제 항목
+            {t('공제 항목')}
             <span className="ml-1.5 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">
               {deductionComponents.length}
             </span>
@@ -233,31 +239,31 @@ export default function SalaryComponentsPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm">
                   {formView.id
-                    ? (activeTab === 'earning' ? '급여 항목 수정' : '공제 항목 수정')
-                    : (activeTab === 'earning' ? '급여 항목 추가' : '공제 항목 추가')}
+                    ? (activeTab === 'earning' ? t('급여 항목 수정') : t('공제 항목 수정'))
+                    : (activeTab === 'earning' ? t('급여 항목 추가') : t('공제 항목 추가'))}
                 </CardTitle>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={closeForm}>취소</Button>
+                  <Button variant="ghost" size="sm" onClick={closeForm}>{t('취소')}</Button>
                   <Button size="sm" onClick={handleSave} disabled={saving}>
                     <Save className="w-3.5 h-3.5 mr-1" />
-                    {saving ? '저장 중...' : '저장'}
+                    {saving ? t('저장 중...') : t('저장')}
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">항목명 *</Label>
+                <Label className="text-xs">{t('항목명 *')}</Label>
                 <Input
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  placeholder={activeTab === 'earning' ? '예: 기본급, 시간외 수당' : '예: 본선불, 노조비'}
+                  placeholder={activeTab === 'earning' ? t('예: 기본급, 시간외 수당') : t('예: 본선불, 노조비')}
                   className="h-8 text-sm"
                 />
               </div>
               {activeTab === 'earning' && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">지급 방식 (선원 기준)</Label>
+                  <Label className="text-xs">{t('지급 방식 (선원 기준)')}</Label>
                   <div className="flex gap-2">
                     {(['monthly', 'deferred'] as const).map(type => (
                       <button

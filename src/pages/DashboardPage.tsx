@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/DashboardPage/en.json';
 import { getShips, getCrewMembers, getJobPostings, getJobApplications, getCurrentUser } from '@/lib/store';
 import type { User, Ship, CrewMember, JobPosting, JobApplication } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +22,8 @@ import { getMyPayslips } from '@/services/employee-salary.service';
 import type { EmployeePayslipWithDetails } from '@/types/employee-salary';
 import type { JobPostingGroupWithDetails, CrewRecommendationWithDetails } from '@/types/models';
 
+i18n.addResourceBundle('en', 'DashboardPage', en, true, true);
+
 const fmtWon = (n: number) => n.toLocaleString('ko-KR');
 
 interface MyPendingItem {
@@ -38,6 +43,7 @@ const REC_STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const { t } = useTranslation('DashboardPage');
   const { openNewTab } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [ships, setShips] = useState<Ship[]>([]);
@@ -124,10 +130,10 @@ export default function DashboardPage() {
 
     // 채용/배승/계약/승진강등 — 4개 도메인 모두 발령 결재함(/dispatch-approval-inbox)으로 모인다.
     const myTurnCrew: MyPendingItem[] = [
-      ...crewApprovals.filter(isMyTurn).map(a => ({ ...a, title: '선원추천 결재' })),
-      ...rotationApprovals.filter(isMyTurn).map(a => ({ ...a, title: '배승 결재' })),
-      ...contractApprovals.filter(isMyTurn).map(a => ({ ...a, title: '계약 결재' })),
-      ...dispatchApprovals.filter(isMyTurn).map(a => ({ ...a, title: '승진/강등 결재' })),
+      ...crewApprovals.filter(isMyTurn).map(a => ({ ...a, title: t('선원추천 결재') })),
+      ...rotationApprovals.filter(isMyTurn).map(a => ({ ...a, title: t('배승 결재') })),
+      ...contractApprovals.filter(isMyTurn).map(a => ({ ...a, title: t('계약 결재') })),
+      ...dispatchApprovals.filter(isMyTurn).map(a => ({ ...a, title: t('승진/강등 결재') })),
     ].map(a => ({ id: a.id, kind: 'crew' as const, title: a.title, requesterName: a.requester_name, createdAt: a.created_at }));
 
     const myTurnDocs: MyPendingItem[] = documents
@@ -192,33 +198,33 @@ export default function DashboardPage() {
           myJobs.some(j => j.id === a.job_posting_id)
         );
         return [
-          { label: '보유 선박', value: myShips.length, icon: ShipIcon },
-          { label: '구인 중', value: myJobs.filter(j => j.status === 'open').length, icon: Briefcase },
-          { label: '대기 지원', value: myApplications.filter(a => a.status === 'sent_to_owner').length, icon: FileText },
+          { label: t('보유 선박'), value: myShips.length, icon: ShipIcon },
+          { label: t('구인 중'), value: myJobs.filter(j => j.status === 'open').length, icon: Briefcase },
+          { label: t('대기 지원'), value: myApplications.filter(a => a.status === 'sent_to_owner').length, icon: FileText },
         ];
       }
       case 'ship_manager':
         return [
-          { label: '전체 선박', value: ships.length, icon: ShipIcon },
-          { label: '전체 선원', value: crewMembers.length, icon: Users },
-          { label: '구인 공고', value: jobPostings.length, icon: Briefcase },
-          { label: '지원서', value: jobApplications.length, icon: FileText },
+          { label: t('전체 선박'), value: ships.length, icon: ShipIcon },
+          { label: t('전체 선원'), value: crewMembers.length, icon: Users },
+          { label: t('구인 공고'), value: jobPostings.length, icon: Briefcase },
+          { label: t('지원서'), value: jobApplications.length, icon: FileText },
         ];
       case 'manning_agency': {
         const myCrews = crewMembers.filter(c => c.manning_agency_id === currentUser.company_id);
         return [
-          { label: '소속 선원', value: myCrews.length, icon: Users },
-          { label: '진행중 공고', value: postings.length, icon: Briefcase },
-          { label: '긴급 공고', value: postings.filter(p => p.urgency === 'urgent').length, icon: AlertTriangle },
-          { label: '내 추천 건수', value: myRecs.length, icon: FileText },
+          { label: t('소속 선원'), value: myCrews.length, icon: Users },
+          { label: t('진행중 공고'), value: postings.length, icon: Briefcase },
+          { label: t('긴급 공고'), value: postings.filter(p => p.urgency === 'urgent').length, icon: AlertTriangle },
+          { label: t('내 추천 건수'), value: myRecs.length, icon: FileText },
         ];
       }
       case 'crew': {
         const myApplications = jobApplications.filter(a => a.crew_member_id === currentUser.id);
         return [
-          { label: '지원 공고', value: myApplications.length, icon: Briefcase },
-          { label: '검토 중', value: myApplications.filter(a => a.status === 'under_review').length, icon: FileText },
-          { label: '최종 단계', value: myApplications.filter(a => a.status === 'sent_to_owner').length, icon: ShipIcon },
+          { label: t('지원 공고'), value: myApplications.length, icon: Briefcase },
+          { label: t('검토 중'), value: myApplications.filter(a => a.status === 'under_review').length, icon: FileText },
+          { label: t('최종 단계'), value: myApplications.filter(a => a.status === 'sent_to_owner').length, icon: ShipIcon },
         ];
       }
       default:
@@ -231,18 +237,18 @@ export default function DashboardPage() {
     
     switch (currentUser.role) {
       case 'ship_owner':
-        return '선박 및 구인 현황을 확인하고 선원 고용을 승인/거절하세요.';
+        return t('선박 및 구인 현황을 확인하고 선원 고용을 승인/거절하세요.');
       case 'ship_manager':
-        return '선박·선원 현황을 확인하고 업무를 처리하세요.';
+        return t('선박·선원 현황을 확인하고 업무를 처리하세요.');
       case 'manning_agency':
-        return '소속 선원을 대신하여 구인 공고에 지원하고 관리하세요.';
+        return t('소속 선원을 대신하여 구인 공고에 지원하고 관리하세요.');
       case 'crew':
-        return '구직 활동을 하고 지원 현황을 확인하세요.';
+        return t('구직 활동을 하고 지원 현황을 확인하세요.');
       case 'admin':
       case 'system_admin':
-        return '전체 시스템을 관리하고 운영하세요.';
+        return t('전체 시스템을 관리하고 운영하세요.');
       default:
-        return '시스템에 오신 것을 환영합니다.';
+        return t('시스템에 오신 것을 환영합니다.');
     }
   };
 
@@ -252,7 +258,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-            <p className="text-sm text-gray-600">로딩 중...</p>
+            <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
           </div>
         </div>
       </>
@@ -267,7 +273,7 @@ export default function DashboardPage() {
         {/* Compact Welcome */}
         <div className="mb-4">
           <h2 className="text-xl font-bold text-gray-900 mb-1">
-            환영합니다, {currentUser.name}님
+            {t('환영합니다, {{name}}님', { name: currentUser.name })}
           </h2>
           <p className="text-sm text-gray-600">{getRoleDescription()}</p>
         </div>
@@ -278,16 +284,16 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Inbox className="w-4 h-4" />내 결재함 — 처리할 항목 ({myPendingApprovals.length})
+                  <Inbox className="w-4 h-4" />{t('내 결재함 — 처리할 항목 ({{count}})', { count: myPendingApprovals.length })}
                 </CardTitle>
-                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => openNewTab('/approval-inbox', '결재함')}>
-                  전체 보기<ChevronRight className="w-3.5 h-3.5" />
+                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => openNewTab('/approval-inbox', t('결재함'))}>
+                  {t('전체 보기')}<ChevronRight className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
               {myPendingApprovals.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">지금 결재하거나 확인할 문서가 없습니다.</p>
+                <p className="text-sm text-gray-400 text-center py-6">{t('지금 결재하거나 확인할 문서가 없습니다.')}</p>
               ) : (
                 <div className="space-y-1.5">
                   {myPendingApprovals.slice(0, 5).map(item => (
@@ -295,22 +301,22 @@ export default function DashboardPage() {
                       key={`${item.kind}-${item.id}`}
                       className="flex items-center justify-between p-2.5 border rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => item.kind === 'crew'
-                        ? openNewTab('/dispatch-approval-inbox', '발령 결재함')
+                        ? openNewTab('/dispatch-approval-inbox', t('발령 결재함'))
                         : openNewTab(`/documents/${item.id}`, item.title)}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {item.kind === 'crew' ? <Users className="w-4 h-4 text-blue-500 shrink-0" /> : <FileText className="w-4 h-4 text-blue-500 shrink-0" />}
                         <span className="text-sm font-medium truncate">{item.title}</span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${item.kind === 'reference' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {item.kind === 'reference' ? '참조 미열람' : '결재 대기'}
+                          {item.kind === 'reference' ? t('참조 미열람') : t('결재 대기')}
                         </span>
-                        <span className="text-xs text-gray-400 shrink-0">{item.requesterName} 기안</span>
+                        <span className="text-xs text-gray-400 shrink-0">{t('{{name}} 기안', { name: item.requesterName })}</span>
                       </div>
                       <span className="text-xs text-gray-400 shrink-0">{new Date(item.createdAt).toLocaleDateString('ko-KR')}</span>
                     </div>
                   ))}
                   {myPendingApprovals.length > 5 && (
-                    <p className="text-xs text-gray-400 text-center pt-1">외 {myPendingApprovals.length - 5}건 더 있습니다.</p>
+                    <p className="text-xs text-gray-400 text-center pt-1">{t('외 {{count}}건 더 있습니다.', { count: myPendingApprovals.length - 5 })}</p>
                   )}
                 </div>
               )}
@@ -324,10 +330,10 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Wallet className="w-4 h-4" />확인 필요한 급여명세서 ({pendingPayslips.length})
+                  <Wallet className="w-4 h-4" />{t('확인 필요한 급여명세서 ({{count}})', { count: pendingPayslips.length })}
                 </CardTitle>
-                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => openNewTab('/my-payslips', '내 급여명세서')}>
-                  전체 보기<ChevronRight className="w-3.5 h-3.5" />
+                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={() => openNewTab('/my-payslips', t('내 급여명세서'))}>
+                  {t('전체 보기')}<ChevronRight className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </CardHeader>
@@ -337,18 +343,18 @@ export default function DashboardPage() {
                   <div
                     key={p.id}
                     className="flex items-center justify-between p-2.5 border rounded-md hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => openNewTab('/my-payslips', '내 급여명세서')}
+                    onClick={() => openNewTab('/my-payslips', t('내 급여명세서'))}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <Wallet className="w-4 h-4 text-blue-500 shrink-0" />
-                      <span className="text-sm font-medium truncate">{p.period_year_month} 급여명세서</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-amber-100 text-amber-700">확인 필요</span>
+                      <span className="text-sm font-medium truncate">{t('{{period}} 급여명세서', { period: p.period_year_month })}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0 bg-amber-100 text-amber-700">{t('확인 필요')}</span>
                     </div>
-                    <span className="text-xs text-gray-500 font-mono shrink-0">{fmtWon(p.net_amount)}원</span>
+                    <span className="text-xs text-gray-500 font-mono shrink-0">{t('{{amount}}원', { amount: fmtWon(p.net_amount) })}</span>
                   </div>
                 ))}
                 {pendingPayslips.length > 5 && (
-                  <p className="text-xs text-gray-400 text-center pt-1">외 {pendingPayslips.length - 5}건 더 있습니다.</p>
+                  <p className="text-xs text-gray-400 text-center pt-1">{t('외 {{count}}건 더 있습니다.', { count: pendingPayslips.length - 5 })}</p>
                 )}
               </div>
             </CardContent>
@@ -360,12 +366,12 @@ export default function DashboardPage() {
           <Card className="mb-4">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Briefcase className="w-4 h-4" />채용 공고 ({sortedPostings.length})
+                <Briefcase className="w-4 h-4" />{t('채용 공고 ({{count}})', { count: sortedPostings.length })}
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               {sortedPostings.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">현재 진행중인 채용 공고가 없습니다.</p>
+                <p className="text-sm text-gray-400 text-center py-6">{t('현재 진행중인 채용 공고가 없습니다.')}</p>
               ) : (
                 <div className="space-y-2">
                   {sortedPostings.map(posting => {
@@ -378,38 +384,38 @@ export default function DashboardPage() {
                       <div
                         key={posting.id}
                         className="border rounded-md p-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => openNewTab('/job-postings', '구인 공고')}
+                        onClick={() => openNewTab('/job-postings', t('구인 공고'))}
                       >
                         <div className="flex items-center justify-between flex-wrap gap-2 mb-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{posting.ship_name || '선박 미정'}</span>
+                            <span className="font-medium text-sm">{posting.ship_name || t('선박 미정')}</span>
                             <span className="text-xs text-gray-400">
                               {posting.company_name}{posting.fleet_name ? ` · ${posting.fleet_name}` : ''}
                             </span>
                             {posting.urgency === 'urgent' && <UrgentBadge />}
                           </div>
                           <span className="text-xs text-gray-400">
-                            승선(예정)일 {new Date(posting.embarkation_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                            {t('승선(예정)일')} {new Date(posting.embarkation_date).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-1.5">
                           {posting.ranks.map(r => (
                             <span key={r.id} className="text-[11px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                              {r.rank_code} ({r.positions_available}명)
+                              {r.rank_code} ({t('{{count}}명', { count: r.positions_available })})
                             </span>
                           ))}
                         </div>
                         {recs.length > 0 ? (
                           <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                            <span className="text-gray-500">채용과정:</span>
+                            <span className="text-gray-500">{t('채용과정:')}</span>
                             {Object.entries(statusCounts).map(([status, count]) => (
                               <span key={status} className={`px-1.5 py-0.5 rounded-full ${REC_STATUS_COLORS[status] || 'bg-gray-100 text-gray-600'}`}>
-                                {REC_STATUS_LABELS[status] || status} {count}
+                                {t(REC_STATUS_LABELS[status] || status)} {count}
                               </span>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-xs text-gray-400">아직 추천한 선원이 없습니다.</p>
+                          <p className="text-xs text-gray-400">{t('아직 추천한 선원이 없습니다.')}</p>
                         )}
                       </div>
                     );
@@ -446,36 +452,36 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
-              {currentUser.role === 'ship_owner' && '선주 권한 안내'}
-              {currentUser.role === 'ship_manager' && '최근 활동'}
-              {currentUser.role === 'manning_agency' && '매닝사 권한 안내'}
-              {currentUser.role === 'crew' && '선원 권한 안내'}
+              {currentUser.role === 'ship_owner' && t('선주 권한 안내')}
+              {currentUser.role === 'ship_manager' && t('최근 활동')}
+              {currentUser.role === 'manning_agency' && t('매닝사 권한 안내')}
+              {currentUser.role === 'crew' && t('선원 권한 안내')}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             {currentUser.role === 'ship_owner' && (
               <div className="space-y-2 text-xs text-gray-700">
                 <div>
-                  <p className="font-semibold text-blue-600 mb-1">✓ 조회 가능</p>
+                  <p className="font-semibold text-blue-600 mb-1">{t('✓ 조회 가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>본인 소유 선박 정보</li>
-                    <li>해당 선박의 급여표</li>
-                    <li>해당 선박에 지원한 선원 정보</li>
+                    <li>{t('본인 소유 선박 정보')}</li>
+                    <li>{t('해당 선박의 급여표')}</li>
+                    <li>{t('해당 선박에 지원한 선원 정보')}</li>
                   </ul>
                 </div>
                 <div>
-                  <p className="font-semibold text-green-600 mb-1">✓ 승인/거절 가능</p>
+                  <p className="font-semibold text-green-600 mb-1">{t('✓ 승인/거절 가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>선원 고용 승인/거절</li>
-                    <li>승인/거절/대기중인 선원 목록 확인</li>
+                    <li>{t('선원 고용 승인/거절')}</li>
+                    <li>{t('승인/거절/대기중인 선원 목록 확인')}</li>
                   </ul>
                 </div>
                 <div>
-                  <p className="font-semibold text-red-600 mb-1">✗ 불가능</p>
+                  <p className="font-semibold text-red-600 mb-1">{t('✗ 불가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>선박 생성/수정/삭제</li>
-                    <li>급여표 생성/수정</li>
-                    <li>선원 정보 수정</li>
+                    <li>{t('선박 생성/수정/삭제')}</li>
+                    <li>{t('급여표 생성/수정')}</li>
+                    <li>{t('선원 정보 수정')}</li>
                   </ul>
                 </div>
               </div>
@@ -483,31 +489,31 @@ export default function DashboardPage() {
             {currentUser.role === 'ship_manager' && (
               <div className="text-center py-6 text-gray-500">
                 <FileText className="w-10 h-10 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">최근 활동 내역이 여기에 표시됩니다</p>
+                <p className="text-sm">{t('최근 활동 내역이 여기에 표시됩니다')}</p>
               </div>
             )}
             {currentUser.role === 'manning_agency' && (
               <div className="space-y-2 text-xs text-gray-700">
                 <div>
-                  <p className="font-semibold text-blue-600 mb-1">✓ 조회 가능</p>
+                  <p className="font-semibold text-blue-600 mb-1">{t('✓ 조회 가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>선박 목록 및 정보</li>
-                    <li>급여표 확인</li>
-                    <li>구인 공고 확인</li>
+                    <li>{t('선박 목록 및 정보')}</li>
+                    <li>{t('급여표 확인')}</li>
+                    <li>{t('구인 공고 확인')}</li>
                   </ul>
                 </div>
                 <div>
-                  <p className="font-semibold text-green-600 mb-1">✓ 생성 가능</p>
+                  <p className="font-semibold text-green-600 mb-1">{t('✓ 생성 가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>선원을 대신한 구직 지원</li>
+                    <li>{t('선원을 대신한 구직 지원')}</li>
                   </ul>
                 </div>
                 <div>
-                  <p className="font-semibold text-red-600 mb-1">✗ 불가능</p>
+                  <p className="font-semibold text-red-600 mb-1">{t('✗ 불가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>선박 수정/삭제</li>
-                    <li>급여 수정</li>
-                    <li>선원 정보 수정</li>
+                    <li>{t('선박 수정/삭제')}</li>
+                    <li>{t('급여 수정')}</li>
+                    <li>{t('선원 정보 수정')}</li>
                   </ul>
                 </div>
               </div>
@@ -515,23 +521,23 @@ export default function DashboardPage() {
             {currentUser.role === 'crew' && (
               <div className="space-y-2 text-xs text-gray-700">
                 <div>
-                  <p className="font-semibold text-blue-600 mb-1">✓ 조회 가능</p>
+                  <p className="font-semibold text-blue-600 mb-1">{t('✓ 조회 가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>본인이 지원한 구직 현황</li>
-                    <li>본인의 지원 상태</li>
+                    <li>{t('본인이 지원한 구직 현황')}</li>
+                    <li>{t('본인의 지원 상태')}</li>
                   </ul>
                 </div>
                 <div>
-                  <p className="font-semibold text-green-600 mb-1">✓ 생성 가능</p>
+                  <p className="font-semibold text-green-600 mb-1">{t('✓ 생성 가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>구직 지원</li>
+                    <li>{t('구직 지원')}</li>
                   </ul>
                 </div>
                 <div>
-                  <p className="font-semibold text-red-600 mb-1">✗ 불가능</p>
+                  <p className="font-semibold text-red-600 mb-1">{t('✗ 불가능')}</p>
                   <ul className="list-disc list-inside space-y-0.5 ml-3">
-                    <li>다른 선원 정보 조회</li>
-                    <li>선박/급여 정보 접근</li>
+                    <li>{t('다른 선원 정보 조회')}</li>
+                    <li>{t('선박/급여 정보 접근')}</li>
                   </ul>
                 </div>
               </div>

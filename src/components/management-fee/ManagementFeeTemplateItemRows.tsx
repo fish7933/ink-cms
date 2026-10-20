@@ -7,6 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { ManagementFeeItem, ManagementFeeTemplateItemInput } from '@/lib/management-fee-store';
 import type { Nationality } from '@/types/nationality';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/ManagementFeeTemplateItemRows/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeTemplateItemRows', en, true, true);
 
 const CURRENCIES = ['USD', 'EUR', 'KRW', 'JPY', 'IDR', 'MMK', 'PHP', 'CNY'];
 
@@ -39,6 +43,7 @@ interface ManagementFeeTemplateItemRowsProps {
 export default function ManagementFeeTemplateItemRows({
   feeItems, nationalities, rows, onChange, templateCurrency,
 }: ManagementFeeTemplateItemRowsProps) {
+  const { t } = useTranslation('ManagementFeeTemplateItemRows');
   const [addFeeItemId, setAddFeeItemId] = useState('');
 
   const feeItemById = new Map(feeItems.map(f => [f.id, f]));
@@ -117,21 +122,21 @@ export default function ManagementFeeTemplateItemRows({
     <div className="space-y-3">
       {rows.length === 0 ? (
         <div className="text-center py-6 text-sm text-gray-400 border rounded-md">
-          추가된 청구 항목이 없습니다. 아래에서 항목을 선택해 조건을 추가하세요.
+          {t('추가된 청구 항목이 없습니다. 아래에서 항목을 선택해 조건을 추가하세요.')}
         </div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="text-[10px] h-8 px-2">청구 항목</TableHead>
-                <TableHead className="text-[10px] h-8 px-2">직급구분</TableHead>
-                <TableHead className="text-[10px] h-8 px-2">국적</TableHead>
-                <TableHead className="text-[10px] h-8 px-2">과금 방식</TableHead>
-                <TableHead className="text-[10px] h-8 px-2 text-right">금액</TableHead>
-                <TableHead className="text-[10px] h-8 px-2">통화</TableHead>
-                <TableHead className="text-[10px] h-8 px-2">선박당 월 상한</TableHead>
-                <TableHead className="text-[10px] h-8 px-2">부가세</TableHead>
+                <TableHead className="text-[10px] h-8 px-2">{t('청구 항목')}</TableHead>
+                <TableHead className="text-[10px] h-8 px-2">{t('직급구분')}</TableHead>
+                <TableHead className="text-[10px] h-8 px-2">{t('국적')}</TableHead>
+                <TableHead className="text-[10px] h-8 px-2">{t('과금 방식')}</TableHead>
+                <TableHead className="text-[10px] h-8 px-2 text-right">{t('금액')}</TableHead>
+                <TableHead className="text-[10px] h-8 px-2">{t('통화')}</TableHead>
+                <TableHead className="text-[10px] h-8 px-2">{t('선박당 월 상한')}</TableHead>
+                <TableHead className="text-[10px] h-8 px-2">{t('부가세')}</TableHead>
                 <TableHead className="text-[10px] h-8 px-2 w-16"></TableHead>
               </TableRow>
             </TableHeader>
@@ -150,7 +155,7 @@ export default function ManagementFeeTemplateItemRows({
                       {idx === 0 && (
                         <div className="flex items-center justify-between gap-1 pt-1">
                           <span className="text-xs font-semibold whitespace-nowrap">{feeItem?.name || 'Unknown'}</span>
-                          <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-gray-700" onClick={() => addConditionRow(feeItemId)} title="조건 추가">
+                          <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-gray-400 hover:text-gray-700" onClick={() => addConditionRow(feeItemId)} title={t('조건 추가')}>
                             <Plus className="w-3.5 h-3.5" />
                           </Button>
                         </div>
@@ -160,9 +165,9 @@ export default function ManagementFeeTemplateItemRows({
                       <Select value={row.rank_category ?? 'all'} onValueChange={v => updateRow(row.clientId, { rank_category: v === 'all' ? null : v as 'officer' | 'rating' })}>
                         <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all" className="text-xs">전체</SelectItem>
-                          <SelectItem value="officer" className="text-xs">사관</SelectItem>
-                          <SelectItem value="rating" className="text-xs">부원</SelectItem>
+                          <SelectItem value="all" className="text-xs">{t('전체')}</SelectItem>
+                          <SelectItem value="officer" className="text-xs">{t('사관')}</SelectItem>
+                          <SelectItem value="rating" className="text-xs">{t('부원')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -170,7 +175,7 @@ export default function ManagementFeeTemplateItemRows({
                       <Select value={row.nationality_code ?? 'all'} onValueChange={v => updateRow(row.clientId, { nationality_code: v === 'all' ? null : v })}>
                         <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all" className="text-xs">전체</SelectItem>
+                          <SelectItem value="all" className="text-xs">{t('전체')}</SelectItem>
                           {nationalities.map(n => <SelectItem key={n.id} value={n.country_code} className="text-xs">{n.country_name_ko}</SelectItem>)}
                         </SelectContent>
                       </Select>
@@ -180,14 +185,14 @@ export default function ManagementFeeTemplateItemRows({
                         <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {(['monthly', 'monthly_flat', 'one_time', 'actual_cost'] as const).map(b => (
-                            <SelectItem key={b} value={b} className="text-xs">{BILLING_BASIS_LABEL[b]}</SelectItem>
+                            <SelectItem key={b} value={b} className="text-xs">{t(BILLING_BASIS_LABEL[b])}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </TableCell>
                     <TableCell className="p-1">
                       {row.billing_basis === 'actual_cost' ? (
-                        <div className="h-7 flex items-center justify-end text-xs text-gray-400 w-24">수기 입력</div>
+                        <div className="h-7 flex items-center justify-end text-xs text-gray-400 w-24">{t('수기 입력')}</div>
                       ) : (
                         <Input
                           type="number" min={0} value={row.amount || ''}
@@ -249,13 +254,13 @@ export default function ManagementFeeTemplateItemRows({
       {availableFeeItems.length > 0 && (
         <div className="flex items-center gap-2 pt-1">
           <Select value={addFeeItemId} onValueChange={setAddFeeItemId}>
-            <SelectTrigger className="h-8 text-xs w-56"><SelectValue placeholder="추가할 청구 항목 선택" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-56"><SelectValue placeholder={t('추가할 청구 항목 선택')} /></SelectTrigger>
             <SelectContent>
               {availableFeeItems.map(f => <SelectItem key={f.id} value={f.id} className="text-xs">{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={addGroup} disabled={!addFeeItemId}>
-            <Plus className="w-3.5 h-3.5" />항목 추가
+            <Plus className="w-3.5 h-3.5" />{t('항목 추가')}
           </Button>
         </div>
       )}

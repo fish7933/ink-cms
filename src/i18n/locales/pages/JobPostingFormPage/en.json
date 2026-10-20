@@ -1,0 +1,15 @@
+{
+  "공고 수정: {{shipName}}": "Edit Job Posting: {{shipName}}",
+  "구인 공고": "Job Postings",
+  "{{code}} 선원 추천": "{{code}} Crew Recommendation",
+  "필수 항목을 모두 입력해주세요.": "Please fill in all required fields.",
+  "구인할 직급을 최소 1개 이상 선택해주세요.": "Please select at least one rank to recruit.",
+  "공개 대상 매닝사를 최소 1개 이상 선택해주세요.": "Please select at least one manning agency to publish to.",
+  "{{code}}: {{count}}개의 유사한 공고 존재": "{{code}}: {{count}} similar posting(s) exist",
+  "알 수 없는 오류": "Unknown error",
+  "로딩 중...": "Loading...",
+  "목록": "List",
+  "구인 공고 수정": "Edit Job Posting",
+  "다직급 구인 공고 등록": "Register Multi-Rank Job Posting",
+  "기존 데이터를 불러오는 중...": "Loading existing data..."
+}

@@ -32,6 +32,10 @@ import { useNavigate } from 'react-router-dom';
 import { useTabContext } from '@/contexts/TabContext';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewRotationPage/en.json';
+i18n.addResourceBundle('en', 'CrewRotationPage', en, true, true);
 
 type StatusTab = 'all' | 'draft' | 'pending_approval' | 'approved' | 'executed';
 
@@ -44,6 +48,7 @@ const STATUS_CONFIG: Record<StatusTab, { label: string; color: string }> = {
 };
 
 export function CrewRotationPage() {
+  const { t } = useTranslation('CrewRotationPage');
   const { openNewTab, activeTabId, tabs } = useTabContext();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -111,7 +116,7 @@ export function CrewRotationPage() {
   }, [permissions.loading, permissions.canView, navigate]);
 
   useEffect(() => {
-    const activeTab = tabs.find(t => t.id === activeTabId);
+    const activeTab = tabs.find(tab => tab.id === activeTabId);
     if (activeTab?.path === '/crew-rotation') loadPlans();
   }, [activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -221,9 +226,9 @@ export function CrewRotationPage() {
     new Map(targetPlans.map(p => [p.id, p.port_id ? portLabelById.get(p.port_id) || '-' : '-']));
 
   const handleExportMonthsExcel = async () => {
-    if (pickedMonths.length === 0) { toast({ title: '달을 하나 이상 골라주세요', variant: 'destructive' }); return; }
+    if (pickedMonths.length === 0) { toast({ title: t('달을 하나 이상 골라주세요'), variant: 'destructive' }); return; }
     const monthPlans = plansForMonths(pickedMonths);
-    if (monthPlans.length === 0) { toast({ title: '선택한 달에 교대계획이 없습니다', variant: 'destructive' }); return; }
+    if (monthPlans.length === 0) { toast({ title: t('선택한 달에 교대계획이 없습니다'), variant: 'destructive' }); return; }
     setMonthExporting('months');
     try {
       await exportRotationPlansLedgerToExcel(monthPlans, portLabelMapFor(monthPlans), pickedMonths.join('_'));
@@ -233,9 +238,9 @@ export function CrewRotationPage() {
   };
 
   const handlePrintMonths = () => {
-    if (pickedMonths.length === 0) { toast({ title: '달을 하나 이상 골라주세요', variant: 'destructive' }); return; }
+    if (pickedMonths.length === 0) { toast({ title: t('달을 하나 이상 골라주세요'), variant: 'destructive' }); return; }
     const monthPlans = plansForMonths(pickedMonths);
-    if (monthPlans.length === 0) { toast({ title: '선택한 달에 교대계획이 없습니다', variant: 'destructive' }); return; }
+    if (monthPlans.length === 0) { toast({ title: t('선택한 달에 교대계획이 없습니다'), variant: 'destructive' }); return; }
     window.open(`/print/rotation-plans-ledger?months=${pickedMonths.join(',')}`, '_blank');
   };
 
@@ -244,7 +249,7 @@ export function CrewRotationPage() {
     if (targetPlans.length === 0) return;
     setMonthExporting('selected');
     try {
-      await exportRotationPlansLedgerToExcel(targetPlans, portLabelMapFor(targetPlans), '선택계획');
+      await exportRotationPlansLedgerToExcel(targetPlans, portLabelMapFor(targetPlans), t('선택계획'));
     } finally {
       setMonthExporting(null);
     }
@@ -275,13 +280,13 @@ export function CrewRotationPage() {
 
   const handleDelete = async (planId: string) => {
     if (!currentUser) return;
-    if (!confirm('이 교대 계획서를 삭제하시겠습니까? 삭제 이력이 기록됩니다.')) return;
+    if (!confirm(t('이 교대 계획서를 삭제하시겠습니까? 삭제 이력이 기록됩니다.'))) return;
     if (await rotationService.deleteRotationPlan(planId, currentUser.id)) loadPlans();
   };
 
   const handleBulkDelete = async () => {
     if (!currentUser || selectedIds.length === 0) return;
-    if (!confirm(`선택한 ${selectedIds.length}개의 교대 계획서를 삭제하시겠습니까? 삭제 이력이 기록됩니다.`)) return;
+    if (!confirm(t('선택한 {{count}}개의 교대 계획서를 삭제하시겠습니까? 삭제 이력이 기록됩니다.', { count: selectedIds.length }))) return;
     await Promise.all(selectedIds.map(id => rotationService.deleteRotationPlan(id, currentUser.id)));
     setSelectedIds([]);
     loadPlans();
@@ -318,13 +323,13 @@ export function CrewRotationPage() {
     setDeletedSelectedIds(checked ? deletedPlans.map(p => p.id) : []);
 
   const handlePermanentDelete = async (planId: string) => {
-    if (!confirm('이 교대 계획서를 영구 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+    if (!confirm(t('이 교대 계획서를 영구 삭제하시겠습니까? 되돌릴 수 없습니다.'))) return;
     if (await rotationService.permanentlyDeleteRotationPlan(planId)) loadDeletedPlans();
   };
 
   const handleBulkPermanentDelete = async () => {
     if (deletedSelectedIds.length === 0) return;
-    if (!confirm(`선택한 ${deletedSelectedIds.length}개의 교대 계획서를 영구 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('선택한 {{count}}개의 교대 계획서를 영구 삭제하시겠습니까? 되돌릴 수 없습니다.', { count: deletedSelectedIds.length }))) return;
     setBulkPermanentDeleting(true);
     try {
       await Promise.all(deletedSelectedIds.map(id => rotationService.permanentlyDeleteRotationPlan(id)));
@@ -384,13 +389,13 @@ export function CrewRotationPage() {
       );
       const failCount = results.filter(r => !r.ok).length;
       if (submitDialogPlanIds.length === 1) {
-        if (failCount > 0) { toast({ title: '결재 상신 실패', description: results[0].message, variant: 'destructive' }); return; }
-        toast({ title: '결재 상신 완료', description: '발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.' });
+        if (failCount > 0) { toast({ title: t('결재 상신 실패'), description: results[0].message, variant: 'destructive' }); return; }
+        toast({ title: t('결재 상신 완료'), description: t('발령 결재함(배승)에서 진행 상황을 확인할 수 있습니다.') });
       } else {
         const successCount = submitDialogPlanIds.length - failCount;
         toast({
-          title: failCount === 0 ? '일괄 결재 상신 완료' : '일부만 처리됨',
-          description: `${successCount}/${submitDialogPlanIds.length}건 상신되었습니다.`,
+          title: failCount === 0 ? t('일괄 결재 상신 완료') : t('일부만 처리됨'),
+          description: t('{{successCount}}/{{total}}건 상신되었습니다.', { successCount, total: submitDialogPlanIds.length }),
           variant: failCount === 0 ? undefined : 'destructive',
         });
       }
@@ -405,25 +410,25 @@ export function CrewRotationPage() {
   // 수당 결정은 결재 상신 시점에 이미 저장돼 있으므로(발령자가 상세화면에서 미리 검토했거나,
   // 상신 시 조건 충족분이 자동 저장됨) 실행 시점엔 다시 확인할 필요 없이 바로 실행한다.
   const handleExecute = async (planId: string) => {
-    if (!confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
+    if (!confirm(t('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.'))) return;
     if (await rotationService.executeRotationPlan(planId)) {
-      alert('발령이 실행되었습니다. 선원 상태가 업데이트되었습니다.');
+      alert(t('발령이 실행되었습니다. 선원 상태가 업데이트되었습니다.'));
       loadPlans();
-    } else alert('실행 중 오류가 발생했습니다.');
+    } else alert(t('실행 중 오류가 발생했습니다.'));
   };
 
   const [bulkExecuting, setBulkExecuting] = useState(false);
 
   const handleBulkExecute = async () => {
     if (approvedSelectedIds.length === 0) return;
-    if (!confirm(`선택한 승인된 계획 ${approvedSelectedIds.length}건에 대해 일괄 발령 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.\n\n지급 조건이 걸린 수당(재고용수당 등)은 건별 확인 없이, 조건을 충족하는 항목만 자동으로 적용됩니다. 개별 확인이 필요하면 계획을 하나씩 실행해주세요.`)) return;
+    if (!confirm(t('선택한 승인된 계획 {{count}}건에 대해 일괄 발령 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.\n\n지급 조건이 걸린 수당(재고용수당 등)은 건별 확인 없이, 조건을 충족하는 항목만 자동으로 적용됩니다. 개별 확인이 필요하면 계획을 하나씩 실행해주세요.', { count: approvedSelectedIds.length }))) return;
     setBulkExecuting(true);
     try {
       const results = await Promise.all(approvedSelectedIds.map(id => rotationService.executeRotationPlan(id)));
       const successCount = results.filter(Boolean).length;
       toast({
-        title: successCount === approvedSelectedIds.length ? '일괄 발령 실행 완료' : '일부만 처리됨',
-        description: `${successCount}/${approvedSelectedIds.length}건 발령이 실행되었습니다.`,
+        title: successCount === approvedSelectedIds.length ? t('일괄 발령 실행 완료') : t('일부만 처리됨'),
+        description: t('{{successCount}}/{{total}}건 발령이 실행되었습니다.', { successCount, total: approvedSelectedIds.length }),
         variant: successCount === approvedSelectedIds.length ? undefined : 'destructive',
       });
       setSelectedIds([]);
@@ -504,11 +509,11 @@ export function CrewRotationPage() {
         if (plan) created++;
       }
 
-      toast({ title: `${created}개 선박 하선계획 초안 생성 완료`, description: '교대계획 목록에서 확인하세요.' });
+      toast({ title: t('{{count}}개 선박 하선계획 초안 생성 완료', { count: created }), description: t('교대계획 목록에서 확인하세요.') });
       setAutoGenOpen(false);
       loadPlans();
     } catch (e) {
-      toast({ title: '생성 실패', description: String(e), variant: 'destructive' });
+      toast({ title: t('생성 실패'), description: String(e), variant: 'destructive' });
     } finally {
       setAutoGenLoading(false);
     }
@@ -517,7 +522,7 @@ export function CrewRotationPage() {
   const getStatusBadge = (status: string) => {
     const cfg = STATUS_CONFIG[status as StatusTab];
     if (!cfg || status === 'all') return <Badge variant="secondary">{status}</Badge>;
-    return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color}`}>{cfg.label}</span>;
+    return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color}`}>{t(cfg.label)}</span>;
   };
 
   const expiryColor = (days: number) =>
@@ -529,23 +534,23 @@ export function CrewRotationPage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <RefreshCw className="w-5 h-5 text-muted-foreground" />선원 교대 발령
+            <RefreshCw className="w-5 h-5 text-muted-foreground" />{t('선원 교대 발령')}
           </h1>
-          <p className="text-xs text-muted-foreground mt-1">선원 승선/하선 교대 계획을 작성하고 결재를 진행합니다</p>
+          <p className="text-xs text-muted-foreground mt-1">{t('선원 승선/하선 교대 계획을 작성하고 결재를 진행합니다')}</p>
         </div>
         <div className="flex gap-2">
           {isSuperAdmin && (
             <Button variant="outline" size="sm" onClick={viewingDeleted ? () => setViewingDeleted(false) : openDeletedView} className="h-8 text-xs gap-1.5 text-red-600 border-red-300 hover:bg-red-50">
-              <Trash2 className="h-3.5 w-3.5" />{viewingDeleted ? '목록으로' : '삭제된 교대 발령'}
+              <Trash2 className="h-3.5 w-3.5" />{viewingDeleted ? t('목록으로') : t('삭제된 교대 발령')}
             </Button>
           )}
           {permissions.canCreate && (
             <>
               <Button variant="outline" size="sm" onClick={openAutoGen} className="h-8 text-xs gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50">
-                <AlertTriangle className="h-3.5 w-3.5" />계약만료 하선계획 자동생성
+                <AlertTriangle className="h-3.5 w-3.5" />{t('계약만료 하선계획 자동생성')}
               </Button>
-              <Button onClick={() => openNewTab('/crew-rotation/new', '교대계획 작성', true)} size="sm" className="h-8">
-                <Plus className="mr-2 h-4 w-4" />새 교대 계획 작성
+              <Button onClick={() => openNewTab('/crew-rotation/new', t('교대계획 작성'), true)} size="sm" className="h-8">
+                <Plus className="mr-2 h-4 w-4" />{t('새 교대 계획 작성')}
               </Button>
             </>
           )}
@@ -557,11 +562,11 @@ export function CrewRotationPage() {
           <CardHeader className="py-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <CardTitle className="text-sm">삭제된 교대 발령 ({deletedPlans.length}건)</CardTitle>
-                <CardDescription className="text-xs">삭제된 교대 계획서 목록입니다. 영구 삭제하면 되돌릴 수 없습니다.</CardDescription>
+                <CardTitle className="text-sm">{t('삭제된 교대 발령 ({{count}}건)', { count: deletedPlans.length })}</CardTitle>
+                <CardDescription className="text-xs">{t('삭제된 교대 계획서 목록입니다. 영구 삭제하면 되돌릴 수 없습니다.')}</CardDescription>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-400">페이지당</span>
+                <span className="text-xs text-gray-400">{t('페이지당')}</span>
                 <Select value={deletedItemsPerPage.toString()} onValueChange={v => { setDeletedItemsPerPage(+v); setDeletedCurrentPage(1); }}>
                   <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
@@ -571,16 +576,16 @@ export function CrewRotationPage() {
           </CardHeader>
           <CardContent className="p-0">
             {deletedLoading ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">로딩 중...</div>
+              <div className="text-center py-8 text-muted-foreground text-sm">{t('로딩 중...')}</div>
             ) : deletedPlans.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">삭제된 교대 계획이 없습니다</div>
+              <div className="text-center py-8 text-muted-foreground text-sm">{t('삭제된 교대 계획이 없습니다')}</div>
             ) : (
               <>
               {deletedSelectedIds.length > 0 && (
                 <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-md px-3 py-2 mx-4 mt-3 mb-1">
-                  <span className="text-xs text-red-800">{deletedSelectedIds.length}건 선택됨</span>
+                  <span className="text-xs text-red-800">{t('{{count}}건 선택됨', { count: deletedSelectedIds.length })}</span>
                   <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-100" onClick={handleBulkPermanentDelete} disabled={bulkPermanentDeleting}>
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkPermanentDeleting ? '삭제 중...' : `선택 영구 삭제 (${deletedSelectedIds.length})`}
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkPermanentDeleting ? t('삭제 중...') : t('선택 영구 삭제 ({{count}})', { count: deletedSelectedIds.length })}
                   </Button>
                 </div>
               )}
@@ -593,13 +598,13 @@ export function CrewRotationPage() {
                         onCheckedChange={checked => toggleDeletedSelectAll(!!checked)}
                       />
                     </TableHead>
-                    <TableHead className="text-xs">계획명</TableHead>
-                    <TableHead className="text-xs">선주사</TableHead>
-                    <TableHead className="text-xs">선박</TableHead>
-                    <TableHead className="text-xs">교대일</TableHead>
-                    <TableHead className="text-xs">삭제자</TableHead>
-                    <TableHead className="text-xs">삭제일시</TableHead>
-                    <TableHead className="text-right text-xs">작업</TableHead>
+                    <TableHead className="text-xs">{t('계획명')}</TableHead>
+                    <TableHead className="text-xs">{t('선주사')}</TableHead>
+                    <TableHead className="text-xs">{t('선박')}</TableHead>
+                    <TableHead className="text-xs">{t('교대일')}</TableHead>
+                    <TableHead className="text-xs">{t('삭제자')}</TableHead>
+                    <TableHead className="text-xs">{t('삭제일시')}</TableHead>
+                    <TableHead className="text-right text-xs">{t('작업')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -614,7 +619,7 @@ export function CrewRotationPage() {
                       <TableCell className="text-xs">{plan.deleted_at ? format(new Date(plan.deleted_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 border-red-300 hover:bg-red-50" onClick={() => handlePermanentDelete(plan.id)}>
-                          영구 삭제
+                          {t('영구 삭제')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -652,32 +657,32 @@ export function CrewRotationPage() {
       {/* 필터 */}
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterOwner || '_all'} onValueChange={v => { setFilterOwner(v === '_all' ? '' : v); setFilterFleet(''); setFilterShip(''); }}>
-          <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder="전체 선주사" /></SelectTrigger>
+          <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder={t('전체 선주사')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all">전체 선주사</SelectItem>
+            <SelectItem value="_all">{t('전체 선주사')}</SelectItem>
             {owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterFleet || '_all'} onValueChange={v => { setFilterFleet(v === '_all' ? '' : v); setFilterShip(''); }} disabled={!filterOwner}>
-          <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="전체 플릿" /></SelectTrigger>
+          <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('전체 플릿')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all">전체 플릿</SelectItem>
+            <SelectItem value="_all">{t('전체 플릿')}</SelectItem>
             {fleets.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterShip || '_all'} onValueChange={v => setFilterShip(v === '_all' ? '' : v)} disabled={!filterOwner}>
-          <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder="전체 선박" /></SelectTrigger>
+          <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('전체 선박')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="_all">전체 선박</SelectItem>
+            <SelectItem value="_all">{t('전체 선박')}</SelectItem>
             {ships.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
         {(filterOwner || filterFleet || filterShip) && (
           <Button variant="ghost" size="sm" className="h-8 text-xs gap-1" onClick={() => { setFilterOwner(''); setFilterFleet(''); setFilterShip(''); }}>
-            <X className="w-3 h-3" />초기화
+            <X className="w-3 h-3" />{t('초기화')}
           </Button>
         )}
-        <span className="text-xs text-muted-foreground ml-auto">{filteredPlans.length}건</span>
+        <span className="text-xs text-muted-foreground ml-auto">{t('{{count}}건', { count: filteredPlans.length })}</span>
       </div>
 
       {/* 상태 탭 */}
@@ -687,7 +692,7 @@ export function CrewRotationPage() {
             const emphasize = (s === 'draft' || s === 'pending_approval' || s === 'approved') && countByStatus(s) > 0;
             return (
               <TabsTrigger key={s} value={s} className="text-xs h-7 px-3">
-                {STATUS_CONFIG[s].label}{' '}
+                {t(STATUS_CONFIG[s].label)}{' '}
                 <span className={emphasize ? 'ml-1 font-bold text-blue-600' : 'ml-1 text-[10px] opacity-70'}>
                   ({countByStatus(s)})
                 </span>
@@ -701,9 +706,9 @@ export function CrewRotationPage() {
       <Card>
         <CardHeader className="py-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <CardTitle className="text-sm shrink-0">교대 계획 목록</CardTitle>
+            <CardTitle className="text-sm shrink-0">{t('교대 계획 목록')}</CardTitle>
             <div className="flex items-center gap-2 flex-wrap ml-4">
-              <span className="text-xs font-medium text-gray-600">기간</span>
+              <span className="text-xs font-medium text-gray-600">{t('기간')}</span>
               <input
                 type="month"
                 value={monthFrom}
@@ -717,16 +722,16 @@ export function CrewRotationPage() {
                 onChange={e => setMonthTo(e.target.value)}
                 className="h-8 rounded-md border border-input bg-white px-2 text-xs"
               />
-              {pickedMonths.length > 0 && <span className="text-xs text-gray-400">({pickedMonths.length}개월)</span>}
+              {pickedMonths.length > 0 && <span className="text-xs text-gray-400">{t('({{count}}개월)', { count: pickedMonths.length })}</span>}
               <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExportMonthsExcel} disabled={monthExporting === 'months'}>
-                {monthExporting === 'months' ? '내보내는 중...' : '엑셀 다운로드'}
+                {monthExporting === 'months' ? t('내보내는 중...') : t('엑셀 다운로드')}
               </Button>
               <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handlePrintMonths}>
-                PDF 출력
+                {t('PDF 출력')}
               </Button>
             </div>
             <div className="flex items-center gap-1.5 ml-auto shrink-0">
-              <span className="text-xs text-gray-400">페이지당</span>
+              <span className="text-xs text-gray-400">{t('페이지당')}</span>
               <Select value={itemsPerPage.toString()} onValueChange={v => { setItemsPerPage(+v); setCurrentPage(1); }}>
                 <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>{[10, 20, 50, 100].map(n => <SelectItem key={n} value={String(n)} className="text-sm">{n}</SelectItem>)}</SelectContent>
@@ -736,27 +741,27 @@ export function CrewRotationPage() {
         </CardHeader>
         {selectedIds.length > 0 && (
           <div className="flex items-center justify-between gap-2 flex-wrap bg-blue-50 border-y border-blue-200 px-4 py-2">
-            <span className="text-xs font-medium text-blue-800">{selectedIds.length}건 선택됨</span>
+            <span className="text-xs font-medium text-blue-800">{t('{{count}}건 선택됨', { count: selectedIds.length })}</span>
             <div className="flex items-center gap-1.5 flex-wrap">
               {draftSelectedIds.length > 0 && (
                 <Button variant="outline" size="sm" className="h-7 text-xs text-blue-600 border-blue-300 bg-white hover:bg-blue-50" onClick={openBulkSubmitDialog}>
-                  일괄 결재 상신 ({draftSelectedIds.length})
+                  {t('일괄 결재 상신 ({{count}})', { count: draftSelectedIds.length })}
                 </Button>
               )}
               {approvedSelectedIds.length > 0 && (
                 <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkExecute} disabled={bulkExecuting}>
-                  <CheckCircle className="h-3.5 w-3.5" />{bulkExecuting ? '실행 중...' : `일괄 발령실행 (${approvedSelectedIds.length})`}
+                  <CheckCircle className="h-3.5 w-3.5" />{bulkExecuting ? t('실행 중...') : t('일괄 발령실행 ({{count}})', { count: approvedSelectedIds.length })}
                 </Button>
               )}
               <Button variant="outline" size="sm" className="h-7 text-xs bg-white gap-1" onClick={handleExportSelectedExcel} disabled={monthExporting === 'selected'}>
-                {monthExporting === 'selected' ? '내보내는 중...' : `선택 엑셀 (${selectedIds.length})`}
+                {monthExporting === 'selected' ? t('내보내는 중...') : t('선택 엑셀 ({{count}})', { count: selectedIds.length })}
               </Button>
               <Button variant="outline" size="sm" className="h-7 text-xs bg-white gap-1" onClick={handlePrintSelected}>
-                선택 PDF ({selectedIds.length})
+                {t('선택 PDF ({{count}})', { count: selectedIds.length })}
               </Button>
               {isSuperAdmin && (
                 <Button variant="outline" size="sm" className="h-7 text-xs bg-white text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete}>
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />선택 삭제 ({selectedIds.length})
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />{t('선택 삭제 ({{count}})', { count: selectedIds.length })}
                 </Button>
               )}
             </div>
@@ -764,9 +769,9 @@ export function CrewRotationPage() {
         )}
         <CardContent className="p-0">
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">로딩 중...</div>
+            <div className="text-center py-8 text-muted-foreground text-sm">{t('로딩 중...')}</div>
           ) : filteredPlans.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">교대 계획이 없습니다</div>
+            <div className="text-center py-8 text-muted-foreground text-sm">{t('교대 계획이 없습니다')}</div>
           ) : (
             <Table>
               <TableHeader>
@@ -778,23 +783,23 @@ export function CrewRotationPage() {
                       disabled={allSelectableIds.length === 0}
                     />
                   </TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">년월</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">계획명</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">선주사</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">선박</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">교대일</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">교대인원</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">상태</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">결재 현황</TableHead>
-                  <TableHead className="text-xs whitespace-nowrap">작성일</TableHead>
-                  <TableHead className="text-right text-xs whitespace-nowrap w-28">작업</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('년월')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('계획명')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('선주사')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('선박')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('교대일')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('교대인원')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('상태')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('결재 현황')}</TableHead>
+                  <TableHead className="text-xs whitespace-nowrap">{t('작성일')}</TableHead>
+                  <TableHead className="text-right text-xs whitespace-nowrap w-28">{t('작업')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedPlans.map(plan => (
                       <TableRow
                         key={plan.id} className="cursor-pointer"
-                        onClick={() => openNewTab(`/crew-rotation/${plan.id}/edit`, plan.plan_name || '교대계획')}
+                        onClick={() => openNewTab(`/crew-rotation/${plan.id}/edit`, plan.plan_name || t('교대계획'))}
                       >
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.includes(plan.id)} onCheckedChange={() => toggleSelect(plan.id)} />
@@ -812,7 +817,7 @@ export function CrewRotationPage() {
                         <TableCell className="text-[11px] whitespace-nowrap">
                           <div className="flex items-center gap-1">
                             <Users className="h-3 w-3 text-muted-foreground shrink-0" />
-                            {plan.assignments.length}명
+                            {t('{{count}}명', { count: plan.assignments.length })}
                           </div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">{getStatusBadge(plan.status)}</TableCell>
@@ -821,13 +826,13 @@ export function CrewRotationPage() {
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex flex-nowrap justify-end gap-1">
                             {plan.status === 'draft' && (
-                              <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(plan.id)}>상신</Button>
+                              <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(plan.id)}>{t('상신')}</Button>
                             )}
                             {isSuperAdmin && (
-                              <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>삭제</Button>
+                              <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap text-red-600 border-red-300 hover:bg-red-50" onClick={() => handleDelete(plan.id)}>{t('삭제')}</Button>
                             )}
                             {plan.status === 'approved' && (
-                              <Button variant="default" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap" onClick={() => handleExecute(plan.id)}>발령실행</Button>
+                              <Button variant="default" size="sm" className="h-7 px-2.5 text-xs whitespace-nowrap" onClick={() => handleExecute(plan.id)}>{t('발령실행')}</Button>
                             )}
                           </div>
                         </TableCell>
@@ -867,40 +872,40 @@ export function CrewRotationPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-orange-500" />
-              계약만료 하선계획 자동생성
+              {t('계약만료 하선계획 자동생성')}
             </DialogTitle>
           </DialogHeader>
 
           <div className="flex items-center gap-3 py-2 border-b">
-            <span className="text-sm text-gray-600">만료 기준:</span>
+            <span className="text-sm text-gray-600">{t('만료 기준:')}</span>
             <Select value={String(expiryThreshold)} onValueChange={v => setExpiryThreshold(+v)}>
               <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {[7, 14, 30, 60, 90].map(d => <SelectItem key={d} value={String(d)}>{d}일 이내</SelectItem>)}
+                {[7, 14, 30, 60, 90].map(d => <SelectItem key={d} value={String(d)}>{t('{{days}}일 이내', { days: d })}</SelectItem>)}
               </SelectContent>
             </Select>
             <span className="text-xs text-muted-foreground">
-              {expiryLoading ? '조회 중...' : `해당 선원 ${expiryFiltered.length}명`}
+              {expiryLoading ? t('조회 중...') : t('해당 선원 {{count}}명', { count: expiryFiltered.length })}
             </span>
           </div>
 
           <div className="overflow-y-auto flex-1">
             {expiryLoading ? (
-              <div className="text-center py-8 text-sm text-muted-foreground">조회 중...</div>
+              <div className="text-center py-8 text-sm text-muted-foreground">{t('조회 중...')}</div>
             ) : expiryFiltered.length === 0 ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
-                {expiryThreshold}일 이내 계약 만료 선원이 없습니다
+                {t('{{days}}일 이내 계약 만료 선원이 없습니다', { days: expiryThreshold })}
               </div>
             ) : (
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">선박</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">선원</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">승선일</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">계약개월</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">계약만료일</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">잔여일</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">{t('선박')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">{t('선원')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">{t('승선일')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">{t('계약개월')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">{t('계약만료일')}</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">{t('잔여일')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -909,10 +914,10 @@ export function CrewRotationPage() {
                       <td className="px-3 py-1.5 font-medium">{e.ship_name}</td>
                       <td className="px-3 py-1.5">{e.crew_name}</td>
                       <td className="px-3 py-1.5">{e.embark_date}</td>
-                      <td className="px-3 py-1.5 text-center">{e.contract_months}개월</td>
+                      <td className="px-3 py-1.5 text-center">{t('{{months}}개월', { months: e.contract_months })}</td>
                       <td className="px-3 py-1.5">{e.expiry_date}</td>
                       <td className={`px-3 py-1.5 font-medium ${expiryColor(e.days_until_expiry)}`}>
-                        {e.days_until_expiry < 0 ? `${Math.abs(e.days_until_expiry)}일 초과` : `${e.days_until_expiry}일`}
+                        {e.days_until_expiry < 0 ? t('{{days}}일 초과', { days: Math.abs(e.days_until_expiry) }) : t('{{days}}일', { days: e.days_until_expiry })}
                       </td>
                     </tr>
                   ))}
@@ -922,13 +927,13 @@ export function CrewRotationPage() {
           </div>
 
           <DialogFooter className="border-t pt-3">
-            <Button variant="outline" onClick={() => setAutoGenOpen(false)}>취소</Button>
+            <Button variant="outline" onClick={() => setAutoGenOpen(false)}>{t('취소')}</Button>
             <Button
               onClick={handleAutoGenerate}
               disabled={expiryFiltered.length === 0 || autoGenLoading}
               className="bg-orange-600 hover:bg-orange-700"
             >
-              {autoGenLoading ? '생성 중...' : `${new Set(expiryFiltered.map(e => e.ship_id)).size}개 선박 하선계획 초안 생성`}
+              {autoGenLoading ? t('생성 중...') : t('{{count}}개 선박 하선계획 초안 생성', { count: new Set(expiryFiltered.map(e => e.ship_id)).size })}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -938,35 +943,35 @@ export function CrewRotationPage() {
       <Dialog open={submitDialogPlanIds.length > 0} onOpenChange={o => !submitting && !o && setSubmitDialogPlanIds([])}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{submitDialogPlanIds.length > 1 ? `배승 결재 상신 (${submitDialogPlanIds.length}건 일괄)` : '배승 결재 상신'}</DialogTitle>
+            <DialogTitle>{submitDialogPlanIds.length > 1 ? t('배승 결재 상신 ({{count}}건 일괄)', { count: submitDialogPlanIds.length }) : t('배승 결재 상신')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <label className="text-sm font-medium mb-2 block">{t('결재 라인 선택 *')}</label>
               <Select value={submitLineId} onValueChange={setSubmitLineId}>
-                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('결재 라인을 선택하세요')} /></SelectTrigger>
                 <SelectContent>
                   {approvalLines.length === 0
-                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
-                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                    ? <SelectItem value="none" disabled>{t('등록된 결재 라인이 없습니다')}</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({t('{{count}}단계', { count: l.steps.length })})</SelectItem>)}
                 </SelectContent>
               </Select>
               {submitLineId && (
                 <div className="flex items-center space-x-2 mt-2">
                   <Checkbox id="save-line-default-rotation" checked={saveLineDefault} onCheckedChange={c => setSaveLineDefault(c as boolean)} />
-                  <label htmlFor="save-line-default-rotation" className="text-sm text-gray-700 cursor-pointer">앞으로도 해당 결재 라인 이용</label>
+                  <label htmlFor="save-line-default-rotation" className="text-sm text-gray-700 cursor-pointer">{t('앞으로도 해당 결재 라인 이용')}</label>
                 </div>
               )}
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
-              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+              <label className="text-sm font-medium mb-2 block">{t('요청 사유 (선택)')}</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder={t('요청 사유를 입력하세요...')} className="min-h-[80px]" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitDialogPlanIds([])} disabled={submitting}>취소</Button>
+            <Button variant="outline" onClick={() => setSubmitDialogPlanIds([])} disabled={submitting}>{t('취소')}</Button>
             <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
-              {submitting ? '처리 중...' : submitDialogPlanIds.length > 1 ? `${submitDialogPlanIds.length}건 결재 상신` : '결재 상신'}
+              {submitting ? t('처리 중...') : submitDialogPlanIds.length > 1 ? t('{{count}}건 결재 상신', { count: submitDialogPlanIds.length }) : t('결재 상신')}
             </Button>
           </DialogFooter>
         </DialogContent>

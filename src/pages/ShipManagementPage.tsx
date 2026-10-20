@@ -20,9 +20,14 @@ import ShipDialog from '@/components/ship/ShipDialog';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
 import { getEffectiveTemplateMapForShips, type SalaryTemplate } from '@/lib/salary-store';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ShipManagementPage/en.json';
+i18n.addResourceBundle('en', 'ShipManagementPage', en, true, true);
 
 export default function ShipManagementPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('ShipManagementPage');
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -325,7 +330,7 @@ export default function ShipManagementPage() {
       closeTab(activeTabId!);
     } catch (error) {
       console.error('Error saving ship:', error);
-      alert('선박 저장 중 오류가 발생했습니다. IMO 번호가 중복되었는지 확인해주세요.');
+      alert(t('선박 저장 중 오류가 발생했습니다. IMO 번호가 중복되었는지 확인해주세요.'));
     }
   };
 
@@ -402,11 +407,11 @@ export default function ShipManagementPage() {
   };
 
   const handleEdit = (ship: Ship) => {
-    openNewTab(`/ships?id=${ship.id}`, `${ship.name} 수정`);
+    openNewTab(`/ships?id=${ship.id}`, `${ship.name} ${t('수정')}`);
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('이 선박을 삭제하시겠습니까?')) {
+    if (confirm(t('이 선박을 삭제하시겠습니까?'))) {
       await deleteShip(id);
       await loadData();
       setSelectedShipIds(prev => prev.filter(shipId => shipId !== id));
@@ -436,7 +441,7 @@ export default function ShipManagementPage() {
         window.dispatchEvent(new CustomEvent('ship-data-changed'));
       } catch (error) {
         console.error('Error deleting ships:', error);
-        alert('선박 삭제 중 오류가 발생했습니다.');
+        alert(t('선박 삭제 중 오류가 발생했습니다.'));
       }
     }
   };
@@ -458,7 +463,7 @@ export default function ShipManagementPage() {
     myShipsOnly;
 
   const getOwnerDisplayName = (ownerId: string) => {
-    if (ownerId === 'none') return '선주 없음';
+    if (ownerId === 'none') return t('선주 없음');
     return availableOwnerCompanies.companies.find(c => c.id === ownerId)?.name || '';
   };
 
@@ -468,7 +473,7 @@ export default function ShipManagementPage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-            <p className="text-sm text-gray-600">로딩 중...</p>
+            <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
           </div>
         </div>
       </>
@@ -488,21 +493,21 @@ export default function ShipManagementPage() {
               <div className="flex justify-between items-center">
                 {isFormMode ? (
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => closeTab(activeTabId!)} title="닫기">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => closeTab(activeTabId!)} title={t('닫기')}>
                       <X className="w-4 h-4" />
                     </Button>
                     <div>
-                      <CardTitle className="text-base">{editId ? '선박 정보 수정' : '선박 등록'}</CardTitle>
-                      <p className="text-xs text-gray-500 mt-0.5">선박의 상세 정보를 입력하세요</p>
+                      <CardTitle className="text-base">{editId ? t('선박 정보 수정') : t('선박 등록')}</CardTitle>
+                      <p className="text-xs text-gray-500 mt-0.5">{t('선박의 상세 정보를 입력하세요')}</p>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <CardTitle className="text-base">선박 목록</CardTitle>
+                    <CardTitle className="text-base">{t('선박 목록')}</CardTitle>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={loadData} disabled={loading}>
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        새로고침
+                        {t('새로고침')}
                       </Button>
                       {permissions.canDelete && selectedShipIds.length > 0 && (
                         <Button
@@ -512,17 +517,17 @@ export default function ShipManagementPage() {
                           onClick={handleBulkDelete}
                         >
                           <Trash2 className="w-4 h-4" />
-                          선택 삭제 ({selectedShipIds.length})
+                          {t('선택 삭제')} ({selectedShipIds.length})
                         </Button>
                       )}
                       {permissions.canCreate && (
                         <Button
                           size="sm"
                           className="gap-1.5 h-8"
-                          onClick={() => openNewTab('/ships?mode=new', '선박 등록', true)}
+                          onClick={() => openNewTab('/ships?mode=new', t('선박 등록'), true)}
                         >
                           <Plus className="w-4 h-4" />
-                          선박 등록
+                          {t('선박 등록')}
                         </Button>
                       )}
                     </div>
@@ -552,12 +557,12 @@ export default function ShipManagementPage() {
                       onValueChange={setSelectedOwner}
                     >
                       <SelectTrigger className="w-48 h-9 text-sm">
-                        <SelectValue placeholder="선주사 선택" />
+                        <SelectValue placeholder={t('선주사 선택')} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all" className="text-sm">전체 선주사</SelectItem>
+                        <SelectItem value="all" className="text-sm">{t('전체 선주사')}</SelectItem>
                         {availableOwnerCompanies.hasNoOwner && (
-                          <SelectItem value="none" className="text-sm text-gray-500">선주 없음</SelectItem>
+                          <SelectItem value="none" className="text-sm text-gray-500">{t('선주 없음')}</SelectItem>
                         )}
                         {availableOwnerCompanies.companies.map(company => (
                           <SelectItem key={company.id} value={String(company.id)} className="text-sm">
@@ -574,10 +579,10 @@ export default function ShipManagementPage() {
                     disabled={availableFleets.length === 0}
                   >
                     <SelectTrigger className="w-40 h-9 text-sm">
-                      <SelectValue placeholder="플릿 선택" />
+                      <SelectValue placeholder={t('플릿 선택')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all" className="text-sm">전체 플릿</SelectItem>
+                      <SelectItem value="all" className="text-sm">{t('전체 플릿')}</SelectItem>
                       {availableFleets.map(fleet => (
                         <SelectItem key={fleet.id} value={String(fleet.id)} className="text-sm">
                           {fleet.name}
@@ -592,10 +597,10 @@ export default function ShipManagementPage() {
                     disabled={availableShipTypes.length === 0}
                   >
                     <SelectTrigger className="w-40 h-9 text-sm">
-                      <SelectValue placeholder="선종 선택" />
+                      <SelectValue placeholder={t('선종 선택')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all" className="text-sm">전체 선종</SelectItem>
+                      <SelectItem value="all" className="text-sm">{t('전체 선종')}</SelectItem>
                       {availableShipTypes.map(type => (
                         <SelectItem key={type} value={type} className="text-sm">
                           {type}
@@ -606,19 +611,19 @@ export default function ShipManagementPage() {
 
                   <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                     <SelectTrigger className="w-32 h-9 text-sm">
-                      <SelectValue placeholder="상태" />
+                      <SelectValue placeholder={t('상태')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all" className="text-sm">전체 상태</SelectItem>
-                      <SelectItem value="active" className="text-sm">활성</SelectItem>
-                      <SelectItem value="inactive" className="text-sm">비활성</SelectItem>
+                      <SelectItem value="all" className="text-sm">{t('전체 상태')}</SelectItem>
+                      <SelectItem value="active" className="text-sm">{t('활성')}</SelectItem>
+                      <SelectItem value="inactive" className="text-sm">{t('비활성')}</SelectItem>
                     </SelectContent>
                   </Select>
 
                   {currentUser && ['admin', 'system_admin'].includes(currentUser.role) && (
                     <div className="flex items-center gap-2 h-9">
                       <Checkbox id="myShipsOnly" checked={myShipsOnly} onCheckedChange={c => setMyShipsOnly(!!c)} />
-                      <label htmlFor="myShipsOnly" className="text-sm text-gray-700 cursor-pointer select-none">내 담당 선박만</label>
+                      <label htmlFor="myShipsOnly" className="text-sm text-gray-700 cursor-pointer select-none">{t('내 담당 선박만')}</label>
                     </div>
                   )}
 
@@ -630,7 +635,7 @@ export default function ShipManagementPage() {
                       className="h-9 gap-1.5 text-sm"
                     >
                       <X className="w-3.5 h-3.5" />
-                      필터 초기화
+                      {t('필터 초기화')}
                     </Button>
                   )}
                 </div>
@@ -640,22 +645,22 @@ export default function ShipManagementPage() {
                   <div className="flex flex-wrap gap-1.5">
                     {searchTerm && (
                       <Badge variant="secondary" className="text-xs">
-                        검색: {searchTerm}
+                        {t('검색:')} {searchTerm}
                       </Badge>
                     )}
                     {selectedOwner !== 'all' && !(currentUser.role === 'ship_owner' && selectedOwner === currentUser.company_id) && (
                       <Badge variant="secondary" className="text-xs">
-                        선주사: {getOwnerDisplayName(selectedOwner)}
+                        {t('선주사:')} {getOwnerDisplayName(selectedOwner)}
                       </Badge>
                     )}
                     {selectedFleet !== 'all' && (
                       <Badge variant="secondary" className="text-xs">
-                        플릿: {fleets.find(f => f.id === selectedFleet)?.name}
+                        {t('플릿:')} {fleets.find(f => f.id === selectedFleet)?.name}
                       </Badge>
                     )}
                     {selectedShipType !== 'all' && (
                       <Badge variant="secondary" className="text-xs">
-                        선종: {selectedShipType}
+                        {t('선종:')} {selectedShipType}
                       </Badge>
                     )}
                   </div>
@@ -664,7 +669,7 @@ export default function ShipManagementPage() {
                 {/* Results Count and Items Per Page */}
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-500">
-                    총 {totalItems}척의 선박
+                    {t('총 {{count}}척의 선박', { count: totalItems })}
                     {selectedShipIds.length > 0 && msg.ship.selectedCount(selectedShipIds.length)}
                   </p>
                 </div>
@@ -673,15 +678,15 @@ export default function ShipManagementPage() {
               <Tabs value={viewMode} onValueChange={v => setViewMode(v as 'grid' | 'tree')}>
                 <TabsList className="h-9 gap-1">
                   <TabsTrigger value="grid" className="text-xs h-8 gap-1.5">
-                    <LayoutGrid className="w-3.5 h-3.5" />그리드
+                    <LayoutGrid className="w-3.5 h-3.5" />{t('그리드')}
                   </TabsTrigger>
                   <TabsTrigger value="tree" className="text-xs h-8 gap-1.5">
-                    <ListTree className="w-3.5 h-3.5" />트리구조
+                    <ListTree className="w-3.5 h-3.5" />{t('트리구조')}
                   </TabsTrigger>
                 </TabsList>
 
                 <Input
-                  placeholder={viewMode === 'grid' ? '선명, IMO, 선주사, 플릿으로 검색...' : '선명, 선주사로 검색...'}
+                  placeholder={viewMode === 'grid' ? t('선명, IMO, 선주사, 플릿으로 검색...') : t('선명, 선주사로 검색...')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="max-w-xs h-9 text-sm mt-2"

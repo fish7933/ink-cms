@@ -30,6 +30,11 @@ import type { SignOffReason } from '@/types/sign-off-reason';
 import { useToast } from '@/hooks/use-toast';
 import { useTabContext } from '@/contexts/TabContext';
 import CrewCandidateSelectDialog from '@/components/rotation/CrewCandidateSelectDialog';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/RotationPlanFormPage/en.json';
+
+i18n.addResourceBundle('en', 'RotationPlanFormPage', en, true, true);
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'secondary' | 'default' | 'destructive' }> = {
   draft: { label: '임시저장', variant: 'secondary' },
@@ -100,6 +105,7 @@ function withDateSuffix(name: string, date: string): string {
 }
 
 export default function RotationPlanFormPage() {
+  const { t } = useTranslation('RotationPlanFormPage');
   const { toast } = useToast();
   const { activeTabId, closeTab, openTab } = useTabContext();
   const [searchParams] = useSearchParams();
@@ -232,7 +238,7 @@ export default function RotationPlanFormPage() {
     if (editPlanId) {
       const existing = await rotationService.getRotationPlanById(editPlanId);
       if (!existing) {
-        toast({ title: '교대계획을 찾을 수 없습니다.', variant: 'destructive' });
+        toast({ title: t('교대계획을 찾을 수 없습니다.'), variant: 'destructive' });
         if (activeTabId) closeTab(activeTabId);
         return;
       }
@@ -550,8 +556,8 @@ export default function RotationPlanFormPage() {
   const getCrewLabel = (id: string | null, fallbackName?: string | null) => {
     const c = getCrew(id);
     if (c) return crewDisplayName(c);
-    if (id) return fallbackName || '이름 확인 불가';
-    return '선원 선택';
+    if (id) return fallbackName || t('이름 확인 불가');
+    return t('선원 선택');
   };
 
   const rowPickerCandidates = (): CrewWithDetails[] => {
@@ -640,28 +646,28 @@ export default function RotationPlanFormPage() {
   };
 
   const handleSubmit = async () => {
-    if (!ownerId) { toast({ title: '선주를 선택하세요', variant: 'destructive' }); return; }
-    if (!shipId) { toast({ title: '선박을 선택하세요', variant: 'destructive' }); return; }
+    if (!ownerId) { toast({ title: t('선주를 선택하세요'), variant: 'destructive' }); return; }
+    if (!shipId) { toast({ title: t('선박을 선택하세요'), variant: 'destructive' }); return; }
     const validRows = rows.filter(r => r.boardingCrewId || r.disembarkCrewId);
-    if (validRows.length === 0) { toast({ title: '배정 정보를 입력하세요', variant: 'destructive' }); return; }
+    if (validRows.length === 0) { toast({ title: t('배정 정보를 입력하세요'), variant: 'destructive' }); return; }
 
     // 승선자 직급/등급 필수 검증 — 등급은 그 직급의 급여템플릿에 실제로 등급 옵션이 있을 때만 필수
     const missingRank = validRows.filter(r => r.boardingCrewId && !r.boardingRankId);
     if (missingRank.length > 0) {
       const names = missingRank.map(r => { const c = getCrew(r.boardingCrewId); return c ? crewDisplayName(c) : '?'; }).join(', ');
-      toast({ title: '승선 직급 필수', description: `${names} — 승선 직급을 선택하세요`, variant: 'destructive' });
+      toast({ title: t('승선 직급 필수'), description: t('{{names}} — 승선 직급을 선택하세요', { names }), variant: 'destructive' });
       return;
     }
     const missingGrade = validRows.filter(r => r.boardingCrewId && r.boardingRankId && gradesForRankId(r.boardingRankId).length > 0 && !r.boardingGrade);
     if (missingGrade.length > 0) {
       const names = missingGrade.map(r => { const c = getCrew(r.boardingCrewId); return c ? crewDisplayName(c) : '?'; }).join(', ');
-      toast({ title: '승선 등급 필수', description: `${names} — 이 직급은 급여템플릿에 등급이 구분돼 있어 등급을 선택해야 합니다`, variant: 'destructive' });
+      toast({ title: t('승선 등급 필수'), description: t('{{names}} — 이 직급은 급여템플릿에 등급이 구분돼 있어 등급을 선택해야 합니다', { names }), variant: 'destructive' });
       return;
     }
     const missingReason = validRows.filter(r => r.disembarkCrewId && !r.disembarkReasonId);
     if (missingReason.length > 0) {
       const names = missingReason.map(r => { const c = getCrew(r.disembarkCrewId); return c ? crewDisplayName(c) : '?'; }).join(', ');
-      toast({ title: '하선사유 필수', description: `${names} — 하선사유를 선택하세요`, variant: 'destructive' });
+      toast({ title: t('하선사유 필수'), description: t('{{names}} — 하선사유를 선택하세요', { names }), variant: 'destructive' });
       return;
     }
 
@@ -709,21 +715,21 @@ export default function RotationPlanFormPage() {
         ? await rotationService.updateRotationPlanWithAssignments(editPlanId!, planPayload)
         : await rotationService.createRotationPlan(planPayload);
 
-      if (!result) throw new Error('저장에 실패했습니다');
+      if (!result) throw new Error(t('저장에 실패했습니다'));
       window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
       const { moved } = result;
       if (moved.length > 0) {
         const summary = moved.map(m => `${m.crewName}(${m.fromPlanName})`).join(', ');
-        toast({ title: isEditMode ? '수정 완료' : '작성 완료', description: `${summary} — 이전 임시저장 계획에서 제외되고 이 계획에 포함되었습니다.` });
+        toast({ title: isEditMode ? t('수정 완료') : t('작성 완료'), description: t('{{summary}} — 이전 임시저장 계획에서 제외되고 이 계획에 포함되었습니다.', { summary }) });
       } else {
-        toast({ title: isEditMode ? '수정 완료' : '작성 완료', description: '결재 상신은 교대계획 목록에서 진행하세요' });
+        toast({ title: isEditMode ? t('수정 완료') : t('작성 완료'), description: t('결재 상신은 교대계획 목록에서 진행하세요') });
       }
       // 작성/수정 완료 후에는 항상 선원 교대 발령 목록으로 이동(이미 열려 있으면 그 탭을
       // 최신 데이터로 새로고침해 활성화)한 뒤, 현재 폼 탭은 닫는다.
-      openTab('/crew-rotation', '선원 교대 발령');
+      openTab('/crew-rotation', t('선원 교대 발령'));
       if (activeTabId) closeTab(activeTabId);
     } catch (e) {
-      toast({ title: '오류', description: String(e), variant: 'destructive' });
+      toast({ title: t('오류'), description: String(e), variant: 'destructive' });
     } finally { setSubmitting(false); }
   };
 
@@ -736,9 +742,9 @@ export default function RotationPlanFormPage() {
       await Promise.all(
         rows.filter(r => r.assignmentId).map(r => rotationService.updateAssignmentNotes(r.assignmentId!, r.notes || null))
       );
-      toast({ title: '비고가 저장되었습니다.' });
+      toast({ title: t('비고가 저장되었습니다.') });
     } catch (e) {
-      toast({ title: '비고 저장 중 오류가 발생했습니다.', description: String(e), variant: 'destructive' });
+      toast({ title: t('비고 저장 중 오류가 발생했습니다.'), description: String(e), variant: 'destructive' });
     } finally { setSavingNotes(false); }
   };
 
@@ -753,7 +759,7 @@ export default function RotationPlanFormPage() {
     try {
       await rotationService.saveAssignmentAllowanceSelections(editPlanId, { [assignmentId]: [...current] });
     } catch (e) {
-      toast({ title: '수당 선택 저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('수당 선택 저장 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSavingAllowanceId(null);
     }
@@ -761,19 +767,19 @@ export default function RotationPlanFormPage() {
 
   const handleDeleteDraft = async () => {
     if (!editPlanId) return;
-    if (!confirm('이 임시저장 계획을 삭제하시겠습니까? 삭제 이력이 기록되며, 배정된 선원들의 임시저장 표시도 함께 풀립니다.')) return;
+    if (!confirm(t('이 임시저장 계획을 삭제하시겠습니까? 삭제 이력이 기록되며, 배정된 선원들의 임시저장 표시도 함께 풀립니다.'))) return;
     const user = await getCurrentUser();
     if (!user) return;
     setDeleting(true);
     try {
       const ok = await rotationService.deleteRotationPlan(editPlanId, user.id);
       if (ok) {
-        toast({ title: '삭제되었습니다' });
+        toast({ title: t('삭제되었습니다') });
         window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
-        openTab('/crew-rotation', '선원 교대 발령');
+        openTab('/crew-rotation', t('선원 교대 발령'));
         if (activeTabId) closeTab(activeTabId);
       } else {
-        toast({ title: '삭제 중 오류가 발생했습니다', variant: 'destructive' });
+        toast({ title: t('삭제 중 오류가 발생했습니다'), variant: 'destructive' });
       }
     } finally {
       setDeleting(false);
@@ -781,35 +787,35 @@ export default function RotationPlanFormPage() {
   };
 
   const handleWithdraw = async () => {
-    if (!editPlanId || !confirm('이 교대 계획의 결재 상신을 철회하시겠습니까? 배정됐던 선원들의 임시저장 표시도 함께 풀립니다.')) return;
+    if (!editPlanId || !confirm(t('이 교대 계획의 결재 상신을 철회하시겠습니까? 배정됐던 선원들의 임시저장 표시도 함께 풀립니다.'))) return;
     setWithdrawing(true);
     try {
       const ok = await rotationService.withdrawRotationPlan(editPlanId, (await getCurrentUser())?.id || '');
       if (ok) {
-        toast({ title: '철회되었습니다', description: '결재 상신이 철회되고 계획이 반려 상태로 정리되었습니다.' });
+        toast({ title: t('철회되었습니다'), description: t('결재 상신이 철회되고 계획이 반려 상태로 정리되었습니다.') });
         setPlanStatus('rejected');
         window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
       } else {
-        toast({ title: '철회할 대기 중인 결재가 없습니다', variant: 'destructive' });
+        toast({ title: t('철회할 대기 중인 결재가 없습니다'), variant: 'destructive' });
       }
     } catch (e) {
-      toast({ title: '철회 중 오류가 발생했습니다', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('철회 중 오류가 발생했습니다'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setWithdrawing(false);
     }
   };
 
   const handleExecute = async () => {
-    if (!editPlanId || !confirm('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.')) return;
+    if (!editPlanId || !confirm(t('발령을 실행하시겠습니까? 실행하면 선원 상태가 즉시 변경됩니다.'))) return;
     setExecuting(true);
     try {
       const ok = await rotationService.executeRotationPlan(editPlanId);
       if (ok) {
-        toast({ title: '발령이 실행되었습니다', description: '선원 상태가 업데이트되었습니다.' });
+        toast({ title: t('발령이 실행되었습니다'), description: t('선원 상태가 업데이트되었습니다.') });
         setPlanStatus('executed');
         window.dispatchEvent(new CustomEvent('rotation-plan-data-changed'));
       } else {
-        toast({ title: '실행 중 오류가 발생했습니다', variant: 'destructive' });
+        toast({ title: t('실행 중 오류가 발생했습니다'), variant: 'destructive' });
       }
     } finally { setExecuting(false); }
   };
@@ -849,10 +855,10 @@ export default function RotationPlanFormPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-base flex items-center gap-2">
               <Ship className="w-4 h-4" />
-              {isReadOnly ? '교대 계획 상세' : isEditMode ? '교대 계획 수정 (임시저장)' : '교대 계획 작성'}
+              {isReadOnly ? t('교대 계획 상세') : isEditMode ? t('교대 계획 수정 (임시저장)') : t('교대 계획 작성')}
               {isReadOnly && (
                 <Badge variant={STATUS_CONFIG[planStatus]?.variant || 'secondary'}>
-                  {STATUS_CONFIG[planStatus]?.label || planStatus}
+                  {t(STATUS_CONFIG[planStatus]?.label || planStatus)}
                 </Badge>
               )}
             </CardTitle>
@@ -860,33 +866,33 @@ export default function RotationPlanFormPage() {
               {isReadOnly ? (
                 <>
                   <Button size="sm" variant="outline" className="h-8" onClick={handleExportExcel} disabled={exporting}>
-                    <Download className="w-3.5 h-3.5 mr-1" />{exporting ? '내보내는 중...' : '엑셀 다운로드'}
+                    <Download className="w-3.5 h-3.5 mr-1" />{exporting ? t('내보내는 중...') : t('엑셀 다운로드')}
                   </Button>
                   <Button size="sm" variant="outline" className="h-8" onClick={handlePrint}>
-                    <Printer className="w-3.5 h-3.5 mr-1" />PDF 출력
+                    <Printer className="w-3.5 h-3.5 mr-1" />{t('PDF 출력')}
                   </Button>
                   {planStatus === 'approved' && (
                     <Button size="sm" className="h-8" onClick={handleExecute} disabled={executing}>
-                      {executing ? '실행 중...' : '발령 실행'}
+                      {executing ? t('실행 중...') : t('발령 실행')}
                     </Button>
                   )}
                   {planStatus === 'pending_approval' && (
                     <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50" onClick={handleWithdraw} disabled={withdrawing}>
-                      <Undo2 className="w-3.5 h-3.5 mr-1" />{withdrawing ? '철회 중...' : '계획 철회'}
+                      <Undo2 className="w-3.5 h-3.5 mr-1" />{withdrawing ? t('철회 중...') : t('계획 철회')}
                     </Button>
                   )}
                   <Button size="sm" variant="outline" className="h-8 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={handleSaveNotes} disabled={savingNotes}>
-                    {savingNotes ? '저장 중...' : '비고 저장'}
+                    {savingNotes ? t('저장 중...') : t('비고 저장')}
                   </Button>
                 </>
               ) : (
                 <>
                   {isEditMode && (
                     <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-300 hover:bg-red-50" onClick={handleDeleteDraft} disabled={deleting}>
-                      <Trash2 className="w-3.5 h-3.5 mr-1" />{deleting ? '삭제 중...' : '삭제'}
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />{deleting ? t('삭제 중...') : t('삭제')}
                     </Button>
                   )}
-                  <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">{isEditMode ? '수정 완료' : '작성 완료'}</Button>
+                  <Button size="sm" onClick={handleSubmit} disabled={submitting} className="h-8 bg-blue-600 hover:bg-blue-700">{isEditMode ? t('수정 완료') : t('작성 완료')}</Button>
                 </>
               )}
             </div>
@@ -895,38 +901,38 @@ export default function RotationPlanFormPage() {
         <CardContent className="pt-0 space-y-2.5">
           <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_2fr] gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">선주 *</Label>
+              <Label className="text-xs">{t('선주 *')}</Label>
               <Select value={ownerId || '_none'} onValueChange={v => handleOwnerChange(v === '_none' ? '' : v)} disabled={isReadOnly}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선주 선택" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('선주 선택')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">선주 선택</SelectItem>
+                  <SelectItem value="_none">{t('선주 선택')}</SelectItem>
                   {owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">플릿</Label>
+              <Label className="text-xs">{t('플릿')}</Label>
               <Select value={fleetId || '_none'} onValueChange={handleFleetChange} disabled={isReadOnly || !ownerId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="전체" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('전체')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">전체</SelectItem>
+                  <SelectItem value="_none">{t('전체')}</SelectItem>
                   {fleets.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">선박 *</Label>
+              <Label className="text-xs">{t('선박 *')}</Label>
               <Select value={shipId || '_none'} onValueChange={v => setShipId(v === '_none' ? '' : v)} disabled={isReadOnly || !ownerId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="선박 선택" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('선박 선택')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">선박 선택</SelectItem>
+                  <SelectItem value="_none">{t('선박 선택')}</SelectItem>
                   {ships.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">계획명</Label>
-              <Input value={planName} onChange={e => setPlanName(e.target.value)} placeholder="선박 선택 시 자동입력" className="h-8 text-[12px] md:text-[12px]" disabled={isReadOnly} />
+              <Label className="text-xs">{t('계획명')}</Label>
+              <Input value={planName} onChange={e => setPlanName(e.target.value)} placeholder={t('선박 선택 시 자동입력')} className="h-8 text-[12px] md:text-[12px]" disabled={isReadOnly} />
             </div>
           </div>
 
@@ -934,38 +940,38 @@ export default function RotationPlanFormPage() {
             <div className="space-y-1">
               {/* 교대 계획 하나는 항상 한 장소에서 이루어지므로, 국가/도시를 두 칸으로 나누지 않고
                   비고와 같은 방식으로 한 칸 안에 같이 보여준다. */}
-              <Label className="text-xs">교대지 (국가/도시)</Label>
+              <Label className="text-xs">{t('교대지 (국가/도시)')}</Label>
               <div className="flex gap-1">
                 {manualCountry ? (
                   <>
-                    <Input value={countryName} onChange={e => handleManualCountryChange(e.target.value)} placeholder="국가명 (영어)" className="h-8 text-xs flex-1 min-w-0" disabled={isReadOnly} />
+                    <Input value={countryName} onChange={e => handleManualCountryChange(e.target.value)} placeholder={t('국가명 (영어)')} className="h-8 text-xs flex-1 min-w-0" disabled={isReadOnly} />
                     {!isReadOnly && (
-                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCountry(false); setCountryName(''); }}>목록</Button>
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCountry(false); setCountryName(''); }}>{t('목록')}</Button>
                     )}
                   </>
                 ) : (
                   <Select value={countryName || '_none'} onValueChange={handleCountrySelect} disabled={isReadOnly}>
-                    <SelectTrigger className="h-8 text-xs flex-1 min-w-0"><SelectValue placeholder="국가 선택" /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs flex-1 min-w-0"><SelectValue placeholder={t('국가 선택')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_manual">직접 입력...</SelectItem>
-                      <SelectItem value="_none">국가 선택</SelectItem>
+                      <SelectItem value="_manual">{t('직접 입력...')}</SelectItem>
+                      <SelectItem value="_none">{t('국가 선택')}</SelectItem>
                       {countryOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 )}
                 {(manualCountry || manualCity) ? (
                   <>
-                    <Input value={cityName} onChange={e => setCityName(e.target.value)} placeholder="도시명 (영어)" className="h-8 text-xs flex-1 min-w-0" disabled={isReadOnly} />
+                    <Input value={cityName} onChange={e => setCityName(e.target.value)} placeholder={t('도시명 (영어)')} className="h-8 text-xs flex-1 min-w-0" disabled={isReadOnly} />
                     {!manualCountry && !isReadOnly && (
-                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCity(false); setCityName(''); }}>목록</Button>
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs shrink-0 px-2" onClick={() => { setManualCity(false); setCityName(''); }}>{t('목록')}</Button>
                     )}
                   </>
                 ) : (
                   <Select value={cityName || '_none'} onValueChange={handleCitySelect} disabled={isReadOnly || !countryName}>
-                    <SelectTrigger className="h-8 text-xs flex-1 min-w-0"><SelectValue placeholder={countryName ? '도시 선택' : '국가를 먼저 선택'} /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs flex-1 min-w-0"><SelectValue placeholder={countryName ? t('도시 선택') : t('국가를 먼저 선택')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_manual">직접 입력...</SelectItem>
-                      <SelectItem value="_none">도시 선택</SelectItem>
+                      <SelectItem value="_manual">{t('직접 입력...')}</SelectItem>
+                      <SelectItem value="_none">{t('도시 선택')}</SelectItem>
                       {cityOptions.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -973,14 +979,14 @@ export default function RotationPlanFormPage() {
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">기준 교대일</Label>
+              <Label className="text-xs">{t('기준 교대일')}</Label>
               <Input type="date" value={baseDepartureDate} onChange={e => setBaseDepartureDate(e.target.value)} className="h-8 text-[12px] md:text-[12px]" disabled={isReadOnly} />
-              <p className="text-[10px] text-gray-400">승선/하선일은 기준일, 출국일은 하루 전날, 귀국일은 하루 뒷날로 일괄 설정합니다</p>
+              <p className="text-[10px] text-gray-400">{t('승선/하선일은 기준일, 출국일은 하루 전날, 귀국일은 하루 뒷날로 일괄 설정합니다')}</p>
             </div>
           </div>
 
           <div className="space-y-1">
-            <Textarea value={planNotes} onChange={e => setPlanNotes(e.target.value)} placeholder="비고" rows={1} className="text-xs md:text-xs resize-none min-h-0 h-8 py-1.5" />
+            <Textarea value={planNotes} onChange={e => setPlanNotes(e.target.value)} placeholder={t('비고')} rows={1} className="text-xs md:text-xs resize-none min-h-0 h-8 py-1.5" />
           </div>
         </CardContent>
       </Card>
@@ -988,17 +994,17 @@ export default function RotationPlanFormPage() {
       {/* 발령 상세 */}
       <div className="space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <h3 className="text-sm font-semibold text-gray-700">발령 상세</h3>
+          <h3 className="text-sm font-semibold text-gray-700">{t('발령 상세')}</h3>
           {!isReadOnly && (
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setBoardingDialogOpen(true)} className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
-                <Plus className="w-3 h-3" />승선 후보 추가
+                <Plus className="w-3 h-3" />{t('승선 후보 추가')}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setDisembarkDialogOpen(true)} className="h-7 text-xs gap-1 border-orange-300 text-orange-700 hover:bg-orange-50">
-                <Plus className="w-3 h-3" />하선 후보 추가
+                <Plus className="w-3 h-3" />{t('하선 후보 추가')}
               </Button>
               <Button size="sm" variant="outline" onClick={addRow} className="h-7 text-xs gap-1">
-                <Plus className="w-3 h-3" />빈 행 추가
+                <Plus className="w-3 h-3" />{t('빈 행 추가')}
               </Button>
             </div>
           )}
@@ -1024,42 +1030,42 @@ export default function RotationPlanFormPage() {
                     <span className="text-[11px] font-semibold text-emerald-700">On-Signer</span>
                   </div>
                   {isReadOnly && !row.boardingCrewId ? (
-                    <p className="text-xs text-gray-400 italic py-1">없음 (승선 없이 하선만 진행)</p>
+                    <p className="text-xs text-gray-400 italic py-1">{t('없음 (승선 없이 하선만 진행)')}</p>
                   ) : (
                     <>
                       <div className="flex gap-1">
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-emerald-600 shrink-0">직급</span>
+                          <span className="text-[9px] text-emerald-600 shrink-0">{t('직급')}</span>
                           <Select value={row.boardingRankId || '_none'} onValueChange={v => updateRow(row.id, { boardingRankId: v === '_none' ? '' : v, boardingGrade: null })} disabled={isReadOnly}>
-                            <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder="직급 *" /></SelectTrigger>
+                            <SelectTrigger className="h-7 text-xs w-20 shrink-0"><SelectValue placeholder={t('직급 *')} /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="_none">직급 *</SelectItem>
+                              <SelectItem value="_none">{t('직급 *')}</SelectItem>
                               {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code || r.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-emerald-600 shrink-0">등급</span>
+                          <span className="text-[9px] text-emerald-600 shrink-0">{t('등급')}</span>
                           {(() => {
                             const opts = gradesForRankId(row.boardingRankId);
                             return opts.length > 0 ? (
                               <Select value={row.boardingGrade || '_none'} onValueChange={v => updateRow(row.id, { boardingGrade: v === '_none' ? null : v })} disabled={isReadOnly}>
                                 <SelectTrigger className={`h-7 text-[12px] md:text-[12px] w-16 shrink-0 px-1 ${!row.boardingGrade ? 'border-orange-300' : ''}`}>
-                                  <SelectValue placeholder="등급 *" />
+                                  <SelectValue placeholder={t('등급 *')} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="_none" className="text-[12px]">선택 *</SelectItem>
+                                  <SelectItem value="_none" className="text-[12px]">{t('선택 *')}</SelectItem>
                                   {opts.map(g => <SelectItem key={g} value={g} className="text-[12px]">{g}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                             ) : (
                               <Input value={row.boardingGrade || ''} onChange={e => updateRow(row.id, { boardingGrade: e.target.value || null })}
-                                placeholder="등급" className="h-7 text-[12px] md:text-[12px] w-16 shrink-0" disabled={isReadOnly} />
+                                placeholder={t('등급')} className="h-7 text-[12px] md:text-[12px] w-16 shrink-0" disabled={isReadOnly} />
                             );
                           })()}
                         </div>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="text-[9px] text-emerald-600 shrink-0">이름</span>
+                          <span className="text-[9px] text-emerald-600 shrink-0">{t('이름')}</span>
                           <Button
                             type="button" variant="outline" disabled={isReadOnly}
                             className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-emerald-200"
@@ -1071,26 +1077,26 @@ export default function RotationPlanFormPage() {
                       </div>
                       {draftReservationFor(row.boardingCrewId) && (
                         <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                          ⚠ 임시저장 계획 "{draftReservationFor(row.boardingCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
+                          {t('⚠ 임시저장 계획 "{{planName}}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.', { planName: draftReservationFor(row.boardingCrewId)!.planName })}
                         </p>
                       )}
                       <div className="flex gap-1">
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="text-[9px] text-emerald-600 shrink-0">출국일</span>
+                          <span className="text-[9px] text-emerald-600 shrink-0">{t('출국일')}</span>
                           <Input type="date" value={row.departureDate} onChange={e => updateRow(row.id, { departureDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                         </div>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="text-[9px] text-emerald-600 shrink-0">승선일</span>
+                          <span className="text-[9px] text-emerald-600 shrink-0">{t('승선일')}</span>
                           <Input type="date" value={row.boardingDate} onChange={e => updateRow(row.id, { boardingDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                         </div>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="text-[9px] text-emerald-600 shrink-0 whitespace-nowrap">계약개월</span>
+                          <span className="text-[9px] text-emerald-600 shrink-0 whitespace-nowrap">{t('계약개월')}</span>
                           <Input
                             type="number"
                             value={row.contractMonths}
                             onChange={e => updateRow(row.id, { contractMonths: e.target.value })}
                             className="h-7 text-xs px-1 min-w-0"
-                            placeholder={row.boardingCrewId && !row.contractMonths ? '미설정' : ''}
+                            placeholder={row.boardingCrewId && !row.contractMonths ? t('미설정') : ''}
                             disabled={isReadOnly}
                           />
                         </div>
@@ -1106,32 +1112,32 @@ export default function RotationPlanFormPage() {
                     <span className="text-[11px] font-semibold text-orange-700">Off-Signer</span>
                   </div>
                   {isReadOnly && !row.disembarkCrewId ? (
-                    <p className="text-xs text-gray-400 italic py-1">없음 (하선 없이 승선만 진행)</p>
+                    <p className="text-xs text-gray-400 italic py-1">{t('없음 (하선 없이 승선만 진행)')}</p>
                   ) : (
                     <>
                       {/* 하선자는 이미 승선 중인 선원이라 직급/등급이 배정 시점의 사실(현재 배정 선박
                           기준)일 뿐 여기서 새로 고르는 값이 아니므로, 둘 다 고정 표시만 하고 수정은 막는다. */}
                       <div className="flex gap-1">
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-orange-600 shrink-0">직급</span>
+                          <span className="text-[9px] text-orange-600 shrink-0">{t('직급')}</span>
                           <div
                             className="h-7 text-xs w-16 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
-                            title="현재 승선 중 직급 (고정)"
+                            title={t('현재 승선 중 직급 (고정)')}
                           >
                             {ranks.find(r => r.id === row.disembarkRankId)?.rank_code || '-'}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-orange-600 shrink-0">등급</span>
+                          <span className="text-[9px] text-orange-600 shrink-0">{t('등급')}</span>
                           <div
                             className="h-7 text-xs w-14 shrink-0 px-1 flex items-center justify-center rounded-md border border-gray-200 bg-gray-100 text-gray-600 font-mono"
-                            title="현재 승선 중 등급 (고정)"
+                            title={t('현재 승선 중 등급 (고정)')}
                           >
                             {row.disembarkGrade || '-'}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="text-[9px] text-orange-600 shrink-0">이름</span>
+                          <span className="text-[9px] text-orange-600 shrink-0">{t('이름')}</span>
                           <Button
                             type="button" variant="outline" disabled={isReadOnly}
                             className="h-7 text-xs flex-1 min-w-0 justify-start font-normal truncate px-2 border-orange-200"
@@ -1143,25 +1149,25 @@ export default function RotationPlanFormPage() {
                       </div>
                       {draftReservationFor(row.disembarkCrewId) && (
                         <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                          ⚠ 임시저장 계획 "{draftReservationFor(row.disembarkCrewId)!.planName}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.
+                          {t('⚠ 임시저장 계획 "{{planName}}"에도 포함되어 있습니다 — 저장 시 그 계획에서 제외됩니다.', { planName: draftReservationFor(row.disembarkCrewId)!.planName })}
                         </p>
                       )}
                       <div className="flex gap-1">
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="text-[9px] text-orange-600 shrink-0">하선일</span>
+                          <span className="text-[9px] text-orange-600 shrink-0">{t('하선일')}</span>
                           <Input type="date" value={row.disembarkDate} onChange={e => updateRow(row.id, { disembarkDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                         </div>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <span className="text-[9px] text-orange-600 shrink-0">귀국일</span>
+                          <span className="text-[9px] text-orange-600 shrink-0">{t('귀국일')}</span>
                           <Input type="date" value={row.returnDate} onChange={e => updateRow(row.id, { returnDate: e.target.value })} className="h-7 text-[12px] md:text-[12px] px-1 min-w-0" disabled={isReadOnly} />
                         </div>
                         {row.disembarkCrewId && (
                           <div className="flex items-center gap-1 flex-1 min-w-0">
-                            <span className="text-[9px] text-orange-600 shrink-0 whitespace-nowrap">하선사유</span>
+                            <span className="text-[9px] text-orange-600 shrink-0 whitespace-nowrap">{t('하선사유')}</span>
                             <Select value={row.disembarkReasonId || '_none'} onValueChange={v => updateRow(row.id, { disembarkReasonId: v === '_none' ? '' : v, sickPayMonthlyAmount: '' })} disabled={isReadOnly}>
-                              <SelectTrigger className="h-7 text-xs min-w-0"><SelectValue placeholder="선택" /></SelectTrigger>
+                              <SelectTrigger className="h-7 text-xs min-w-0"><SelectValue placeholder={t('선택')} /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="_none">하선사유 선택</SelectItem>
+                                <SelectItem value="_none">{t('하선사유 선택')}</SelectItem>
                                 {signOffReasons.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
                               </SelectContent>
                             </Select>
@@ -1169,7 +1175,7 @@ export default function RotationPlanFormPage() {
                         )}
                         {signOffReasons.find(r => r.id === row.disembarkReasonId)?.name === '상병하선' && (
                           <div className="flex items-center gap-1 flex-1 min-w-0">
-                            <span className="text-[9px] text-red-500 shrink-0 whitespace-nowrap">상병급여</span>
+                            <span className="text-[9px] text-red-500 shrink-0 whitespace-nowrap">{t('상병급여')}</span>
                             <Input
                               type="number" value={row.sickPayMonthlyAmount}
                               onChange={e => updateRow(row.id, { sickPayMonthlyAmount: e.target.value })}
@@ -1185,7 +1191,7 @@ export default function RotationPlanFormPage() {
 
               {/* 비고 */}
               <div className="pt-1 border-t">
-                <Input value={row.notes} onChange={e => updateRow(row.id, { notes: e.target.value })} className="h-7 text-xs w-full" placeholder="비고" />
+                <Input value={row.notes} onChange={e => updateRow(row.id, { notes: e.target.value })} className="h-7 text-xs w-full" placeholder={t('비고')} />
               </div>
             </CardContent>
           </Card>
@@ -1195,9 +1201,9 @@ export default function RotationPlanFormPage() {
       {/* 배정 요약 */}
       <Card className="bg-gray-50">
         <CardContent className="py-3 px-4">
-          <p className="text-xs font-semibold text-gray-600 mb-2">교대 배정 요약</p>
+          <p className="text-xs font-semibold text-gray-600 mb-2">{t('교대 배정 요약')}</p>
           {rows.every(r => !r.boardingCrewId && !r.disembarkCrewId) ? (
-            <p className="text-xs text-gray-400">배정된 선원이 없습니다</p>
+            <p className="text-xs text-gray-400">{t('배정된 선원이 없습니다')}</p>
           ) : (
             <div className="rounded-md border bg-white overflow-hidden overflow-x-auto">
               <table className="w-full text-xs whitespace-nowrap">
@@ -1205,12 +1211,12 @@ export default function RotationPlanFormPage() {
                   <tr className="text-[10px] text-gray-400">
                     <th className="text-left py-1 px-2 font-medium">#</th>
                     <th className="text-left py-1 px-2 font-medium text-emerald-600">On-Signer</th>
-                    <th className="text-left py-1 px-2 font-medium">승선일</th>
-                    <th className="text-left py-1 px-2 font-medium">계약개월</th>
+                    <th className="text-left py-1 px-2 font-medium">{t('승선일')}</th>
+                    <th className="text-left py-1 px-2 font-medium">{t('계약개월')}</th>
                     <th className="text-left py-1 pl-6 pr-2 font-medium text-orange-600 border-l">Off-Signer</th>
-                    <th className="text-left py-1 px-2 font-medium">하선일</th>
-                    <th className="text-left py-1 px-2 font-medium">하선사유</th>
-                    {hasSickPayInSummary && <th className="text-left py-1 px-2 font-medium text-red-500">상병급여</th>}
+                    <th className="text-left py-1 px-2 font-medium">{t('하선일')}</th>
+                    <th className="text-left py-1 px-2 font-medium">{t('하선사유')}</th>
+                    {hasSickPayInSummary && <th className="text-left py-1 px-2 font-medium text-red-500">{t('상병급여')}</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1233,27 +1239,27 @@ export default function RotationPlanFormPage() {
                               <span className="flex items-center gap-1 w-[70px] shrink-0">
                                 {inRankCode && <span className="font-mono text-[10px] bg-emerald-50 text-emerald-700 px-1 rounded shrink-0">{inRankCode}</span>}
                                 {r.boardingGrade
-                                  ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{r.boardingGrade}급</span>
+                                  ? <span className="font-mono text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded shrink-0">{t('{{grade}}급', { grade: r.boardingGrade })}</span>
                                   : gradesForRankId(r.boardingRankId).length > 0
-                                    ? <span className="text-[10px] text-orange-500 shrink-0">등급 미선택</span>
+                                    ? <span className="text-[10px] text-orange-500 shrink-0">{t('등급 미선택')}</span>
                                     : null}
                               </span>
-                              <span className="font-medium text-emerald-800">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || '이름 확인 불가'}</span>
+                              <span className="font-medium text-emerald-800">{(inCrew ? crewDisplayName(inCrew) : '') || r.boardingCrewName || t('이름 확인 불가')}</span>
                             </span>
-                          ) : <span className="text-gray-300 italic">{isReadOnly ? '없음' : '미정'}</span>}
+                          ) : <span className="text-gray-300 italic">{isReadOnly ? t('없음') : t('미정')}</span>}
                         </td>
                         <td className="py-1 px-2 text-gray-400">{r.boardingCrewId ? (r.boardingDate || '-') : '-'}</td>
-                        <td className="py-1 px-2 text-gray-400">{r.contractMonths ? `${r.contractMonths}개월` : '-'}</td>
+                        <td className="py-1 px-2 text-gray-400">{r.contractMonths ? t('{{months}}개월', { months: r.contractMonths }) : '-'}</td>
                         <td className="py-1 pl-6 pr-2 border-l">
                           {r.disembarkCrewId ? (
                             <span className="flex items-center gap-1">
                               <span className="flex items-center gap-1 w-[70px] shrink-0">
                                 {outRankCode && <span className="font-mono text-[10px] bg-orange-50 text-orange-700 px-1 rounded shrink-0">{outRankCode}</span>}
-                                {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{r.disembarkGrade}급</span>}
+                                {r.disembarkGrade && <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded shrink-0">{t('{{grade}}급', { grade: r.disembarkGrade })}</span>}
                               </span>
-                              <span className="font-medium text-orange-800">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || '이름 확인 불가'}</span>
+                              <span className="font-medium text-orange-800">{(outCrew ? crewDisplayName(outCrew) : '') || r.disembarkCrewName || t('이름 확인 불가')}</span>
                             </span>
-                          ) : <span className="text-gray-300 italic">{isReadOnly ? '없음' : '미정'}</span>}
+                          ) : <span className="text-gray-300 italic">{isReadOnly ? t('없음') : t('미정')}</span>}
                         </td>
                         <td className="py-1 px-2 text-gray-400">{r.disembarkCrewId ? (r.disembarkDate || '-') : '-'}</td>
                         <td className="py-1 px-2 text-gray-400">{disembarkReasonName || '-'}</td>
@@ -1274,8 +1280,8 @@ export default function RotationPlanFormPage() {
         <Card className="bg-gray-50">
           <CardContent className="py-3 px-4">
             <p className="text-xs font-semibold text-gray-600 mb-2">
-              승선자별 수당/공제 확인
-              {planStatus !== 'draft' && <span className="text-gray-400 font-normal ml-1">(임시저장 단계에서 결정된 내용 — 읽기전용)</span>}
+              {t('승선자별 수당/공제 확인')}
+              {planStatus !== 'draft' && <span className="text-gray-400 font-normal ml-1">{t('(임시저장 단계에서 결정된 내용 — 읽기전용)')}</span>}
             </p>
             <div className="space-y-2">
               {rows
@@ -1286,7 +1292,7 @@ export default function RotationPlanFormPage() {
                   const crew = getCrew(r.boardingCrewId);
                   return (
                     <div key={r.assignmentId} className="rounded-md border bg-white px-3 py-2">
-                      <p className="text-xs font-medium text-emerald-800 mb-1.5">{(crew ? crewDisplayName(crew) : '') || r.boardingCrewName || '이름 확인 불가'}</p>
+                      <p className="text-xs font-medium text-emerald-800 mb-1.5">{(crew ? crewDisplayName(crew) : '') || r.boardingCrewName || t('이름 확인 불가')}</p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                         {items.map(item => (
                           <label key={item.allowanceItemId} className={`flex items-center gap-1.5 text-xs ${planStatus === 'draft' ? 'cursor-pointer' : ''}`}>
@@ -1314,7 +1320,7 @@ export default function RotationPlanFormPage() {
         mode="boarding"
         candidates={boardingCandidates}
         onConfirm={addBoardingCrewIdsAsRows}
-        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
+        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? t('임시저장 계획 "{{planName}}"에도 포함됨 — 저장 시 제외됩니다', { planName: r.planName }) : null; }}
         scoringContext={shipId ? { targetShipId: shipId } : undefined}
       />
       <CrewCandidateSelectDialog
@@ -1323,7 +1329,7 @@ export default function RotationPlanFormPage() {
         mode="disembark"
         candidates={disembarkCandidates}
         onConfirm={addDisembarkCrewIdsAsRows}
-        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
+        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? t('임시저장 계획 "{{planName}}"에도 포함됨 — 저장 시 제외됩니다', { planName: r.planName }) : null; }}
       />
       <CrewCandidateSelectDialog
         open={rowPicker !== null}
@@ -1332,7 +1338,7 @@ export default function RotationPlanFormPage() {
         candidates={rowPickerCandidates()}
         onConfirm={handleRowPickerConfirm}
         selectionMode="single"
-        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? `임시저장 계획 "${r.planName}"에도 포함됨 — 저장 시 제외됩니다` : null; }}
+        getReservationNote={c => { const r = draftReservationFor(c.id); return r ? t('임시저장 계획 "{{planName}}"에도 포함됨 — 저장 시 제외됩니다', { planName: r.planName }) : null; }}
         initialCrew={rowPickerInitialCrew()}
         defaultRankId={rowPickerDefaultRankId()}
         scoringContext={

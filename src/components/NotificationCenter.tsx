@@ -20,8 +20,13 @@ import {
 } from '@/lib/notifications';
 import { getCurrentUser } from '@/lib/store';
 import type { User } from '@/lib/store';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/NotificationCenter/en.json';
+i18n.addResourceBundle('en', 'NotificationCenter', en, true, true);
 
 export default function NotificationCenter() {
+  const { t } = useTranslation('NotificationCenter');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -61,7 +66,7 @@ export default function NotificationCenter() {
       setNotifications(notifs);
       setUnreadCount(count);
     } catch (err) {
-      setError('알림을 불러오는데 실패했습니다.');
+      setError(t('알림을 불러오는데 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -90,10 +95,10 @@ export default function NotificationCenter() {
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return '방금 전';
-    if (minutes < 60) return `${minutes}분 전`;
-    if (hours < 24) return `${hours}시간 전`;
-    if (days < 7) return `${days}일 전`;
+    if (minutes < 1) return t('방금 전');
+    if (minutes < 60) return t('{{minutes}}분 전', { minutes });
+    if (hours < 24) return t('{{hours}}시간 전', { hours });
+    if (days < 7) return t('{{days}}일 전', { days });
     return date.toLocaleDateString('ko-KR');
   };
 
@@ -114,7 +119,7 @@ export default function NotificationCenter() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
-          <span>알림</span>
+          <span>{t('알림')}</span>
           {unreadCount > 0 && (
             <Button
               variant="ghost"
@@ -123,20 +128,20 @@ export default function NotificationCenter() {
               onClick={handleMarkAllAsRead}
             >
               <CheckCheck className="h-3 w-3 mr-1" />
-              모두 읽음
+              {t('모두 읽음')}
             </Button>
           )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {loading ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
-            로딩 중...
+            {t('로딩 중...')}
           </div>
         ) : error ? (
           <div className="p-4 text-center text-sm text-destructive">{error}</div>
         ) : notifications.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">
-            알림이 없습니다.
+            {t('알림이 없습니다.')}
           </div>
         ) : (
           notifications.slice(0, 10).map(notification => (

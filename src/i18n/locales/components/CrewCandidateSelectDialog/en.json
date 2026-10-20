@@ -37,5 +37,6 @@
   "선택 해제": "Clear Selection",
   "{{count}}명 추가": "Add {{count}}",
   "승선 후보 추가": "Add Boarding Candidate",
-  "하선 후보 추가": "Add Disembarkation Candidate"
+  "하선 후보 추가": "Add Disembarkation Candidate",
+  "{{score}}점": "{{score}} pts"
 }

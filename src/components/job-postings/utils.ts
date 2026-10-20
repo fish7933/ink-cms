@@ -1,3 +1,7 @@
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/utils/en.json';
+i18n.addResourceBundle('en', 'utils', en, true, true);
+
 // Helper function to format date as YYYY-MM-DD
 export const formatDate = (date: Date): string => {
   const year = date.getFullYear();
@@ -21,9 +25,9 @@ export const getDefaultApplicationDeadline = (): string => {
 };
 
 export const departmentLabels = {
-  deck: '갑판부',
-  engine: '기관부',
-  catering: '사주부',
+  deck: i18n.t('갑판부', { ns: 'utils' }),
+  engine: i18n.t('기관부', { ns: 'utils' }),
+  catering: i18n.t('사주부', { ns: 'utils' }),
 };
 
 export const departmentColors = {

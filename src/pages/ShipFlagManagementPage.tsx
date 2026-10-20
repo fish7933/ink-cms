@@ -16,9 +16,14 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { usePermissions } from '@/hooks/usePermissions';
 import ShipFlagTable from '@/components/ship-flag/ShipFlagTable';
 import ShipFlagDialog from '@/components/ship-flag/ShipFlagDialog';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ShipFlagManagementPage/en.json';
+i18n.addResourceBundle('en', 'ShipFlagManagementPage', en, true, true);
 
 export default function ShipFlagManagementPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('ShipFlagManagementPage');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [shipFlags, setShipFlags] = useState<ShipFlag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,14 +70,14 @@ export default function ShipFlagManagementPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('이 선적국을 삭제하시겠습니까?')) return;
+    if (!confirm(t('이 선적국을 삭제하시겠습니까?'))) return;
     
     try {
       await deleteShipFlag(id);
       await loadData();
     } catch (error) {
       console.error('Error deleting ship flag:', error);
-      alert('선적국 삭제 중 오류가 발생했습니다.');
+      alert(t('선적국 삭제 중 오류가 발생했습니다.'));
     }
   };
 
@@ -88,7 +93,7 @@ export default function ShipFlagManagementPage() {
       setIsDialogOpen(false);
     } catch (error) {
       console.error('Error saving ship flag:', error);
-      alert('선적국 저장 중 오류가 발생했습니다.');
+      alert(t('선적국 저장 중 오류가 발생했습니다.'));
     }
   };
 
@@ -98,7 +103,7 @@ export default function ShipFlagManagementPage() {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-            <p className="text-sm text-gray-600">로딩 중...</p>
+            <p className="text-sm text-gray-600">{t('로딩 중...')}</p>
           </div>
         </div>
       </>
@@ -115,10 +120,10 @@ export default function ShipFlagManagementPage() {
                 <div>
                   <CardTitle className="text-base flex items-center gap-2">
                     <Flag className="w-5 h-5" />
-                    선적국 관리
+                    {t('선적국 관리')}
                   </CardTitle>
                   <CardDescription className="text-xs mt-1">
-                    선박 등록 국가를 관리하세요
+                    {t('선박 등록 국가를 관리하세요')}
                   </CardDescription>
                 </div>
                 {permissions.canCreate && (
@@ -128,7 +133,7 @@ export default function ShipFlagManagementPage() {
                     onClick={handleAdd}
                   >
                     <Plus className="w-4 h-4" />
-                    선적국 추가
+                    {t('선적국 추가')}
                   </Button>
                 )}
               </div>

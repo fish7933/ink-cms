@@ -25,6 +25,10 @@ import type { Ship } from '@/lib/store';
 import type { Company, Fleet } from '@/types/models';
 import ManagementFeeActualCostEntriesSection from '@/components/management-fee/ManagementFeeActualCostEntriesSection';
 import OwnerFleetShipCheckTree from '@/components/management-fee/OwnerFleetShipCheckTree';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ManagementFeeCalculationPage/en.json';
+i18n.addResourceBundle('en', 'ManagementFeeCalculationPage', en, true, true);
 
 const STATUS_LABELS: Record<string, string> = { none: '미생성', draft: '임시저장' };
 const STATUS_COLORS: Record<string, string> = {
@@ -46,6 +50,7 @@ function monthRangeLocal(yearMonth: string): { start: string; end: string } {
 // 선택해서 일괄 계산할 수 있다. 실제 청구서 발행 이전 검증/미리보기 화면이며,
 // 회차 상태는 'draft' 하나뿐이라 급여 대시보드와 달리 확정/승인 단계는 없다.
 export default function ManagementFeeCalculationPage() {
+  const { t } = useTranslation('ManagementFeeCalculationPage');
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
 
@@ -119,7 +124,7 @@ export default function ManagementFeeCalculationPage() {
       const data = await managementFeeCalcService.getDashboardRows(ym, shipList.map(s => ({ id: s.id, name: s.name, owner_id: s.owner_id, fleet_id: s.fleet_id })));
       setRows(data);
     } catch (e) {
-      toast({ title: '불러오기 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('불러오기 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       if (!silent) setLoading(false);
     }
@@ -142,7 +147,7 @@ export default function ManagementFeeCalculationPage() {
     const byOwner = new Map<string, { ownerId: string; ownerName: string; rows: ManagementFeeDashboardRow[] }>();
     for (const row of filteredRows) {
       const key = row.owner_id || '_none';
-      const group = byOwner.get(key) || { ownerId: key, ownerName: row.owner_name || '선주 미지정', rows: [] };
+      const group = byOwner.get(key) || { ownerId: key, ownerName: row.owner_name || t('선주 미지정'), rows: [] };
       group.rows.push(row);
       byOwner.set(key, group);
     }
@@ -166,11 +171,11 @@ export default function ManagementFeeCalculationPage() {
       if (!user) return;
       const result = await managementFeeCalcService.generateForShips(generatableIds, yearMonth, user.id);
       setGenResult(result);
-      toast({ title: `일괄 계산 완료 — 성공 ${result.succeeded.length} / 건너뜀 ${result.skipped.length} / 실패 ${result.failed.length}` });
+      toast({ title: t('일괄 계산 완료 — 성공 {{succeeded}} / 건너뜀 {{skipped}} / 실패 {{failed}}', { succeeded: result.succeeded.length, skipped: result.skipped.length, failed: result.failed.length }) });
       setSelectedIds([]);
       await loadRows(yearMonth, ships, true);
     } catch (e) {
-      toast({ title: '일괄 계산 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('일괄 계산 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setGenerating(false);
     }
@@ -178,7 +183,7 @@ export default function ManagementFeeCalculationPage() {
 
   const handleBulkRegenerate = async () => {
     if (regeneratablePeriods.length === 0) return;
-    if (!confirm(`선택한 ${regeneratablePeriods.length}척의 관리비를 다시 계산하시겠습니까? 이미 발행된 청구서가 있는 선박도 포함됩니다.`)) return;
+    if (!confirm(t('선택한 {{count}}척의 관리비를 다시 계산하시겠습니까? 이미 발행된 청구서가 있는 선박도 포함됩니다.', { count: regeneratablePeriods.length }))) return;
     setBulkRegenerating(true);
     let succeeded = 0;
     const failed: string[] = [];
@@ -193,8 +198,8 @@ export default function ManagementFeeCalculationPage() {
         });
       }
       toast({
-        title: `일괄 재계산 완료 — 성공 ${succeeded} / 실패 ${failed.length}`,
-        description: failed.length > 0 ? `실패: ${failed.join(', ')}` : undefined,
+        title: t('일괄 재계산 완료 — 성공 {{succeeded}} / 실패 {{failed}}', { succeeded, failed: failed.length }),
+        description: failed.length > 0 ? t('실패: {{names}}', { names: failed.join(', ') }) : undefined,
         variant: failed.length > 0 ? 'destructive' : undefined,
       });
       setSelectedIds([]);
@@ -206,7 +211,7 @@ export default function ManagementFeeCalculationPage() {
 
   const handleBulkDelete = async () => {
     if (regeneratablePeriods.length === 0) return;
-    if (!confirm(`선택한 ${regeneratablePeriods.length}척의 관리비 계산 회차를 삭제하시겠습니까? 이미 발행된 청구서가 있는 선박도 포함되며, 되돌릴 수 없습니다.`)) return;
+    if (!confirm(t('선택한 {{count}}척의 관리비 계산 회차를 삭제하시겠습니까? 이미 발행된 청구서가 있는 선박도 포함되며, 되돌릴 수 없습니다.', { count: regeneratablePeriods.length }))) return;
     setBulkDeleting(true);
     let succeeded = 0;
     const failed: string[] = [];
@@ -226,8 +231,8 @@ export default function ManagementFeeCalculationPage() {
       // 삭제 후 남은 계산 회차가 없는 선주+월인데 청구서가 "발행됨"으로 남아있으면 임시저장으로 되돌린다.
       await Promise.all([...affectedOwnerIds].map(ownerId => managementFeeInvoiceService.syncStatusAfterCalcDeleted(ownerId, yearMonth)));
       toast({
-        title: `일괄 삭제 완료 — 성공 ${succeeded} / 실패 ${failed.length}`,
-        description: failed.length > 0 ? `실패: ${failed.join(', ')}` : undefined,
+        title: t('일괄 삭제 완료 — 성공 {{succeeded}} / 실패 {{failed}}', { succeeded, failed: failed.length }),
+        description: failed.length > 0 ? t('실패: {{names}}', { names: failed.join(', ') }) : undefined,
         variant: failed.length > 0 ? 'destructive' : undefined,
       });
       setSelectedIds([]);
@@ -269,7 +274,7 @@ export default function ManagementFeeCalculationPage() {
     setRegenerating(true);
     try {
       await managementFeeCalcService.regeneratePeriod(ledgerPeriodId);
-      toast({ title: '재계산 완료' });
+      toast({ title: t('재계산 완료') });
       await loadRows(yearMonth, ships, true);
       const updatedRow = rows.find(r => r.period_id === ledgerPeriodId);
       if (updatedRow) {
@@ -277,7 +282,7 @@ export default function ManagementFeeCalculationPage() {
         if (fresh[0]?.period_id) loadLedger(fresh[0].period_id);
       }
     } catch (e) {
-      toast({ title: '재계산 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('재계산 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setRegenerating(false);
     }
@@ -285,7 +290,7 @@ export default function ManagementFeeCalculationPage() {
 
   const handleDelete = async () => {
     if (!ledgerPeriodId) return;
-    if (!confirm('이 관리비 계산 회차를 삭제하시겠습니까?')) return;
+    if (!confirm(t('이 관리비 계산 회차를 삭제하시겠습니까?'))) return;
     setDeleting(true);
     try {
       const ownerId = rows.find(r => r.period_id === ledgerPeriodId)?.owner_id;
@@ -293,7 +298,7 @@ export default function ManagementFeeCalculationPage() {
       // 삭제 후 그 선주+월에 남은 계산 회차가 없는데 청구서가 "발행됨"으로 남아있으면
       // 임시저장으로 되돌린다 — 근거 없는 발행 상태가 남지 않도록.
       if (ownerId) await managementFeeInvoiceService.syncStatusAfterCalcDeleted(ownerId, yearMonth);
-      toast({ title: '삭제 완료' });
+      toast({ title: t('삭제 완료') });
       setLedgerPeriodId(null);
       setLedgerData(null);
       await loadRows(yearMonth, ships, true);
@@ -305,42 +310,42 @@ export default function ManagementFeeCalculationPage() {
   return (
     <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-3 space-y-2.5">
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><Receipt className="w-5 h-5 text-muted-foreground" />관리비 계산</h1>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Receipt className="w-5 h-5 text-muted-foreground" />{t('관리비 계산')}</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          담당 선박 전체의 월별 관리비 계산 현황입니다. 아직 계산되지 않은 선박을 선택해 일괄 계산한 뒤, 선박을 클릭해 선원×항목별 상세 내역을 확인하세요. 실제 청구서 발행 전 검증용 화면입니다.
+          {t('담당 선박 전체의 월별 관리비 계산 현황입니다. 아직 계산되지 않은 선박을 선택해 일괄 계산한 뒤, 선박을 클릭해 선원×항목별 상세 내역을 확인하세요. 실제 청구서 발행 전 검증용 화면입니다.')}
         </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">대상 월</Label>
+          <Label className="text-xs">{t('대상 월')}</Label>
           <Input type="month" value={yearMonth} onChange={e => { setYearMonth(e.target.value); setSelectedIds([]); }} className="h-7 text-xs w-40" />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">선주</Label>
+          <Label className="text-xs">{t('선주')}</Label>
           <Select value={ownerFilter || '_all'} onValueChange={v => handleOwnerFilterChange(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">플릿</Label>
+          <Label className="text-xs">{t('플릿')}</Label>
           <Select value={fleetFilter || '_all'} onValueChange={v => setFleetFilter(v === '_all' ? '' : v)}>
-            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="전체" /></SelectTrigger>
+            <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder={t('전체')} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">전체</SelectItem>
+              <SelectItem value="_all">{t('전체')}</SelectItem>
               {fleetsForOwnerFilter.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">선박 검색</Label>
+          <Label className="text-xs">{t('선박 검색')}</Label>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="선박명" className="h-7 text-xs w-44 pl-7" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('선박명')} className="h-7 text-xs w-44 pl-7" />
           </div>
         </div>
       </div>
@@ -352,7 +357,7 @@ export default function ManagementFeeCalculationPage() {
           className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
         >
           {showQuickSelect ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-          전체 / 선주 / 플릿 / 선박 단위로 빠르게 선택
+          {t('전체 / 선주 / 플릿 / 선박 단위로 빠르게 선택')}
         </button>
         {showQuickSelect && (
           <div className="px-3 pb-2 pt-1 border-t">
@@ -369,20 +374,20 @@ export default function ManagementFeeCalculationPage() {
 
       {selectedIds.length > 0 && (
         <div className="flex items-center justify-between gap-2 flex-wrap bg-blue-50 border border-blue-200 rounded-md px-3 py-1.5">
-          <span className="text-xs font-medium text-blue-800">{selectedIds.length}척 선택됨</span>
+          <span className="text-xs font-medium text-blue-800">{t('{{count}}척 선택됨', { count: selectedIds.length })}</span>
           <div className="flex items-center gap-1.5 flex-wrap">
             {generatableIds.length > 0 && (
               <Button size="sm" className="h-7 text-xs gap-1" onClick={handleBulkGenerate} disabled={generating}>
-                <RefreshCw className="w-3.5 h-3.5" />{generating ? '계산 중...' : `일괄 계산 (${generatableIds.length})`}
+                <RefreshCw className="w-3.5 h-3.5" />{generating ? t('계산 중...') : t('일괄 계산 ({{count}})', { count: generatableIds.length })}
               </Button>
             )}
             {regeneratablePeriods.length > 0 && (
               <>
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={handleBulkRegenerate} disabled={bulkRegenerating || bulkDeleting}>
-                  <RefreshCw className="w-3.5 h-3.5" />{bulkRegenerating ? '재계산 중...' : `일괄 재계산 (${regeneratablePeriods.length})`}
+                  <RefreshCw className="w-3.5 h-3.5" />{bulkRegenerating ? t('재계산 중...') : t('일괄 재계산 ({{count}})', { count: regeneratablePeriods.length })}
                 </Button>
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-red-600 border-red-300 hover:bg-red-50" onClick={handleBulkDelete} disabled={bulkRegenerating || bulkDeleting}>
-                  <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? '삭제 중...' : `일괄 삭제 (${regeneratablePeriods.length})`}
+                  <Trash2 className="w-3.5 h-3.5" />{bulkDeleting ? t('삭제 중...') : t('일괄 삭제 ({{count}})', { count: regeneratablePeriods.length })}
                 </Button>
               </>
             )}
@@ -393,7 +398,7 @@ export default function ManagementFeeCalculationPage() {
       {loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
       ) : filteredRows.length === 0 ? (
-        <div className="text-center py-12 text-sm text-gray-400">조건에 맞는 선박이 없습니다.</div>
+        <div className="text-center py-12 text-sm text-gray-400">{t('조건에 맞는 선박이 없습니다.')}</div>
       ) : (
         <div className="rounded-md border overflow-hidden overflow-x-auto">
           <Table>
@@ -405,10 +410,10 @@ export default function ManagementFeeCalculationPage() {
                     onCheckedChange={checked => toggleSelectAll(!!checked)}
                   />
                 </TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">플릿</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">선박</TableHead>
-                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">상태</TableHead>
-                <TableHead className="py-1 px-2 text-xs text-center whitespace-nowrap">계산 라인 수</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('플릿')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('선박')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('상태')}</TableHead>
+                <TableHead className="py-1 px-2 text-xs text-center whitespace-nowrap">{t('계산 라인 수')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -440,7 +445,7 @@ export default function ManagementFeeCalculationPage() {
                           </TableCell>
                           <TableCell className="py-1 px-2 text-xs text-muted-foreground">{row.fleet_name || '-'}</TableCell>
                           <TableCell className="py-1 px-2 text-xs font-medium">{row.ship_name}</TableCell>
-                          <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{STATUS_LABELS[row.status]}</Badge></TableCell>
+                          <TableCell className="py-1 px-2"><Badge variant="outline" className={`text-[11px] ${STATUS_COLORS[row.status]}`}>{t(STATUS_LABELS[row.status])}</Badge></TableCell>
                           <TableCell className="py-1 px-2 text-xs text-center">{row.line_count > 0 ? row.line_count : '-'}</TableCell>
                         </TableRow>
                         {/* 선택된 선박의 선원×항목 상세 내역 — 클릭한 선박 바로 아래에 펼쳐진다.
@@ -453,14 +458,14 @@ export default function ManagementFeeCalculationPage() {
                               <div className="p-2.5 space-y-2.5">
                                 <div className="flex items-center justify-between">
                                   <h3 className="text-sm font-semibold">
-                                    {ledgerData ? `${[ledgerData.owner_name, ledgerData.fleet_name, ledgerData.ship_name].filter(Boolean).join(' > ')} — ${yearMonth}` : '불러오는 중...'}
+                                    {ledgerData ? `${[ledgerData.owner_name, ledgerData.fleet_name, ledgerData.ship_name].filter(Boolean).join(' > ')} — ${yearMonth}` : t('불러오는 중...')}
                                   </h3>
                                   <div className="flex gap-2">
                                     <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs bg-white" onClick={handleRegenerate} disabled={regenerating}>
-                                      <RefreshCw className="w-3.5 h-3.5" />{regenerating ? '재계산 중...' : '재계산'}
+                                      <RefreshCw className="w-3.5 h-3.5" />{regenerating ? t('재계산 중...') : t('재계산')}
                                     </Button>
                                     <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs text-red-600 border-red-300 hover:bg-red-50 bg-white" onClick={handleDelete} disabled={deleting}>
-                                      <Trash2 className="w-3.5 h-3.5" />삭제
+                                      <Trash2 className="w-3.5 h-3.5" />{t('삭제')}
                                     </Button>
                                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setLedgerPeriodId(null); setLedgerData(null); }}>
                                       <X className="w-3.5 h-3.5" />
@@ -468,31 +473,31 @@ export default function ManagementFeeCalculationPage() {
                                   </div>
                                 </div>
                                 {ledgerLoading || !ledgerData ? (
-                                  <div className="text-center py-8 text-sm text-gray-400">불러오는 중...</div>
+                                  <div className="text-center py-8 text-sm text-gray-400">{t('불러오는 중...')}</div>
                                 ) : (
                                   <>
                                     {/* 선원별 상세 (피벗) — 이번 달 승선/하선 선원은 배지 + 배경색으로 표시해
                                         승·하선 비용(항공권 등)을 실비 항목에 빠짐없이 입력했는지 바로 확인할 수 있게 한다. */}
                                     <div>
-                                    <h3 className="text-sm font-semibold mb-2">선원별 청구 항목</h3>
+                                    <h3 className="text-sm font-semibold mb-2">{t('선원별 청구 항목')}</h3>
                                     <div className="rounded-md border bg-white overflow-x-auto">
                                       <Table>
                                         <TableHeader>
                                           <TableRow>
-                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">직급</TableHead>
-                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">이름</TableHead>
-                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">국적</TableHead>
-                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">승선일</TableHead>
-                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">하선일</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('직급')}</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('이름')}</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('국적')}</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('승선일')}</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs whitespace-nowrap">{t('하선일')}</TableHead>
                                             {ledgerData.fee_item_columns.map(col => (
                                               <TableHead key={col} className="py-1 px-2 text-xs text-right whitespace-nowrap">{col}</TableHead>
                                             ))}
-                                            <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">합계</TableHead>
+                                            <TableHead className="py-1 px-2 text-xs text-right whitespace-nowrap">{t('합계')}</TableHead>
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                           {ledgerData.rows.length === 0 ? (
-                                            <TableRow><TableCell colSpan={6 + ledgerData.fee_item_columns.length} className="text-center py-6 text-xs text-gray-400">계산된 라인이 없습니다.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={6 + ledgerData.fee_item_columns.length} className="text-center py-6 text-xs text-gray-400">{t('계산된 라인이 없습니다.')}</TableCell></TableRow>
                                           ) : ledgerData.rows.map(r => {
                                             const rowKey = r.crew_member_id + r.embark_date;
                                             const isEmbarked = embarkedKeySet.has(rowKey);
@@ -503,8 +508,8 @@ export default function ManagementFeeCalculationPage() {
                                                 <TableCell className="py-1 px-2 text-xs font-medium whitespace-nowrap">
                                                   <span className="inline-flex items-center gap-1">
                                                     {r.crew_name}
-                                                    {isEmbarked && <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-100">승선</Badge>}
-                                                    {isDisembarked && <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">하선</Badge>}
+                                                    {isEmbarked && <Badge className="text-[10px] bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-100">{t('승선')}</Badge>}
+                                                    {isDisembarked && <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">{t('하선')}</Badge>}
                                                   </span>
                                                 </TableCell>
                                                 <TableCell className="py-1 px-2 text-xs">{r.nationality || '-'}</TableCell>
@@ -512,7 +517,7 @@ export default function ManagementFeeCalculationPage() {
                                                 <TableCell className="py-1 px-2 text-xs whitespace-nowrap">{r.disembark_date || '-'}</TableCell>
                                                 {ledgerData.fee_item_columns.map(col => (
                                                   <TableCell key={col} className="py-1 px-2 text-xs text-right font-mono">
-                                                    {r.item_amounts[col] == null ? (col in r.item_amounts ? '수기입력' : '-') : fmt(r.item_amounts[col]!)}
+                                                    {r.item_amounts[col] == null ? (col in r.item_amounts ? t('수기입력') : '-') : fmt(r.item_amounts[col]!)}
                                                   </TableCell>
                                                 ))}
                                                 <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(r.total_amount)}</TableCell>
@@ -524,7 +529,7 @@ export default function ManagementFeeCalculationPage() {
                                           <TableFooter>
                                             <TableRow>
                                               <TableCell colSpan={5} className="py-1 px-2 text-xs text-right font-semibold">
-                                                합계 <span className="font-normal text-gray-400">(아래 항목별 합계와 비교)</span>
+                                                {t('합계')} <span className="font-normal text-gray-400">{t('(아래 항목별 합계와 비교)')}</span>
                                               </TableCell>
                                               {ledgerData.fee_item_columns.map(col => (
                                                 <TableCell key={`sum-${col}`} className="py-1 px-2 text-xs text-right font-mono font-semibold">
@@ -544,33 +549,33 @@ export default function ManagementFeeCalculationPage() {
                                     {/* 항목별 합계 (상한 적용 여부 / 부가세 대상 여부) */}
                                     {ledgerData.item_totals.length > 0 && (
                                       <div>
-                                      <h3 className="text-sm font-semibold mb-2">항목별 청구금액</h3>
+                                      <h3 className="text-sm font-semibold mb-2">{t('항목별 청구금액')}</h3>
                                       <div className="rounded-md border bg-white overflow-x-auto">
                                         <Table>
                                           <TableHeader>
                                             <TableRow>
-                                              <TableHead className="py-1 px-2 text-xs">청구 항목</TableHead>
-                                              <TableHead className="py-1 px-2 text-xs text-right">전 선원 합계</TableHead>
-                                              <TableHead className="py-1 px-2 text-xs text-right">상한</TableHead>
-                                              <TableHead className="py-1 px-2 text-xs text-right">청구 금액</TableHead>
-                                              <TableHead className="py-1 px-2 text-xs text-right text-teal-700">부가세</TableHead>
-                                              <TableHead className="py-1 px-2 text-xs">비고</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs">{t('청구 항목')}</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right">{t('전 선원 합계')}</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right">{t('상한')}</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right">{t('청구 금액')}</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs text-right text-teal-700">{t('부가세')}</TableHead>
+                                              <TableHead className="py-1 px-2 text-xs">{t('비고')}</TableHead>
                                             </TableRow>
                                           </TableHeader>
                                           {(() => {
                                             const autoItems = ledgerData.item_totals.filter(t => !t.is_actual_cost);
                                             const actualItems = ledgerData.item_totals.filter(t => t.is_actual_cost);
-                                            const renderRow = (t: typeof ledgerData.item_totals[number]) => (
-                                              <TableRow key={`${t.fee_item_id}-${t.currency}`}>
-                                                <TableCell className="py-1 px-2 text-xs font-medium">{t.fee_item_name}</TableCell>
-                                                <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(t.raw_total)} {t.currency}</TableCell>
-                                                <TableCell className="py-1 px-2 text-xs text-right font-mono">{t.cap_amount != null ? `${fmt(t.cap_amount)} ${t.currency}` : '-'}</TableCell>
-                                                <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(t.billed_total)} {t.currency}</TableCell>
+                                            const renderRow = (row: typeof ledgerData.item_totals[number]) => (
+                                              <TableRow key={`${row.fee_item_id}-${row.currency}`}>
+                                                <TableCell className="py-1 px-2 text-xs font-medium">{row.fee_item_name}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono">{fmt(row.raw_total)} {row.currency}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono">{row.cap_amount != null ? `${fmt(row.cap_amount)} ${row.currency}` : '-'}</TableCell>
+                                                <TableCell className="py-1 px-2 text-xs text-right font-mono font-semibold">{fmt(row.billed_total)} {row.currency}</TableCell>
                                                 <TableCell className="py-1 px-2 text-xs text-right font-mono text-teal-700">
-                                                  {!t.is_vat_applicable ? '-' : t.vat_amount_krw != null ? `${fmt(t.vat_amount_krw)} KRW` : '환율 없음'}
+                                                  {!row.is_vat_applicable ? '-' : row.vat_amount_krw != null ? `${fmt(row.vat_amount_krw)} KRW` : t('환율 없음')}
                                                 </TableCell>
                                                 <TableCell className="py-1 px-2 text-xs">
-                                                  {t.was_capped && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50">상한 적용됨</Badge>}
+                                                  {row.was_capped && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50">{t('상한 적용됨')}</Badge>}
                                                 </TableCell>
                                               </TableRow>
                                             );

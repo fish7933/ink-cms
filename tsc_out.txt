@@ -1,0 +1,119 @@
+src/components/document/ApprovalDocumentIssuedSheet.tsx(472,104): error TS2322: Type 'FormFieldValue' is not assignable to type 'ReactI18NextChildren | Iterable<ReactI18NextChildren>'.
+  Type 'LineItemRow[]' is not assignable to type 'ReactI18NextChildren | Iterable<ReactI18NextChildren>'.
+    Type 'LineItemRow[]' is not assignable to type 'Iterable<ReactI18NextChildren>'.
+      The types returned by '[Symbol.iterator]().next(...)' are incompatible between these types.
+        Type 'IteratorResult<LineItemRow, any>' is not assignable to type 'IteratorResult<ReactI18NextChildren, any>'.
+          Type 'IteratorYieldResult<LineItemRow>' is not assignable to type 'IteratorResult<ReactI18NextChildren, any>'.
+            Type 'IteratorYieldResult<LineItemRow>' is not assignable to type 'IteratorYieldResult<ReactI18NextChildren>'.
+              Type 'LineItemRow' is not assignable to type 'ReactI18NextChildren'.
+                Type 'LineItemRow' is missing the following properties from type 'ReactPortal': children, type, props, key
+src/components/job-postings/useJobPostingData.ts(207,13): error TS2322: Type '{ rank_id: string; rank_name: string; rank_code: string; department: string; base_salary: number; currency: string; contract_months: number; positions_available: number; salary_grade: any; }[]' is not assignable to type 'SelectedRankDetail[]'.
+  Property 'preferred_nationalities' is missing in type '{ rank_id: string; rank_name: string; rank_code: string; department: string; base_salary: number; currency: string; contract_months: number; positions_available: number; salary_grade: any; }' but required in type 'SelectedRankDetail'.
+src/components/job-postings/useJobPostingData.ts(217,27): error TS2339: Property 'salary_grade' does not exist on type '{ id: string; rank_id: string; rank_name: string; rank_code: string; department: string; positions_available: number; contract_months: number; salary_amount?: number; salary_currency: string; preferred_nationalities: string[]; salary_components?: { ...; }[]; }'.
+src/lib/store.ts(10,3): error TS2305: Module '"@/types/models"' has no exported member 'SalaryTable'.
+src/lib/store.ts(12,3): error TS2305: Module '"@/types/models"' has no exported member 'JobApplication'.
+src/lib/store.ts(13,3): error TS2305: Module '"@/types/models"' has no exported member 'CrewAssignment'.
+src/lib/store.ts(28,3): error TS2741: Property 'created_at' is missing in type 'import("C:/code/ink-cms/src/services/auth.service").User' but required in type 'import("C:/code/ink-cms/src/types/models").User'.
+src/pages/CrewAssignmentPage.tsx(12,21): error TS2305: Module '"@/types/models"' has no exported member 'CrewAssignment'.
+src/pages/DashboardPage.tsx(202,57): error TS2367: This comparison appears to be unintentional because the types '"active" | "filled" | "cancelled"' and '"open"' have no overlap.
+src/pages/JobPostingsPage.tsx(284,29): error TS2339: Property 'rank_category' does not exist on type '{ id: string; rank_id: string; rank_name: string; rank_code: string; department: string; positions_available: number; contract_months: number; salary_amount?: number; salary_currency: string; preferred_nationalities: string[]; salary_components?: { ...; }[]; }'.
+src/pages/ProfilePage.tsx(113,15): error TS2352: Conversion of type 'User' to type 'UserData' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'created_at' is missing in type 'User' but required in type 'UserData'.
+src/pages/ProfilePage.tsx(117,28): error TS2339: Property 'phone' does not exist on type 'User'.
+src/pages/RanksPage.tsx(69,143): error TS2352: Conversion of type 'Rank' to type 'Record<string, string>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'Rank'.
+src/pages/RanksPage.tsx(232,73): error TS2352: Conversion of type 'Rank' to type 'Record<string, string>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'Rank'.
+src/pages/ShipManagementPage.tsx(233,20): error TS2339: Property 'imo' does not exist on type 'Ship'.
+src/pages/ShipManagementPage.tsx(233,32): error TS2339: Property 'imo' does not exist on type 'Ship'.
+src/pages/ShipManagementPage.tsx(288,7): error TS2353: Object literal may only specify known properties, and 'imo' does not exist in type 'Partial<Ship>'.
+src/pages/ShipManagementPage.tsx(378,43): error TS2339: Property 'imo' does not exist on type 'Ship'.
+src/pages/ShipManagementPage.tsx(405,22): error TS2339: Property 'is_bbchp' does not exist on type 'Ship'.
+src/pages/ShipManagementPage.tsx(542,19): error TS2322: Type 'Dispatch<SetStateAction<{ name: string; owner_id: string; fleet_id: string; imo_number: string; call_sign: string; mmsi: string; flag: string; ship_type: string; gross_tonnage: string; dwt: string; gt: string; built_year: string; ... 18 more ...; is_bbchp: boolean; }>>' is not assignable to type '(data: ShipFormData) => void'.
+  Types of parameters 'value' and 'data' are incompatible.
+    Type 'ShipFormData' is not assignable to type 'SetStateAction<{ name: string; owner_id: string; fleet_id: string; imo_number: string; call_sign: string; mmsi: string; flag: string; ship_type: string; gross_tonnage: string; dwt: string; gt: string; built_year: string; ... 18 more ...; is_bbchp: boolean; }>'.
+      Type 'ShipFormData' is not assignable to type '{ name: string; owner_id: string; fleet_id: string; imo_number: string; call_sign: string; mmsi: string; flag: string; ship_type: string; gross_tonnage: string; dwt: string; gt: string; built_year: string; ... 18 more ...; is_bbchp: boolean; }'.
+        Property 'is_bbchp' is optional in type 'ShipFormData' but required in type '{ name: string; owner_id: string; fleet_id: string; imo_number: string; call_sign: string; mmsi: string; flag: string; ship_type: string; gross_tonnage: string; dwt: string; gt: string; built_year: string; ... 18 more ...; is_bbchp: boolean; }'.
+src/services/crew.service.ts(4,27): error TS2305: Module '"@/types/models"' has no exported member 'CrewStatus'.
+src/services/crew.service.ts(4,39): error TS2305: Module '"@/types/models"' has no exported member 'CrewExperience'.
+src/services/crew.service.ts(558,30): error TS2339: Property 'experience' does not exist on type 'Omit<CrewMember, "id" | "updated_at" | "created_at">'.
+src/services/crew.service.ts(579,17): error TS2339: Property 'experience' does not exist on type 'Partial<CrewMember>'.
+src/services/crew.service.ts(579,75): error TS2339: Property 'experience' does not exist on type 'Partial<CrewMember>'.
+src/services/job-posting-group.service.ts(3,32): error TS2724: '"@/types/models"' has no exported member named 'JobPostingRank'. Did you mean 'JobPosting'?
+src/services/job-posting-group.service.ts(150,5): error TS2322: Type '{ company_name: string; fleet_name: string; ship_name: string; ranks: { rank_name: string; rank_code: string; rank_category: "officer" | "rating"; department: string; id: string; group_id: string; ... 10 more ...; rank?: { ...; }; }[]; ... 15 more ...; ship?: { ...; }; }[]' is not assignable to type 'JobPostingGroupWithDetails[]'.
+  Property 'preferred_nationalities' is missing in type '{ company_name: string; fleet_name: string; ship_name: string; ranks: { rank_name: string; rank_code: string; rank_category: "officer" | "rating"; department: string; id: string; group_id: string; ... 10 more ...; rank?: { name: string; rank_code: string; rank_category: "officer" | "rating"; department: string; }; }...' but required in type 'JobPostingGroupWithDetails'.
+src/services/job-posting-group.service.ts(199,7): error TS2322: Type '{ rank_name: string; rank_code: string; rank_category: "officer" | "rating"; department: string; id: string; group_id: string; rank_id: string; positions_available: number; contract_months: number; ... 7 more ...; rank?: { ...; }; }[]' is not assignable to type '{ id: string; rank_id: string; rank_name: string; rank_code: string; department: string; positions_available: number; contract_months: number; salary_amount?: number; salary_currency: string; preferred_nationalities: string[]; salary_components?: { ...; }[]; }[]'.
+  Property 'preferred_nationalities' is missing in type '{ rank_name: string; rank_code: string; rank_category: "officer" | "rating"; department: string; id: string; group_id: string; rank_id: string; positions_available: number; contract_months: number; ... 7 more ...; rank?: { name: string; rank_code: string; rank_category: "officer" | "rating"; department: string; }; }' but required in type '{ id: string; rank_id: string; rank_name: string; rank_code: string; department: string; positions_available: number; contract_months: number; salary_amount?: number; salary_currency: string; preferred_nationalities: string[]; salary_components?: { ...; }[]; }'.
+src/services/job-posting-group.service.ts(336,35): error TS2345: Argument of type '(g: DuplicateCheckResult) => string' is not assignable to parameter of type '(value: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }, index: number, array: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }[]) => string'.
+  Types of parameters 'g' and 'value' are incompatible.
+    Type '{ id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }' is not assignable to type 'DuplicateCheckResult'.
+      Types of property 'ship' are incompatible.
+        Property 'name' is missing in type '{ name: any; }[]' but required in type '{ name: string; }'.
+src/services/job-posting-group.service.ts(365,35): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(predicate: (value: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }, index: number, obj: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }[]) => value is { ...; }, thisArg?: any): { ...; }', gave the following error.
+    Argument of type '(g: DuplicateCheckResult) => boolean' is not assignable to parameter of type '(value: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }, index: number, obj: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }[]) => value is { id: any; ship_id: any; embarkation_date: any; status: any; ship: { ...; }[]; }'.
+      Types of parameters 'g' and 'value' are incompatible.
+        Type '{ id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }' is not assignable to type 'DuplicateCheckResult'.
+          Types of property 'ship' are incompatible.
+            Property 'name' is missing in type '{ name: any; }[]' but required in type '{ name: string; }'.
+  Overload 2 of 2, '(predicate: (value: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }, index: number, obj: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }[]) => unknown, thisArg?: any): { ...; }', gave the following error.
+    Argument of type '(g: DuplicateCheckResult) => boolean' is not assignable to parameter of type '(value: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }, index: number, obj: { id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }[]) => unknown'.
+      Types of parameters 'g' and 'value' are incompatible.
+        Type '{ id: any; ship_id: any; embarkation_date: any; status: any; ship: { name: any; }[]; }' is not assignable to type 'DuplicateCheckResult'.
+          Types of property 'ship' are incompatible.
+            Property 'name' is missing in type '{ name: any; }[]' but required in type '{ name: string; }'.
+src/services/job-posting-group.service.ts(370,36): error TS2339: Property 'name' does not exist on type '{ name: any; }[]'.
+src/services/job-posting.service.ts(59,5): error TS2322: Type '{ company_name: string; fleet_name: string; ship_name: string; rank_name: string; rank_code: string; rank_category: "officer" | "rating"; id: string; company_id: string; fleet_id?: string; ship_id: string; ... 19 more ...; rank?: { ...; }; }[]' is not assignable to type 'JobPostingWithDetails[]'.
+  Property 'department' is missing in type '{ company_name: string; fleet_name: string; ship_name: string; rank_name: string; rank_code: string; rank_category: "officer" | "rating"; id: string; company_id: string; fleet_id?: string; ... 20 more ...; rank?: { name: string; rank_code: string; rank_category: "officer" | "rating"; }; }' but required in type 'JobPostingWithDetails'.
+src/services/job-posting.service.ts(142,38): error TS2339: Property 'name' does not exist on type '{ name: any; rank_code: any; }[]'.
+src/services/job-posting.service.ts(143,38): error TS2339: Property 'rank_code' does not exist on type '{ name: any; rank_code: any; }[]'.
+src/services/job-posting.service.ts(150,36): error TS2339: Property 'name' does not exist on type '{ name: any; }[]'.
+src/services/job.service.ts(3,27): error TS2305: Module '"@/types/models"' has no exported member 'JobPostingPosition'.
+src/services/job.service.ts(3,47): error TS2305: Module '"@/types/models"' has no exported member 'JobApplication'.
+src/services/rotation.service.ts(15,3): error TS2305: Module '"@/types/rotation"' has no exported member 'CrewEmbarkationRecordWithDetails'.
+src/services/rotation.service.ts(17,3): error TS2305: Module '"@/types/rotation"' has no exported member 'RotationPlanStatus'.
+src/services/salary.service.ts(2,15): error TS2305: Module '"@/types/models"' has no exported member 'SalaryTable'.
+src/services/ship-classification.service.ts(126,54): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+src/services/ship.service.ts(2,21): error TS2305: Module '"@/types/models"' has no exported member 'ShipFilterOptions'.
+src/services/supervisor.service.ts(136,32): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(iterable?: Iterable<readonly [unknown, unknown]>): Map<unknown, unknown>', gave the following error.
+    Argument of type 'any[][]' is not assignable to parameter of type 'Iterable<readonly [unknown, unknown]>'.
+      The types returned by '[Symbol.iterator]().next(...)' are incompatible between these types.
+        Type 'IteratorResult<any[], any>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.
+          Type 'IteratorYieldResult<any[]>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.
+            Type 'IteratorYieldResult<any[]>' is not assignable to type 'IteratorYieldResult<readonly [unknown, unknown]>'.
+              Type 'any[]' is not assignable to type 'readonly [unknown, unknown]'.
+                Target requires 2 element(s) but source may have fewer.
+  Overload 2 of 4, '(entries?: readonly (readonly [unknown, unknown])[]): Map<unknown, unknown>', gave the following error.
+    Argument of type 'any[][]' is not assignable to parameter of type 'readonly (readonly [unknown, unknown])[]'.
+      Type 'any[]' is not assignable to type 'readonly [unknown, unknown]'.
+        Target requires 2 element(s) but source may have fewer.
+src/services/supervisor.service.ts(137,32): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(iterable?: Iterable<readonly [unknown, unknown]>): Map<unknown, unknown>', gave the following error.
+    Argument of type 'any[][]' is not assignable to parameter of type 'Iterable<readonly [unknown, unknown]>'.
+      The types returned by '[Symbol.iterator]().next(...)' are incompatible between these types.
+        Type 'IteratorResult<any[], any>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.
+          Type 'IteratorYieldResult<any[]>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.
+            Type 'IteratorYieldResult<any[]>' is not assignable to type 'IteratorYieldResult<readonly [unknown, unknown]>'.
+              Type 'any[]' is not assignable to type 'readonly [unknown, unknown]'.
+                Target requires 2 element(s) but source may have fewer.
+  Overload 2 of 4, '(entries?: readonly (readonly [unknown, unknown])[]): Map<unknown, unknown>', gave the following error.
+    Argument of type 'any[][]' is not assignable to parameter of type 'readonly (readonly [unknown, unknown])[]'.
+      Type 'any[]' is not assignable to type 'readonly [unknown, unknown]'.
+        Target requires 2 element(s) but source may have fewer.
+src/services/supervisor.service.ts(138,31): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(iterable?: Iterable<readonly [unknown, unknown]>): Map<unknown, unknown>', gave the following error.
+    Argument of type 'any[][]' is not assignable to parameter of type 'Iterable<readonly [unknown, unknown]>'.
+      The types returned by '[Symbol.iterator]().next(...)' are incompatible between these types.
+        Type 'IteratorResult<any[], any>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.
+          Type 'IteratorYieldResult<any[]>' is not assignable to type 'IteratorResult<readonly [unknown, unknown], any>'.
+            Type 'IteratorYieldResult<any[]>' is not assignable to type 'IteratorYieldResult<readonly [unknown, unknown]>'.
+              Type 'any[]' is not assignable to type 'readonly [unknown, unknown]'.
+                Target requires 2 element(s) but source may have fewer.
+  Overload 2 of 4, '(entries?: readonly (readonly [unknown, unknown])[]): Map<unknown, unknown>', gave the following error.
+    Argument of type 'any[][]' is not assignable to parameter of type 'readonly (readonly [unknown, unknown])[]'.
+      Type 'any[]' is not assignable to type 'readonly [unknown, unknown]'.
+        Target requires 2 element(s) but source may have fewer.
+src/services/supervisor.service.ts(150,11): error TS2322: Type 'unknown' is not assignable to type 'string'.
+src/services/supervisor.service.ts(153,11): error TS2322: Type 'unknown' is not assignable to type 'string'.
+src/services/supervisor.service.ts(156,11): error TS2322: Type 'unknown' is not assignable to type 'string'.

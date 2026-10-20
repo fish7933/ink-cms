@@ -6,6 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getBoardingScoreWeights, updateBoardingScoreWeights, DEFAULT_BOARDING_SCORE_WEIGHTS, type BoardingScoreWeights } from '@/services/crew-boarding-score.service';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/CrewBoardingScoreSettingsPage/en.json';
+i18n.addResourceBundle('en', 'CrewBoardingScoreSettingsPage', en, true, true);
 
 const FIELDS: { key: keyof BoardingScoreWeights; label: string; hint: string }[] = [
   { key: 'shipType', label: '선종 경험', hint: '과거 승선했던 선종이 대상 선박과 같은지' },
@@ -27,6 +31,7 @@ const FIELDS: { key: keyof BoardingScoreWeights; label: string; hint: string }[]
 // 항상 0~100 기준으로 나온다.
 export default function CrewBoardingScoreSettingsPage() {
   const { toast } = useToast();
+  const { t } = useTranslation('CrewBoardingScoreSettingsPage');
   const [weights, setWeights] = useState<BoardingScoreWeights>(DEFAULT_BOARDING_SCORE_WEIGHTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,7 +44,7 @@ export default function CrewBoardingScoreSettingsPage() {
       setWeights(await getBoardingScoreWeights());
     } catch (e) {
       console.error(e);
-      toast({ title: '불러오기 실패', variant: 'destructive' });
+      toast({ title: t('불러오기 실패'), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -49,10 +54,10 @@ export default function CrewBoardingScoreSettingsPage() {
     setSaving(true);
     try {
       await updateBoardingScoreWeights(weights);
-      toast({ title: '저장 완료' });
+      toast({ title: t('저장 완료') });
     } catch (e) {
       console.error(e);
-      toast({ title: '저장 실패', description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
+      toast({ title: t('저장 실패'), description: e instanceof Error ? e.message : undefined, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -66,13 +71,13 @@ export default function CrewBoardingScoreSettingsPage() {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">승선 적합도 설정</CardTitle>
+          <CardTitle className="text-base">{t('승선 적합도 설정')}</CardTitle>
           <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving || loading}>
-            <Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}
+            <Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}
           </Button>
         </div>
         <p className="text-xs text-gray-500 pt-1">
-          로테이션 승선 후보를 추천할 때 각 요소를 얼마나 중요하게 볼지 정합니다. 상대적인 비중이라 합이 꼭 100일 필요는 없고, 옆의 "100 기준" 값은 현재 입력값들을 100 기준으로 환산해 참고용으로 보여줍니다. 실제 적합도 점수는 합계와 무관하게 항상 0~100으로 계산됩니다.
+          {t('로테이션 승선 후보를 추천할 때 각 요소를 얼마나 중요하게 볼지 정합니다. 상대적인 비중이라 합이 꼭 100일 필요는 없고, 옆의 "100 기준" 값은 현재 입력값들을 100 기준으로 환산해 참고용으로 보여줍니다. 실제 적합도 점수는 합계와 무관하게 항상 0~100으로 계산됩니다.')}
         </p>
       </CardHeader>
       <CardContent>
@@ -86,8 +91,8 @@ export default function CrewBoardingScoreSettingsPage() {
               return (
                 <div key={f.key} className="grid grid-cols-[1fr_90px_90px] items-center gap-3">
                   <div>
-                    <Label className="text-xs">{f.label}</Label>
-                    <p className="text-[11px] text-gray-400">{f.hint}</p>
+                    <Label className="text-xs">{t(f.label)}</Label>
+                    <p className="text-[11px] text-gray-400">{t(f.hint)}</p>
                   </div>
                   <Input
                     type="number"
@@ -96,11 +101,11 @@ export default function CrewBoardingScoreSettingsPage() {
                     value={weights[f.key]}
                     onChange={e => setWeights(w => ({ ...w, [f.key]: e.target.value === '' ? 0 : Number(e.target.value) }))}
                   />
-                  <p className="text-xs text-gray-500 text-right">100 기준 {normalized}</p>
+                  <p className="text-xs text-gray-500 text-right">{t('100 기준 {{value}}', { value: normalized })}</p>
                 </div>
               );
             })}
-            <p className="text-xs text-gray-400 pt-1">합계: {total}</p>
+            <p className="text-xs text-gray-400 pt-1">{t('합계: {{total}}', { total })}</p>
           </div>
         )}
       </CardContent>

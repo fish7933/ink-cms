@@ -1,0 +1,23 @@
+{
+  "검토대기": "Pending Review",
+  "검토완료": "Reviewed",
+  "수락": "Accepted",
+  "거절": "Rejected",
+  "선원 추천 현황: {{shipName}}": "Crew Recommendation Status: {{shipName}}",
+  "구인 공고": "Job Postings",
+  "목록": "List",
+  "내 회사 선원 추천 현황": "My Company's Crew Recommendations",
+  "선원 추천 현황": "Crew Recommendation Status",
+  "아직 추천한 선원이 없습니다.": "No crew have been recommended yet.",
+  "아직 받은 선원 추천이 없습니다.": "No crew recommendations received yet.",
+  "직급": "Rank",
+  "이름": "Name",
+  "생년월일": "Date of Birth",
+  "출국가능일": "Available Departure Date",
+  "희망급여": "Desired Salary",
+  "계약기간": "Contract Period",
+  "매닝사": "Manning Agency",
+  "추천일": "Recommendation Date",
+  "상태": "Status",
+  "개월": "months"
+}

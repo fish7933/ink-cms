@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/JobPostingsPage/en.json';
 import { msg } from '@/lib/messages';
 import { Plus, Search, Filter, AlertTriangle, Eye, UserPlus, Users, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -36,10 +39,13 @@ import { getCompanies, getFleets, getShips, getCurrentUser } from '@/lib/store';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { JobPostingGroupWithDetails, Company, Fleet, Ship, User } from '@/types/models';
 
+i18n.addResourceBundle('en', 'JobPostingsPage', en, true, true);
+
 const ITEMS_PER_PAGE = 20;
 
 export default function JobPostingsPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation('JobPostingsPage');
   const { openNewTab } = useTabContext();
   const [postings, setPostings] = useState<JobPostingGroupWithDetails[]>([]);
   const [filteredPostings, setFilteredPostings] = useState<JobPostingGroupWithDetails[]>([]);
@@ -299,26 +305,26 @@ export default function JobPostingsPage() {
   };
 
   const handleAdd = () => {
-    openNewTab('/job-postings/new', '다직급 공고 등록', true);
+    openNewTab('/job-postings/new', t('다직급 공고 등록'), true);
   };
 
   const handleView = (posting: JobPostingGroupWithDetails) => {
-    openNewTab(`/job-postings/${posting.id}/edit`, `공고 수정: ${posting.ship_name}`);
+    openNewTab(`/job-postings/${posting.id}/edit`, t('공고 수정: {{name}}', { name: posting.ship_name }));
   };
 
   const handleViewRecommendations = (posting: JobPostingGroupWithDetails) => {
-    openNewTab(`/job-postings/${posting.id}/recommendations`, `선원 추천 현황: ${posting.ship_name}`);
+    openNewTab(`/job-postings/${posting.id}/recommendations`, t('선원 추천 현황: {{name}}', { name: posting.ship_name }));
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('이 구인 공고를 삭제하시겠습니까?')) return;
+    if (!confirm(t('이 구인 공고를 삭제하시겠습니까?'))) return;
 
     try {
       await jobPostingGroupService.delete(id);
       await loadData();
     } catch (error) {
       console.error('Failed to delete job posting:', error);
-      alert('구인 공고 삭제에 실패했습니다.');
+      alert(t('구인 공고 삭제에 실패했습니다.'));
     }
   };
 
@@ -329,7 +335,7 @@ export default function JobPostingsPage() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(`선택한 ${selectedIds.length}개의 구인 공고를 삭제하시겠습니까?`)) return;
+    if (!confirm(t('선택한 {{count}}개의 구인 공고를 삭제하시겠습니까?', { count: selectedIds.length }))) return;
     setBulkDeleting(true);
     try {
       await Promise.all(selectedIds.map(id => jobPostingGroupService.delete(id)));
@@ -337,7 +343,7 @@ export default function JobPostingsPage() {
       await loadData();
     } catch (error) {
       console.error('Failed to bulk delete job postings:', error);
-      alert('일부 구인 공고 삭제에 실패했습니다.');
+      alert(t('일부 구인 공고 삭제에 실패했습니다.'));
     } finally {
       setBulkDeleting(false);
     }
@@ -346,11 +352,11 @@ export default function JobPostingsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge variant="default" className="bg-green-600 text-xs">모집중</Badge>;
+        return <Badge variant="default" className="bg-green-600 text-xs">{t('모집중')}</Badge>;
       case 'filled':
-        return <Badge variant="secondary" className="text-xs">채용완료</Badge>;
+        return <Badge variant="secondary" className="text-xs">{t('채용완료')}</Badge>;
       case 'cancelled':
-        return <Badge variant="outline" className="text-xs">취소</Badge>;
+        return <Badge variant="outline" className="text-xs">{t('취소')}</Badge>;
       default:
         return null;
     }
@@ -417,7 +423,7 @@ export default function JobPostingsPage() {
   if (loading) {
     return (
       <>
-        <div className="p-8">로딩 중...</div>
+        <div className="p-8">{t('로딩 중...')}</div>
       </>
     );
   }
@@ -428,7 +434,7 @@ export default function JobPostingsPage() {
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h1 className="text-2xl font-bold">
-                  {isManningOrCrew ? '선원 추천 가능 공고' : '구인 공고 관리'}
+                  {isManningOrCrew ? t('선원 추천 가능 공고') : t('구인 공고 관리')}
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   {isManningOrCrew
@@ -440,12 +446,12 @@ export default function JobPostingsPage() {
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
                   <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  새로고침
+                  {t('새로고침')}
                 </Button>
                 {canEditPostings && permissions.canCreate && (
                   <Button onClick={handleAdd} size="sm">
                     <Plus className="w-4 h-4 mr-2" />
-                    다직급 공고 등록
+                    {t('다직급 공고 등록')}
                   </Button>
                 )}
               </div>
@@ -455,7 +461,7 @@ export default function JobPostingsPage() {
             {canEditPostings && duplicateWarnings.length > 0 && (
               <Alert variant="destructive" className="mb-3">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertTitle className="text-sm">중복 공고 경고 (동일 선박, 동일 직급)</AlertTitle>
+                <AlertTitle className="text-sm">{t('중복 공고 경고 (동일 선박, 동일 직급)')}</AlertTitle>
                 <AlertDescription>
                   <ul className="list-disc list-inside space-y-1 mt-2">
                     {duplicateWarnings.map((warning, index) => (
@@ -469,10 +475,9 @@ export default function JobPostingsPage() {
             {/* Info for manning agencies and crew */}
             {isManningOrCrew && (
               <Alert className="mb-3 bg-blue-50 border-blue-200">
-                <AlertTitle className="text-sm text-blue-900">선원 추천 안내</AlertTitle>
+                <AlertTitle className="text-sm text-blue-900">{t('선원 추천 안내')}</AlertTitle>
                 <AlertDescription className="text-xs text-blue-800">
-                  아래 공고는 선박관리사가 등록한 채용 공고입니다. 각 공고에 적합한 선원을 추천할 수 있습니다.
-                  공고 내용을 수정할 수는 없으며, 선원 추천만 가능합니다.
+                  {t('아래 공고는 선박관리사가 등록한 채용 공고입니다. 각 공고에 적합한 선원을 추천할 수 있습니다. 공고 내용을 수정할 수는 없으며, 선원 추천만 가능합니다.')}
                 </AlertDescription>
               </Alert>
             )}
@@ -481,14 +486,14 @@ export default function JobPostingsPage() {
             <div className="bg-white rounded-lg shadow-sm p-3 mb-3">
               <div className="flex items-center gap-2 mb-2">
                 <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-sm font-medium">필터</span>
+                <span className="text-sm font-medium">{t('필터')}</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <div className="md:col-span-4">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <Input
-                      placeholder="선박명, 선주사, 직급 코드 검색..."
+                      placeholder={t('선박명, 선주사, 직급 코드 검색...')}
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-8 h-9 text-sm"
@@ -497,10 +502,10 @@ export default function JobPostingsPage() {
                 </div>
                 <Select value={ownerFilter} onValueChange={setOwnerFilter}>
                   <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="선주사" />
+                    <SelectValue placeholder={t('선주사')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체 선주사</SelectItem>
+                    <SelectItem value="all">{t('전체 선주사')}</SelectItem>
                     {ownerCompanies.map(owner => (
                       <SelectItem key={owner.id} value={String(owner.id)}>
                         {owner.name}
@@ -510,10 +515,10 @@ export default function JobPostingsPage() {
                 </Select>
                 <Select value={fleetFilter} onValueChange={setFleetFilter} disabled={ownerFilter === 'all'}>
                   <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="플릿" />
+                    <SelectValue placeholder={t('플릿')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체 플릿</SelectItem>
+                    <SelectItem value="all">{t('전체 플릿')}</SelectItem>
                     {fleets.map(fleet => (
                       <SelectItem key={fleet.id} value={String(fleet.id)}>
                         {fleet.name}
@@ -523,10 +528,10 @@ export default function JobPostingsPage() {
                 </Select>
                 <Select value={shipFilter} onValueChange={setShipFilter} disabled={ownerFilter === 'all'}>
                   <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="선박" />
+                    <SelectValue placeholder={t('선박')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체 선박</SelectItem>
+                    <SelectItem value="all">{t('전체 선박')}</SelectItem>
                     {ships.map(ship => (
                       <SelectItem key={ship.id} value={String(ship.id)}>
                         {ship.name}
@@ -536,33 +541,33 @@ export default function JobPostingsPage() {
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="상태" />
+                    <SelectValue placeholder={t('상태')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체 상태</SelectItem>
-                    <SelectItem value="active">모집중</SelectItem>
-                    <SelectItem value="filled">채용완료</SelectItem>
-                    <SelectItem value="cancelled">취소</SelectItem>
+                    <SelectItem value="all">{t('전체 상태')}</SelectItem>
+                    <SelectItem value="active">{t('모집중')}</SelectItem>
+                    <SelectItem value="filled">{t('채용완료')}</SelectItem>
+                    <SelectItem value="cancelled">{t('취소')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
                   <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="긴급 여부" />
+                    <SelectValue placeholder={t('긴급 여부')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="urgent">긴급</SelectItem>
-                    <SelectItem value="normal">일반</SelectItem>
+                    <SelectItem value="all">{t('전체')}</SelectItem>
+                    <SelectItem value="urgent">{t('긴급')}</SelectItem>
+                    <SelectItem value="normal">{t('일반')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                   <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="직급 구분" />
+                    <SelectValue placeholder={t('직급 구분')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="officer">사관</SelectItem>
-                    <SelectItem value="rating">부원</SelectItem>
+                    <SelectItem value="all">{t('전체')}</SelectItem>
+                    <SelectItem value="officer">{t('사관')}</SelectItem>
+                    <SelectItem value="rating">{t('부원')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -570,13 +575,13 @@ export default function JobPostingsPage() {
 
             {!isManningOrCrew && permissions.canDelete && selectedIds.length > 0 && (
               <div className="flex items-center justify-between gap-2 rounded-md border bg-blue-50 border-blue-200 px-3 py-2 mb-2">
-                <span className="text-xs text-blue-800">{selectedIds.length}개 선택됨</span>
+                <span className="text-xs text-blue-800">{t('{{count}}개 선택됨', { count: selectedIds.length })}</span>
                 <Button
                   size="sm" variant="outline"
                   className="h-7 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50"
                   onClick={handleBulkDelete} disabled={bulkDeleting}
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting ? '삭제 중...' : '선택 삭제'}
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />{bulkDeleting ? t('삭제 중...') : t('선택 삭제')}
                 </Button>
               </div>
             )}
@@ -595,17 +600,17 @@ export default function JobPostingsPage() {
                         />
                       </TableHead>
                     )}
-                    <TableHead className="text-xs py-2">상태</TableHead>
-                    <TableHead className="text-xs py-2">선주사</TableHead>
-                    <TableHead className="text-xs py-2">선박</TableHead>
-                    <TableHead className="text-xs py-2">직급 (인원)</TableHead>
-                    <TableHead className="text-xs py-2">승선예정일</TableHead>
-                    <TableHead className="text-xs py-2">공고마감일</TableHead>
+                    <TableHead className="text-xs py-2">{t('상태')}</TableHead>
+                    <TableHead className="text-xs py-2">{t('선주사')}</TableHead>
+                    <TableHead className="text-xs py-2">{t('선박')}</TableHead>
+                    <TableHead className="text-xs py-2">{t('직급 (인원)')}</TableHead>
+                    <TableHead className="text-xs py-2">{t('승선예정일')}</TableHead>
+                    <TableHead className="text-xs py-2">{t('공고마감일')}</TableHead>
                     {!isManningOrCrew && (
-                      <TableHead className="text-xs py-2">노출 매닝사</TableHead>
+                      <TableHead className="text-xs py-2">{t('노출 매닝사')}</TableHead>
                     )}
-                    <TableHead className="text-xs py-2">추천현황</TableHead>
-                    <TableHead className="text-right text-xs py-2 w-24">작업</TableHead>
+                    <TableHead className="text-xs py-2">{t('추천현황')}</TableHead>
+                    <TableHead className="text-right text-xs py-2 w-24">{t('작업')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -642,7 +647,7 @@ export default function JobPostingsPage() {
                                 variant="outline"
                                 className={`text-xs ${getDepartmentColor(rank.department)}`}
                               >
-                                {rank.rank_code} ({rank.positions_available}명)
+                                {rank.rank_code} ({t('{{count}}명', { count: rank.positions_available })})
                               </Badge>
                             ))}
                           </div>
@@ -683,7 +688,7 @@ export default function JobPostingsPage() {
                             className="h-7 px-2"
                           >
                             <Users className="w-3.5 h-3.5 mr-1" />
-                            {posting.recommendation_count || 0}명
+                            {t('{{count}}명', { count: posting.recommendation_count || 0 })}
                           </Button>
                         </TableCell>
                         <TableCell className="text-right py-2">
@@ -698,7 +703,7 @@ export default function JobPostingsPage() {
                               className="h-7 px-2"
                             >
                               <Eye className="w-3.5 h-3.5 mr-1" />
-                              보기
+                              {t('보기')}
                             </Button>
                             {!isManningOrCrew && permissions.canDelete && (
                               <Button
@@ -710,7 +715,7 @@ export default function JobPostingsPage() {
                                 }}
                                 className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
                               >
-                                삭제
+                                {t('삭제')}
                               </Button>
                             )}
                           </div>
@@ -724,10 +729,10 @@ export default function JobPostingsPage() {
               {currentPostings.length === 0 && (
                 <div className="py-12 text-center text-sm text-muted-foreground">
                   {searchTerm || statusFilter !== 'all' || urgencyFilter !== 'all' || categoryFilter !== 'all' || ownerFilter !== 'all' || fleetFilter !== 'all' || shipFilter !== 'all'
-                    ? '검색 결과가 없습니다.'
+                    ? t('검색 결과가 없습니다.')
                     : isManningOrCrew
-                      ? '현재 추천 가능한 채용 공고가 없습니다.'
-                      : '등록된 구인 공고가 없습니다.'}
+                      ? t('현재 추천 가능한 채용 공고가 없습니다.')
+                      : t('등록된 구인 공고가 없습니다.')}
                 </div>
               )}
             </div>

@@ -1,0 +1,11 @@
+{
+  "알림을 불러오는데 실패했습니다.": "Failed to load notifications.",
+  "방금 전": "Just now",
+  "{{minutes}}분 전": "{{minutes}} min ago",
+  "{{hours}}시간 전": "{{hours}} hr ago",
+  "{{days}}일 전": "{{days}} days ago",
+  "알림": "Notifications",
+  "모두 읽음": "Mark all as read",
+  "로딩 중...": "Loading...",
+  "알림이 없습니다.": "No notifications."
+}

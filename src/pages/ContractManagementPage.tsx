@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/pages/ContractManagementPage/en.json';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Trash2, ArrowLeft, Save, Coins, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +33,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 // 갱신/연장은 시스템상 동일하게 동작해 혼란을 주므로 '연장'으로 통일한다.
 // 기존 데이터에 renewal로 저장된 값도 그대로 '연장'으로 표시하고, extension은 신규 선택지에서 제외한다.
+i18n.addResourceBundle('en', 'ContractManagementPage', en, true, true);
+
 const TYPE_LABELS: Record<string, string> = { initial: '최초', renewal: '연장', transfer: '이적' };
 const CURRENCIES = ['USD', 'KRW', 'EUR', 'JPY', 'SGD'];
 const BASIS_LABELS: Record<AllowancePaymentBasis, string> = { monthly: '매월 지급', on_embark_once: '승선월 1회', disembark_settlement: '하선 시 정산' };
@@ -39,6 +44,7 @@ interface CrewOption { id: string; name: string; rank: string; rank_id: string; 
 interface ShipOption { id: string; name: string; }
 
 export default function ContractManagementPage() {
+  const { t } = useTranslation('ContractManagementPage');
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -105,13 +111,13 @@ export default function ContractManagementPage() {
       );
       const failCount = results.filter(r => r.status === 'rejected').length;
       if (submitDialogContracts.length === 1) {
-        if (failCount > 0) { toast({ title: '결재 상신 실패', variant: 'destructive' }); return; }
-        toast({ title: '결재 상신 완료', description: '발령 결재함(계약)에서 진행 상황을 확인할 수 있습니다.' });
+        if (failCount > 0) { toast({ title: t('결재 상신 실패'), variant: 'destructive' }); return; }
+        toast({ title: t('결재 상신 완료'), description: t('발령 결재함(계약)에서 진행 상황을 확인할 수 있습니다.') });
       } else {
         const successCount = submitDialogContracts.length - failCount;
         toast({
-          title: failCount === 0 ? '일괄 결재 상신 완료' : '일부만 처리됨',
-          description: `${successCount}/${submitDialogContracts.length}건 상신되었습니다.`,
+          title: failCount === 0 ? t('일괄 결재 상신 완료') : t('일부만 처리됨'),
+          description: t('{{success}}/{{total}}건 상신되었습니다.', { success: successCount, total: submitDialogContracts.length }),
           variant: failCount === 0 ? undefined : 'destructive',
         });
       }
@@ -212,20 +218,20 @@ export default function ContractManagementPage() {
   }, [form.start_date, form.end_date]);
 
   const handleSave = async () => {
-    if (!form.crew_member_id || !form.rank || !form.start_date || !form.end_date) { toast({ title: '필수 항목을 입력하세요', variant: 'destructive' }); return; }
+    if (!form.crew_member_id || !form.rank || !form.start_date || !form.end_date) { toast({ title: t('필수 항목을 입력하세요'), variant: 'destructive' }); return; }
     try {
       setSaving(true);
       const data = { crew_member_id: form.crew_member_id, ship_id: form.ship_id || undefined, contract_number: form.contract_number || undefined, contract_type: form.contract_type as CrewContractWithDetails['contract_type'], root_contract_id: renewContext?.rootId, rank: form.rank, start_date: form.start_date, end_date: form.end_date, duration_months: form.duration_months ? parseInt(form.duration_months) : undefined, salary_amount: form.salary_amount ? parseFloat(form.salary_amount) : undefined, salary_currency: form.salary_currency, overtime_rate: form.overtime_rate ? parseFloat(form.overtime_rate) : undefined, leave_pay: form.leave_pay ? parseFloat(form.leave_pay) : undefined, terms_and_conditions: form.terms_and_conditions || undefined, status: (formView?.record?.status || 'active') as CrewContractWithDetails['status'], notes: form.notes || undefined };
       if (formView?.record) {
         await updateContract(formView.record.id, data);
-        toast({ title: '수정 완료' });
+        toast({ title: t('수정 완료') });
         closeForm();
       } else {
         const created = await addContract(data);
         if (created && renewContext) {
           await updateContract(renewContext.previousId, { status: 'renewed' });
         }
-        toast({ title: renewContext ? '연장 완료' : '등록 완료', description: created ? '이어서 수당을 추가할 수 있습니다.' : undefined });
+        toast({ title: renewContext ? t('연장 완료') : t('등록 완료'), description: created ? t('이어서 수당을 추가할 수 있습니다.') : undefined });
         if (created) {
           const list = await getContracts();
           setContracts(list);
@@ -234,19 +240,19 @@ export default function ContractManagementPage() {
         }
         closeForm();
       }
-    } catch { toast({ title: '저장 실패', variant: 'destructive' }); } finally { setSaving(false); }
+    } catch { toast({ title: t('저장 실패'), variant: 'destructive' }); } finally { setSaving(false); }
   };
 
-  const handleDelete = async (id: string) => { if (!confirm('삭제하시겠습니까?')) return; try { await deleteContract(id); toast({ title: '삭제 완료' }); loadData(); } catch { toast({ title: '실패', variant: 'destructive' }); } };
+  const handleDelete = async (id: string) => { if (!confirm(t('삭제하시겠습니까?'))) return; try { await deleteContract(id); toast({ title: t('삭제 완료') }); loadData(); } catch { toast({ title: t('실패'), variant: 'destructive' }); } };
 
   const confirmBulkDelete = async () => {
     try {
       await Promise.all(selectedIds.map(id => deleteContract(id)));
-      toast({ title: `${selectedIds.length}건 삭제 완료` });
+      toast({ title: t('{{count}}건 삭제 완료', { count: selectedIds.length }) });
       setSelectedIds([]);
       setShowDeleteDialog(false);
       loadData();
-    } catch { toast({ title: '삭제 실패', variant: 'destructive' }); }
+    } catch { toast({ title: t('삭제 실패'), variant: 'destructive' }); }
   };
 
   const toggleSelect = (id: string) => setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -275,7 +281,7 @@ export default function ContractManagementPage() {
 
   const handleAddAllowance = async () => {
     if (!formView?.record) return;
-    if (!newAllowance.allowance_item_id || !newAllowance.amount) { toast({ title: '유형과 금액을 입력하세요', variant: 'destructive' }); return; }
+    if (!newAllowance.allowance_item_id || !newAllowance.amount) { toast({ title: t('유형과 금액을 입력하세요'), variant: 'destructive' }); return; }
     const created = await allowanceService.addContractAllowance({
       contract_id: formView.record.id,
       allowance_item_id: newAllowance.allowance_item_id,
@@ -286,8 +292,8 @@ export default function ContractManagementPage() {
       payment_method: newAllowance.payment_method,
       notes: newAllowance.notes || undefined,
     });
-    if (!created) { toast({ title: '추가 실패', variant: 'destructive' }); return; }
-    toast({ title: `${KIND_LABELS[newAllowance.kind]}이(가) 추가되었습니다` });
+    if (!created) { toast({ title: t('추가 실패'), variant: 'destructive' }); return; }
+    toast({ title: t('{{kind}}이(가) 추가되었습니다', { kind: t(KIND_LABELS[newAllowance.kind]) }) });
     setNewAllowance({ kind: newAllowance.kind, allowance_item_id: '', amount: '', currency: 'USD', payment_basis: 'monthly', payment_method: 'owner_billed', notes: '' });
     await loadContractAllowances(formView.record.id);
   };
@@ -310,15 +316,15 @@ export default function ContractManagementPage() {
     let list = chains.filter(c => {
       if (activeTab !== 'all' && chainStatus(c) !== activeTab) return false;
       if (searchTerm) {
-        const t = searchTerm.toLowerCase();
+        const term = searchTerm.toLowerCase();
         const c2 = c.latest;
-        return c2.crew_name.toLowerCase().includes(t) ||
-          (c2.ship_name || '').toLowerCase().includes(t) ||
-          (c2.owner_name || '').toLowerCase().includes(t) ||
-          (c2.fleet_name || '').toLowerCase().includes(t) ||
-          (c2.rank_code || '').toLowerCase().includes(t) ||
-          (c2.rank_name || '').toLowerCase().includes(t) ||
-          c2.rank.toLowerCase().includes(t);
+        return c2.crew_name.toLowerCase().includes(term) ||
+          (c2.ship_name || '').toLowerCase().includes(term) ||
+          (c2.owner_name || '').toLowerCase().includes(term) ||
+          (c2.fleet_name || '').toLowerCase().includes(term) ||
+          (c2.rank_code || '').toLowerCase().includes(term) ||
+          (c2.rank_name || '').toLowerCase().includes(term) ||
+          c2.rank.toLowerCase().includes(term);
       }
       return true;
     });
@@ -342,59 +348,59 @@ export default function ContractManagementPage() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               {formView !== null && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={closeForm}><ArrowLeft className="w-4 h-4" /></Button>}
-              <div><CardTitle className="text-base">{formView !== null ? (renewContext ? '계약 연장' : formView.record ? '계약 수정' : '계약 등록') : '계약 관리'}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? '선원 고용 계약 정보를 입력합니다' : '선원 고용 계약을 관리합니다'}</p></div>
+              <div><CardTitle className="text-base">{formView !== null ? (renewContext ? t('계약 연장') : formView.record ? t('계약 수정') : t('계약 등록')) : t('계약 관리')}</CardTitle><p className="text-xs text-muted-foreground mt-1">{formView !== null ? t('선원 고용 계약 정보를 입력합니다') : t('선원 고용 계약을 관리합니다')}</p></div>
             </div>
-            {formView !== null ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? '저장 중...' : '저장'}</Button> : permissions.canCreate && <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />계약 등록</Button>}
+            {formView !== null ? <Button size="sm" className="gap-1.5 h-8" onClick={handleSave} disabled={saving}><Save className="w-4 h-4" />{saving ? t('저장 중...') : t('저장')}</Button> : permissions.canCreate && <Button size="sm" className="gap-1.5 h-8" onClick={() => openForm()}><Plus className="w-4 h-4" />{t('계약 등록')}</Button>}
           </div>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
           {formView !== null ? (
             <div className="space-y-4 pt-2">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="text-xs">선원 *</Label><Select value={form.crew_member_id} onValueChange={v => setForm({ ...form, crew_member_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선원 선택" /></SelectTrigger><SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.rank})</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-1.5"><Label className="text-xs">선박</Label><Select value={form.ship_id} onValueChange={v => setForm({ ...form, ship_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선박 선택" /></SelectTrigger><SelectContent>{shipOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('선원 *')}</Label><Select value={form.crew_member_id} onValueChange={v => setForm({ ...form, crew_member_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선원 선택')} /></SelectTrigger><SelectContent>{crewOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.rank})</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('선박')}</Label><Select value={form.ship_id} onValueChange={v => setForm({ ...form, ship_id: v })}><SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선박 선택')} /></SelectTrigger><SelectContent>{shipOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5"><Label className="text-xs">계약번호</Label><Input value={form.contract_number} placeholder="저장 시 자동 생성됩니다" className="h-9 text-sm bg-gray-50" disabled /></div>
-                <div className="space-y-1.5"><Label className="text-xs">계약 유형 *</Label><Select value={form.contract_type} onValueChange={v => setForm({ ...form, contract_type: v })}><SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-1.5"><Label className="text-xs">직급 *</Label><Input value={form.rank} onChange={e => setForm({ ...form, rank: e.target.value })} className="h-9 text-sm" /></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('계약번호')}</Label><Input value={form.contract_number} placeholder={t('저장 시 자동 생성됩니다')} className="h-9 text-sm bg-gray-50" disabled /></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('계약 유형 *')}</Label><Select value={form.contract_type} onValueChange={v => setForm({ ...form, contract_type: v })}><SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{t(v)}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('직급 *')}</Label><Input value={form.rank} onChange={e => setForm({ ...form, rank: e.target.value })} className="h-9 text-sm" /></div>
               </div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5"><Label className="text-xs">시작일 *</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="h-9 text-sm" /></div>
-                <div className="space-y-1.5"><Label className="text-xs">종료일 *</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="h-9 text-sm" /></div>
-                <div className="space-y-1.5"><Label className="text-xs">기간 (개월)</Label><Input type="number" value={form.duration_months} className="h-9 text-sm" readOnly /></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('시작일 *')}</Label><Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} className="h-9 text-sm" /></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('종료일 *')}</Label><Input type="date" value={form.end_date} onChange={e => setForm({ ...form, end_date: e.target.value })} className="h-9 text-sm" /></div>
+                <div className="space-y-1.5"><Label className="text-xs">{t('기간 (개월)')}</Label><Input type="number" value={form.duration_months} className="h-9 text-sm" readOnly /></div>
               </div>
-              <div className="border-t pt-3"><p className="text-xs font-semibold text-gray-600 mb-2">급여 정보</p>
+              <div className="border-t pt-3"><p className="text-xs font-semibold text-gray-600 mb-2">{t('급여 정보')}</p>
                 <div className="grid grid-cols-4 gap-3">
-                  <div className="space-y-1.5"><Label className="text-xs">기본급</Label><Input type="number" step="0.01" value={form.salary_amount} onChange={e => setForm({ ...form, salary_amount: e.target.value })} className="h-9 text-sm" /></div>
-                  <div className="space-y-1.5"><Label className="text-xs">통화</Label><Select value={form.salary_currency} onValueChange={v => setForm({ ...form, salary_currency: v })}><SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-1.5"><Label className="text-xs">초과근무율</Label><Input type="number" step="0.01" value={form.overtime_rate} onChange={e => setForm({ ...form, overtime_rate: e.target.value })} className="h-9 text-sm" /></div>
-                  <div className="space-y-1.5"><Label className="text-xs">휴가급</Label><Input type="number" step="0.01" value={form.leave_pay} onChange={e => setForm({ ...form, leave_pay: e.target.value })} className="h-9 text-sm" /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">{t('기본급')}</Label><Input type="number" step="0.01" value={form.salary_amount} onChange={e => setForm({ ...form, salary_amount: e.target.value })} className="h-9 text-sm" /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">{t('통화')}</Label><Select value={form.salary_currency} onValueChange={v => setForm({ ...form, salary_currency: v })}><SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent>{CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-1.5"><Label className="text-xs">{t('초과근무율')}</Label><Input type="number" step="0.01" value={form.overtime_rate} onChange={e => setForm({ ...form, overtime_rate: e.target.value })} className="h-9 text-sm" /></div>
+                  <div className="space-y-1.5"><Label className="text-xs">{t('휴가급')}</Label><Input type="number" step="0.01" value={form.leave_pay} onChange={e => setForm({ ...form, leave_pay: e.target.value })} className="h-9 text-sm" /></div>
                 </div>
               </div>
-              <div className="space-y-1.5"><Label className="text-xs">계약 조건</Label><Textarea value={form.terms_and_conditions} onChange={e => setForm({ ...form, terms_and_conditions: e.target.value })} rows={2} className="text-sm resize-none" /></div>
-              <div className="space-y-1.5"><Label className="text-xs">비고</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className="text-sm resize-none" /></div>
+              <div className="space-y-1.5"><Label className="text-xs">{t('계약 조건')}</Label><Textarea value={form.terms_and_conditions} onChange={e => setForm({ ...form, terms_and_conditions: e.target.value })} rows={2} className="text-sm resize-none" /></div>
+              <div className="space-y-1.5"><Label className="text-xs">{t('비고')}</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} className="text-sm resize-none" /></div>
 
               {formView?.record && (
                 <div className="border-t pt-3">
                   <p className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
-                    <Coins className="w-3.5 h-3.5" />수당/공제 (급여 구성항목과 별개로 급여대장 지급/공제항목에 별도로 붙습니다)
+                    <Coins className="w-3.5 h-3.5" />{t('수당/공제 (급여 구성항목과 별개로 급여대장 지급/공제항목에 별도로 붙습니다)')}
                   </p>
                   {contractAllowances.length > 0 && (
                     <table className="w-full text-xs mb-3">
                       <thead><tr className="border-b bg-gray-50">
-                        <th className="text-left p-1.5">종류</th><th className="text-left p-1.5">항목명</th><th className="text-right p-1.5">금액</th><th className="text-left p-1.5">지급방식</th><th className="text-left p-1.5">지급주체</th><th className="text-left p-1.5">비고</th><th className="p-1.5 w-8"></th>
+                        <th className="text-left p-1.5">{t('종류')}</th><th className="text-left p-1.5">{t('항목명')}</th><th className="text-right p-1.5">{t('금액')}</th><th className="text-left p-1.5">{t('지급방식')}</th><th className="text-left p-1.5">{t('지급주체')}</th><th className="text-left p-1.5">{t('비고')}</th><th className="p-1.5 w-8"></th>
                       </tr></thead>
                       <tbody>
                         {contractAllowances.map(a => (
                           <tr key={a.id} className="border-b">
                             <td className="p-1.5">
-                              <span className={a.kind === 'deduction' ? 'text-red-600' : 'text-emerald-600'}>{KIND_LABELS[a.kind]}</span>
+                              <span className={a.kind === 'deduction' ? 'text-red-600' : 'text-emerald-600'}>{t(KIND_LABELS[a.kind])}</span>
                             </td>
                             <td className="p-1.5 font-medium">{a.allowance_item_name}</td>
                             <td className="p-1.5 text-right font-mono">{a.amount.toLocaleString()} {a.currency}</td>
-                            <td className="p-1.5">{BASIS_LABELS[a.payment_basis]}</td>
-                            <td className="p-1.5">{a.kind === 'deduction' ? '-' : METHOD_LABELS[a.payment_method]}</td>
+                            <td className="p-1.5">{t(BASIS_LABELS[a.payment_basis])}</td>
+                            <td className="p-1.5">{a.kind === 'deduction' ? '-' : t(METHOD_LABELS[a.payment_method])}</td>
                             <td className="p-1.5 text-muted-foreground">{a.notes || '-'}</td>
                             <td className="p-1.5 text-center"><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteAllowance(a.id)}><Trash2 className="h-3 w-3" /></Button></td>
                           </tr>
@@ -404,37 +410,37 @@ export default function ContractManagementPage() {
                   )}
                   <div className="grid grid-cols-6 gap-2 items-end">
                     <div className="space-y-1.5">
-                      <Label className="text-xs">종류</Label>
+                      <Label className="text-xs">{t('종류')}</Label>
                       <Select value={newAllowance.kind} onValueChange={v => handleAllowanceKindSelect(v as AllowanceKind)}>
                         <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Object.entries(KIND_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                        <SelectContent>{Object.entries(KIND_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{t(l)}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">유형</Label>
+                      <Label className="text-xs">{t('유형')}</Label>
                       <Select value={newAllowance.allowance_item_id} onValueChange={handleAllowanceTypeSelect}>
-                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
-                        <SelectContent>{allowanceItems.filter(t => t.kind === newAllowance.kind).map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder={t('선택')} /></SelectTrigger>
+                        <SelectContent>{allowanceItems.filter(item => item.kind === newAllowance.kind).map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1.5"><Label className="text-xs">금액</Label><Input type="number" value={newAllowance.amount} onChange={e => setNewAllowance(p => ({ ...p, amount: e.target.value }))} className="h-9 text-sm" /></div>
+                    <div className="space-y-1.5"><Label className="text-xs">{t('금액')}</Label><Input type="number" value={newAllowance.amount} onChange={e => setNewAllowance(p => ({ ...p, amount: e.target.value }))} className="h-9 text-sm" /></div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">지급방식</Label>
+                      <Label className="text-xs">{t('지급방식')}</Label>
                       <Select value={newAllowance.payment_basis} onValueChange={v => setNewAllowance(p => ({ ...p, payment_basis: v as AllowancePaymentBasis }))}>
                         <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Object.entries(BASIS_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                        <SelectContent>{Object.entries(BASIS_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{t(l)}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     {newAllowance.kind === 'allowance' ? (
                       <div className="space-y-1.5">
-                        <Label className="text-xs">지급주체</Label>
+                        <Label className="text-xs">{t('지급주체')}</Label>
                         <Select value={newAllowance.payment_method} onValueChange={v => setNewAllowance(p => ({ ...p, payment_method: v as AllowancePaymentMethod }))}>
                           <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                          <SelectContent>{Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                          <SelectContent>{Object.entries(METHOD_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{t(l)}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                     ) : <div />}
-                    <Button size="sm" variant="outline" className="h-9 text-xs" onClick={handleAddAllowance}>추가</Button>
+                    <Button size="sm" variant="outline" className="h-9 text-xs" onClick={handleAddAllowance}>{t('추가')}</Button>
                   </div>
                 </div>
               )}
@@ -442,30 +448,30 @@ export default function ContractManagementPage() {
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="선원명, 선주사, 플릿, 선박, 직급으로 검색..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
+                <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder={t('선원명, 선주사, 플릿, 선박, 직급으로 검색...')} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9 text-sm" /></div>
                 {draftSelectedCount > 0 && permissions.canEdit && (
-                  <Button size="sm" variant="outline" className="gap-1.5 h-9 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openBulkSubmitDialog}>일괄 결재 상신 ({draftSelectedCount})</Button>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-9 text-blue-600 border-blue-300 hover:bg-blue-50" onClick={openBulkSubmitDialog}>{t('일괄 결재 상신 ({{count}})', { count: draftSelectedCount })}</Button>
                 )}
                 {selectedIds.length > 0 && permissions.canDelete && (
-                  <Button size="sm" variant="destructive" className="gap-1.5 h-9" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4" />선택 삭제 ({selectedIds.length})</Button>
+                  <Button size="sm" variant="destructive" className="gap-1.5 h-9" onClick={() => setShowDeleteDialog(true)}><Trash2 className="w-4 h-4" />{t('선택 삭제 ({{count}})', { count: selectedIds.length })}</Button>
                 )}
               </div>
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="h-8">
-                  <TabsTrigger value="all" className="text-xs h-7">전체 ({getCount('all')})</TabsTrigger>
-                  <TabsTrigger value="draft" className="text-xs h-7">결재대기 ({getCount('draft')})</TabsTrigger>
-                  <TabsTrigger value="valid" className="text-xs h-7">유효 ({getCount('valid')})</TabsTrigger>
-                  <TabsTrigger value="expired" className="text-xs h-7">만료 ({getCount('expired')})</TabsTrigger>
-                  <TabsTrigger value="completed" className="text-xs h-7">완료 ({getCount('completed')})</TabsTrigger>
-                  <TabsTrigger value="terminated" className="text-xs h-7">해지 ({getCount('terminated')})</TabsTrigger>
+                  <TabsTrigger value="all" className="text-xs h-7">{t('전체 ({{count}})', { count: getCount('all') })}</TabsTrigger>
+                  <TabsTrigger value="draft" className="text-xs h-7">{t('결재대기 ({{count}})', { count: getCount('draft') })}</TabsTrigger>
+                  <TabsTrigger value="valid" className="text-xs h-7">{t('유효 ({{count}})', { count: getCount('valid') })}</TabsTrigger>
+                  <TabsTrigger value="expired" className="text-xs h-7">{t('만료 ({{count}})', { count: getCount('expired') })}</TabsTrigger>
+                  <TabsTrigger value="completed" className="text-xs h-7">{t('완료 ({{count}})', { count: getCount('completed') })}</TabsTrigger>
+                  <TabsTrigger value="terminated" className="text-xs h-7">{t('해지 ({{count}})', { count: getCount('terminated') })}</TabsTrigger>
                 </TabsList>
                 {['all','draft','valid','expired','completed','terminated'].map(tab => (
                   <TabsContent key={tab} value={tab} className="mt-2">
                     <div className="overflow-x-auto">
                     <table className="w-full text-xs whitespace-nowrap"><thead><tr className="border-b bg-gray-50">
                       <th className="w-8 p-2"><Checkbox checked={filteredChains.length > 0 && filteredChains.every(c => selectedIds.includes(c.latest.id))} onCheckedChange={checked => toggleSelectAll(!!checked, filteredChains)} /></th>
-                      <th className="text-left p-2">선주사</th><th className="text-left p-2">플릿</th><th className="text-left p-2">선박</th><th className="text-left p-2">직급</th><th className="text-left p-2">선원명</th><th className="text-left p-2">국적</th><th className="text-left p-2">최초 계약일</th><th className="text-left p-2">만료일</th><th className="text-left p-2">연장일</th><th className="text-right p-2">급여</th><th className="text-center p-2">상태</th><th className="text-left p-2">결재 현황</th><th className="text-center p-2">작업</th></tr></thead>
-                      <tbody>{filteredChains.length === 0 ? <tr><td colSpan={14} className="text-center py-8 text-gray-400">데이터가 없습니다.</td></tr> : filteredChains.map(chain => {
+                      <th className="text-left p-2">{t('선주사')}</th><th className="text-left p-2">{t('플릿')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('직급')}</th><th className="text-left p-2">{t('선원명')}</th><th className="text-left p-2">{t('국적')}</th><th className="text-left p-2">{t('최초 계약일')}</th><th className="text-left p-2">{t('만료일')}</th><th className="text-left p-2">{t('연장일')}</th><th className="text-right p-2">{t('급여')}</th><th className="text-center p-2">{t('상태')}</th><th className="text-left p-2">{t('결재 현황')}</th><th className="text-center p-2">{t('작업')}</th></tr></thead>
+                      <tbody>{filteredChains.length === 0 ? <tr><td colSpan={14} className="text-center py-8 text-gray-400">{t('데이터가 없습니다.')}</td></tr> : filteredChains.map(chain => {
                         const c = chain.latest;
                         const status = chainStatus(chain);
                         const needsDisembark = chain.totalMonths >= DISEMBARK_NEEDED_THRESHOLD_MONTHS && (status === 'valid' || status === 'expired');
@@ -480,7 +486,7 @@ export default function ContractManagementPage() {
                             {c.crew_name}
                             {needsDisembark && (
                               <Badge className="ml-1.5 text-[10px] bg-orange-100 text-orange-700 gap-0.5 align-middle">
-                                <AlertTriangle className="w-2.5 h-2.5" />하선 필요
+                                <AlertTriangle className="w-2.5 h-2.5" />{t('하선 필요')}
                               </Badge>
                             )}
                           </td>
@@ -494,10 +500,10 @@ export default function ContractManagementPage() {
                           <td className="p-2 text-center" onClick={e => e.stopPropagation()}>
                             <div className="flex justify-center gap-1">
                               {status === 'draft' && permissions.canEdit && (
-                                <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(c)}>결재 상신</Button>
+                                <Button variant="outline" size="sm" className="h-6 px-2 text-[11px] text-blue-600 border-blue-300 hover:bg-blue-50" onClick={() => openSubmitDialog(c)}>{t('결재 상신')}</Button>
                               )}
                               {status === 'expired' && permissions.canCreate && (
-                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="연장" onClick={() => openRenewForm(chain)}><RefreshCw className="h-3 w-3" /></Button>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title={t('연장')} onClick={() => openRenewForm(chain)}><RefreshCw className="h-3 w-3" /></Button>
                               )}
                               {permissions.canDelete && (
                                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDelete(c.id)}><Trash2 className="h-3 w-3" /></Button>
@@ -519,12 +525,12 @@ export default function ContractManagementPage() {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>계약 삭제 확인</AlertDialogTitle>
-            <AlertDialogDescription>선택한 {selectedIds.length}건의 계약을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</AlertDialogDescription>
+            <AlertDialogTitle>{t('계약 삭제 확인')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('선택한 {{count}}건의 계약을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.', { count: selectedIds.length })}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBulkDelete} className="bg-red-600 hover:bg-red-700">삭제</AlertDialogAction>
+            <AlertDialogCancel>{t('취소')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkDelete} className="bg-red-600 hover:bg-red-700">{t('삭제')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -532,18 +538,18 @@ export default function ContractManagementPage() {
       <Dialog open={submitDialogContracts.length > 0} onOpenChange={o => !submitting && !o && setSubmitDialogContracts([])}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{submitDialogContracts.length > 1 ? `계약 결재 상신 (${submitDialogContracts.length}건 일괄)` : '계약 결재 상신'}</DialogTitle>
+            <DialogTitle>{submitDialogContracts.length > 1 ? t('계약 결재 상신 ({{count}}건 일괄)', { count: submitDialogContracts.length }) : t('계약 결재 상신')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {submitDialogContracts.length === 1 ? (
               <div className="p-3 bg-gray-50 rounded-md text-sm space-y-1">
-                <div><span className="font-medium">선원:</span> {submitDialogContracts[0].crew_name}</div>
-                <div><span className="font-medium">직급:</span> {submitDialogContracts[0].rank_code || submitDialogContracts[0].rank}</div>
-                <div><span className="font-medium">선박:</span> {submitDialogContracts[0].ship_name || '-'}</div>
+                <div><span className="font-medium">{t('선원:')}</span> {submitDialogContracts[0].crew_name}</div>
+                <div><span className="font-medium">{t('직급:')}</span> {submitDialogContracts[0].rank_code || submitDialogContracts[0].rank}</div>
+                <div><span className="font-medium">{t('선박:')}</span> {submitDialogContracts[0].ship_name || '-'}</div>
               </div>
             ) : submitDialogContracts.length > 1 && (
               <div className="p-3 bg-gray-50 rounded-md text-sm">
-                <div className="font-medium mb-1">대상 {submitDialogContracts.length}건</div>
+                <div className="font-medium mb-1">{t('대상 {{count}}건', { count: submitDialogContracts.length })}</div>
                 <div className="text-xs text-gray-600 max-h-24 overflow-y-auto space-y-0.5">
                   {submitDialogContracts.map(c => (
                     <div key={c.id}>{c.crew_name} ({c.rank_code || c.rank}) · {c.ship_name || '-'}</div>
@@ -552,25 +558,25 @@ export default function ContractManagementPage() {
               </div>
             )}
             <div>
-              <label className="text-sm font-medium mb-2 block">결재 라인 선택 *</label>
+              <label className="text-sm font-medium mb-2 block">{t('결재 라인 선택 *')}</label>
               <Select value={submitLineId} onValueChange={setSubmitLineId}>
-                <SelectTrigger><SelectValue placeholder="결재 라인을 선택하세요" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('결재 라인을 선택하세요')} /></SelectTrigger>
                 <SelectContent>
                   {approvalLines.length === 0
-                    ? <SelectItem value="none" disabled>등록된 결재 라인이 없습니다</SelectItem>
-                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({l.steps.length}단계)</SelectItem>)}
+                    ? <SelectItem value="none" disabled>{t('등록된 결재 라인이 없습니다')}</SelectItem>
+                    : approvalLines.map(l => <SelectItem key={l.id} value={String(l.id)}>{l.name} ({t('{{count}}단계', { count: l.steps.length })})</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">요청 사유 (선택)</label>
-              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder="요청 사유를 입력하세요..." className="min-h-[80px]" />
+              <label className="text-sm font-medium mb-2 block">{t('요청 사유 (선택)')}</label>
+              <Textarea value={submitComment} onChange={e => setSubmitComment(e.target.value)} placeholder={t('요청 사유를 입력하세요...')} className="min-h-[80px]" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitDialogContracts([])} disabled={submitting}>취소</Button>
+            <Button variant="outline" onClick={() => setSubmitDialogContracts([])} disabled={submitting}>{t('취소')}</Button>
             <Button onClick={handleSubmitApproval} disabled={submitting || !submitLineId} className="bg-blue-600 hover:bg-blue-700">
-              {submitting ? '처리 중...' : submitDialogContracts.length > 1 ? `${submitDialogContracts.length}건 결재 상신` : '결재 상신'}
+              {submitting ? t('처리 중...') : submitDialogContracts.length > 1 ? t('{{count}}건 결재 상신', { count: submitDialogContracts.length }) : t('결재 상신')}
             </Button>
           </DialogFooter>
         </DialogContent>

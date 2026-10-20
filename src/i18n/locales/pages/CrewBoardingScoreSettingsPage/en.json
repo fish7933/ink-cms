@@ -1,0 +1,32 @@
+{
+  "선종 경험": "Ship Type Experience",
+  "과거 승선했던 선종이 대상 선박과 같은지": "Whether the crew member's past ship types match the target vessel's type",
+  "선박 사이즈 경험": "Vessel Size Experience",
+  "과거 승선했던 선박 총톤수와 대상 선박의 근접도": "How close the gross tonnage of the crew member's past vessels is to the target vessel",
+  "항로 경험": "Route Experience",
+  "과거 승선했던 선박의 항로와 대상 선박 항로 일치 여부": "Whether the routes of the crew member's past vessels match the target vessel's route",
+  "기존 고과": "Past Evaluations",
+  "확정된 승선평가 점수 평균": "Average of confirmed boarding evaluation scores",
+  "근무년수": "Years of Service",
+  "누적 승선 기간(연 단위, 체감 반영)": "Cumulative boarding period (in years, perceptually weighted)",
+  "동직급 경력": "Same-Rank Experience",
+  "지금 그 직급인지가 아니라, 실제 그 직급으로 승선해본 연차(체감 반영)": "Years actually boarded at that exact rank, not just currently holding it (perceptually weighted)",
+  "휴식 기간": "Rest Period",
+  "마지막 하선일로부터 90일 지났을 때 최고점": "Highest score once 90 days have passed since the last sign-off date",
+  "승선 희망일": "Desired Boarding Date",
+  "선원이 등록한 희망일과 목표 승선일의 근접도": "How close the crew member's registered desired date is to the target boarding date",
+  "선박/플릿/선주사 친숙도": "Vessel/Fleet/Owner Familiarity",
+  "같은 선박 승선 경험이 최고점, 없으면 같은 플릿, 그것도 없으면 같은 선주사": "Highest score for experience on the same vessel, then the same fleet, then the same owner",
+  "나이": "Age",
+  "30대(30~39세)가 최고점, 멀어질수록 감점": "Highest score in the 30s (ages 30-39), with points deducted the further away",
+
+  "승선 적합도 설정": "Boarding Fitness Settings",
+  "저장": "Save",
+  "저장 중...": "Saving...",
+  "로테이션 승선 후보를 추천할 때 각 요소를 얼마나 중요하게 볼지 정합니다. 상대적인 비중이라 합이 꼭 100일 필요는 없고, 옆의 \"100 기준\" 값은 현재 입력값들을 100 기준으로 환산해 참고용으로 보여줍니다. 실제 적합도 점수는 합계와 무관하게 항상 0~100으로 계산됩니다.": "Sets how much weight to give each factor when recommending rotation boarding candidates. These are relative weights, so the total doesn't need to equal 100 — the \"out of 100\" value next to each one converts the current inputs to a 100-point scale for reference only. The actual fitness score is always calculated on a 0-100 scale regardless of the total.",
+  "100 기준 {{value}}": "Out of 100: {{value}}",
+  "합계: {{total}}": "Total: {{total}}",
+
+  "불러오기 실패": "Failed to Load",
+  "저장 완료": "Saved"
+}

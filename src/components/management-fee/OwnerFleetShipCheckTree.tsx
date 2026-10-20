@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/OwnerFleetShipCheckTree/en.json';
+i18n.addResourceBundle('en', 'OwnerFleetShipCheckTree', en, true, true);
 import { Checkbox } from '@/components/ui/checkbox';
 import { Building2, Layers, Ship as ShipIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import { groupShips } from '@/lib/ship-grouping';
@@ -25,6 +29,7 @@ interface OwnerFleetShipCheckTreeProps {
 // 많은 선주라면 기본으로 전부 펼쳐두면 화면이 감당 안 되기 때문. 체크박스 클릭은 펼침과
 // 별개로 동작한다(체크만 해도 펼쳐지지 않음).
 export default function OwnerFleetShipCheckTree({ ships, companies, fleets, selectedShipIds, onChange, onlyShipIds }: OwnerFleetShipCheckTreeProps) {
+  const { t } = useTranslation('OwnerFleetShipCheckTree');
   // 비활성화된 선박은 관리비 계산/청구서 작성 대상 선택 목록에 나올 필요가 없다(지금 선원이
   // 타지 않는 배). onlyShipIds가 주어졌으면 그 집합에 속한 선박만 추가로 걸러낸다.
   const activeShips = ships.filter(s => s.is_active !== false && (!onlyShipIds || onlyShipIds.has(s.id)));
@@ -53,7 +58,7 @@ export default function OwnerFleetShipCheckTree({ ships, companies, fleets, sele
     <div className="space-y-2">
       <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
         <Checkbox checked={isAllChecked(allShipIds)} onCheckedChange={checked => toggleIds(allShipIds, !!checked)} />
-        전체 선택 ({allShipIds.length}척)
+        {t('전체 선택 ({{count}}척)', { count: allShipIds.length })}
       </label>
       <div className="space-y-1.5 pl-1 border-l-2 border-gray-100">
         {groups.map(group => {
@@ -71,8 +76,8 @@ export default function OwnerFleetShipCheckTree({ ships, companies, fleets, sele
                 >
                   {expanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
                   <Building2 className="h-3.5 w-3.5 text-gray-400" />
-                  {group.owner?.name || '선주 미지정'}
-                  <span className="text-xs text-gray-400 font-normal">({ownerShipIds.length}척)</span>
+                  {group.owner?.name || t('선주 미지정')}
+                  <span className="text-xs text-gray-400 font-normal">{t('({{count}}척)', { count: ownerShipIds.length })}</span>
                 </button>
               </div>
               {expanded && (
@@ -85,7 +90,7 @@ export default function OwnerFleetShipCheckTree({ ships, companies, fleets, sele
                           <Checkbox checked={isAllChecked(fleetShipIds)} onCheckedChange={checked => toggleIds(fleetShipIds, !!checked)} />
                           <Layers className="h-3 w-3 text-gray-400" />
                           {fg.fleet.name}
-                          <span className="text-gray-400">({fleetShipIds.length}척)</span>
+                          <span className="text-gray-400">{t('({{count}}척)', { count: fleetShipIds.length })}</span>
                         </label>
                         <div className="pl-6 space-y-0.5">
                           {fg.ships.map(ship => (
