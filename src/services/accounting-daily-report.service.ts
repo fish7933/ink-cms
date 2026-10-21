@@ -67,6 +67,7 @@ async function buildSnapshot(date: string): Promise<DailyCashReportSnapshotSecti
       .from('accounting_cash_transactions')
       .select('id, bank_account_id, cash_register_id, transaction_date, transaction_type, amount, counterparty, description, created_at, attachments')
       .lte('transaction_date', date)
+      .order('id')
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     if (!page || page.length === 0) break;

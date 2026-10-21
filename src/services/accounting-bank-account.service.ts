@@ -21,6 +21,7 @@ export async function getBankAccounts(): Promise<BankAccountWithBalance[]> {
       .from('accounting_cash_transactions')
       .select('bank_account_id, transaction_type, amount')
       .in('bank_account_id', ids)
+      .order('id')
       .range(from, from + PAGE_SIZE - 1);
     if (!page || page.length === 0) break;
     txns.push(...page);

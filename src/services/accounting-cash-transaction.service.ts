@@ -14,7 +14,7 @@ export interface CashTransactionFilters {
 
 export async function getCashTransactions(filters: CashTransactionFilters = {}): Promise<CashTransactionWithDetails[]> {
   const buildQuery = () => {
-    let query = supabase.from('accounting_cash_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+    let query = supabase.from('accounting_cash_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false }).order('id');
     if (filters.bankAccountId) query = query.eq('bank_account_id', filters.bankAccountId);
     if (filters.cardId) query = query.eq('card_id', filters.cardId);
     if (filters.cashRegisterId) query = query.eq('cash_register_id', filters.cashRegisterId);

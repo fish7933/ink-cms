@@ -18,7 +18,7 @@ export async function getCashRegisters(): Promise<CashRegisterWithBalance[]> {
   const PAGE_SIZE = 1000;
   const txns: { cash_register_id: string; transaction_type: string; amount: number }[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: page } = await supabase.from('accounting_cash_transactions').select('cash_register_id, transaction_type, amount').in('cash_register_id', ids).range(from, from + PAGE_SIZE - 1);
+    const { data: page } = await supabase.from('accounting_cash_transactions').select('cash_register_id, transaction_type, amount').in('cash_register_id', ids).order('id').range(from, from + PAGE_SIZE - 1);
     if (!page || page.length === 0) break;
     txns.push(...page);
     if (page.length < PAGE_SIZE) break;

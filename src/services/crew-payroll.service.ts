@@ -777,7 +777,7 @@ export const crewPayrollService = {
     if (templateIds.length > 0) {
       const PAGE_SIZE = 1000;
       for (let from = 0; ; from += PAGE_SIZE) {
-        const { data: page } = await supabase.from('salary_template_items').select('*').in('template_id', templateIds).range(from, from + PAGE_SIZE - 1);
+        const { data: page } = await supabase.from('salary_template_items').select('*').in('template_id', templateIds).order('id').range(from, from + PAGE_SIZE - 1);
         if (!page || page.length === 0) break;
         templateItemsRaw.push(...page);
         if (page.length < PAGE_SIZE) break;

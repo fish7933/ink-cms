@@ -17,7 +17,7 @@ export async function getCards(): Promise<CardWithDetails[]> {
   const PAGE_SIZE = 1000;
   const txns: { card_id: string; amount: number }[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: page } = await supabase.from('accounting_cash_transactions').select('card_id, amount').in('card_id', cardIds).eq('transaction_type', 'expense').range(from, from + PAGE_SIZE - 1);
+    const { data: page } = await supabase.from('accounting_cash_transactions').select('card_id, amount').in('card_id', cardIds).eq('transaction_type', 'expense').order('id').range(from, from + PAGE_SIZE - 1);
     if (!page || page.length === 0) break;
     txns.push(...page);
     if (page.length < PAGE_SIZE) break;

@@ -75,6 +75,7 @@ async function fetchAllTransactions(): Promise<RawTxn[]> {
       .select('transaction_date, transaction_type, amount, counterparty, description, category_id, bank_account_id, cash_register_id')
       .order('transaction_date', { ascending: true })
       .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
