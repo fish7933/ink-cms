@@ -1,4 +1,9 @@
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/BadgeSelect/en.json';
+
+i18n.addResourceBundle('en', 'BadgeSelect', en, true, true);
 
 export interface BadgeSelectItem {
   value: string;
@@ -101,6 +106,7 @@ export default function BadgeSelect({
   className,
   compact,
 }: BadgeSelectProps) {
+  const { t } = useTranslation('BadgeSelect');
   const allValues = groups
     ? groups.flatMap(g => g.items.map(i => i.value))
     : (items ?? []).map(i => i.value);
@@ -134,14 +140,14 @@ export default function BadgeSelect({
             onClick={selectAll}
             className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 transition-colors"
           >
-            전체
+            {t('전체')}
           </button>
           <button
             type="button"
             onClick={deselectAll}
             className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100 transition-colors"
           >
-            해제
+            {t('해제')}
           </button>
         </div>
       </div>

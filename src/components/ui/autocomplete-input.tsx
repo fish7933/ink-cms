@@ -1,7 +1,12 @@
 import { useState, useRef, useMemo } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import i18n from '@/i18n';
+import en from '@/i18n/locales/components/AutocompleteInput/en.json';
+
+i18n.addResourceBundle('en', 'AutocompleteInput', en, true, true);
 
 interface AutocompleteInputProps {
   value: string;
@@ -16,6 +21,7 @@ interface AutocompleteInputProps {
 // 네이티브 datalist 대신 직접 필터링해서 보여주는 검색 가능한 드롭다운 — 목록에 없는 값도
 // 자유롭게 입력할 수 있고, 입력한 텍스트를 포함하는 기존 값들이 아래에 후보로 뜬다.
 export function AutocompleteInput({ value, onChange, options, placeholder, className, onDeleteOption }: AutocompleteInputProps) {
+  const { t } = useTranslation('AutocompleteInput');
   const [open, setOpen] = useState(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -63,7 +69,7 @@ export function AutocompleteInput({ value, onChange, options, placeholder, class
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => onDeleteOption(opt)}
                   className="shrink-0 px-2 py-1.5 text-gray-400 hover:text-red-600"
-                  title="목록에서 삭제"
+                  title={t('목록에서 삭제')}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
