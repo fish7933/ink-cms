@@ -9,6 +9,7 @@ import { EMPLOYEE_ROLES } from '@/pages/EmployeeCardManagementPage';
 import EmployeeSalaryCatalogSection from '@/components/employee-salary/EmployeeSalaryCatalogSection';
 import EmployeeSalaryItemsSection from '@/components/employee-salary/EmployeeSalaryItemsSection';
 import EmployeePayrollPeriodsSection from '@/components/employee-salary/EmployeePayrollPeriodsSection';
+import EmployeeAnnualLedgerSection from '@/components/employee-salary/EmployeeAnnualLedgerSection';
 
 // 육상 직원 급여관리 — 급여 항목(정보관리) + 월별 지급 처리 두 탭으로 구성.
 // 선원 급여 템플릿 시스템과는 완전히 별개 도메인이며, 결재 엔진과 연동하지 않는다.
@@ -52,6 +53,7 @@ export default function EmployeeSalaryManagementPage() {
               <TabsTrigger value="catalog">급여 항목 관리</TabsTrigger>
               <TabsTrigger value="items">직원별 급여표</TabsTrigger>
               <TabsTrigger value="periods">월별 지급 처리</TabsTrigger>
+              <TabsTrigger value="annual-ledger">연도별 급여 내역</TabsTrigger>
             </TabsList>
             <TabsContent value="catalog" className="mt-3">
               <EmployeeSalaryCatalogSection />
@@ -61,6 +63,9 @@ export default function EmployeeSalaryManagementPage() {
             </TabsContent>
             <TabsContent value="periods" className="mt-3">
               <EmployeePayrollPeriodsSection />
+            </TabsContent>
+            <TabsContent value="annual-ledger" className="mt-3">
+              <EmployeeAnnualLedgerSection />
             </TabsContent>
           </Tabs>
         </CardContent>
