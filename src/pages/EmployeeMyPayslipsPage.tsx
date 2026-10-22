@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wallet, CheckCircle2, AlertTriangle, Clock, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Wallet, CheckCircle2, AlertTriangle, Clock, Printer, ChevronLeft, ChevronRight, Receipt } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getCurrentUser } from '@/services/auth.service';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -17,6 +19,11 @@ import EmployeePayslipDetailView from '@/components/employee-salary/EmployeePays
 import type { EmployeePayslipWithDetails } from '@/types/employee-salary';
 
 const fmt = (n: number) => n.toLocaleString('ko-KR');
+
+// 월별 급여에서 소득세성 공제 항목 이름 — 연말정산으로 추가 징수/환급된 금액도 해당 월의
+// 원천징수액에 포함되도록 같은 칸에 합산한다.
+const INCOME_TAX_ITEM_NAMES = new Set(['소득세', '연말정산소득세']);
+const RESIDENT_TAX_ITEM_NAMES = new Set(['주민세', '연말정산주민세']);
 
 // 직원 본인의 급여명세서를 확인하고 승인/이의제기하는 화면 — "월별 지급 처리"에서 담당자가
 // "직원 확인 요청"을 누른 명세서부터 여기 나타난다.
@@ -38,6 +45,9 @@ export default function EmployeeMyPayslipsPage() {
   const [filterMonth, setFilterMonth] = useState('all');
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const [activeTab, setActiveTab] = useState<'payslips' | 'withholding'>('payslips');
+  const [withholdingYear, setWithholdingYear] = useState('');
 
   useEffect(() => {
     const init = async () => {
@@ -98,6 +108,29 @@ export default function EmployeeMyPayslipsPage() {
     () => [...new Set(payslips.map(p => p.period_year_month?.slice(0, 4)).filter((y): y is string => !!y))].sort((a, b) => b.localeCompare(a)),
     [payslips]
   );
+  useEffect(() => {
+    if (!withholdingYear && years.length > 0) setWithholdingYear(years[0]);
+  }, [years, withholdingYear]);
+  const withholdingMonthly = useMemo(() => {
+    const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+    return months.map(month => {
+      const slip = payslips.find(p => p.period_year_month === `${withholdingYear}-${month}`);
+      let incomeTax = 0, residentTax = 0;
+      for (const item of slip?.items || []) {
+        if (item.category !== 'deduction') continue;
+        if (INCOME_TAX_ITEM_NAMES.has(item.name)) incomeTax += item.amount;
+        else if (RESIDENT_TAX_ITEM_NAMES.has(item.name)) residentTax += item.amount;
+      }
+      return { month, hasPayslip: !!slip, incomeTax, residentTax, total: incomeTax + residentTax };
+    });
+  }, [payslips, withholdingYear]);
+  const withholdingYearTotal = useMemo(
+    () => withholdingMonthly.reduce(
+      (acc, m) => ({ incomeTax: acc.incomeTax + m.incomeTax, residentTax: acc.residentTax + m.residentTax, total: acc.total + m.total }),
+      { incomeTax: 0, residentTax: 0, total: 0 }
+    ),
+    [withholdingMonthly]
+  );
   const filteredPayslips = useMemo(
     () => payslips.filter(p => {
       if (!p.period_year_month) return false;
@@ -128,7 +161,13 @@ export default function EmployeeMyPayslipsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pt-0 space-y-3">
+        <CardContent className="pt-0">
+          <Tabs value={activeTab} onValueChange={v => setActiveTab(v as 'payslips' | 'withholding')}>
+            <TabsList>
+              <TabsTrigger value="payslips">급여명세서</TabsTrigger>
+              <TabsTrigger value="withholding">연도별 원천징수</TabsTrigger>
+            </TabsList>
+            <TabsContent value="payslips" className="space-y-3 mt-3">
           {payslips.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
@@ -212,6 +251,57 @@ export default function EmployeeMyPayslipsPage() {
               </Button>
             </div>
           )}
+            </TabsContent>
+
+            <TabsContent value="withholding" className="space-y-3 mt-3">
+              {years.length === 0 ? (
+                <div className="text-center py-12 text-sm text-gray-400">아직 확인할 급여명세서가 없습니다.</div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <Select value={withholdingYear} onValueChange={setWithholdingYear}>
+                      <SelectTrigger className="h-8 w-24 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {years.map(y => <SelectItem key={y} value={y} className="text-sm">{y}년</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <Receipt className="w-3.5 h-3.5" />
+                    <span>급여명세서상 소득세/주민세(연말정산 조정분 포함) 공제 내역을 월별로 정리한 참고용 내역입니다. 실제 신고 기준은 회사 원천징수 자료를 확인하세요.</span>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">월</TableHead>
+                        <TableHead className="text-right text-xs">소득세</TableHead>
+                        <TableHead className="text-right text-xs">주민세</TableHead>
+                        <TableHead className="text-right text-xs">합계</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {withholdingMonthly.map(m => (
+                        <TableRow key={m.month} className={!m.hasPayslip ? 'text-gray-400' : undefined}>
+                          <TableCell className="text-sm">{Number(m.month)}월</TableCell>
+                          <TableCell className="text-right text-sm font-mono">{m.hasPayslip ? fmt(m.incomeTax) : '-'}</TableCell>
+                          <TableCell className="text-right text-sm font-mono">{m.hasPayslip ? fmt(m.residentTax) : '-'}</TableCell>
+                          <TableCell className="text-right text-sm font-mono font-semibold">{m.hasPayslip ? fmt(m.total) : '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell className="text-sm font-semibold">{withholdingYear}년 합계</TableCell>
+                        <TableCell className="text-right text-sm font-mono font-semibold">{fmt(withholdingYearTotal.incomeTax)}</TableCell>
+                        <TableCell className="text-right text-sm font-mono font-semibold">{fmt(withholdingYearTotal.residentTax)}</TableCell>
+                        <TableCell className="text-right text-sm font-mono font-bold">{fmt(withholdingYearTotal.total)}</TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
