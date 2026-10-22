@@ -12,7 +12,7 @@ import { getCurrentUser } from '@/lib/store';
 import { orgChartService } from '@/services/org-chart.service';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { getMyLeaveRequests, addLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, linkLeaveRequestDocument, linkLeaveCancellationDocument, getLeaveBalance } from '@/services/shore-leave.service';
-import { formatLeaveHours, explainAccruedLeaveDays, HOURS_PER_DAY, type LeaveBalance } from '@/lib/leave-calc';
+import { formatLeaveHours, explainAccruedLeaveDays, getCurrentLeaveYearStart, HOURS_PER_DAY, type LeaveBalance } from '@/lib/leave-calc';
 import { calculateLeaveHours, isWorkingDay, rangesOverlap } from '@/lib/leave-duration';
 import { getHolidays, type Holiday } from '@/services/holiday.service';
 import type { OrgUnit, ApprovalChainStep } from '@/types/org-chart';
@@ -202,6 +202,8 @@ export default function ShoreLeaveRequestPage() {
         `신청 기간: ${form.start_date} ${start_time} ~ ${form.end_date} ${end_time}`,
         `신청 시간: ${formatLeaveHours(totalHours)}`,
         `잔여 연차(신청 전): ${formatLeaveHours(balance.remainingHours)}`,
+        `잔여 연차(신청 후): ${formatLeaveHours(balance.remainingHours - totalHours)}`,
+        `연차 적용 기간 시작일: ${getCurrentLeaveYearStart(currentUser.hire_date)}`,
         `사유: ${form.reason || '-'}`,
       ].join('\n');
 
