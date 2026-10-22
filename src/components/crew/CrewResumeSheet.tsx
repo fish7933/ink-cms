@@ -93,6 +93,15 @@ const fmt = (date?: string) => {
   return date.slice(0, 10);
 };
 
+function calculateAge(dateOfBirth: string): number {
+  const today = new Date();
+  const birthDate = new Date(dateOfBirth);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+}
+
 const yesNo = (val: boolean | null | undefined, t: (key: string) => string) => {
   if (val === true) return t('예 (Yes)');
   if (val === false) return t('아니오 (No)');
@@ -106,6 +115,20 @@ const MARITAL_LABELS: Record<string, string> = {
   single: '미혼', married: '기혼', divorced: '이혼', widowed: '사별',
 };
 
+// 라벨 위 · 값 아래로 쌓는 가벼운 필드 — 상자 테두리 없이 공백과 정렬만으로 구분한다.
+function Field({ label, value, className = '', valueClassName = '' }: { label: string; value: React.ReactNode; className?: string; valueClassName?: string }) {
+  return (
+    <div className={`resume-field ${className}`}>
+      <span className="resume-field-label">{label}</span>
+      <span className={`resume-field-value ${valueClassName}`}>{value}</span>
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <div className="resume-section-title">{children}</div>;
+}
+
 interface Props {
   crewId: string;
 }
@@ -113,9 +136,12 @@ interface Props {
 // 선원 이력서 문서 본문 — 독립 인쇄 페이지와 인쇄 모달 양쪽에서 재사용된다.
 // 상단 레터헤드는 결재문서 시행문(ApprovalDocumentIssuedSheet)과 동일하게 회사정보(company_info)를 사용한다.
 export default function CrewResumeSheet({ crewId }: Props) {
-  const { t } = useTranslation('CrewResumeSheet');
+  const { t, i18n } = useTranslation('CrewResumeSheet');
   const [crew, setCrew] = useState<CrewData | null>(null);
   const [rankName, setRankName] = useState('');
+  const [nationalityName, setNationalityName] = useState<{ country_name_ko: string; country_name_en: string } | null>(null);
+  const [rankCodeByName, setRankCodeByName] = useState<Map<string, string>>(new Map());
+  const [rankCodes, setRankCodes] = useState<Set<string>>(new Set());
   const [seaService, setSeaService] = useState<SeaServiceRecord[]>([]);
   const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +154,10 @@ export default function CrewResumeSheet({ crewId }: Props) {
       supabase.from('crew_members').select('*').eq('id', crewId).single(),
       supabase.from('sea_service_records').select('*, sign_off_reasons(name)').eq('crew_member_id', crewId).order('sign_on_date', { ascending: false }),
       getCompanyInfo().catch(() => null),
-    ]).then(([{ data: crewData, error: crewErr }, { data: serviceData }, companyInfo]) => {
+      supabase.from('ranks').select('name, rank_code'),
+    ]).then(([{ data: crewData, error: crewErr }, { data: serviceData }, companyInfo, { data: allRanks }]) => {
+      setRankCodeByName(new Map((allRanks || []).map(r => [r.name, r.rank_code])));
+      setRankCodes(new Set((allRanks || []).map(r => r.rank_code)));
       if (crewErr || !crewData) { setError(t('선원 정보를 불러올 수 없습니다.')); setLoading(false); return; }
 
       let certs: Certificate[] = [];
@@ -151,8 +180,12 @@ export default function CrewResumeSheet({ crewId }: Props) {
       setCompany(companyInfo);
 
       if (crewData.rank_id) {
-        supabase.from('ranks').select('name, rank_code').eq('id', crewData.rank_id).single()
-          .then(({ data: r }) => { if (r) setRankName(`${r.rank_code} / ${r.name}`); });
+        supabase.from('ranks').select('name').eq('id', crewData.rank_id).single()
+          .then(({ data: r }) => { if (r) setRankName(r.name); });
+      }
+      if (crewData.nationality) {
+        supabase.from('nationalities').select('country_name_ko, country_name_en').eq('country_code', crewData.nationality).maybeSingle()
+          .then(({ data: n }) => { if (n) setNationalityName(n); });
       }
       setLoading(false);
     }).catch((e) => {
@@ -165,83 +198,117 @@ export default function CrewResumeSheet({ crewId }: Props) {
   if (loading) return <div style={{ padding: 40, fontFamily: 'sans-serif' }}>{t('불러오는 중...')}</div>;
   if (error || !crew) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: 'red' }}>{error || t('오류')}</div>;
 
+  // 레터헤드 회사명 — 영문 전환 시 결재문서 시행문과 동일하게 name_en(없으면 국문 그대로)을 쓴다.
+  const companyName = i18n.language === 'en' ? (company?.name_en || company?.name) : company?.name;
+  // 승선 이력의 직책은 기록 당시 값이 직급코드("C/E")로도, 풀네임("Chief Engineer")으로도
+  // 저장돼 있어 표기를 코드로 통일한다 — 이미 코드면 그대로, 풀네임이면 매칭되는 코드로 치환.
+  const resolveRankCode = (rank: string) => rankCodes.has(rank) ? rank : (rankCodeByName.get(rank) || rank);
+  const isEnglish = i18n.language === 'en';
+  // 영문 모드에서는 이름 자체를 영문명으로 보여주므로 별도 "영문이름"/"한자이름" 란이 더 필요없다.
+  const displayName = isEnglish ? (crew.name_english || crew.name) : crew.name;
+  // 이제 선원 이름은 기본적으로 영문으로 입력되어 영문이름이 메인 이름과 같은 경우가 대부분이다
+  // — 메인 이름에 이미 나온 값과 같으면 "영문이름" 칸을 또 보여줄 필요가 없다.
+  const showEnglishNameField = !!crew.name_english?.trim() && crew.name_english.trim() !== (displayName || '').trim();
+  const nationalityDisplay = nationalityName ? (isEnglish ? nationalityName.country_name_en : nationalityName.country_name_ko) : (crew.nationality || '');
+  const age = crew.date_of_birth ? calculateAge(crew.date_of_birth) : null;
+  const nameSuffix = [age != null ? t('{{age}}세', { age }) : null, nationalityDisplay || null].filter(Boolean).join(', ');
+
   return (
-    <div className="resume" style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', Arial, sans-serif", fontSize: '9pt', color: '#000' }}>
+    <div className="resume" style={{ maxWidth: 820, margin: '0 auto', fontFamily: "'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', Arial, sans-serif", fontSize: '9pt', color: '#1e293b' }}>
       <style>{`
-        .resume-section { margin-bottom: 10px; }
+        .resume { line-height: 1.5; }
+        .resume-section { margin-bottom: 18px; }
         .resume-section-title {
-          font-size: 9pt; font-weight: 700; color: #fff;
-          background: #1d4ed8; padding: 3px 8px; margin-bottom: 4px;
-          text-transform: uppercase; letter-spacing: 1px;
+          font-size: 8pt; font-weight: 700; color: #0f172a;
+          text-transform: uppercase; letter-spacing: 1.5px;
+          padding-bottom: 5px; margin-bottom: 10px;
+          border-bottom: 1.5px solid #0f172a;
         }
-        .resume-info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; }
-        .resume-info-item { display: flex; border: 0.5px solid #ddd; }
-        .resume-info-label { background: #f0f4ff; font-weight: 600; padding: 3px 6px; min-width: 90px; font-size: 8pt; color: #333; white-space: nowrap; }
-        .resume-info-value { padding: 3px 6px; flex: 1; font-size: 8.5pt; }
-        .resume-profile-block { display: flex; gap: 10px; margin-bottom: 6px; }
-        .resume-profile-photo { width: 90px; height: 110px; border: 1px solid #ccc; object-fit: cover; flex-shrink: 0; }
-        .resume-profile-photo-placeholder { width: 90px; height: 110px; border: 1px solid #ccc; background: #f5f5f5; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #aaa; font-size: 8pt; }
-        .resume-profile-info { flex: 1; }
-        .resume-crew-name { font-size: 13pt; font-weight: 800; color: #1d4ed8; margin-bottom: 2px; }
-        .resume-crew-rank { font-size: 10pt; font-weight: 600; color: #374151; margin-bottom: 6px; }
+        .resume-field-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 20px; }
+        .resume-field { display: flex; flex-direction: column; gap: 1px; padding-bottom: 6px; border-bottom: 1px solid #eef0f3; }
+        .resume-field-span { grid-column: 1 / -1; }
+        .resume-field-label { font-size: 7pt; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.4px; }
+        .resume-field-value { font-size: 8.5pt; color: #1e293b; }
+        .resume-profile-block { display: flex; gap: 18px; margin-bottom: 14px; align-items: flex-start; }
+        .resume-profile-photo { width: 92px; height: 116px; border-radius: 4px; border: 1px solid #e2e8f0; object-fit: cover; flex-shrink: 0; }
+        .resume-profile-photo-placeholder {
+          width: 92px; height: 116px; border-radius: 4px; border: 1px dashed #cbd5e1; background: #f8fafc;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #94a3b8; font-size: 7pt; letter-spacing: 0.5px;
+        }
+        .resume-profile-info { flex: 1; padding-top: 2px; }
+        .resume-crew-name { font-size: 15pt; font-weight: 800; color: #0f172a; letter-spacing: 0.2px; }
+        .resume-crew-name-suffix { font-size: 11pt; font-weight: 500; color: #64748b; }
+        .resume-crew-rank {
+          display: inline-block; margin-top: 6px; margin-bottom: 10px;
+          font-size: 10.5pt; font-weight: 700; color: #0f172a; background: #eef2f7;
+          padding: 4px 12px; border-radius: 999px; letter-spacing: 0.3px;
+        }
         .resume table { width: 100%; border-collapse: collapse; font-size: 8pt; }
-        .resume th { background: #e8eef8; font-weight: 600; padding: 4px 6px; border: 0.5px solid #ccc; text-align: center; }
-        .resume td { padding: 3px 6px; border: 0.5px solid #ccc; vertical-align: top; }
-        .resume tr:nth-child(even) td { background: #fafafa; }
-        .resume-cert-expired { color: #dc2626; }
-        .resume-cert-ok { color: #16a34a; }
-        .resume-footer {
-          margin-top: 12px; padding-top: 6px; border-top: 1px solid #ccc;
-          font-size: 7.5pt; color: #666; display: flex; justify-content: space-between;
+        .resume th {
+          font-weight: 700; font-size: 7pt; letter-spacing: 0.3px; text-transform: uppercase; color: #64748b;
+          padding: 5px 7px; border-bottom: 1.5px solid #0f172a; text-align: center; white-space: nowrap;
         }
-        .resume-result-pass { color: #16a34a; font-weight: 600; }
-        .resume-result-fail { color: #dc2626; font-weight: 600; }
+        .resume td { padding: 5px 7px; border-bottom: 1px solid #eef0f3; vertical-align: top; color: #1e293b; }
+        .resume tbody tr:last-child td { border-bottom: 1px solid #cbd5e1; }
+        .resume-cert-expired { color: #dc2626; font-weight: 600; }
+        .resume-cert-ok { color: #15803d; }
+        .resume-footer {
+          margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0;
+          font-size: 7.5pt; color: #94a3b8; display: flex; justify-content: space-between;
+        }
+        .resume-result-pass { color: #15803d; font-weight: 700; }
+        .resume-result-fail { color: #dc2626; font-weight: 700; }
       `}</style>
 
       {/* 레터헤드 — 결재문서 시행문(ApprovalDocumentIssuedSheet)과 동일한 회사정보 헤더 */}
       {company && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 40 }} />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          {company.logo_url && <img src={company.logo_url} alt="" style={{ height: 36 }} />}
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>{company.name}</div>
-            <div style={{ fontSize: 10.5, color: '#666', marginTop: 2 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a' }}>{companyName}</div>
+            <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 1 }}>
               {[company.address, company.phone && `Tel. ${company.phone}`, company.fax && `Fax. ${company.fax}`].filter(Boolean).join('  ·  ')}
             </div>
             {(company.email || company.website) && (
-              <div style={{ fontSize: 10.5, color: '#666' }}>
+              <div style={{ fontSize: 9.5, color: '#94a3b8' }}>
                 {[company.email, company.website].filter(Boolean).join('  ·  ')}
               </div>
             )}
           </div>
         </div>
       )}
-      <div style={{ borderBottom: '3px solid #1a1a1a', marginBottom: 12 }} />
-      <div style={{ fontSize: '16pt', fontWeight: 800, letterSpacing: 2, color: '#1d4ed8', textAlign: 'center', marginBottom: 12 }}>CREW RESUME</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', borderBottom: '2.5px solid #0f172a', paddingBottom: 8, marginBottom: 18 }}>
+        <div style={{ fontSize: '15pt', fontWeight: 800, letterSpacing: 3, color: '#0f172a' }}>CREW RESUME</div>
+        <div style={{ fontSize: 8, color: '#94a3b8', letterSpacing: 0.3 }}>{t('출력일: {{date}}', { date: new Date().toLocaleDateString('ko-KR') })}</div>
+      </div>
 
       {/* 프로필 + 기본정보 */}
       <div className="resume-section">
-        <div className="resume-section-title">Personal Information</div>
+        <SectionTitle>Personal Information</SectionTitle>
         <div className="resume-profile-block">
           {crew.photo_url
             ? <img src={crew.photo_url} className="resume-profile-photo" alt="crew" />
             : <div className="resume-profile-photo-placeholder">NO PHOTO</div>
           }
           <div className="resume-profile-info">
-            <div className="resume-crew-name">{crew.name || '-'}</div>
+            <div className="resume-crew-name">
+              {displayName || '-'}
+              {nameSuffix && <span className="resume-crew-name-suffix"> ({nameSuffix})</span>}
+            </div>
             <div className="resume-crew-rank">{rankName || crew.rank || '-'}</div>
-            <div className="resume-info-grid">
-              <div className="resume-info-item"><span className="resume-info-label">{t('영문이름')}</span><span className="resume-info-value">{crew.name_english || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('한자이름')}</span><span className="resume-info-value">{crew.name_chinese || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('국적')}</span><span className="resume-info-value">{crew.nationality || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('생년월일')}</span><span className="resume-info-value">{fmt(crew.date_of_birth)}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('출생지')}</span><span className="resume-info-value">{crew.place_of_birth || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('혈액형')}</span><span className="resume-info-value">{crew.blood_type || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('결혼여부')}</span><span className="resume-info-value">{crew.marital_status ? t(MARITAL_LABELS[crew.marital_status] || crew.marital_status) : '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('자녀수')}</span><span className="resume-info-value">{crew.children_count ?? '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('종교')}</span><span className="resume-info-value">{crew.religion || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('연락처')}</span><span className="resume-info-value">{crew.phone || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">{t('이메일')}</span><span className="resume-info-value">{crew.email || '-'}</span></div>
-              <div className="resume-info-item"><span className="resume-info-label">SID</span><span className="resume-info-value">{crew.sid || '-'}</span></div>
+            <div className="resume-field-grid">
+              {showEnglishNameField && <Field label={t('영문이름')} value={crew.name_english} />}
+              {!isEnglish && <Field label={t('한자이름')} value={crew.name_chinese || '-'} />}
+              <Field label={t('국적')} value={nationalityDisplay || '-'} />
+              <Field label={t('생년월일')} value={fmt(crew.date_of_birth)} />
+              <Field label={t('출생지')} value={crew.place_of_birth || '-'} />
+              <Field label={t('혈액형')} value={crew.blood_type || '-'} />
+              <Field label={t('결혼여부')} value={crew.marital_status ? t(MARITAL_LABELS[crew.marital_status] || crew.marital_status) : '-'} />
+              <Field label={t('자녀수')} value={crew.children_count ?? '-'} />
+              <Field label={t('종교')} value={crew.religion || '-'} />
+              <Field label={t('연락처')} value={crew.phone || '-'} />
+              <Field label={t('이메일')} value={crew.email || '-'} />
+              <Field label="SID" value={crew.sid || '-'} />
             </div>
           </div>
         </div>
@@ -249,100 +316,77 @@ export default function CrewResumeSheet({ crewId }: Props) {
 
       {/* 신체 정보 */}
       <div className="resume-section">
-        <div className="resume-section-title">Physical Data</div>
-        <div className="resume-info-grid">
-          <div className="resume-info-item"><span className="resume-info-label">{t('키 (Height)')}</span><span className="resume-info-value">{crew.height ? `${crew.height} cm` : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('몸무게 (Weight)')}</span><span className="resume-info-value">{crew.weight ? `${crew.weight} kg` : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('혈액형')}</span><span className="resume-info-value">{crew.blood_type || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('눈 색')}</span><span className="resume-info-value">{crew.eye_color || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('신발 사이즈')}</span><span className="resume-info-value">{crew.shoe_size ? `${crew.shoe_size} mm` : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('작업복 사이즈')}</span><span className="resume-info-value">{crew.coverall_size || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('의류 사이즈')}</span><span className="resume-info-value">{crew.clothing_size || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('흡연')}</span><span className="resume-info-value">{crew.smoking === true ? t('흡연') : crew.smoking === false ? t('비흡연') : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('음주')}</span><span className="resume-info-value">{crew.drinking === true ? t('음주') : crew.drinking === false ? t('비음주') : '-'}</span></div>
+        <SectionTitle>Physical Data</SectionTitle>
+        <div className="resume-field-grid">
+          <Field label={t('키 (Height)')} value={crew.height ? `${crew.height} cm` : '-'} />
+          <Field label={t('몸무게 (Weight)')} value={crew.weight ? `${crew.weight} kg` : '-'} />
+          <Field label={t('혈액형')} value={crew.blood_type || '-'} />
+          <Field label={t('눈 색')} value={crew.eye_color || '-'} />
+          <Field label={t('신발 사이즈')} value={crew.shoe_size ? `${crew.shoe_size} mm` : '-'} />
+          <Field label={t('작업복 사이즈')} value={crew.coverall_size || '-'} />
+          <Field label={t('의류 사이즈')} value={crew.clothing_size || '-'} />
+          <Field label={t('흡연')} value={crew.smoking === true ? t('흡연') : crew.smoking === false ? t('비흡연') : '-'} />
+          <Field label={t('음주')} value={crew.drinking === true ? t('음주') : crew.drinking === false ? t('비음주') : '-'} />
         </div>
       </div>
 
       {/* 서류 번호 */}
       <div className="resume-section">
-        <div className="resume-section-title">Documents</div>
-        <div className="resume-info-grid">
-          <div className="resume-info-item"><span className="resume-info-label">{t('여권 번호')}</span><span className="resume-info-value">{crew.passport_number || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('여권 만료일')}</span><span className="resume-info-value">{fmt(crew.passport_expiry)}</span></div>
-          <div className="resume-info-item" style={{ gridColumn: 'span 1' }} />
-          <div className="resume-info-item"><span className="resume-info-label">{t('선원수첩 (국내)')}</span><span className="resume-info-value">{crew.seaman_book_number || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('국내 만료일')}</span><span className="resume-info-value">{fmt(crew.seaman_book_expiry)}</span></div>
-          <div className="resume-info-item" />
-          <div className="resume-info-item"><span className="resume-info-label">{t('선원수첩 (국제)')}</span><span className="resume-info-value">{crew.seaman_book_flag_number || '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('국제 만료일')}</span><span className="resume-info-value">{fmt(crew.seaman_book_flag_expiry)}</span></div>
-          <div className="resume-info-item" />
+        <SectionTitle>Documents</SectionTitle>
+        <div className="resume-field-grid">
+          <Field label={t('여권 번호')} value={crew.passport_number || '-'} />
+          <Field label={t('여권 만료일')} value={fmt(crew.passport_expiry)} />
+          <div />
+          <Field label={t('선원수첩 (국내)')} value={crew.seaman_book_number || '-'} />
+          <Field label={t('국내 만료일')} value={fmt(crew.seaman_book_expiry)} />
+          <div />
+          <Field label={t('선원수첩 (국제)')} value={crew.seaman_book_flag_number || '-'} />
+          <Field label={t('국제 만료일')} value={fmt(crew.seaman_book_flag_expiry)} />
+          <div />
         </div>
       </div>
 
       {/* 언어 능력 */}
       <div className="resume-section">
-        <div className="resume-section-title">Language Skills</div>
-        <div className="resume-info-grid">
-          <div className="resume-info-item"><span className="resume-info-label">{t('영어 읽기/쓰기')}</span><span className="resume-info-value">{crew.english_read_write ? t(LEVEL_LABELS[crew.english_read_write] || crew.english_read_write) : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('영어 말하기/듣기')}</span><span className="resume-info-value">{crew.english_speak_listen ? t(LEVEL_LABELS[crew.english_speak_listen] || crew.english_speak_listen) : '-'}</span></div>
-          <div className="resume-info-item"><span className="resume-info-label">{t('기타 언어')}</span><span className="resume-info-value">{crew.other_languages || '-'}</span></div>
+        <SectionTitle>Language Skills</SectionTitle>
+        <div className="resume-field-grid">
+          <Field label={t('영어 읽기/쓰기')} value={crew.english_read_write ? t(LEVEL_LABELS[crew.english_read_write] || crew.english_read_write) : '-'} />
+          <Field label={t('영어 말하기/듣기')} value={crew.english_speak_listen ? t(LEVEL_LABELS[crew.english_speak_listen] || crew.english_speak_listen) : '-'} />
+          <Field label={t('기타 언어')} value={crew.other_languages || '-'} />
+          {crew.job_ability && <Field label={t('업무 능력')} value={crew.job_ability} className="resume-field-span" />}
+          {crew.motivation && <Field label={t('지원 동기')} value={crew.motivation} className="resume-field-span" />}
         </div>
-        {crew.job_ability && (
-          <div className="resume-info-item" style={{ marginTop: 2 }}><span className="resume-info-label">{t('업무 능력')}</span><span className="resume-info-value">{crew.job_ability}</span></div>
-        )}
-        {crew.motivation && (
-          <div className="resume-info-item" style={{ marginTop: 2 }}><span className="resume-info-label">{t('지원 동기')}</span><span className="resume-info-value">{crew.motivation}</span></div>
-        )}
       </div>
 
       {/* 건강/신체검사 */}
       <div className="resume-section">
-        <div className="resume-section-title">Health & Medical</div>
-        <div className="resume-info-grid">
-          <div className="resume-info-item">
-            <span className="resume-info-label">{t('신체검사일')}</span>
-            <span className="resume-info-value">{fmt(crew.physical_exam_date)}</span>
-          </div>
-          <div className="resume-info-item">
-            <span className="resume-info-label">{t('신체검사 결과')}</span>
-            <span className={`resume-info-value ${crew.physical_exam_result === 'fit' ? 'resume-result-pass' : crew.physical_exam_result === 'unfit' ? 'resume-result-fail' : ''}`}>
-              {crew.physical_exam_result === 'fit' ? 'FIT' : crew.physical_exam_result === 'unfit' ? 'UNFIT' : '-'}
-            </span>
-          </div>
-          <div className="resume-info-item" />
-          <div className="resume-info-item">
-            <span className="resume-info-label">{t('약물/알코올 검사일')}</span>
-            <span className="resume-info-value">{fmt(crew.drug_test_date)}</span>
-          </div>
-          <div className="resume-info-item">
-            <span className="resume-info-label">{t('검사 결과')}</span>
-            <span className={`resume-info-value ${crew.drug_test_result === 'pass' ? 'resume-result-pass' : crew.drug_test_result === 'fail' ? 'resume-result-fail' : ''}`}>
-              {crew.drug_test_result === 'pass' ? 'PASS' : crew.drug_test_result === 'fail' ? 'FAIL' : '-'}
-            </span>
-          </div>
-          <div className="resume-info-item" />
-          <div className="resume-info-item">
-            <span className="resume-info-label">{t('황열병 예방접종')}</span>
-            <span className="resume-info-value">{yesNo(crew.yellow_fever_vaccination, t)}</span>
-          </div>
-          <div className="resume-info-item">
-            <span className="resume-info-label">{t('접종일')}</span>
-            <span className="resume-info-value">{fmt(crew.yellow_fever_date)}</span>
-          </div>
-          <div className="resume-info-item" />
+        <SectionTitle>Health & Medical</SectionTitle>
+        <div className="resume-field-grid">
+          <Field label={t('신체검사일')} value={fmt(crew.physical_exam_date)} />
+          <Field
+            label={t('신체검사 결과')}
+            value={crew.physical_exam_result === 'fit' ? 'FIT' : crew.physical_exam_result === 'unfit' ? 'UNFIT' : '-'}
+            valueClassName={crew.physical_exam_result === 'fit' ? 'resume-result-pass' : crew.physical_exam_result === 'unfit' ? 'resume-result-fail' : ''}
+          />
+          <div />
+          <Field label={t('약물/알코올 검사일')} value={fmt(crew.drug_test_date)} />
+          <Field
+            label={t('검사 결과')}
+            value={crew.drug_test_result === 'pass' ? 'PASS' : crew.drug_test_result === 'fail' ? 'FAIL' : '-'}
+            valueClassName={crew.drug_test_result === 'pass' ? 'resume-result-pass' : crew.drug_test_result === 'fail' ? 'resume-result-fail' : ''}
+          />
+          <div />
+          <Field label={t('황열병 예방접종')} value={yesNo(crew.yellow_fever_vaccination, t)} />
+          <Field label={t('접종일')} value={fmt(crew.yellow_fever_date)} />
+          <div />
+          {crew.previous_illness && <Field label={t('기왕증')} value={crew.previous_illness} className="resume-field-span" />}
         </div>
-        {crew.previous_illness && (
-          <div className="resume-info-item" style={{ marginTop: 2 }}>
-            <span className="resume-info-label">{t('기왕증')}</span>
-            <span className="resume-info-value">{crew.previous_illness}</span>
-          </div>
-        )}
       </div>
 
       {/* 보유 증서 */}
       {crew.certificates && crew.certificates.length > 0 && (
         <div className="resume-section">
-          <div className="resume-section-title">Certificates & Documents</div>
+          <SectionTitle>Certificates & Documents</SectionTitle>
           <table>
             <thead>
               <tr>
@@ -358,7 +402,7 @@ export default function CrewResumeSheet({ crewId }: Props) {
                 const isExpired = cert.expiry_date && !cert.no_expiry && new Date(cert.expiry_date) < new Date();
                 return (
                   <tr key={i}>
-                    <td>{cert.name}</td>
+                    <td style={{ fontWeight: 600 }}>{cert.name}</td>
                     <td style={{ textAlign: 'center' }}>{cert.number || '-'}</td>
                     <td style={{ textAlign: 'center' }}>{fmt(cert.issued_date)}</td>
                     <td style={{ textAlign: 'center' }} className={isExpired ? 'resume-cert-expired' : cert.no_expiry ? '' : 'resume-cert-ok'}>
@@ -376,7 +420,7 @@ export default function CrewResumeSheet({ crewId }: Props) {
       {/* 승선 이력 */}
       {seaService.length > 0 && (
         <div className="resume-section">
-          <div className="resume-section-title">Sea Service Record</div>
+          <SectionTitle>Sea Service Record</SectionTitle>
           <table>
             <thead>
               <tr>
@@ -398,11 +442,11 @@ export default function CrewResumeSheet({ crewId }: Props) {
                   : null;
                 return (
                   <tr key={i}>
-                    <td>{rec.ship_name}</td>
+                    <td style={{ fontWeight: 600 }}>{rec.ship_name}</td>
                     <td style={{ textAlign: 'center' }}>{rec.ship_type || '-'}</td>
                     <td style={{ textAlign: 'center' }}>{rec.flag || '-'}</td>
                     <td style={{ textAlign: 'center' }}>{rec.gross_tonnage?.toLocaleString() || '-'}</td>
-                    <td style={{ textAlign: 'center' }}>{rec.rank}{rec.rank_grade ? `(${rec.rank_grade})` : ''}</td>
+                    <td style={{ textAlign: 'center' }}>{resolveRankCode(rec.rank)}{rec.rank_grade ? `(${rec.rank_grade})` : ''}</td>
                     <td style={{ textAlign: 'center' }}>{fmt(rec.sign_on_date)}</td>
                     <td style={{ textAlign: 'center' }}>{rec.sign_off_date ? fmt(rec.sign_off_date) : t('현재')}</td>
                     <td style={{ textAlign: 'center' }}>{months != null ? t('{{months}}개월', { months }) : '-'}</td>
@@ -418,13 +462,10 @@ export default function CrewResumeSheet({ crewId }: Props) {
       {/* 비상 연락처 */}
       {crew.emergency_contacts && crew.emergency_contacts.length > 0 && (
         <div className="resume-section">
-          <div className="resume-section-title">Emergency Contacts</div>
-          <div className="resume-info-grid">
+          <SectionTitle>Emergency Contacts</SectionTitle>
+          <div className="resume-field-grid">
             {crew.emergency_contacts.map((c, i) => (
-              <div key={i} className="resume-info-item">
-                <span className="resume-info-label">{c.relationship} ({i + 1})</span>
-                <span className="resume-info-value">{c.name} / {c.phone}</span>
-              </div>
+              <Field key={i} label={`${c.relationship} (${i + 1})`} value={`${c.name} / ${c.phone}`} />
             ))}
           </div>
         </div>
@@ -432,8 +473,7 @@ export default function CrewResumeSheet({ crewId }: Props) {
 
       {/* 푸터 */}
       <div className="resume-footer">
-        <span>{company?.name || ''}{company?.address ? ` — ${company.address}` : ''}{company?.phone ? ` | Tel: ${company.phone}` : ''}</span>
-        <span>{t('출력일: {{date}}', { date: new Date().toLocaleDateString('ko-KR') })}</span>
+        <span>{companyName || ''}{company?.address ? ` — ${company.address}` : ''}{company?.phone ? ` | Tel: ${company.phone}` : ''}</span>
       </div>
     </div>
   );

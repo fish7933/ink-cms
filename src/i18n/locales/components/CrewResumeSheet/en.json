@@ -67,5 +67,6 @@
   "하선 사유": "Disembark Reason",
   "현재": "Present",
   "{{months}}개월": "{{months}} months",
+  "{{age}}세": "{{age}}",
   "출력일: {{date}}": "Printed on: {{date}}"
 }
