@@ -98,6 +98,9 @@ function SortableItem({ id, item, onEdit, onToggle }: SortableItemProps) {
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm">{item.label}</span>
+          {item.label_en && (
+            <span className="text-xs text-gray-400">({item.label_en})</span>
+          )}
           {item.path && (
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
               {item.path}
@@ -145,9 +148,11 @@ export default function MenuConfigurationPage() {
   const [deletedCategoryIds, setDeletedCategoryIds] = useState<string[]>([]);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [categoryDraftLabel, setCategoryDraftLabel] = useState('');
+  const [categoryDraftLabelEn, setCategoryDraftLabelEn] = useState('');
   const [categoryDraftIcon, setCategoryDraftIcon] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
+  const [newCategoryLabelEn, setNewCategoryLabelEn] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('');
 
   const sensors = useSensors(
@@ -325,6 +330,7 @@ export default function MenuConfigurationPage() {
   const startEditCategory = (cat: MenuCategory) => {
     setEditingCategoryId(cat.id);
     setCategoryDraftLabel(cat.label);
+    setCategoryDraftLabelEn(cat.label_en || '');
     setCategoryDraftIcon(cat.icon || '');
   };
 
@@ -333,7 +339,9 @@ export default function MenuConfigurationPage() {
   const saveEditCategory = () => {
     if (!editingCategoryId || !categoryDraftLabel.trim()) return;
     setMenuStructure(prev => prev.map(cat =>
-      cat.id === editingCategoryId ? { ...cat, label: categoryDraftLabel.trim(), icon: categoryDraftIcon.trim() || undefined } : cat
+      cat.id === editingCategoryId
+        ? { ...cat, label: categoryDraftLabel.trim(), label_en: categoryDraftLabelEn.trim() || undefined, icon: categoryDraftIcon.trim() || undefined }
+        : cat
     ));
     setEditingCategoryId(null);
   };
@@ -351,6 +359,7 @@ export default function MenuConfigurationPage() {
     const newCategory: MenuCategory = {
       id: `custom-${Date.now()}`,
       label: newCategoryLabel.trim(),
+      label_en: newCategoryLabelEn.trim() || undefined,
       icon: newCategoryIcon.trim() || 'Folder',
       order: maxOrder + 1,
       is_active: true,
@@ -358,6 +367,7 @@ export default function MenuConfigurationPage() {
     };
     setMenuStructure(prev => [...prev, newCategory]);
     setNewCategoryLabel('');
+    setNewCategoryLabelEn('');
     setNewCategoryIcon('');
     setAddingCategory(false);
     toast({ title: '대메뉴가 추가되었습니다.', description: '하위 메뉴는 없는 빈 대메뉴입니다. 저장을 눌러야 실제로 반영됩니다.' });
@@ -402,6 +412,14 @@ export default function MenuConfigurationPage() {
                       id="label"
                       value={editingItem.label}
                       onChange={(e) => setEditingItem({ ...editingItem, label: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="label-en">영문명 (선택, 비워두면 기본 번역을 사용)</Label>
+                    <Input
+                      id="label-en"
+                      value={editingItem.label_en || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, label_en: e.target.value })}
                     />
                   </div>
                   <div>
@@ -516,11 +534,15 @@ export default function MenuConfigurationPage() {
                     <Input id="new-cat-label" value={newCategoryLabel} onChange={e => setNewCategoryLabel(e.target.value)} placeholder="예: 마케팅" />
                   </div>
                   <div className="flex-1">
+                    <Label htmlFor="new-cat-label-en">영문명 (선택)</Label>
+                    <Input id="new-cat-label-en" value={newCategoryLabelEn} onChange={e => setNewCategoryLabelEn(e.target.value)} placeholder="예: Marketing" />
+                  </div>
+                  <div className="flex-1">
                     <Label htmlFor="new-cat-icon">아이콘 (선택, lucide-react 이름)</Label>
                     <Input id="new-cat-icon" value={newCategoryIcon} onChange={e => setNewCategoryIcon(e.target.value)} placeholder="예: Folder" />
                   </div>
                   <Button onClick={handleAddCategory} disabled={!newCategoryLabel.trim()}>추가</Button>
-                  <Button variant="ghost" onClick={() => { setAddingCategory(false); setNewCategoryLabel(''); setNewCategoryIcon(''); }}>취소</Button>
+                  <Button variant="ghost" onClick={() => { setAddingCategory(false); setNewCategoryLabel(''); setNewCategoryLabelEn(''); setNewCategoryIcon(''); }}>취소</Button>
                 </CardContent>
               </Card>
             )}
@@ -552,6 +574,7 @@ export default function MenuConfigurationPage() {
                               editingCategoryId === category.id ? (
                                 <div className="flex-1 flex items-center gap-2">
                                   <Input value={categoryDraftLabel} onChange={e => setCategoryDraftLabel(e.target.value)} placeholder="대메뉴명" className="h-8" />
+                                  <Input value={categoryDraftLabelEn} onChange={e => setCategoryDraftLabelEn(e.target.value)} placeholder="영문명 (선택)" className="h-8" />
                                   <Input value={categoryDraftIcon} onChange={e => setCategoryDraftIcon(e.target.value)} placeholder="아이콘" className="h-8 w-40" />
                                   <Button size="sm" variant="ghost" onClick={saveEditCategory} disabled={!categoryDraftLabel.trim()}><Check className="w-4 h-4 text-green-600" /></Button>
                                   <Button size="sm" variant="ghost" onClick={cancelEditCategory}><X className="w-4 h-4 text-gray-500" /></Button>
@@ -570,6 +593,9 @@ export default function MenuConfigurationPage() {
                                       <ChevronRight className="w-4 h-4 mr-2" />
                                     )}
                                     <span className="font-semibold text-base">{category.label}</span>
+                                    {category.label_en && (
+                                      <span className="ml-1.5 text-xs text-gray-400">({category.label_en})</span>
+                                    )}
                                     <span className="ml-2 text-xs text-gray-500">
                                       ({category.items.length}개 항목)
                                     </span>

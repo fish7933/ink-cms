@@ -100,6 +100,15 @@
   }
 }
 
+/* 헤더 대메뉴처럼 좁은 화면에서 가로 스크롤이 필요한 영역에 쓴다 — 스크롤 동작은
+   유지하고 눈에 보이는 스크롤바(가로줄)만 숨긴다. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media print {
   /* 급여 템플릿 인쇄 모달이 열려있는 동안은 뒤에 있는 앱 화면을 인쇄에서 제외한다 */
   body.salary-print-dialog-open #root {

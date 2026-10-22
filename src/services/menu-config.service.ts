@@ -45,6 +45,7 @@ export async function getEffectiveMenuStructure(): Promise<MenuCategory[]> {
           ? {
               ...defaultItem,
               label: savedItem.label || defaultItem.label,
+              label_en: savedItem.label_en,
               icon: savedItem.icon || defaultItem.icon,
               order: savedItem.order,
               is_active: savedItem.is_active,
@@ -55,6 +56,7 @@ export async function getEffectiveMenuStructure(): Promise<MenuCategory[]> {
       return {
         ...defaultCat,
         label: savedCat.label || defaultCat.label,
+        label_en: savedCat.label_en,
         icon: savedCat.icon || defaultCat.icon,
         order: savedCat.order,
         is_active: savedCat.is_active,

@@ -20,6 +20,7 @@ import { getIconComponent } from '@/lib/icon-utils';
 import type { MenuCategory } from '@/types/menu';
 import { useTabContext } from '@/contexts/TabContext';
 import { getCompanyInfo } from '@/services/company-info.service';
+import { resolveMenuLabel } from '@/lib/menu-i18n';
 
 interface HeaderProps {
   selectedCategoryId?: string | null;
@@ -149,7 +150,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
       </button>
 
       {/* 카테고리 버튼들 - 클릭 시 좌측 사이드바 즉시 변경 */}
-      <nav className="flex items-center gap-1 flex-1 overflow-x-auto">
+      <nav className="flex items-center gap-1 flex-1 overflow-x-auto no-scrollbar">
         {visibleCategories.map(category => {
           const CategoryIcon = getIconComponent(category.icon);
           const isSelected = category.id === selectedCategoryId;
@@ -167,7 +168,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
               onClick={() => onCategorySelect?.(category.id)}
             >
               {CategoryIcon && <CategoryIcon className="h-3.5 w-3.5" />}
-              {KOREAN_ONLY_CATEGORY_IDS.has(category.id) ? category.label : t(category.label)}
+              {KOREAN_ONLY_CATEGORY_IDS.has(category.id) ? category.label : resolveMenuLabel(category.label, category.label_en, lang, t)}
             </Button>
           );
         })}

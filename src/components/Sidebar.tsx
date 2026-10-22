@@ -8,6 +8,7 @@ import type { Permission } from '@/types/permissions';
 import { getIconComponent } from '@/lib/icon-utils';
 import { useTabContext } from '@/contexts/TabContext';
 import { resourceForMenuItemId } from '@/lib/menu-permission-map';
+import { resolveMenuLabel } from '@/lib/menu-i18n';
 
 interface SidebarProps {
   menuStructure: MenuCategory[];
@@ -25,7 +26,7 @@ const KOREAN_ONLY_CATEGORY_IDS = new Set(['groupware', 'accounting']);
 export default function Sidebar({ menuStructure, currentRole, permissions = [], selectedCategoryId, badgeCounts = {} }: SidebarProps) {
   const { openTab } = useTabContext();
   const location = useLocation();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // 접속(canView) 권한이 명시적으로 꺼진 메뉴만 숨긴다. 권한 관리 화면과 매핑되지 않은 메뉴이거나,
   // 아직 아무도 손대지 않아 레코드가 없는 리소스는 항상 노출(기본 허용)한다 — usePermissions와 동일한 기본값.
@@ -83,7 +84,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
           {currentCategory && (
             <div className="px-2.5 pt-2.5 pb-2 mb-1">
               <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                {isKoreanOnly ? currentCategory.label : t(currentCategory.label)}
+                {isKoreanOnly ? currentCategory.label : resolveMenuLabel(currentCategory.label, currentCategory.label_en, i18n.language, t)}
               </h3>
             </div>
           )}
@@ -98,7 +99,7 @@ export default function Sidebar({ menuStructure, currentRole, permissions = [], 
                 const ItemIcon = getIconComponent(item.icon);
                 const isActive = isItemActive(item);
                 const badgeCount = badgeCounts[item.id] || 0;
-                const itemLabel = isKoreanOnly ? item.label : t(item.label);
+                const itemLabel = isKoreanOnly ? item.label : resolveMenuLabel(item.label, item.label_en, i18n.language, t);
                 return (
                   <Button
                     key={item.id}
