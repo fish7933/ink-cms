@@ -148,6 +148,16 @@ function FieldRow({ label, children }: { label: React.ReactNode; children: React
   );
 }
 
+// 증서 탭의 카테고리 구분(뱃지 + 가로선)과 같은 모양 — 기본정보 탭의 섹션 구분에도 동일하게 쓴다.
+function SectionDivider({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <Badge variant="outline" className="text-xs font-semibold">{children}</Badge>
+      <div className="flex-1 border-t border-gray-200" />
+    </div>
+  );
+}
+
 // 인덱스카드의 종이 탭처럼 보이도록 — 선택된 탭은 아래 카드 본문과 같은 흰색이라 경계선이
 // 사라져 하나로 이어진 것처럼 보이고, 나머지는 회색으로 뒤에 접혀 있는 것처럼 보인다.
 const CARD_TAB_CLASS =
@@ -729,6 +739,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               {t('대기/승선/하선 단계로 넘어간 선원은 이름·직급·국적·생년월일을 수정할 수 없습니다.')}
             </p>
           )}
+          <SectionDivider>{t('필수정보')}</SectionDivider>
           <div className="grid grid-cols-3 gap-3">
             <FieldRow label={t('이름 (영문) *')}><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="h-9 flex-1" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></FieldRow>
             <FieldRow label={t('직급 *')}>
@@ -766,8 +777,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </FieldRow>
           </div>
 
-          <div className="border-t pt-3">
-          <p className="text-xs font-semibold text-gray-600">{t('신체 정보')}</p>
+          <div className="border-t pt-3 space-y-3">
+          <SectionDivider>{t('신체 정보')}</SectionDivider>
           <div className="grid grid-cols-2 gap-3">
             <FieldRow label={t('출생지')}><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="h-9 flex-1" placeholder="예: Jakarta, Indonesia" /></FieldRow>
             <FieldRow label={t('혈액형')}>
@@ -810,8 +821,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </FieldRow>
           </div>
 
-          <div className="border-t pt-3">
-            <p className="text-xs font-semibold text-gray-600 mb-2">{t('인적사항')}</p>
+          <div className="border-t pt-3 space-y-3">
+            <SectionDivider>{t('인적사항')}</SectionDivider>
             <div className="grid grid-cols-2 gap-3">
               <FieldRow label={t('종교')}>
                 <Select value={formData.religion || '_none'} onValueChange={v => f('religion', v === '_none' ? '' : v)}>
