@@ -334,8 +334,8 @@ export default function ApprovalInboxPage() {
   const renderDocTable = (list: ApprovalDocumentWithDetails[]) => {
     const selectableIds = list.filter(canDeleteDoc).map(d => d.id);
     return (
-    <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
-      <table className="w-full text-xs whitespace-nowrap">
+    <div className="rounded-md border overflow-hidden">
+      <table className="w-full text-xs">
         <thead className="bg-gray-50 border-b">
           <tr>
             <th className="w-8 p-2">
@@ -345,13 +345,13 @@ export default function ApprovalInboxPage() {
                 disabled={selectableIds.length === 0}
               />
             </th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">유형</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">유형</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">결재 현황</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">시행일시</th>
-            <th className="text-right p-2 text-xs font-medium text-gray-600 w-40">작업</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">기안일시</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">시행일시</th>
+            <th className="text-right p-2 text-xs font-medium text-gray-600 w-24">작업</th>
           </tr>
         </thead>
         <tbody>
@@ -362,8 +362,8 @@ export default function ApprovalInboxPage() {
                 <td className="p-2" onClick={e => e.stopPropagation()}>
                   {canDeleteDoc(doc) && <Checkbox checked={docSelectedIds.includes(doc.id)} onCheckedChange={() => toggleDocSelect(doc.id)} />}
                 </td>
-                <td className="p-2">
-                  <div className="flex items-center gap-1.5">
+                <td className="p-2 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {getStatusBadge(doc.status)}
                     {myTurn && <Badge className="bg-blue-500 text-xs">내 차례</Badge>}
                     {referencedDocIds.has(doc.id) && (
@@ -373,18 +373,18 @@ export default function ApprovalInboxPage() {
                     )}
                   </div>
                 </td>
-                <td className="p-2 font-medium">{doc.title}</td>
-                <td className="p-2 text-gray-500">{doc.document_type_name}</td>
+                <td className="p-2 font-medium break-words">{doc.title}</td>
+                <td className="p-2 text-gray-500 whitespace-nowrap">{doc.document_type_name}</td>
                 <td className="p-2">
-                  <div className="flex items-center gap-1 text-xs whitespace-nowrap">
-                    <span className="text-gray-500">{doc.creator_name}<span className="text-[10px] text-gray-400 ml-0.5">(기안자)</span></span>
+                  <div className="flex items-center gap-1 text-xs flex-wrap">
+                    <span className="text-gray-500 whitespace-nowrap">{doc.creator_name}<span className="text-[10px] text-gray-400 ml-0.5">(기안자)</span></span>
                     {/* 기안자 본인이 중간결재자로도 걸려있으면(자기 자신에게 다시 결재받는 셈이라
                         의미 없음) 그 단계는 화면에서 생략한다 — 단, 최종결재자는 기안자와 같은
                         사람이어도 실제로 거쳐야 하는 단계이므로 그대로 보여준다. */}
                     {doc.steps.filter(s => s.step_order === doc.steps[doc.steps.length - 1].step_order || s.approver_id !== doc.created_by).map(s => {
                       const isFinal = s.step_order === doc.steps[doc.steps.length - 1].step_order;
                       return (
-                        <span key={s.id} className="flex items-center gap-1">
+                        <span key={s.id} className="flex items-center gap-1 whitespace-nowrap">
                           <span className="text-gray-300">→</span>
                           <span className={
                             s.status === 'approved' ? 'text-green-600'
@@ -400,10 +400,10 @@ export default function ApprovalInboxPage() {
                     })}
                   </div>
                 </td>
-                <td className="p-2 text-gray-500">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
-                <td className="p-2 text-gray-500">{doc.completed_at ? format(new Date(doc.completed_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</td>
+                <td className="p-2 text-gray-500 whitespace-nowrap">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
+                <td className="p-2 text-gray-500 whitespace-nowrap">{doc.completed_at ? format(new Date(doc.completed_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</td>
                 <td className="p-2 text-right" onClick={e => e.stopPropagation()}>
-                  <div className="flex justify-end gap-1">
+                  <div className="flex justify-end gap-1 flex-wrap">
                     {myTurn && (
                       <>
                         <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-green-600 border-green-300" title="승인" onClick={() => openDocAction(doc, 'approved')}><CheckCircle2 className="w-3.5 h-3.5" /></Button>
@@ -435,8 +435,8 @@ export default function ApprovalInboxPage() {
   const renderDeletedDocTable = (list: ApprovalDocumentWithDetails[]) => {
     const selectableIds = list.filter(canPermanentlyDeleteDoc).map(d => d.id);
     return (
-    <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
-      <table className="w-full text-xs whitespace-nowrap">
+    <div className="rounded-md border overflow-hidden">
+      <table className="w-full text-xs">
         <thead className="bg-gray-50 border-b">
           <tr>
             <th className="w-8 p-2">
@@ -446,12 +446,12 @@ export default function ApprovalInboxPage() {
                 disabled={selectableIds.length === 0}
               />
             </th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">상태</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">상태</th>
             <th className="text-left p-2 text-xs font-medium text-gray-600">제목</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">유형</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">기안자</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">기안일시</th>
-            <th className="text-left p-2 text-xs font-medium text-gray-600">시행일시</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">유형</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">기안자</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">기안일시</th>
+            <th className="text-left p-2 text-xs font-medium text-gray-600 whitespace-nowrap">시행일시</th>
             <th className="text-right p-2 text-xs font-medium text-gray-600 w-32">작업</th>
           </tr>
         </thead>
@@ -461,14 +461,14 @@ export default function ApprovalInboxPage() {
               <td className="p-2" onClick={e => e.stopPropagation()}>
                 {canPermanentlyDeleteDoc(doc) && <Checkbox checked={docSelectedIds.includes(doc.id)} onCheckedChange={() => toggleDocSelect(doc.id)} />}
               </td>
-              <td className="p-2">{getStatusBadge(doc.status)}</td>
-              <td className="p-2 font-medium">{doc.title}</td>
-              <td className="p-2">{doc.document_type_name}</td>
-              <td className="p-2">{doc.creator_name}</td>
-              <td className="p-2">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
-              <td className="p-2">{doc.completed_at ? format(new Date(doc.completed_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</td>
+              <td className="p-2 whitespace-nowrap">{getStatusBadge(doc.status)}</td>
+              <td className="p-2 font-medium break-words">{doc.title}</td>
+              <td className="p-2 whitespace-nowrap">{doc.document_type_name}</td>
+              <td className="p-2 whitespace-nowrap">{doc.creator_name}</td>
+              <td className="p-2 whitespace-nowrap">{format(new Date(doc.created_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</td>
+              <td className="p-2 whitespace-nowrap">{doc.completed_at ? format(new Date(doc.completed_at), 'yyyy-MM-dd HH:mm', { locale: ko }) : '-'}</td>
               <td className="p-2 text-right">
-                <div className="flex justify-end gap-1">
+                <div className="flex justify-end gap-1 flex-wrap">
                   <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleRestoreDoc(doc)}>복원</Button>
                   <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openDocDetail(doc)}>보기</Button>
                   {canPermanentlyDeleteDoc(doc) && (
@@ -621,7 +621,7 @@ export default function ApprovalInboxPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Inbox className="w-6 h-6" />결재함</h1>

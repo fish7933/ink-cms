@@ -673,35 +673,35 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       {/* 탭 */}
       <Tabs defaultValue="basic" onValueChange={scrollToTop}>
         <div className="space-y-1">
-          <TabsList className="grid w-full grid-cols-3 h-8">
-            <TabsTrigger value="basic" className="text-xs">{t('기본정보')}</TabsTrigger>
-            <TabsTrigger value="certificates" className="text-xs">
+          <TabsList className={`grid w-full h-8 ${isNew ? 'grid-cols-3' : 'grid-cols-9'}`}>
+            <TabsTrigger value="basic" className="text-xs px-1">{t('기본정보')}</TabsTrigger>
+            <TabsTrigger value="certificates" className="text-xs px-1">
               {t('증서')}{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
             </TabsTrigger>
-            <TabsTrigger value="emergency" className="text-xs">{t('비상연락망')}</TabsTrigger>
+            <TabsTrigger value="emergency" className="text-xs px-1">{t('비상연락망')}</TabsTrigger>
+            {!isNew && (
+              <>
+                <TabsTrigger value="sea_service" className="text-xs px-1">
+                  {t('승선경력')}{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="training" className="text-xs px-1">
+                  {t('교육이력')}{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="evaluations" className="text-xs px-1">
+                  {t('고과')}{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="medical" className="text-xs px-1">
+                  {t('상병기록')}{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="salary_records" className="text-xs px-1">
+                  {t('급여이력')}{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
+                </TabsTrigger>
+                <TabsTrigger value="interviews" className="text-xs px-1">
+                  {t('면담일지')}{interviewLogs.length > 0 && <span className="ml-1 bg-teal-100 text-teal-700 rounded-full px-1.5">{interviewLogs.length}</span>}
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
-          {!isNew && (
-            <TabsList className="grid w-full grid-cols-6 h-8">
-              <TabsTrigger value="sea_service" className="text-xs">
-                {t('승선경력')}{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="training" className="text-xs">
-                {t('교육이력')}{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="evaluations" className="text-xs">
-                {t('고과')}{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="medical" className="text-xs">
-                {t('상병기록')}{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="salary_records" className="text-xs">
-                {t('급여이력')}{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
-              </TabsTrigger>
-              <TabsTrigger value="interviews" className="text-xs">
-                {t('면담일지')}{interviewLogs.length > 0 && <span className="ml-1 bg-teal-100 text-teal-700 rounded-full px-1.5">{interviewLogs.length}</span>}
-              </TabsTrigger>
-            </TabsList>
-          )}
         </div>
 
         {/* 기본 정보 */}
