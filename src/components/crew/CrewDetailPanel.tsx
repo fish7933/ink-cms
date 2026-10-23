@@ -142,7 +142,7 @@ function calculateAge(dateOfBirth: string): number {
 function FieldRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <Label className="text-xs shrink-0 whitespace-nowrap">{label}</Label>
+      <Label className="text-xs shrink-0 whitespace-nowrap w-32 text-right">{label}</Label>
       {children}
     </div>
   );
@@ -967,7 +967,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                         <div className="flex-1 border-t border-gray-200" />
                       </div>
                       <div className="overflow-x-auto no-scrollbar">
-                        <table className="w-full text-xs">
+                        <table className="w-full text-xs table-fixed">
                           <thead><tr className="border-b bg-gray-50/50">
                             <th className="text-left p-1.5 w-[200px]">{t('증서명')}</th>
                             <th className="text-left p-1.5 w-[120px]">{t('증서번호')}</th>
