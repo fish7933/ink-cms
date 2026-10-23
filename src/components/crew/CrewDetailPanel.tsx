@@ -137,6 +137,24 @@ function calculateAge(dateOfBirth: string): number {
   return age;
 }
 
+// 기본정보 탭의 라벨+입력란을 한 줄로 붙여서 줄 수를 줄인다 — 예전엔 라벨이 입력란 위에 쌓여
+// 필드 하나당 두 줄을 차지했다.
+function FieldRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Label className="text-xs shrink-0 whitespace-nowrap">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+// 인덱스카드의 종이 탭처럼 보이도록 — 선택된 탭은 아래 카드 본문과 같은 흰색이라 경계선이
+// 사라져 하나로 이어진 것처럼 보이고, 나머지는 회색으로 뒤에 접혀 있는 것처럼 보인다.
+const CARD_TAB_CLASS =
+  'text-xs px-2.5 rounded-t-md rounded-b-none border border-gray-300 border-b-gray-300 bg-gray-100 text-gray-500 -mb-px ' +
+  'hover:bg-gray-50 hover:text-gray-700 ' +
+  'data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:border-b-white data-[state=active]:shadow-[0_-1px_3px_rgba(0,0,0,0.06)] data-[state=active]:z-10';
+
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
   const { t } = useTranslation('CrewDetailPanel');
   const { toast } = useToast();
@@ -670,39 +688,39 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
       {!isNew && <CrewResumeDialog open={resumeDialogOpen} onOpenChange={setResumeDialogOpen} crewId={id!} />}
 
-      {/* 탭 */}
+      {/* 탭 — 실제 인덱스카드를 뽑아 본 것처럼, 선택된 탭이 카드 본문과 이어지는 하나의
+          종이처럼 보이도록 테두리가 맞물리게 만든다. */}
       <Tabs defaultValue="basic" onValueChange={scrollToTop}>
-        <div className="space-y-1">
-          <TabsList className={`grid w-full h-8 ${isNew ? 'grid-cols-3' : 'grid-cols-9'}`}>
-            <TabsTrigger value="basic" className="text-xs px-1">{t('기본정보')}</TabsTrigger>
-            <TabsTrigger value="certificates" className="text-xs px-1">
-              {t('증서')}{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
-            </TabsTrigger>
-            <TabsTrigger value="emergency" className="text-xs px-1">{t('비상연락망')}</TabsTrigger>
-            {!isNew && (
-              <>
-                <TabsTrigger value="sea_service" className="text-xs px-1">
-                  {t('승선경력')}{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
-                </TabsTrigger>
-                <TabsTrigger value="training" className="text-xs px-1">
-                  {t('교육이력')}{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
-                </TabsTrigger>
-                <TabsTrigger value="evaluations" className="text-xs px-1">
-                  {t('고과')}{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
-                </TabsTrigger>
-                <TabsTrigger value="medical" className="text-xs px-1">
-                  {t('상병기록')}{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
-                </TabsTrigger>
-                <TabsTrigger value="salary_records" className="text-xs px-1">
-                  {t('급여이력')}{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
-                </TabsTrigger>
-                <TabsTrigger value="interviews" className="text-xs px-1">
-                  {t('면담일지')}{interviewLogs.length > 0 && <span className="ml-1 bg-teal-100 text-teal-700 rounded-full px-1.5">{interviewLogs.length}</span>}
-                </TabsTrigger>
-              </>
-            )}
-          </TabsList>
-        </div>
+        <TabsList className="inline-flex w-full h-9 items-stretch justify-start gap-1 bg-transparent p-0 rounded-none border-b border-gray-300">
+          <TabsTrigger value="basic" className={CARD_TAB_CLASS}>{t('기본정보')}</TabsTrigger>
+          <TabsTrigger value="certificates" className={CARD_TAB_CLASS}>
+            {t('증서')}{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
+          </TabsTrigger>
+          <TabsTrigger value="emergency" className={CARD_TAB_CLASS}>{t('비상연락망')}</TabsTrigger>
+          {!isNew && (
+            <>
+              <TabsTrigger value="sea_service" className={CARD_TAB_CLASS}>
+                {t('승선경력')}{seaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{seaServiceRecords.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="training" className={CARD_TAB_CLASS}>
+                {t('교육이력')}{trainingRecords.length > 0 && <span className="ml-1 bg-purple-100 text-purple-700 rounded-full px-1.5">{trainingRecords.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="evaluations" className={CARD_TAB_CLASS}>
+                {t('고과')}{evaluations.length > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{evaluations.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="medical" className={CARD_TAB_CLASS}>
+                {t('상병기록')}{medicalRecords.length > 0 && <span className="ml-1 bg-orange-100 text-orange-700 rounded-full px-1.5">{medicalRecords.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="salary_records" className={CARD_TAB_CLASS}>
+                {t('급여이력')}{(payrollHistory.length + salaryRecords.length + sickPayHistory.length) > 0 && <span className="ml-1 bg-yellow-100 text-yellow-700 rounded-full px-1.5">{payrollHistory.length + salaryRecords.length + sickPayHistory.length}</span>}
+              </TabsTrigger>
+              <TabsTrigger value="interviews" className={CARD_TAB_CLASS}>
+                {t('면담일지')}{interviewLogs.length > 0 && <span className="ml-1 bg-teal-100 text-teal-700 rounded-full px-1.5">{interviewLogs.length}</span>}
+              </TabsTrigger>
+            </>
+          )}
+        </TabsList>
+        <div className="bg-white border border-gray-300 rounded-b-lg shadow-sm -mt-px p-4">
 
         {/* 기본 정보 */}
         <TabsContent value="basic" className="space-y-3 mt-3 data-[state=inactive]:hidden">
@@ -712,143 +730,129 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </p>
           )}
           <div className="grid grid-cols-3 gap-3">
-            <div><Label className="text-xs">{t('이름 (영문) *')}</Label><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="mt-1 h-9" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></div>
-            <div>
-              <Label className="text-xs">{t('직급 *')}</Label>
+            <FieldRow label={t('이름 (영문) *')}><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="h-9 flex-1" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></FieldRow>
+            <FieldRow label={t('직급 *')}>
               <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={identityFieldsLocked}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('직급 선택')} /></SelectTrigger>
+                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('직급 선택')} /></SelectTrigger>
                 <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">{t('등급')}</Label>
-              <Input value={currentGrade || ''} className="mt-1 h-9 bg-gray-50" disabled placeholder={t('배정된 선박의 급여표 기준')} />
-            </div>
+            </FieldRow>
+            <FieldRow label={t('등급')}>
+              <Input value={currentGrade || ''} className="h-9 flex-1 bg-gray-50" disabled placeholder={t('배정된 선박의 급여표 기준')} />
+            </FieldRow>
           </div>
 
           {formData.nationality === 'KR' && (
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">{t('이름 (한국어)')}</Label><Input value={formData.name} onChange={e => f('name', e.target.value)} className="mt-1 h-9" placeholder="홍길동" disabled={identityFieldsLocked} /></div>
-              <div><Label className="text-xs">{t('이름 (한자)')}</Label><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="mt-1 h-9" placeholder="洪吉童" disabled={identityFieldsLocked} /></div>
+              <FieldRow label={t('이름 (한국어)')}><Input value={formData.name} onChange={e => f('name', e.target.value)} className="h-9 flex-1" placeholder="홍길동" disabled={identityFieldsLocked} /></FieldRow>
+              <FieldRow label={t('이름 (한자)')}><Input value={formData.name_chinese} onChange={e => f('name_chinese', e.target.value)} className="h-9 flex-1" placeholder="洪吉童" disabled={identityFieldsLocked} /></FieldRow>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">{t('국적')}</Label>
+            <FieldRow label={t('국적')}>
               <Select value={formData.nationality} onValueChange={v => f('nationality', v)} disabled={identityFieldsLocked}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
+                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
                 <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">{t('생년월일')}{formData.date_of_birth && <span className="text-gray-400 font-normal"> {t('(만 {{age}}세)', { age: calculateAge(formData.date_of_birth) })}</span>}</Label>
-              <Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="mt-1 h-9" disabled={identityFieldsLocked} />
-            </div>
-            <div><Label className="text-xs">{t('연락처')}</Label><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="mt-1 h-9" /></div>
-            <div><Label className="text-xs">{t('이메일')}</Label><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="mt-1 h-9" /></div>
-            <div>
-              <Label className="text-xs">{t('승선 희망일')}</Label>
-              <Input type="date" value={formData.desired_embark_date} onChange={e => f('desired_embark_date', e.target.value)} className="mt-1 h-9" />
-            </div>
+            </FieldRow>
+            <FieldRow label={<>{t('생년월일')}{formData.date_of_birth && <span className="text-gray-400 font-normal"> {t('(만 {{age}}세)', { age: calculateAge(formData.date_of_birth) })}</span>}</>}>
+              <Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="h-9 flex-1" disabled={identityFieldsLocked} />
+            </FieldRow>
+            <FieldRow label={t('연락처')}><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="h-9 flex-1" /></FieldRow>
+            <FieldRow label={t('이메일')}><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="h-9 flex-1" /></FieldRow>
+            <FieldRow label={t('승선 희망일')}>
+              <Input type="date" value={formData.desired_embark_date} onChange={e => f('desired_embark_date', e.target.value)} className="h-9 flex-1" />
+            </FieldRow>
           </div>
 
           <div className="border-t pt-3">
           <p className="text-xs font-semibold text-gray-600">{t('신체 정보')}</p>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">{t('출생지')}</Label><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="mt-1 h-9" placeholder="예: Jakarta, Indonesia" /></div>
-            <div>
-              <Label className="text-xs">{t('혈액형')}</Label>
+            <FieldRow label={t('출생지')}><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="h-9 flex-1" placeholder="예: Jakarta, Indonesia" /></FieldRow>
+            <FieldRow label={t('혈액형')}>
               <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 flex-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">{t('선택 안함')}</SelectItem>
                   {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bt => <SelectItem key={bt} value={bt}>{bt}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div><Label className="text-xs">{t('키 (cm)')}</Label><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="mt-1 h-9" placeholder="170" /></div>
-            <div><Label className="text-xs">{t('몸무게 (kg)')}</Label><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="mt-1 h-9" placeholder="70" /></div>
-            <div>
-              <Label className="text-xs">{t('눈 색')}</Label>
+            </FieldRow>
+            <FieldRow label={t('키 (cm)')}><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="h-9 flex-1" placeholder="170" /></FieldRow>
+            <FieldRow label={t('몸무게 (kg)')}><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="h-9 flex-1" placeholder="70" /></FieldRow>
+            <FieldRow label={t('눈 색')}>
               <Select value={formData.eye_color || '_none'} onValueChange={v => f('eye_color', v === '_none' ? '' : v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('눈 색 선택')} /></SelectTrigger>
+                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('눈 색 선택')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">{t('선택 안함')}</SelectItem>
                   {EYE_COLORS.map(c => <SelectItem key={c} value={c}>{t(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">{t('신발 사이즈 (mm)')}</Label>
+            </FieldRow>
+            <FieldRow label={t('신발 사이즈 (mm)')}>
               <Select value={formData.shoe_size} onValueChange={v => f('shoe_size', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('신발 사이즈')} /></SelectTrigger>
+                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('신발 사이즈')} /></SelectTrigger>
                 <SelectContent>{SHOE_SIZES.map(s => <SelectItem key={s} value={s}>{s} mm</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">{t('작업복 사이즈')}</Label>
+            </FieldRow>
+            <FieldRow label={t('작업복 사이즈')}>
               <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('작업복 사이즈')} /></SelectTrigger>
+                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('작업복 사이즈')} /></SelectTrigger>
                 <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">{t('의류 사이즈')}</Label>
+            </FieldRow>
+            <FieldRow label={t('의류 사이즈')}>
               <Select value={formData.clothing_size} onValueChange={v => f('clothing_size', v)}>
-                <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('의류 사이즈')} /></SelectTrigger>
+                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('의류 사이즈')} /></SelectTrigger>
                 <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
-            </div>
+            </FieldRow>
           </div>
 
           <div className="border-t pt-3">
             <p className="text-xs font-semibold text-gray-600 mb-2">{t('인적사항')}</p>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">{t('종교')}</Label>
+              <FieldRow label={t('종교')}>
                 <Select value={formData.religion || '_none'} onValueChange={v => f('religion', v === '_none' ? '' : v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('종교 선택')} /></SelectTrigger>
+                  <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('종교 선택')} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">{t('선택 안함')}</SelectItem>
                     {RELIGIONS.map(r => <SelectItem key={r} value={r}>{t(r)}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div>
-                <Label className="text-xs">{t('결혼 여부')}</Label>
+              </FieldRow>
+              <FieldRow label={t('결혼 여부')}>
                 <Select value={formData.marital_status} onValueChange={v => f('marital_status', v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue placeholder={t('선택')} /></SelectTrigger>
+                  <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('선택')} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">{t('선택 안함')}</SelectItem>
                     {MARITAL_STATUSES.map(m => <SelectItem key={m.value} value={m.value}>{t(m.label)}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div><Label className="text-xs">{t('자녀 수')}</Label><Input type="number" min="0" value={formData.children_count} onChange={e => f('children_count', e.target.value)} className="mt-1 h-9" placeholder="0" /></div>
+              </FieldRow>
+              <FieldRow label={t('자녀 수')}><Input type="number" min="0" value={formData.children_count} onChange={e => f('children_count', e.target.value)} className="h-9 flex-1" placeholder="0" /></FieldRow>
               <div />
-              <div>
-                <Label className="text-xs">{t('흡연')}</Label>
+              <FieldRow label={t('흡연')}>
                 <Select value={formData.smoking} onValueChange={v => f('smoking', v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 flex-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">{t('선택 안함')}</SelectItem>
                     <SelectItem value="yes">{t('흡연')}</SelectItem>
                     <SelectItem value="no">{t('비흡연')}</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div>
-                <Label className="text-xs">{t('음주')}</Label>
+              </FieldRow>
+              <FieldRow label={t('음주')}>
                 <Select value={formData.drinking} onValueChange={v => f('drinking', v)}>
-                  <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 flex-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">{t('선택 안함')}</SelectItem>
                     <SelectItem value="yes">{t('음주')}</SelectItem>
                     <SelectItem value="no">{t('비음주')}</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </FieldRow>
             </div>
           </div>
         </div>
@@ -1478,6 +1482,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             />
           </TabsContent>
         )}
+        </div>
       </Tabs>
 
       {/* 지급된 급여명세 상세 — 새 탭 대신 모달로 보여준다. */}
