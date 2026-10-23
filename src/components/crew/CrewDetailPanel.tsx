@@ -92,7 +92,6 @@ interface CrewDetailPanelProps {
 const RELATIONSHIPS = ['배우자', '부', '모', '자', '녀', '형', '제', '자매', '친구', '기타'];
 const SHOE_SIZES = ['235','240','245','250','255','260','265','270','275','280','285','290','295','300'];
 const COVERALL_SIZES = ['XS','S','M','L','XL','XXL','XXXL'];
-const EYE_COLORS = ['검정', '갈색', '파랑', '녹색', '회색', '기타'];
 const RELIGIONS = ['기독교', '천주교', '불교', '이슬람', '힌두교', '무교', '기타'];
 const MARITAL_STATUSES = [
   { value: 'single', label: '미혼' },
@@ -113,9 +112,9 @@ const EMPTY_FORM = {
   contact_phone: '', contact_email: '', photo_url: '',
   height: '', weight: '', blood_type: 'none',
   shoe_size: '', coverall_size: '', clothing_size: '',
-  eye_color: '', place_of_birth: '', religion: '',
+  eye_color: '', place_of_birth: '', religion: '', education: '',
   smoking: 'none', drinking: 'none',
-  marital_status: 'none', children_count: '',
+  marital_status: 'none', children_sons: '', children_daughters: '',
   english_read_write: 'none', english_speak_listen: 'none',
   other_languages: '', job_ability: '', motivation: '',
   previous_illness: '',
@@ -135,6 +134,15 @@ function calculateAge(dateOfBirth: string): number {
   const m = today.getMonth() - birthDate.getMonth();
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
   return age;
+}
+
+// 체질량지수(BMI) = 몸무게(kg) / 키(m)^2 — 키/몸무게 입력에서 자동 계산되는 참고용 수치.
+function calculateBMI(heightCm: string, weightKg: string): string | null {
+  const h = parseFloat(heightCm);
+  const w = parseFloat(weightKg);
+  if (!h || !w) return null;
+  const heightM = h / 100;
+  return (w / (heightM * heightM)).toFixed(1);
 }
 
 // 기본정보 탭의 라벨+입력란을 한 줄로 붙여서 줄 수를 줄인다 — 예전엔 라벨이 입력란 위에 쌓여
@@ -311,10 +319,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         eye_color: data.eye_color || '',
         place_of_birth: data.place_of_birth || '',
         religion: data.religion || '',
+        education: data.education || '',
         smoking: data.smoking === true ? 'yes' : data.smoking === false ? 'no' : 'none',
         drinking: data.drinking === true ? 'yes' : data.drinking === false ? 'no' : 'none',
         marital_status: data.marital_status || 'none',
-        children_count: data.children_count?.toString() || '',
+        children_sons: data.children_sons?.toString() || '',
+        children_daughters: data.children_daughters?.toString() || '',
         english_read_write: data.english_read_write || 'none',
         english_speak_listen: data.english_speak_listen || 'none',
         other_languages: data.other_languages || '',
@@ -514,10 +524,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         eye_color: formData.eye_color || null,
         place_of_birth: formData.place_of_birth || null,
         religion: formData.religion || null,
+        education: formData.education || null,
         smoking: parseBool(formData.smoking),
         drinking: parseBool(formData.drinking),
         marital_status: parseOptional(formData.marital_status),
-        children_count: formData.children_count ? parseInt(formData.children_count) : null,
+        children_sons: formData.children_sons ? parseInt(formData.children_sons) : null,
+        children_daughters: formData.children_daughters ? parseInt(formData.children_daughters) : null,
         english_read_write: parseOptional(formData.english_read_write),
         english_speak_listen: parseOptional(formData.english_speak_listen),
         other_languages: formData.other_languages || null,
@@ -740,20 +752,22 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </p>
           )}
           <SectionDivider>{t('필수정보')}</SectionDivider>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <FieldRow label={t('이름 (영문) *')}><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="h-9 flex-1" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></FieldRow>
-            <FieldRow label={t('직급 *')}>
-              {/* 직급은 선원 발령(승진/강등 발령)으로만 바꿀 수 있다 — 신규 등록 시에만 여기서 지정한다. */}
-              <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={!isNew}>
-                <SelectTrigger className="h-9 flex-1 disabled:bg-gray-50" title={!isNew ? t('직급은 선원 발령(승진/강등 발령)에서만 변경할 수 있습니다.') : undefined}>
-                  <SelectValue placeholder={t('직급 선택')} />
-                </SelectTrigger>
-                <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}</SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow label={t('등급')}>
-              <Input value={currentGrade || ''} className="h-9 flex-1 bg-gray-50" disabled placeholder={t('배정된 선박의 급여표 기준')} title={t('등급은 선원 발령(배승)에서만 변경할 수 있습니다.')} />
-            </FieldRow>
+            <div className="flex items-center gap-3">
+              <FieldRow label={t('직급 *')}>
+                {/* 직급은 선원 발령(승진/강등 발령)으로만 바꿀 수 있다 — 신규 등록 시에만 여기서 지정한다. */}
+                <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={!isNew}>
+                  <SelectTrigger className="h-9 flex-1 disabled:bg-gray-50" title={!isNew ? t('직급은 선원 발령(승진/강등 발령)에서만 변경할 수 있습니다.') : undefined}>
+                    <SelectValue placeholder={t('직급 선택')} />
+                  </SelectTrigger>
+                  <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}</SelectContent>
+                </Select>
+              </FieldRow>
+              <FieldRow label={t('등급')}>
+                <Input value={currentGrade || ''} className="h-9 flex-1 bg-gray-50" disabled placeholder={t('배정된 선박의 급여표 기준')} title={t('등급은 선원 발령(배승)에서만 변경할 수 있습니다.')} />
+              </FieldRow>
+            </div>
           </div>
 
           {formData.nationality === 'KR' && (
@@ -770,37 +784,31 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                 <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{i18n.language === 'en' ? n.country_name_en : n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
               </Select>
             </FieldRow>
-            <FieldRow label={<>{t('생년월일')}{formData.date_of_birth && <span className="text-gray-400 font-normal"> {t('(만 {{age}}세)', { age: calculateAge(formData.date_of_birth) })}</span>}</>}>
+            <FieldRow label={t('출생지')}><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="h-9 flex-1" placeholder="예: Jakarta, Indonesia" /></FieldRow>
+            <FieldRow label={t('생년월일')}>
               <Input type="date" value={formData.date_of_birth} onChange={e => f('date_of_birth', e.target.value)} className="h-9 flex-1" disabled={identityFieldsLocked} />
+            </FieldRow>
+            <FieldRow label={t('나이')}>
+              <Input value={formData.date_of_birth ? t('{{age}}세', { age: calculateAge(formData.date_of_birth) }) : ''} className="h-9 flex-1 bg-gray-50" disabled />
             </FieldRow>
             <FieldRow label={t('연락처')}><Input value={formData.contact_phone} onChange={e => f('contact_phone', e.target.value)} className="h-9 flex-1" /></FieldRow>
             <FieldRow label={t('이메일')}><Input type="email" value={formData.contact_email} onChange={e => f('contact_email', e.target.value)} className="h-9 flex-1" /></FieldRow>
-            <FieldRow label={t('승선 희망일')}>
-              <Input type="date" value={formData.desired_embark_date} onChange={e => f('desired_embark_date', e.target.value)} className="h-9 flex-1" />
-            </FieldRow>
           </div>
 
           <div className="border-t pt-3 space-y-3">
           <SectionDivider>{t('신체 정보')}</SectionDivider>
           <div className="grid grid-cols-2 gap-3">
-            <FieldRow label={t('출생지')}><Input value={formData.place_of_birth} onChange={e => f('place_of_birth', e.target.value)} className="h-9 flex-1" placeholder="예: Jakarta, Indonesia" /></FieldRow>
+            <FieldRow label={t('키 (cm)')}><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="h-9 flex-1" placeholder="170" /></FieldRow>
+            <FieldRow label={t('몸무게 (kg)')}><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="h-9 flex-1" placeholder="70" /></FieldRow>
+            <FieldRow label="BMI">
+              <Input value={calculateBMI(formData.height, formData.weight) || ''} className="h-9 flex-1 bg-gray-50" disabled placeholder={t('키·몸무게 입력 시 자동 계산')} />
+            </FieldRow>
             <FieldRow label={t('혈액형')}>
               <Select value={formData.blood_type} onValueChange={v => f('blood_type', v)}>
                 <SelectTrigger className="h-9 flex-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">{t('선택 안함')}</SelectItem>
                   {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bt => <SelectItem key={bt} value={bt}>{bt}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow label={t('키 (cm)')}><Input type="number" value={formData.height} onChange={e => f('height', e.target.value)} className="h-9 flex-1" placeholder="170" /></FieldRow>
-            <FieldRow label={t('몸무게 (kg)')}><Input type="number" value={formData.weight} onChange={e => f('weight', e.target.value)} className="h-9 flex-1" placeholder="70" /></FieldRow>
-            <FieldRow label={t('눈 색')}>
-              <Select value={formData.eye_color || '_none'} onValueChange={v => f('eye_color', v === '_none' ? '' : v)}>
-                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('눈 색 선택')} /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">{t('선택 안함')}</SelectItem>
-                  {EYE_COLORS.map(c => <SelectItem key={c} value={c}>{t(c)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FieldRow>
@@ -813,12 +821,6 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             <FieldRow label={t('작업복 사이즈')}>
               <Select value={formData.coverall_size} onValueChange={v => f('coverall_size', v)}>
                 <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('작업복 사이즈')} /></SelectTrigger>
-                <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow label={t('의류 사이즈')}>
-              <Select value={formData.clothing_size} onValueChange={v => f('clothing_size', v)}>
-                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('의류 사이즈')} /></SelectTrigger>
                 <SelectContent>{COVERALL_SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </FieldRow>
@@ -845,8 +847,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                   </SelectContent>
                 </Select>
               </FieldRow>
-              <FieldRow label={t('자녀 수')}><Input type="number" min="0" value={formData.children_count} onChange={e => f('children_count', e.target.value)} className="h-9 flex-1" placeholder="0" /></FieldRow>
-              <div />
+              <FieldRow label={t('자녀')}>
+                <div className="flex items-center gap-1.5 flex-1">
+                  <Input type="number" min="0" value={formData.children_sons} onChange={e => f('children_sons', e.target.value)} className="h-9 flex-1" placeholder="0" />
+                  <span className="text-xs text-gray-500 shrink-0">{t('남')}</span>
+                  <Input type="number" min="0" value={formData.children_daughters} onChange={e => f('children_daughters', e.target.value)} className="h-9 flex-1" placeholder="0" />
+                  <span className="text-xs text-gray-500 shrink-0">{t('녀')}</span>
+                </div>
+              </FieldRow>
+              <FieldRow label={t('학력')}><Input value={formData.education} onChange={e => f('education', e.target.value)} className="h-9 flex-1" placeholder={t('예: 고등학교 졸업')} /></FieldRow>
               <FieldRow label={t('흡연')}>
                 <Select value={formData.smoking} onValueChange={v => f('smoking', v)}>
                   <SelectTrigger className="h-9 flex-1"><SelectValue /></SelectTrigger>
@@ -1456,7 +1465,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <TabsContent value="interviews" className="mt-3 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">{t('면담 일지 ({{count}}건)', { count: interviewLogs.length })} <span className="text-xs text-gray-400 font-normal">— {t('가장 최근 면담의 승선 희망일이 기본정보에 반영됩니다')}</span></span>
+                <span className="text-sm font-semibold">{t('면담 일지 ({{count}}건)', { count: interviewLogs.length })}</span>
                 <Button type="button" variant="outline" size="sm" onClick={() => { setEditingInterview(undefined); setInterviewDialogOpen(true); }} className="h-7 text-xs gap-1"><Plus className="h-3 w-3" />{t('추가')}</Button>
               </div>
               {interviewLogs.length === 0 ? (

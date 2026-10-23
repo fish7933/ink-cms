@@ -13,7 +13,9 @@ export interface CrewBioData {
   smoking?: boolean;
   drinking?: boolean;
   marital_status?: 'single' | 'married' | 'divorced' | 'widowed';
-  children_count?: number;
+  children_sons?: number;
+  children_daughters?: number;
+  education?: string;
   // Language
   english_read_write?: 'beginner' | 'intermediate' | 'advanced' | 'excellent';
   english_speak_listen?: 'beginner' | 'intermediate' | 'advanced' | 'excellent';

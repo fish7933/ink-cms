@@ -93,7 +93,7 @@ export async function exportCrewResumeToExcel(crewId: string): Promise<void> {
   pushInfoRow('한자이름', crew.name_chinese || '-', '직급', rankName || crew.rank || '-');
   pushInfoRow('국적', crew.nationality || '-', '생년월일', fmt(crew.date_of_birth));
   pushInfoRow('출생지', crew.place_of_birth || '-', '혈액형', crew.blood_type || '-');
-  pushInfoRow('결혼여부', crew.marital_status ? MARITAL_LABELS[crew.marital_status] || crew.marital_status : '-', '자녀수', crew.children_count != null ? String(crew.children_count) : '-');
+  pushInfoRow('결혼여부', crew.marital_status ? MARITAL_LABELS[crew.marital_status] || crew.marital_status : '-', '자녀', (crew.children_sons != null || crew.children_daughters != null) ? `${crew.children_sons ?? 0}남 ${crew.children_daughters ?? 0}녀` : '-');
   pushInfoRow('종교', crew.religion || '-', '연락처', crew.phone || '-');
   pushInfoRow('이메일', crew.email || '-', 'SID', crew.sid || '-');
   rows.push([]);

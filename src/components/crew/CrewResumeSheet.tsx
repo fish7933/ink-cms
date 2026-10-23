@@ -62,7 +62,8 @@ interface CrewData {
   smoking?: boolean;
   drinking?: boolean;
   marital_status?: string;
-  children_count?: number;
+  children_sons?: number;
+  children_daughters?: number;
   english_read_write?: string;
   english_speak_listen?: string;
   other_languages?: string;
@@ -304,7 +305,7 @@ export default function CrewResumeSheet({ crewId }: Props) {
               <Field label={t('출생지')} value={crew.place_of_birth || '-'} />
               <Field label={t('혈액형')} value={crew.blood_type || '-'} />
               <Field label={t('결혼여부')} value={crew.marital_status ? t(MARITAL_LABELS[crew.marital_status] || crew.marital_status) : '-'} />
-              <Field label={t('자녀수')} value={crew.children_count ?? '-'} />
+              <Field label={t('자녀')} value={crew.children_sons != null || crew.children_daughters != null ? t('{{sons}}남 {{daughters}}녀', { sons: crew.children_sons ?? 0, daughters: crew.children_daughters ?? 0 }) : '-'} />
               <Field label={t('종교')} value={crew.religion || '-'} />
               <Field label={t('연락처')} value={crew.phone || '-'} />
               <Field label={t('이메일')} value={crew.email || '-'} />
