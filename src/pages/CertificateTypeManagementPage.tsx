@@ -51,7 +51,7 @@ function SortableCategoryRow({ id, children }: { id: string; children: React.Rea
 const EMPTY_FORM = { category: '', type_code: '', type_name_en: '', type_name_ko: '', description: '', validity_period_months: undefined as number|undefined, is_mandatory: false, is_active: true, display_order: 999 };
 
 export default function CertificateTypeManagementPage() {
-  const { t } = useTranslation('CertificateTypeManagementPage');
+  const { t, i18n } = useTranslation('CertificateTypeManagementPage');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
@@ -348,7 +348,7 @@ export default function CertificateTypeManagementPage() {
                         const nat = nationalities.find(n => n.country_code === o.nationality_code);
                         return (
                           <div key={o.id} className="flex items-center gap-2 p-2 text-sm">
-                            <span className="flex-1 min-w-0 truncate">{nat ? `${nat.country_name_ko} (${nat.country_code})` : o.nationality_code}</span>
+                            <span className="flex-1 min-w-0 truncate">{nat ? `${i18n.language === 'en' ? nat.country_name_en : nat.country_name_ko} (${nat.country_code})` : o.nationality_code}</span>
                             <Input
                               type="number" min={1} placeholder={t('무기한')}
                               defaultValue={o.validity_period_months ?? ''}
@@ -369,7 +369,7 @@ export default function CertificateTypeManagementPage() {
                         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
                         <SelectContent>
                           {nationalities.filter(n => !validityOverrides.some(o => o.nationality_code === n.country_code)).map(n => (
-                            <SelectItem key={n.country_code} value={n.country_code} className="text-sm">{n.country_name_ko} ({n.country_code})</SelectItem>
+                            <SelectItem key={n.country_code} value={n.country_code} className="text-sm">{i18n.language === 'en' ? n.country_name_en : n.country_name_ko} ({n.country_code})</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

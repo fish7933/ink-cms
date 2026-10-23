@@ -46,7 +46,7 @@ const EMPTY_FORM: FormState = { name: '', country: '', email: '', phone: '', off
 const MONTH_BASIS_LABELS: Record<string, string> = { '30': '30일 고정', 'actual': '실제 일수' };
 
 export default function CompanyManagementPage() {
-  const { t } = useTranslation('CompanyManagementPage');
+  const { t, i18n } = useTranslation('CompanyManagementPage');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { openNewTab, closeTab, activeTabId } = useTabContext();
@@ -188,7 +188,7 @@ export default function CompanyManagementPage() {
                     <Label className="text-xs">{t('국가')}</Label>
                     <Select value={form.country || '_none'} onValueChange={v => setForm(f => ({ ...f, country: v === '_none' ? '' : v }))}>
                       <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t('국가 선택')} /></SelectTrigger>
-                      <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
+                      <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{i18n.language === 'en' ? n.country_name_en : n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
@@ -276,7 +276,7 @@ export default function CompanyManagementPage() {
                               {c.name}
                               {c.company_type === '선박관리사' && <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{t('선박관리사')}</span>}
                             </td>
-                            <td className="px-3 py-2 text-gray-600">{c.country ? (natByCode.get(c.country)?.country_name_ko ?? c.country) : '-'}</td>
+                            <td className="px-3 py-2 text-gray-600">{c.country ? ((i18n.language === 'en' ? natByCode.get(c.country)?.country_name_en : natByCode.get(c.country)?.country_name_ko) ?? c.country) : '-'}</td>
                             <td className="px-3 py-2 text-gray-600 text-xs">{c.email || '-'}</td>
                             <td className="px-3 py-2 text-gray-600 text-xs">{c.phone || '-'}</td>
                             <td className="px-3 py-2 text-center text-gray-600">{c.officer_contract_months ?? '-'}</td>

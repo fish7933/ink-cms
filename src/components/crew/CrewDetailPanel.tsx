@@ -166,7 +166,7 @@ const CARD_TAB_CLASS =
   'data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:border-b-white data-[state=active]:shadow-[0_-1px_3px_rgba(0,0,0,0.06)] data-[state=active]:z-10';
 
 export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewDetailPanelProps) {
-  const { t } = useTranslation('CrewDetailPanel');
+  const { t, i18n } = useTranslation('CrewDetailPanel');
   const { toast } = useToast();
   const { activeTabId, updateTab, tabs } = useTabContext();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -743,13 +743,16 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <div className="grid grid-cols-3 gap-3">
             <FieldRow label={t('이름 (영문) *')}><Input value={formData.name_english} onChange={e => f('name_english', e.target.value)} className="h-9 flex-1" placeholder="HONG GIL DONG" disabled={identityFieldsLocked} /></FieldRow>
             <FieldRow label={t('직급 *')}>
-              <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={identityFieldsLocked}>
-                <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('직급 선택')} /></SelectTrigger>
+              {/* 직급은 선원 발령(승진/강등 발령)으로만 바꿀 수 있다 — 신규 등록 시에만 여기서 지정한다. */}
+              <Select value={formData.rank_id} onValueChange={v => f('rank_id', v)} disabled={!isNew}>
+                <SelectTrigger className="h-9 flex-1 disabled:bg-gray-50" title={!isNew ? t('직급은 선원 발령(승진/강등 발령)에서만 변경할 수 있습니다.') : undefined}>
+                  <SelectValue placeholder={t('직급 선택')} />
+                </SelectTrigger>
                 <SelectContent>{ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code}</SelectItem>)}</SelectContent>
               </Select>
             </FieldRow>
             <FieldRow label={t('등급')}>
-              <Input value={currentGrade || ''} className="h-9 flex-1 bg-gray-50" disabled placeholder={t('배정된 선박의 급여표 기준')} />
+              <Input value={currentGrade || ''} className="h-9 flex-1 bg-gray-50" disabled placeholder={t('배정된 선박의 급여표 기준')} title={t('등급은 선원 발령(배승)에서만 변경할 수 있습니다.')} />
             </FieldRow>
           </div>
 
@@ -764,7 +767,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             <FieldRow label={t('국적')}>
               <Select value={formData.nationality} onValueChange={v => f('nationality', v)} disabled={identityFieldsLocked}>
                 <SelectTrigger className="h-9 flex-1"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
-                <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
+                <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{i18n.language === 'en' ? n.country_name_en : n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
               </Select>
             </FieldRow>
             <FieldRow label={<>{t('생년월일')}{formData.date_of_birth && <span className="text-gray-400 font-normal"> {t('(만 {{age}}세)', { age: calculateAge(formData.date_of_birth) })}</span>}</>}>

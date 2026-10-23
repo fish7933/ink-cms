@@ -22,8 +22,8 @@ interface ManagementFeeTemplateItemsSummaryProps {
 // 읽기전용 템플릿 항목 표시 — 급여 템플릿의 직급×항목 매트릭스 표처럼, 청구 항목 전체를
 // 하나의 표로 한눈에 볼 수 있게 한다. 템플릿 상세/갱신 히스토리에서 재사용.
 export default function ManagementFeeTemplateItemsSummary({ items, nationalities = [] }: ManagementFeeTemplateItemsSummaryProps) {
-  const { t } = useTranslation('ManagementFeeTemplateItemsSummary');
-  const nationalityNameByCode = new Map(nationalities.map(n => [n.country_code, n.country_name_ko]));
+  const { t, i18n } = useTranslation('ManagementFeeTemplateItemsSummary');
+  const nationalityNameByCode = new Map(nationalities.map(n => [n.country_code, i18n.language === 'en' ? n.country_name_en : n.country_name_ko]));
 
   if (items.length === 0) {
     return <div className="text-center py-6 text-sm text-gray-400 border rounded-md">{t('등록된 청구 항목이 없습니다.')}</div>;

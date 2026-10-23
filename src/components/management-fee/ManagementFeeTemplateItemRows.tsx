@@ -43,7 +43,7 @@ interface ManagementFeeTemplateItemRowsProps {
 export default function ManagementFeeTemplateItemRows({
   feeItems, nationalities, rows, onChange, templateCurrency,
 }: ManagementFeeTemplateItemRowsProps) {
-  const { t } = useTranslation('ManagementFeeTemplateItemRows');
+  const { t, i18n } = useTranslation('ManagementFeeTemplateItemRows');
   const [addFeeItemId, setAddFeeItemId] = useState('');
 
   const feeItemById = new Map(feeItems.map(f => [f.id, f]));
@@ -176,7 +176,7 @@ export default function ManagementFeeTemplateItemRows({
                         <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all" className="text-xs">{t('전체')}</SelectItem>
-                          {nationalities.map(n => <SelectItem key={n.id} value={n.country_code} className="text-xs">{n.country_name_ko}</SelectItem>)}
+                          {nationalities.map(n => <SelectItem key={n.id} value={n.country_code} className="text-xs">{i18n.language === 'en' ? n.country_name_en : n.country_name_ko}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </TableCell>

@@ -86,7 +86,7 @@ export function JobPostingForm({
   onSubmit,
   onCancel,
 }: JobPostingFormProps) {
-  const { t } = useTranslation('JobPostingForm');
+  const { t, i18n } = useTranslation('JobPostingForm');
   const [rankSearch, setRankSearch] = useState('');
 
   const filteredRanks = useMemo(() => {
@@ -377,7 +377,7 @@ export function JobPostingForm({
                               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                           }`}
                         >
-                          {nat.country_name_ko}
+                          {i18n.language === 'en' ? nat.country_name_en : nat.country_name_ko}
                         </button>
                       );
                     })}

@@ -69,7 +69,7 @@ const matchesCategory = (c: CrewWithDetails & { status?: string }, cat: Category
 };
 
 export function CrewManagementPage() {
-  const { t } = useTranslation('CrewManagementPage');
+  const { t, i18n } = useTranslation('CrewManagementPage');
   const { toast } = useToast();
   const { openNewTab } = useTabContext();
   const navigate = useNavigate();
@@ -261,10 +261,10 @@ export function CrewManagementPage() {
     const base = facetFilter(facetCrew, 'nationality');
     const options = buildFacetOptions(base, c => c.nationality, c => {
       const nat = nationalities.find(n => n.country_code === c.nationality);
-      return nat ? `${nat.country_name_ko} (${nat.country_code})` : (c.nationality || '');
+      return nat ? `${i18n.language === 'en' ? nat.country_name_en : nat.country_name_ko} (${nat.country_code})` : (c.nationality || '');
     }).sort((a, b) => a.label.localeCompare(b.label, 'ko'));
     return { total: base.length, options };
-  }, [facetCrew, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, nationalities]);
+  }, [facetCrew, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, nationalities, i18n.language]);
 
   const sourceFacet = useMemo(() => {
     const base = facetFilter(facetCrew, 'source');

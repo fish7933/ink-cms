@@ -61,7 +61,7 @@ const getCrewStatus = (c: CrewWithDetails) => (c as CrewWithDetails & { status?:
 export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, candidates, onConfirm, selectionMode = 'multi', getReservationNote, initialCrew, defaultRankId, scoringContext }: CrewCandidateSelectDialogProps) {
   const isSingle = selectionMode === 'single';
   const { openNewTab } = useTabContext();
-  const { t } = useTranslation('CrewCandidateSelectDialog');
+  const { t, i18n } = useTranslation('CrewCandidateSelectDialog');
 
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -234,7 +234,7 @@ export default function CrewCandidateSelectDialog({ open, onOpenChange, mode, ca
               <SelectTrigger className="h-8 text-xs w-24"><SelectValue placeholder={t('국적')} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('전체 국적')}</SelectItem>
-                {nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}
+                {nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{i18n.language === 'en' ? n.country_name_en : n.country_name_ko} ({n.country_code})</SelectItem>)}
               </SelectContent>
             </Select>
             {isFiltered && (

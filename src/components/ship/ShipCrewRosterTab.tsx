@@ -27,7 +27,7 @@ function todayISO(): string {
 }
 
 export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSign, flag }: ShipCrewRosterTabProps) {
-  const { t } = useTranslation('ShipCrewRosterTab');
+  const { t, i18n } = useTranslation('ShipCrewRosterTab');
   const [date, setDate] = useState(todayISO());
   const [roster, setRoster] = useState<ShipCrewRosterEntry[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
@@ -47,9 +47,9 @@ export default function ShipCrewRosterTab({ shipId, shipName, imoNumber, callSig
   }, [shipId, date]);
 
   const nationalityLabel = useMemo(() => {
-    const map = new Map(nationalities.map(n => [n.country_code, n.country_name_ko]));
+    const map = new Map(nationalities.map(n => [n.country_code, i18n.language === 'en' ? n.country_name_en : n.country_name_ko]));
     return (code: string) => map.get(code) || code;
-  }, [nationalities]);
+  }, [nationalities, i18n.language]);
 
   // Crew List(엑셀)는 국제표준에 맞춰 국적을 영문 국가명으로 표기한다 — 저장값이 코드가 아니라
   // (구 데이터 등으로) 한글 국가명 그대로인 경우까지 영문명으로 정규화해준다.

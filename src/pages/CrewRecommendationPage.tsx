@@ -36,7 +36,7 @@ const DEPT_COLORS: Record<string, string> = {
 };
 
 export default function CrewRecommendationPage() {
-  const { t } = useTranslation('CrewRecommendationPage');
+  const { t, i18n } = useTranslation('CrewRecommendationPage');
   const { groupId, rankId } = useParams<{ groupId: string; rankId: string }>();
   const [searchParams] = useSearchParams();
   const sourceRecommendationId = searchParams.get('from');
@@ -240,7 +240,7 @@ export default function CrewRecommendationPage() {
                   <Label className="text-xs">{t('국적 *')}</Label>
                   <Select value={formData.nationality_id} onValueChange={v => setFormData(p => ({ ...p, nationality_id: v }))} disabled={uploading}>
                     <SelectTrigger className="h-9 mt-1"><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
-                    <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_name_en})</SelectItem>)}</SelectContent>
+                    <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{i18n.language === 'en' ? `${n.country_name_en} (${n.country_name_ko})` : `${n.country_name_ko} (${n.country_name_en})`}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>

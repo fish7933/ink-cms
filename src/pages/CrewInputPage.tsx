@@ -39,7 +39,7 @@ interface Certificate {
 }
 
 export default function CrewInputPage() {
-  const { t } = useTranslation('CrewInputPage');
+  const { t, i18n } = useTranslation('CrewInputPage');
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -412,7 +412,7 @@ const addCert = (name?: string) => {
                       <Label>{t('국적')}</Label>
                       <Select value={formData.nationality} onValueChange={v => setFormData(p => ({ ...p, nationality: v }))}>
                         <SelectTrigger><SelectValue placeholder={t('국적 선택')} /></SelectTrigger>
-                        <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
+                        <SelectContent>{nationalities.map(n => <SelectItem key={n.id} value={n.country_code}>{i18n.language === 'en' ? n.country_name_en : n.country_name_ko} ({n.country_code})</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2"><Label>{t('생년월일')}</Label><Input type="date" value={formData.date_of_birth} onChange={e => setFormData(p => ({ ...p, date_of_birth: e.target.value }))} /></div>
