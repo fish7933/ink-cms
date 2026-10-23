@@ -665,7 +665,7 @@ export default function CashbookManagementPage() {
                 <span className="text-xs text-gray-400 ml-auto">{filtered.length}건</span>
               </div>
 
-              <div className="border rounded-md overflow-hidden overflow-x-auto">
+              <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b">
                     <tr>

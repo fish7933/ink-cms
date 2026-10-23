@@ -59,7 +59,7 @@ export default function LineItemsField({ field, value, onChange, disabled, onUpl
 
   return (
     <div className="border rounded-md overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto no-scrollbar">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
             <tr>

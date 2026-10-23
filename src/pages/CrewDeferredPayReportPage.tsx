@@ -260,7 +260,7 @@ export default function CrewDeferredPayReportPage() {
           {rows.length === 0 ? t('이 달에 후불성 급여 항목이 있는 명세서가 없습니다.') : t('현재 필터 조건에 맞는 항목이 없습니다.')}
         </div>
       ) : (
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>
@@ -348,7 +348,7 @@ export default function CrewDeferredPayReportPage() {
                   {payrollHistoryRows.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-6">{t('급여명세 이력이 없습니다.')}</p>
                   ) : (
-                    <div className="rounded-md border overflow-hidden overflow-x-auto">
+                    <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
                       <table className="w-full text-xs whitespace-nowrap">
                         <thead className="bg-gray-50 border-b">
                           <tr>
@@ -405,7 +405,7 @@ export default function CrewDeferredPayReportPage() {
                 {deferredHistoryRows.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-6">{t('후불성 적립 이력이 없습니다.')}</p>
                 ) : (
-                  <div className="rounded-md border overflow-hidden overflow-x-auto">
+                  <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
                     <table className="w-full text-xs whitespace-nowrap">
                       <thead className="bg-gray-50 border-b">
                         <tr>

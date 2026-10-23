@@ -327,7 +327,7 @@ export default function CrewPayrollDashboardPage() {
       ) : filteredRows.length === 0 ? (
         <div className="text-center py-12 text-sm text-gray-400">No vessels match the current filters.</div>
       ) : (
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>

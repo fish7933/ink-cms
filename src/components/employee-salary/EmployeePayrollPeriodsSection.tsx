@@ -393,7 +393,7 @@ export default function EmployeePayrollPeriodsSection() {
           이 달의 급여명세서가 없습니다. {isDraft && '"명세서 생성" 버튼으로 대상 직원 전원의 명세서를 만들 수 있습니다.'}
         </div>
       ) : (
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
               <tr>

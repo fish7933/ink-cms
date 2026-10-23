@@ -1205,7 +1205,7 @@ export default function RotationPlanFormPage() {
           {rows.every(r => !r.boardingCrewId && !r.disembarkCrewId) ? (
             <p className="text-xs text-gray-400">{t('배정된 선원이 없습니다')}</p>
           ) : (
-            <div className="rounded-md border bg-white overflow-hidden overflow-x-auto">
+            <div className="rounded-md border bg-white overflow-hidden overflow-x-auto no-scrollbar">
               <table className="w-full text-xs whitespace-nowrap">
                 <thead className="bg-gray-50 border-b">
                   <tr className="text-[10px] text-gray-400">

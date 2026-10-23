@@ -298,7 +298,7 @@ export default function ManagementFeeActualCostEntriesSection({ periodId, shipId
       {entries.length === 0 ? (
         <div className="text-center py-4 text-xs text-gray-400">{t('기록된 실비 항목이 없습니다.')}</div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-md border overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>

@@ -201,7 +201,7 @@ function CoverSheetView({
         <p>{t('2. {{yearMonth}} 관리비 청구서를 제출하오니 아래의 계좌로 송금해 주시면 감사하겠습니다.', { yearMonth: data.year_month })}</p>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto no-scrollbar">
         <table className="w-full border-collapse">
           <thead>
             <tr>
@@ -270,7 +270,7 @@ function DetailSheetView({ data }: { data: ManagementFeeInvoiceData }) {
   return (
     <div className="bg-white border rounded-md p-4">
       <div className="text-center font-bold text-sm mb-3">{t('비용 상세 내역서')}</div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto no-scrollbar">
         <table className="w-full border-collapse">
           <thead>
             <tr>
@@ -326,7 +326,7 @@ function ActualCostSheetView({
       {rows.length === 0 ? (
         <div className="text-center py-6 text-sm text-gray-400">{t('실비 기록이 없습니다.')}</div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto no-scrollbar">
           <table className="w-full border-collapse">
             <thead>
               <tr>{headerLabels.map(label => <th key={label} className={th}>{label}</th>)}</tr>

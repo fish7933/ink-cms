@@ -130,7 +130,7 @@ export default function CertificateExpiryDashboardPage() {
             </div>
 
             {/* 테이블 */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto no-scrollbar">
               <table className="w-full text-xs whitespace-nowrap">
                 <thead>
                   <tr className="border-b bg-gray-50">

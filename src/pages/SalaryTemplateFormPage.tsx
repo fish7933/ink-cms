@@ -345,7 +345,7 @@ export default function SalaryTemplateFormPage() {
             {selectedRanks.length > 0 && selectedComponents.length > 0 && (
               <div className="space-y-1.5">
                 <Label className="text-sm">{t('직급별 금액 입력')}</Label>
-                <div className="overflow-x-auto border rounded-md">
+                <div className="overflow-x-auto no-scrollbar border rounded-md">
                   <table className="text-xs w-full">
                     <thead>
                       <tr className="bg-gray-50 border-b">

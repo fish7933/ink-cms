@@ -208,7 +208,7 @@ export default function CrewAllowanceManagementPage() {
       ) : filteredRecords.length === 0 ? (
         <div className="text-center py-12 text-sm text-gray-400">{t('해당 조건의 수당/공제 항목이 없습니다.')}</div>
       ) : (
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>

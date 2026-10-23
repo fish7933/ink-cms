@@ -90,7 +90,7 @@ export default function AllowanceTemplateItemRows({ allowanceItems, ranks, rows,
       {rows.length === 0 ? (
         <div className="text-center py-6 text-sm text-gray-400 border rounded-md">{t('등록된 항목이 없습니다. 아래에서 행을 추가하세요.')}</div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-md border overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>

@@ -136,7 +136,7 @@ export default function JobPostingRecommendationsPage() {
             {isManningOrCrew ? t('아직 추천한 선원이 없습니다.') : t('아직 받은 선원 추천이 없습니다.')}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto no-scrollbar">
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50">

@@ -367,7 +367,7 @@ export default function ShoreLeaveManagementPage() {
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base">직원별 연차 현황</CardTitle></CardHeader>
             <CardContent>
-              <div className="border rounded-md overflow-hidden overflow-x-auto">
+              <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
@@ -478,7 +478,7 @@ export default function ShoreLeaveManagementPage() {
               {adminLog.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">작업 로그가 없습니다</p>
               ) : (
-                <div className="border rounded-md overflow-hidden overflow-x-auto">
+                <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 border-b">
                       <tr>
@@ -555,7 +555,7 @@ export default function ShoreLeaveManagementPage() {
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">직원별 누적 질병휴가(승인 기준)</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="border rounded-md overflow-hidden overflow-x-auto">
+                  <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 border-b">
                         <tr>
@@ -581,7 +581,7 @@ export default function ShoreLeaveManagementPage() {
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">질병휴가 신청 내역 (전체)</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="border rounded-md overflow-hidden overflow-x-auto">
+                  <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
                     <table className="w-full text-xs">
                       <thead className="bg-gray-50 border-b">
                         <tr>
@@ -659,7 +659,7 @@ export default function ShoreLeaveManagementPage() {
                   <Button size="sm" className="h-9 gap-1.5" onClick={handleAddHoliday} disabled={holidaySubmitting}><Plus className="w-4 h-4" />추가</Button>
                 </div>
               )}
-              <div className="border rounded-md overflow-hidden overflow-x-auto">
+              <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>

@@ -291,7 +291,7 @@ export default function PermissionsPage() {
             <CardTitle className="text-sm">전체 접근권한 매트릭스 (접속 여부)</CardTitle>
             <p className="text-xs text-gray-500">셀을 클릭하면 그 사용자의 해당 페이지 접속 권한이 바로 토글되어 저장됩니다. 접속을 끄면 추가/수정/삭제 권한도 함께 꺼집니다. 슈퍼관리자·시스템 관리자는 항상 전체 접근이라 편집할 수 없습니다.</p>
           </CardHeader>
-          <CardContent className="pt-0 overflow-x-auto">
+          <CardContent className="pt-0 overflow-x-auto no-scrollbar">
             <table className="text-xs border-collapse w-full">
               <thead>
                 <tr>

@@ -29,7 +29,7 @@ export default function AllowanceTemplateItemsSummary({ items, ranks = [] }: All
   let prevItemId: string | null = null;
 
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <div className="rounded-md border overflow-x-auto no-scrollbar">
       <Table>
         <TableHeader>
           <TableRow>

@@ -467,7 +467,7 @@ export default function ContractManagementPage() {
                 </TabsList>
                 {['all','draft','valid','expired','completed','terminated'].map(tab => (
                   <TabsContent key={tab} value={tab} className="mt-2">
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto no-scrollbar">
                     <table className="w-full text-xs whitespace-nowrap"><thead><tr className="border-b bg-gray-50">
                       <th className="w-8 p-2"><Checkbox checked={filteredChains.length > 0 && filteredChains.every(c => selectedIds.includes(c.latest.id))} onCheckedChange={checked => toggleSelectAll(!!checked, filteredChains)} /></th>
                       <th className="text-left p-2">{t('선주사')}</th><th className="text-left p-2">{t('플릿')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('직급')}</th><th className="text-left p-2">{t('선원명')}</th><th className="text-left p-2">{t('국적')}</th><th className="text-left p-2">{t('최초 계약일')}</th><th className="text-left p-2">{t('만료일')}</th><th className="text-left p-2">{t('연장일')}</th><th className="text-right p-2">{t('급여')}</th><th className="text-center p-2">{t('상태')}</th><th className="text-left p-2">{t('결재 현황')}</th><th className="text-center p-2">{t('작업')}</th></tr></thead>

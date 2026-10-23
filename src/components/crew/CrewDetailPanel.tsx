@@ -951,7 +951,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                         </Badge>
                         <div className="flex-1 border-t border-gray-200" />
                       </div>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto no-scrollbar">
                         <table className="w-full text-xs">
                           <thead><tr className="border-b bg-gray-50/50">
                             <th className="text-left p-1.5 w-[200px]">{t('증서명')}</th>
@@ -1029,7 +1029,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               {seaServiceRecords.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('승선 경력을 추가하세요.')}</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
                       <th className="text-left p-2">{t('선주사')}</th><th className="text-left p-2">{t('선박관리사')}</th><th className="text-left p-2">{t('매닝사')}</th><th className="text-left p-2">{t('선박명')}</th><th className="text-left p-2">{t('직급')}</th><th className="text-left p-2">{t('승선일')}</th><th className="text-left p-2">{t('하선일')}</th><th className="text-left p-2">{t('하선사유')}</th><th className="text-left p-2">{t('유형')}</th><th className="text-center p-2">{t('고과')}</th><th className="text-center p-2">{t('상병기록')}</th><th className="text-center p-2">{t('작업')}</th>
@@ -1095,7 +1095,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               {trainingRecords.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('교육 이력을 추가하세요.')}</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
                       <th className="text-left p-2">{t('교육명')}</th><th className="text-left p-2">{t('유형')}</th><th className="text-left p-2">{t('시작일')}</th><th className="text-left p-2">{t('종료일')}</th><th className="text-left p-2">{t('결과')}</th><th className="text-center p-2">{t('작업')}</th>
@@ -1141,7 +1141,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               {evaluations.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('등록된 고과가 없습니다.')}</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
                       <th className="text-left p-2">{t('평가 기간')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-center p-2">{t('평균점수')}</th><th className="text-center p-2">{t('추천')}</th><th className="text-left p-2">{t('평가자')}</th><th className="text-center p-2">{t('작업')}</th>
@@ -1186,7 +1186,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               {medicalRecords.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('등록된 상병 기록이 없습니다.')}</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
                       <th className="text-left p-2">{t('일자')}</th><th className="text-left p-2">{t('유형')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('진단')}</th><th className="text-left p-2">{t('적합성')}</th><th className="text-left p-2">{t('추적')}</th><th className="text-center p-2">{t('작업')}</th>
@@ -1266,7 +1266,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                       <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('조건에 맞는 급여명세가 없습니다.')}</div>
                     ) : (
                       <>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto no-scrollbar">
                           <table className="w-full text-xs">
                             <thead><tr className="border-b bg-gray-50">
                               <th className="text-left p-2">{t('회차')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('기간')}</th><th className="text-right p-2">{t('근무일수')}</th><th className="text-right p-2">{t('실지급액')}</th><th className="text-left p-2">{t('상태')}</th>
@@ -1320,7 +1320,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                   {salaryRecords.length === 0 ? (
                     <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('급여 이력을 추가하세요.')}</div>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto no-scrollbar">
                       <table className="w-full text-xs">
                         <thead><tr className="border-b bg-gray-50">
                           <th className="text-left p-2">{t('기간')}</th><th className="text-right p-2">{t('기본급')}</th><th className="text-right p-2">{t('순수령')}</th><th className="text-left p-2">{t('통화')}</th><th className="text-left p-2">{t('상태')}</th><th className="text-center p-2">{t('작업')}</th>
@@ -1382,7 +1382,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                     <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('조건에 맞는 상병급여 이력이 없습니다.')}</div>
                   ) : (
                     <>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto no-scrollbar">
                         <table className="w-full text-xs">
                           <thead><tr className="border-b bg-gray-50">
                             <th className="text-left p-2">{t('회차')}</th><th className="text-left p-2">{t('선박')}</th><th className="text-left p-2">{t('직급')}</th><th className="text-right p-2">{t('금액')}</th><th className="text-left p-2">{t('상태')}</th>
@@ -1444,7 +1444,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               {interviewLogs.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('등록된 면담 일지가 없습니다.')}</div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto no-scrollbar">
                   <table className="w-full text-xs">
                     <thead><tr className="border-b bg-gray-50">
                       <th className="text-left p-2">{t('면담일')}</th><th className="text-left p-2">{t('면담자')}</th><th className="text-left p-2">{t('승선 희망 선주/플릿/선박')}</th><th className="text-left p-2">{t('승선 희망일')}</th><th className="text-center p-2">{t('작업')}</th>
@@ -1498,7 +1498,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       <Dialog open={!!viewingSickPayRecordId} onOpenChange={o => !o && setViewingSickPayRecordId(null)}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
           <DialogTitle className="text-base flex items-center gap-1.5"><Stethoscope className="w-4 h-4 text-muted-foreground" />{t('상병급여 월별 내역')}</DialogTitle>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto no-scrollbar">
             <table className="w-full text-xs">
               <thead><tr className="border-b bg-gray-50">
                 <th className="text-left p-2">{t('회차')}</th><th className="text-right p-2">{t('금액')}</th><th className="text-left p-2">{t('상태')}</th>

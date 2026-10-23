@@ -122,7 +122,7 @@ export default function EmployeeAnnualPayrollLedger({ payslips, emptyMessage = '
         <Receipt className="w-3.5 h-3.5" />
         <span>급여명세서의 지급/공제 항목을 그대로 월별로 나열한 참고용 내역입니다.</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto no-scrollbar">
         <Table>
           <TableHeader>
             <TableRow>

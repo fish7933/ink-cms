@@ -334,7 +334,7 @@ export default function ApprovalInboxPage() {
   const renderDocTable = (list: ApprovalDocumentWithDetails[]) => {
     const selectableIds = list.filter(canDeleteDoc).map(d => d.id);
     return (
-    <div className="rounded-md border overflow-hidden overflow-x-auto">
+    <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
       <table className="w-full text-xs whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
@@ -435,7 +435,7 @@ export default function ApprovalInboxPage() {
   const renderDeletedDocTable = (list: ApprovalDocumentWithDetails[]) => {
     const selectableIds = list.filter(canPermanentlyDeleteDoc).map(d => d.id);
     return (
-    <div className="rounded-md border overflow-hidden overflow-x-auto">
+    <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
       <table className="w-full text-xs whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>

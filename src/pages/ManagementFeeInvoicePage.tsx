@@ -442,7 +442,7 @@ function InvoiceListTab() {
                     </button>
                   </div>
                   {expanded && (
-                    <div className="border-t overflow-x-auto">
+                    <div className="border-t overflow-x-auto no-scrollbar">
                       <Table>
                         <TableHeader>
                           <TableRow>

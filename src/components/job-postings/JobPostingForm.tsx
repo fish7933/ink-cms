@@ -360,7 +360,7 @@ export function JobPostingForm({
                 {/* 선호 국적 선택 — 한 줄에 다 들어가도록 세로로 안 늘어나고 가로 스크롤 */}
                 <div className="flex items-center gap-2 min-w-0">
                   <Label className="text-xs text-gray-500 shrink-0 whitespace-nowrap">{t('선호 국적')}</Label>
-                  <div className="flex items-center gap-1.5 overflow-x-auto flex-nowrap py-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-nowrap py-0.5 min-w-0">
                     {nationalities.length === 0 && (
                       <p className="text-xs text-muted-foreground whitespace-nowrap">{t('등록된 주요 송출국이 없습니다. "선원 국적 관리"에서 등록해주세요.')}</p>
                     )}

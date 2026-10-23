@@ -39,7 +39,7 @@ export default function ManagementFeeTemplateItemsSummary({ items, nationalities
   let prevFeeItemId: string | null = null;
 
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <div className="rounded-md border overflow-x-auto no-scrollbar">
       <Table>
         <TableHeader>
           <TableRow>

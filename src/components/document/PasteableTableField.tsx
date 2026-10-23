@@ -46,7 +46,7 @@ export default function PasteableTableField({ value, onChange, disabled }: Props
 
   if (disabled) {
     return value ? (
-      <div className="border border-gray-300 rounded-md overflow-x-auto p-1" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(value) }} />
+      <div className="border border-gray-300 rounded-md overflow-x-auto no-scrollbar p-1" dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(value) }} />
     ) : (
       <p className="text-xs text-gray-400">-</p>
     );
@@ -65,7 +65,7 @@ export default function PasteableTableField({ value, onChange, disabled }: Props
       {value ? (
         <div
           ref={containerRef}
-          className="border border-gray-300 rounded-md overflow-x-auto p-1"
+          className="border border-gray-300 rounded-md overflow-x-auto no-scrollbar p-1"
           onPaste={handlePaste}
           onBlur={commit}
           dangerouslySetInnerHTML={{ __html: injectContentEditable(value) }}

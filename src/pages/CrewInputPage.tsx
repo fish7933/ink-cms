@@ -521,7 +521,7 @@ const addCert = (name?: string) => {
                               </Badge>
                               <div className="flex-1 border-t border-gray-200" />
                             </div>
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto no-scrollbar">
                               <table className="w-full text-xs">
                                 <thead><tr className="border-b bg-gray-50/50">
                                   <th className="text-left p-1.5 w-[200px]">{t('증서명')}</th>

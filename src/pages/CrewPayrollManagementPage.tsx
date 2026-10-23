@@ -656,7 +656,7 @@ export default function CrewPayrollManagementPage() {
           No payslips for this month yet. {isDraft && 'Use "Generate Payslips" to create payslips for every crew member on this vessel.'}
         </div>
       ) : (
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
               <tr>
@@ -733,7 +733,7 @@ export default function CrewPayrollManagementPage() {
           {deferredPayoutRows.length > 0 && (
             <div className="px-2 py-3 border-t">
               <p className="text-xs font-semibold text-amber-700 mb-1.5">⚠ Deferred Pay — sign-off crew this month, settled separately (not included in Net Pay)</p>
-              <div className="rounded-md border border-amber-200 overflow-hidden overflow-x-auto">
+              <div className="rounded-md border border-amber-200 overflow-hidden overflow-x-auto no-scrollbar">
                 <table className="w-full text-xs whitespace-nowrap">
                   <thead className="bg-amber-50 border-b border-amber-200">
                     <tr>
@@ -787,7 +787,7 @@ export default function CrewPayrollManagementPage() {
           {sickPayRows.length > 0 && (
             <div className="px-2 py-3 border-t">
               <p className="text-xs font-semibold text-red-700 mb-1.5">⚠ Sick Pay — claim separately for this month</p>
-              <div className="rounded-md border border-red-200 overflow-hidden overflow-x-auto">
+              <div className="rounded-md border border-red-200 overflow-hidden overflow-x-auto no-scrollbar">
                 <table className="w-full text-xs whitespace-nowrap">
                   <thead className="bg-red-50 border-b border-red-200">
                     <tr>
@@ -894,7 +894,7 @@ export default function CrewPayrollManagementPage() {
           ) : historyRows.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">No payroll history found for this crew member.</p>
           ) : (
-            <div className="rounded-md border overflow-hidden overflow-x-auto">
+            <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
               <table className="w-full text-xs whitespace-nowrap">
                 <thead className="bg-gray-50 border-b">
                   <tr>

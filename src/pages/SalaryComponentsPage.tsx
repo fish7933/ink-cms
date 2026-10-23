@@ -364,7 +364,7 @@ export default function SalaryComponentsPage() {
                   : t('등록된 공제 항목이 없습니다. (예: 본선불, 노조비)')}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto no-scrollbar">
               <Table>
                 <TableHeader>
                   <TableRow>

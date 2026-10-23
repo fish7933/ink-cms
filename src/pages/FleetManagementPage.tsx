@@ -159,7 +159,7 @@ export default function FleetManagementPage() {
                 <SelectTrigger className="h-9 w-60 text-sm"><SelectValue placeholder={t('선주사 필터')} /></SelectTrigger>
                 <SelectContent><SelectItem value="all">{t('전체 선주사')}</SelectItem>{owners.map(o => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
               </Select>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto no-scrollbar">
                 <table className="w-full text-xs">
                   <thead><tr className="border-b bg-gray-50">
                     <th className="text-left p-2">{t('선주사')}</th><th className="text-left p-2">{t('플릿명')}</th><th className="text-left p-2">{t('설명')}</th><th className="text-center p-2">{t('선박 수')}</th><th className="text-center p-2">{t('작업')}</th>

@@ -265,7 +265,7 @@ export default function CrewSickPayManagementPage() {
       ) : filteredRecords.length === 0 ? (
         <div className="text-center py-12 text-sm text-gray-400">{t('해당 조건의 상병급여 케이스가 없습니다.')}</div>
       ) : (
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>

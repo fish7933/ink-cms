@@ -146,7 +146,8 @@ export default function ApprovalDocumentDetailPage() {
       toast({ title: '성공', description: actionType === 'approved' ? '승인되었습니다.' : '반려되었습니다.' });
       setActionType(null); setComment(''); setForceMode(false);
       notifyListRefresh();
-      await loadData();
+      // 처리 후 이 문서를 다시 띄우지 않고 결재함 목록으로 돌아간다 — 연속으로 결재해 나가기 편하도록.
+      goBack();
     } catch (e) {
       console.error(e);
       toast({ title: '오류', description: e instanceof Error ? e.message : '결재 처리 중 오류가 발생했습니다.', variant: 'destructive' });

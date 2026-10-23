@@ -896,7 +896,7 @@ export default function DocumentDraftPage() {
                 <div className="space-y-1.5">
                   <Label className="text-xs">본문 — 상신되면 실제로 나가는 결재문서 그대로입니다</Label>
                   {dailyCashReportPreview && previewDoc ? (
-                    <div className="border rounded-md bg-gray-50 p-4 overflow-x-auto">
+                    <div className="border rounded-md bg-gray-50 p-4 overflow-x-auto no-scrollbar">
                       <ApprovalDocumentIssuedSheet
                         doc={previewDoc}
                         documentType={selectedType}
@@ -1140,7 +1140,7 @@ export default function DocumentDraftPage() {
               ) : filteredDocs.length === 0 ? (
                 <div className="text-center py-12 text-sm text-gray-400">해당하는 문서가 없습니다.</div>
               ) : (
-                <div className="rounded-md border overflow-hidden overflow-x-auto">
+                <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
                   <table className="w-full text-sm whitespace-nowrap">
                     <thead className="bg-gray-50 border-b">
                       <tr>

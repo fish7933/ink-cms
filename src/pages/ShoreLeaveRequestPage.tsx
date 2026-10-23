@@ -445,7 +445,7 @@ export default function ShoreLeaveRequestPage() {
           {myRequests.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">신청 내역이 없습니다</p>
           ) : (
-            <div className="border rounded-md overflow-hidden overflow-x-auto">
+            <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr><th className="text-left p-2">기간</th><th className="text-center p-2">일수/시간</th><th className="text-left p-2">사유</th><th className="text-center p-2">상태</th><th className="p-2 w-28"></th></tr>

@@ -125,7 +125,7 @@ export default function ManagementFeeTemplateItemRows({
           {t('추가된 청구 항목이 없습니다. 아래에서 항목을 선택해 조건을 추가하세요.')}
         </div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-md border overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

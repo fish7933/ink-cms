@@ -400,7 +400,7 @@ export default function ManagementFeeCalculationPage() {
       ) : filteredRows.length === 0 ? (
         <div className="text-center py-12 text-sm text-gray-400">{t('조건에 맞는 선박이 없습니다.')}</div>
       ) : (
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <Table>
             <TableHeader>
               <TableRow>
@@ -480,7 +480,7 @@ export default function ManagementFeeCalculationPage() {
                                         승·하선 비용(항공권 등)을 실비 항목에 빠짐없이 입력했는지 바로 확인할 수 있게 한다. */}
                                     <div>
                                     <h3 className="text-sm font-semibold mb-2">{t('선원별 청구 항목')}</h3>
-                                    <div className="rounded-md border bg-white overflow-x-auto">
+                                    <div className="rounded-md border bg-white overflow-x-auto no-scrollbar">
                                       <Table>
                                         <TableHeader>
                                           <TableRow>
@@ -550,7 +550,7 @@ export default function ManagementFeeCalculationPage() {
                                     {ledgerData.item_totals.length > 0 && (
                                       <div>
                                       <h3 className="text-sm font-semibold mb-2">{t('항목별 청구금액')}</h3>
-                                      <div className="rounded-md border bg-white overflow-x-auto">
+                                      <div className="rounded-md border bg-white overflow-x-auto no-scrollbar">
                                         <Table>
                                           <TableHeader>
                                             <TableRow>
@@ -641,7 +641,7 @@ export default function ManagementFeeCalculationPage() {
                                     {ledgerData.salary_rows.length > 0 && (
                                       <div>
                                         <h3 className="text-sm font-semibold mb-2">{t('선원 급여')} <span className="font-normal text-gray-400 text-xs">{t('(참고용 — 청구서 급여 섹션과 동일 계산)')}</span></h3>
-                                        <div className="rounded-md border bg-white overflow-x-auto">
+                                        <div className="rounded-md border bg-white overflow-x-auto no-scrollbar">
                                           <Table>
                                             <TableHeader>
                                               <TableRow>

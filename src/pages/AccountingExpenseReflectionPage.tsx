@@ -638,7 +638,7 @@ export default function AccountingExpenseReflectionPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-0 space-y-3">
-            <div className="border rounded-md overflow-hidden overflow-x-auto">
+            <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>
@@ -747,7 +747,7 @@ export default function AccountingExpenseReflectionPage() {
               <span className="text-xs text-gray-400 ml-auto">{filteredGroups.length}건</span>
             </div>
 
-            <div className="border rounded-md overflow-hidden overflow-x-auto">
+            <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b">
                   <tr>

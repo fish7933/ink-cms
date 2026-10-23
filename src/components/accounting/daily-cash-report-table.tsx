@@ -16,7 +16,7 @@ export function DailyCashReportTable({ sections, onTransactionClick }: DailyCash
 
   return (
     <div className="space-y-5">
-      <div className="border rounded-md overflow-hidden overflow-x-auto">
+      <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
         <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: '13%' }} />
@@ -60,7 +60,7 @@ export function DailyCashReportTable({ sections, onTransactionClick }: DailyCash
       {sections.map(s => (
         <div key={s.id}>
           <p className="text-xs font-semibold text-gray-600 mb-1.5">{s.name} ({s.currency})</p>
-          <div className="border rounded-md overflow-hidden overflow-x-auto">
+          <div className="border rounded-md overflow-hidden overflow-x-auto no-scrollbar">
             <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: '6%' }} />

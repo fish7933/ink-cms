@@ -949,7 +949,7 @@ export default function DispatchApprovalInboxPage() {
           <span><span className="text-gray-400">{t('교대지')}</span> {selectedRotation.port_label || '-'}</span>
           {selectedRotation.notes && <span><span className="text-gray-400">{t('비고')}</span> {selectedRotation.notes}</span>}
         </div>
-        <div className="rounded-md border overflow-hidden overflow-x-auto">
+        <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
           <table className="w-full text-xs whitespace-nowrap">
             <thead className="bg-gray-50 border-b">
               <tr>
@@ -1015,7 +1015,7 @@ export default function DispatchApprovalInboxPage() {
     const toggleOne = (id: string) => setSelectedIds(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
     const toggleAll = (checked: boolean) => setSelectedIds(checked ? selectableIds : []);
     return (
-    <div className="rounded-md border overflow-hidden overflow-x-auto">
+    <div className="rounded-md border overflow-hidden overflow-x-auto no-scrollbar">
       <table className="w-full text-sm whitespace-nowrap">
         <thead className="bg-gray-50 border-b">
           <tr>
