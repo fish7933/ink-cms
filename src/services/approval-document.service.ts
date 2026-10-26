@@ -91,6 +91,9 @@ export interface LeaveDetail {
   period: string;
   hoursLabel: string;
   reason: string;
+  // 연차 신청/취소에만 있는 신청 시점 스냅샷 — 질병휴가 등 다른 유형에는 없다.
+  remainingAfterLabel?: string;
+  leaveYearStart?: string;
 }
 
 const LEAVE_REFERENCE_TABLE: Record<string, string> = {
@@ -110,13 +113,23 @@ export async function getLeaveDetail(referenceType: string | null, referenceId: 
   if (!referenceType || !referenceId) return null;
   const table = LEAVE_REFERENCE_TABLE[referenceType];
   if (!table) return null;
-  const { data } = await supabase.from(table).select('start_date, start_time, end_date, end_time, hours, reason').eq('id', referenceId).maybeSingle();
+  // remaining_hours_after/leave_year_start_date는 연차(shore_leave_requests)에만 있는 컬럼이라
+  // 질병휴가(sick_leave_requests) 조회 시에는 그냥 undefined로 빠진다(select 자체는 에러 없이
+  // 통과 — Supabase는 없는 컬럼을 select하면 에러를 내므로 테이블별로 분기해야 한다).
+  const isShoreLeave = table === 'shore_leave_requests';
+  // select()에 변수로 만든 컬럼 문자열을 넘기면 Supabase 타입 파서가 리터럴로 못 읽어 타입
+  // 추론이 깨지므로, 테이블별로 리터럴 select 문을 따로 쓴다.
+  const { data } = isShoreLeave
+    ? await supabase.from(table).select('start_date, start_time, end_date, end_time, hours, reason, remaining_hours_after, leave_year_start_date').eq('id', referenceId).maybeSingle()
+    : await supabase.from(table).select('start_date, start_time, end_date, end_time, hours, reason').eq('id', referenceId).maybeSingle();
   if (!data) return null;
   return {
     typeLabel: LEAVE_REFERENCE_LABEL[referenceType] || '휴가',
     period: `${data.start_date} ${data.start_time} ~ ${data.end_date} ${data.end_time}`,
     hoursLabel: formatLeaveHours(data.hours),
     reason: data.reason || '-',
+    remainingAfterLabel: isShoreLeave && (data as unknown as { remaining_hours_after?: number }).remaining_hours_after != null ? formatLeaveHours((data as unknown as { remaining_hours_after: number }).remaining_hours_after) : undefined,
+    leaveYearStart: isShoreLeave ? ((data as unknown as { leave_year_start_date?: string }).leave_year_start_date || undefined) : undefined,
   };
 }
 

@@ -194,6 +194,8 @@ export default function ShoreLeaveRequestPage() {
         end_time,
         hours: totalHours,
         reason: form.reason || undefined,
+        remaining_hours_after: balance.remainingHours - totalHours,
+        leave_year_start_date: getCurrentLeaveYearStart(currentUser.hire_date),
       });
 
       const leaveTypeLabel = LEAVE_TYPE_OPTIONS.find(o => o.value === effectiveLeaveType)?.label || '종일';
@@ -202,8 +204,8 @@ export default function ShoreLeaveRequestPage() {
         `신청 기간: ${form.start_date} ${start_time} ~ ${form.end_date} ${end_time}`,
         `신청 시간: ${formatLeaveHours(totalHours)}`,
         `잔여 연차(신청 전): ${formatLeaveHours(balance.remainingHours)}`,
-        `잔여 연차(신청 후): ${formatLeaveHours(balance.remainingHours - totalHours)}`,
-        `연차 적용 기간 시작일: ${getCurrentLeaveYearStart(currentUser.hire_date)}`,
+        `잔여 연차 (사용 후): ${formatLeaveHours(balance.remainingHours - totalHours)}`,
+        `연차 부여일: ${getCurrentLeaveYearStart(currentUser.hire_date)}`,
         `사유: ${form.reason || '-'}`,
       ].join('\n');
 

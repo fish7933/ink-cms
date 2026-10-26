@@ -285,6 +285,12 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                   <tr><th>휴가 종류</th><td>{leaveDetail.typeLabel}</td></tr>
                   <tr><th>신청 기간</th><td>{leaveDetail.period}</td></tr>
                   <tr><th>신청 시간</th><td>{leaveDetail.hoursLabel}</td></tr>
+                  {leaveDetail.remainingAfterLabel && (
+                    <tr><th>잔여 연차 (사용 후)</th><td>{leaveDetail.remainingAfterLabel}</td></tr>
+                  )}
+                  {leaveDetail.leaveYearStart && (
+                    <tr><th>연차 부여일</th><td>{leaveDetail.leaveYearStart}</td></tr>
+                  )}
                   <tr><th>사유</th><td>{leaveDetail.reason}</td></tr>
                 </tbody>
               </table>

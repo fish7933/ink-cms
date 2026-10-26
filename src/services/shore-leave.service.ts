@@ -280,6 +280,8 @@ export async function addLeaveRequest(input: {
   hours: number;
   reason?: string;
   approval_document_id?: string;
+  remaining_hours_after?: number;
+  leave_year_start_date?: string;
 }): Promise<ShoreLeaveRequest> {
   const now = new Date().toISOString();
   const { data, error } = await supabase
@@ -293,6 +295,8 @@ export async function addLeaveRequest(input: {
       hours: input.hours,
       reason: input.reason || null,
       approval_document_id: input.approval_document_id || null,
+      remaining_hours_after: input.remaining_hours_after ?? null,
+      leave_year_start_date: input.leave_year_start_date || null,
       status: 'pending',
       created_at: now,
       updated_at: now,
