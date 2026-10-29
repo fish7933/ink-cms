@@ -179,7 +179,7 @@ export default function ApprovalInboxPage() {
     setActionLeaveDetail(null);
     getLeaveDetail(doc.reference_type, doc.reference_id).then(setActionLeaveDetail).catch(console.error);
     setActionReferenceLabels([]);
-    approvalDocumentService.getReferenceLabels(doc.id).then(setActionReferenceLabels).catch(console.error);
+    approvalDocumentService.getReferenceLabels(doc.id, doc.steps.map(s => s.approver_id)).then(setActionReferenceLabels).catch(console.error);
   };
 
   // 기안 취소는 본인이 기안한 문서만, 그리고 결재라인이 아직 하나도 진행(승인/반려)되지

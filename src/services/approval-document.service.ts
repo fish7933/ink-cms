@@ -1239,7 +1239,9 @@ export const approvalDocumentService = {
   // 시행문 상단 "참조" 줄 표시용 — 참조 대상을 지정된 그대로(부서 전체 참조면 부서명,
   // 개인 참조면 이름) 보여준다. getReferenceReadStatus처럼 부서 참조를 소속 인원별로
   // 펼치지 않는다 — 시행문에는 "누가 CC됐는지 지정된 형태"만 필요하기 때문이다.
-  async getReferenceLabels(documentId: string): Promise<string[]> {
+  // 결재선에 이미 있는 사람이 참조로도 중복 지정된 경우(부서 전체 참조에 결재자가 포함되는
+  // 등) 참조자 명단에서는 빼고 보여준다 — 어차피 결재 단계로 문서를 보게 되므로 중복 표기다.
+  async getReferenceLabels(documentId: string, excludeApproverIds: string[] = []): Promise<string[]> {
     const { data: refs, error } = await supabase
       .from('approval_document_references')
       .select('user_id, org_unit_id')
@@ -1256,9 +1258,12 @@ export const approvalDocumentService = {
     ]);
     const userNameById = new Map((users || []).map(u => [u.id, u.name]));
     const unitNameById = new Map((units || []).map(u => [u.id, u.name]));
+    const excludeSet = new Set(excludeApproverIds);
 
-    return refs.map(r =>
-      r.user_id ? (userNameById.get(r.user_id) || '알 수 없음') : `${unitNameById.get(r.org_unit_id!) || '부서'} (전체)`
-    );
+    return refs
+      .filter(r => !(r.user_id && excludeSet.has(r.user_id)))
+      .map(r =>
+        r.user_id ? (userNameById.get(r.user_id) || '알 수 없음') : `${unitNameById.get(r.org_unit_id!) || '부서'} (전체)`
+      );
   },
 };

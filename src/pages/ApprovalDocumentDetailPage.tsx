@@ -84,7 +84,7 @@ export default function ApprovalDocumentDetailPage() {
       setLeaveDetail(await getLeaveDetail(found?.reference_type ?? null, found?.reference_id ?? null).catch(() => null));
       setDailyCashReport(found?.reference_type === 'daily_cash_report' && found.reference_id ? await getDailyReportById(found.reference_id).catch(() => null) : null);
       setRejectionHistory(found ? await approvalDocumentService.getRejectionHistory(found.id).catch(() => []) : []);
-      setReferenceLabels(found ? await approvalDocumentService.getReferenceLabels(found.id).catch(() => []) : []);
+      setReferenceLabels(found ? await approvalDocumentService.getReferenceLabels(found.id, found.steps.map(s => s.approver_id)).catch(() => []) : []);
 
       // 이 문서에 내가 참조로 지정돼 있으면(개인 또는 소속 부서), 상세를 연 시점에 열람 처리해
       // 결재함 배지 집계에서 빠지도록 한다. 참조는 결재가 완료(승인)된 문서에 대해서만 의미가

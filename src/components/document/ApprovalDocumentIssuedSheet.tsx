@@ -509,16 +509,24 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
 
           {/* 시행문(공식 문서) 화면/인쇄본에는 그동안 반려 사유가 전혀 표시되지 않아, 기안자가
               이 화면만 보면 왜 반려됐는지 알 수 없는 문제가 있었다 — 반려된 문서면 여기에도 보여준다. */}
-          {doc.status === 'rejected' && doc.final_comment && (
+          {doc.status === 'rejected' && doc.final_comment && (() => { const rejectedStep = doc.steps.find(s => s.status === 'rejected'); return (
             <tr><td>
               <div style={{ marginTop: 8, padding: '8px 10px', border: '1px solid #fca5a5', background: '#fef2f2', borderRadius: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 3 }}>반려 사유</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 3 }}>
+                  반려 사유
+                  {rejectedStep && (
+                    <span style={{ fontWeight: 400, color: '#991b1b', marginLeft: 6 }}>
+                      ({positionOf(rejectedStep.approver_label) ? `${positionOf(rejectedStep.approver_label)} ` : ''}{rejectedStep.approver_name}
+                      {rejectedStep.acted_at ? ` · ${new Date(rejectedStep.acted_at).toLocaleString('ko-KR')}` : ''})
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 12, color: '#333' }}>
                   {doc.final_comment.split('\n').map((line, i) => <div key={i}>{line || ' '}</div>)}
                 </div>
               </div>
             </td></tr>
-          )}
+          ); })()}
 
           {/* 이미지만 각자 새 페이지에 인쇄물로 합쳐 넣는다. PDF는 iframe으로 끼워넣으면 뷰어의
               현재 화면(보통 첫 페이지)만 찍히고 스크롤바까지 인쇄되는 등 브라우저 인쇄와 근본적으로
