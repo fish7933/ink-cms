@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { CheckCircle2, XCircle, FileText, Paperclip, Trash2, Printer, X, RotateCcw } from 'lucide-react';
+import { CheckCircle2, XCircle, FileText, Paperclip, Trash2, Printer, X, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,6 +53,7 @@ export default function ApprovalDocumentDetailPage() {
   const [positions, setPositions] = useState<ShorePosition[]>([]);
   const [creatorPositionName, setCreatorPositionName] = useState<string | null>(null);
   const [rejectionHistory, setRejectionHistory] = useState<ApprovalDocumentRejectionHistoryEntry[]>([]);
+  const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<string>>(new Set());
   const [referenceLabels, setReferenceLabels] = useState<string[]>([]);
 
   useEffect(() => { loadData(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -126,7 +127,9 @@ export default function ApprovalDocumentDetailPage() {
   // 있다. 연차/질병휴가/교대계획/발령처럼 다른 화면이 자동으로 만든 문서(reference_type 있음)는
   // 기안서 작성 화면에서 다룰 수 있는 자유서식이 아니므로, 원래 신청했던 화면에서 다시
   // 신청해야 한다 — 여기서는 자유서식으로 직접 기안한 문서만 재상신 버튼을 보여준다.
-  const canResubmit = doc && doc.status === 'rejected' && !doc.reference_type && (doc.created_by === currentUserId || isAdmin);
+  // 재상신은 기안자 본인만 — 결재선에 포함된 승인자가 관리자 권한을 겸하고 있다는 이유로
+  // 남의 기안을 대신 고쳐 다시 상신할 수 있으면 안 된다.
+  const canResubmit = doc && doc.status === 'rejected' && !doc.reference_type && doc.created_by === currentUserId;
 
   const handleAction = async () => {
     if (!doc || !actionType) return;
@@ -293,20 +296,35 @@ export default function ApprovalDocumentDetailPage() {
       )}
 
       {/* 가장 최근(현재) 반려 사유는 시행문에 이미 나오므로, 여기서는 그보다 이전 상신 회차의
-          반려 이력만 보여준다 — round가 resubmit_count보다 큰(=아직 재상신 전, 현재 회차) 건은 제외. */}
+          반려 이력만 보여준다 — round가 resubmit_count보다 큰(=아직 재상신 전, 현재 회차) 건은 제외.
+          목록엔 일시만 보이고, 클릭하면 그 때의 반려 사유가 펼쳐진다. */}
       {rejectionHistory.filter(h => h.round <= doc.resubmit_count).length > 0 && (
         <div className="bg-red-50/60 border border-red-100 p-3 rounded space-y-2">
           <p className="text-sm font-semibold text-red-800">이전 반려 이력 ({rejectionHistory.filter(h => h.round <= doc.resubmit_count).length}건)</p>
-          {rejectionHistory.filter(h => h.round <= doc.resubmit_count).map(h => (
-            <div key={h.id} className="text-sm bg-white rounded border border-red-100 p-2">
-              <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                <span className="font-medium text-red-700">{h.round}차 상신 반려</span>
-                <span>{h.rejected_by_label ? `${h.rejected_by_label} ` : ''}{h.rejected_by_name}</span>
-                <span>{format(new Date(h.rejected_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>
+          {rejectionHistory.filter(h => h.round <= doc.resubmit_count).map(h => {
+            const isExpanded = expandedHistoryIds.has(h.id);
+            return (
+              <div key={h.id} className="text-sm bg-white rounded border border-red-100">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 text-xs text-gray-500 p-2 hover:bg-red-50/40"
+                  onClick={() => setExpandedHistoryIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(h.id)) next.delete(h.id); else next.add(h.id);
+                    return next;
+                  })}
+                >
+                  {isExpanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                  <span className="font-medium text-red-700">{h.round}차 상신 반려</span>
+                  <span>{h.rejected_by_label ? `${h.rejected_by_label} ` : ''}{h.rejected_by_name}</span>
+                  <span>{format(new Date(h.rejected_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>
+                </button>
+                {isExpanded && (
+                  <p className="text-gray-700 whitespace-pre-wrap px-2 pb-2">{h.comment}</p>
+                )}
               </div>
-              <p className="text-gray-700 whitespace-pre-wrap">{h.comment}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

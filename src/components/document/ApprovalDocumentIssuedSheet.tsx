@@ -513,7 +513,9 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
             <tr><td>
               <div style={{ marginTop: 8, padding: '8px 10px', border: '1px solid #fca5a5', background: '#fef2f2', borderRadius: 4 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 3 }}>반려 사유</div>
-                <div style={{ fontSize: 12, color: '#333', whiteSpace: 'pre-wrap' }}>{doc.final_comment}</div>
+                <div style={{ fontSize: 12, color: '#333' }}>
+                  {doc.final_comment.split('\n').map((line, i) => <div key={i}>{line || ' '}</div>)}
+                </div>
               </div>
             </td></tr>
           )}

@@ -186,10 +186,11 @@ export default function ApprovalInboxPage() {
   // 않은 경우에만 가능하다 — 이미 결재가 시작된 문서는 기안자 본인도 취소할 수 없다.
   const canCancelDoc = (doc: ApprovalDocumentWithDetails) =>
     doc.status === 'pending' && doc.created_by === currentUserId && doc.steps.every(s => s.status === 'pending');
-  // 반려된 자유서식 문서(연차/질병휴가 등 다른 화면이 자동 생성한 문서 제외)는 기안자 본인
-  // (또는 관리자)이 기안서 작성 화면에서 내용을 고쳐 다시 상신할 수 있다.
+  // 반려된 자유서식 문서(연차/질병휴가 등 다른 화면이 자동 생성한 문서 제외)는 기안자 본인만
+  // 기안서 작성 화면에서 내용을 고쳐 다시 상신할 수 있다 — 결재선의 승인자가 관리자 권한을
+  // 겸하고 있어도 남의 기안을 대신 재상신할 수는 없다.
   const canResubmitDoc = (doc: ApprovalDocumentWithDetails) =>
-    doc.status === 'rejected' && !doc.reference_type && (doc.created_by === currentUserId || isAdmin);
+    doc.status === 'rejected' && !doc.reference_type && doc.created_by === currentUserId;
   const handleResubmitDoc = (doc: ApprovalDocumentWithDetails) =>
     openNewTab(`/documents/new?resubmit=${doc.id}`, `${doc.title} (재상신)`);
   // "삭제"는 문서를 지우는 게 아니라 내 결재함 목록에서만 숨기는 것이지만, 아직 결재가
