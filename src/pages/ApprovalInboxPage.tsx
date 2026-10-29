@@ -21,6 +21,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { approvalDocumentService, getLeaveDetail, getReferenceDocumentIds, SELF_APPROVE_COMMENT, type LeaveDetail } from '@/services/approval-document.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
+import ApprovalRejectionReasonBox from '@/components/document/ApprovalRejectionReasonBox';
 import { getCompanyInfo, type CompanyInfo } from '@/services/company-info.service';
 import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
@@ -540,6 +541,8 @@ export default function ApprovalInboxPage() {
             referenceLabels={actionReferenceLabels}
           />
         </div>
+
+        <ApprovalRejectionReasonBox doc={selectedDocument} />
 
         {selectedDocument.attachments.length > 0 && (
           <div className="bg-gray-50 p-3 rounded">

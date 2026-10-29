@@ -8,6 +8,7 @@ import { getShorePositions } from '@/services/shore-position.service';
 import { orgChartService } from '@/services/org-chart.service';
 import { getDailyReportById } from '@/services/accounting-daily-report.service';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
+import ApprovalRejectionReasonBox from '@/components/document/ApprovalRejectionReasonBox';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 import type { DailyCashReport } from '@/types/accounting';
@@ -107,6 +108,7 @@ export default function ApprovalDocumentPrintPage() {
         )}
       </div>
       <ApprovalDocumentIssuedSheet doc={doc} documentType={docType} company={company} positions={positions} creatorPositionName={creatorPositionName} includeAttachments={includeAttachments} leaveDetail={leaveDetail} dailyCashReport={dailyCashReport} referenceLabels={referenceLabels} />
+      <ApprovalRejectionReasonBox doc={doc} />
     </div>
   );
 }

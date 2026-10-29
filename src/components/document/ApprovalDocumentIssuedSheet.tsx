@@ -79,9 +79,47 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
   const lastStepPositionName = positionOf(lastStep?.approver_label);
   const isDelegated = doc.status === 'approved' && !!topPosition && !!lastStepPositionName && lastStepPositionName !== topPosition.name;
 
+  // 승인/반려/취소 상태를 도장처럼 한눈에 보이게 — 문서 내용을 다 읽지 않고도 바로 알 수
+  // 있게 오른쪽 위에 잉크 도장 느낌의 스탬프를 얹는다. 영문 스탬프 문구(APPROVED 등)가 실제
+  // 관공서/계약서 도장 관례에 더 가까워 한글보다 "도장답게" 보인다. 결재가 아직 끝나지 않은
+  // draft/pending 상태는 결론이 나지 않았으므로 스탬프를 찍지 않는다.
+  const STAMP_CONFIG: Partial<Record<ApprovalDocumentWithDetails['status'], { label: string; color: string; dashed?: boolean }>> = {
+    approved: { label: 'APPROVED', color: '#15803d' },
+    rejected: { label: 'REJECTED', color: '#b91c1c' },
+    cancelled: { label: 'CANCELLED', color: '#57534e', dashed: true },
+  };
+  const stamp = STAMP_CONFIG[doc.status];
+  const stampDate = doc.completed_at ? new Date(doc.completed_at) : null;
+
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
+    <div style={{ maxWidth: 800, margin: '0 auto', position: 'relative', fontFamily: "'Segoe UI', Pretendard, sans-serif", color: '#1a1a1a' }}>
+      {stamp && (
+        <div className="issued-status-stamp" style={{
+          position: 'absolute', top: 16, right: 6, zIndex: 5,
+          pointerEvents: 'none', transform: 'rotate(-13deg)',
+          mixBlendMode: 'multiply', opacity: 0.88,
+        }}>
+          <div style={{ border: `2.5px solid ${stamp.color}`, borderStyle: stamp.dashed ? 'dashed' : 'solid', borderRadius: 6, padding: 3 }}>
+            <div style={{
+              border: `1px solid ${stamp.color}`, borderStyle: stamp.dashed ? 'dashed' : 'solid', borderRadius: 4,
+              padding: '5px 16px 4px', color: stamp.color, textAlign: 'center',
+            }}>
+              <div style={{ fontFamily: "'Arial Narrow', Arial, sans-serif", fontWeight: 800, fontSize: 25, letterSpacing: 2.5, lineHeight: 1, whiteSpace: 'nowrap' }}>
+                {stamp.label}
+              </div>
+              {stampDate && (
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, marginTop: 2 }}>
+                  {stampDate.toISOString().slice(0, 10).replace(/-/g, '.')}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
+        /* 화면에서는 상태를 한눈에 보여주지만, 정식 출력물(인쇄/PDF)에는 실제 도장이 아닌
+           화면용 표시가 찍혀 나가면 안 되므로 인쇄 시에는 숨긴다. */
+        @media print { .issued-status-stamp { display: none !important; } }
         /* box-sizing이 없으면 padding이 퍼센트 폭 위에 더 얹혀 계산돼(.issued-table-block과 동일한
            원인) 표 전체가 100%를 넘어서고, 인쇄는 스크롤이 없어 그 초과분(주로 표 맨 오른쪽
            테두리선)이 잘린다. border-box로 padding을 폭 안에 포함시킨다. 여유 폭은 여기서
@@ -506,27 +544,6 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
               </div>
             </td></tr>
           )}
-
-          {/* 시행문(공식 문서) 화면/인쇄본에는 그동안 반려 사유가 전혀 표시되지 않아, 기안자가
-              이 화면만 보면 왜 반려됐는지 알 수 없는 문제가 있었다 — 반려된 문서면 여기에도 보여준다. */}
-          {doc.status === 'rejected' && doc.final_comment && (() => { const rejectedStep = doc.steps.find(s => s.status === 'rejected'); return (
-            <tr><td>
-              <div style={{ marginTop: 8, padding: '8px 10px', border: '1px solid #fca5a5', background: '#fef2f2', borderRadius: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#b91c1c', marginBottom: 14 }}>
-                  반려 사유
-                  {rejectedStep && (
-                    <span style={{ fontWeight: 400, color: '#991b1b', marginLeft: 6 }}>
-                      ({positionOf(rejectedStep.approver_label) ? `${positionOf(rejectedStep.approver_label)} ` : ''}{rejectedStep.approver_name}
-                      {rejectedStep.acted_at ? ` · ${new Date(rejectedStep.acted_at).toLocaleString('ko-KR')}` : ''})
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 12, color: '#333' }}>
-                  {doc.final_comment.split('\n').map((line, i) => <div key={i}>{line || ' '}</div>)}
-                </div>
-              </div>
-            </td></tr>
-          ); })()}
 
           {/* 이미지만 각자 새 페이지에 인쇄물로 합쳐 넣는다. PDF는 iframe으로 끼워넣으면 뷰어의
               현재 화면(보통 첫 페이지)만 찍히고 스크롤바까지 인쇄되는 등 브라우저 인쇄와 근본적으로

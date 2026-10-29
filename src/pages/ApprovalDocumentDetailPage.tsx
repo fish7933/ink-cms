@@ -20,6 +20,7 @@ import { orgChartService } from '@/services/org-chart.service';
 import { getDailyReportById } from '@/services/accounting-daily-report.service';
 import ReferenceReadStatus from '@/components/document/ReferenceReadStatus';
 import ApprovalDocumentIssuedSheet from '@/components/document/ApprovalDocumentIssuedSheet';
+import ApprovalRejectionReasonBox from '@/components/document/ApprovalRejectionReasonBox';
 import type { ApprovalDocumentWithDetails, ApprovalDocumentType, ApprovalDocumentRejectionHistoryEntry } from '@/types/approval-document';
 import type { ShorePosition } from '@/types/models';
 import type { DailyCashReport } from '@/types/accounting';
@@ -257,6 +258,8 @@ export default function ApprovalDocumentDetailPage() {
         />
       </div>
 
+      <ApprovalRejectionReasonBox doc={doc} />
+
       {doc.attachments.length > 0 && (
         <div className="bg-gray-50 p-3 rounded">
           <p className="text-sm font-semibold mb-1.5 flex items-center gap-1"><Paperclip className="w-3.5 h-3.5" />첨부 문서</p>
@@ -275,8 +278,8 @@ export default function ApprovalDocumentDetailPage() {
         <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">비고:</p><p className="text-sm text-gray-700">{doc.requester_comment}</p></div>
       )}
 
-      {/* 승인 단계에서 남긴 의견만 보여준다 — 반려 사유는 바로 위 시행문(ApprovalDocumentIssuedSheet)
-          안에 이미 한 번 나오므로(doc.final_comment), 여기서 반려 단계까지 또 보여주면 같은 글이
+      {/* 승인 단계에서 남긴 의견만 보여준다 — 반려 사유는 바로 위 ApprovalRejectionReasonBox에서
+          이미 한 번 보여주므로(doc.final_comment), 여기서 반려 단계까지 또 보여주면 같은 글이
           두 번(반려 이력까지 있으면 세 번) 반복된다. 기안자 본인 자동승인 문구(SELF_APPROVE_COMMENT)는
           실제 의견이 아니므로 제외. */}
       {doc.steps.some(s => s.status === 'approved' && s.comment && s.comment !== SELF_APPROVE_COMMENT) && (
