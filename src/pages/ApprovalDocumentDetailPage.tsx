@@ -272,16 +272,18 @@ export default function ApprovalDocumentDetailPage() {
         <div className="bg-gray-50 p-3 rounded"><p className="text-sm font-semibold mb-1">비고:</p><p className="text-sm text-gray-700">{doc.requester_comment}</p></div>
       )}
 
-      {/* 결재권자가 승인/반려 시 남긴 의견 — 문서가 최종 완료된 뒤에도(상태와 무관하게) 계속 보여야
-          한다. 기안자 본인 자동승인 시스템 문구(SELF_APPROVE_COMMENT)는 실제 의견이 아니므로 제외. */}
-      {doc.steps.some(s => s.comment && s.comment !== SELF_APPROVE_COMMENT) && (
+      {/* 승인 단계에서 남긴 의견만 보여준다 — 반려 사유는 바로 위 시행문(ApprovalDocumentIssuedSheet)
+          안에 이미 한 번 나오므로(doc.final_comment), 여기서 반려 단계까지 또 보여주면 같은 글이
+          두 번(반려 이력까지 있으면 세 번) 반복된다. 기안자 본인 자동승인 문구(SELF_APPROVE_COMMENT)는
+          실제 의견이 아니므로 제외. */}
+      {doc.steps.some(s => s.status === 'approved' && s.comment && s.comment !== SELF_APPROVE_COMMENT) && (
         <div className="bg-blue-50/60 border border-blue-100 p-3 rounded space-y-2">
           <p className="text-sm font-semibold text-blue-800">결재 의견</p>
-          {doc.steps.filter(s => s.comment && s.comment !== SELF_APPROVE_COMMENT).map(s => (
+          {doc.steps.filter(s => s.status === 'approved' && s.comment && s.comment !== SELF_APPROVE_COMMENT).map(s => (
             <div key={s.id} className="text-sm bg-white rounded border border-blue-100 p-2">
               <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
                 <span className="font-medium text-blue-700">{s.approver_label ? `${s.approver_label} ` : ''}{s.approver_name}</span>
-                <span className={s.status === 'rejected' ? 'text-red-600' : 'text-blue-600'}>{s.status === 'approved' ? '승인' : s.status === 'rejected' ? '반려' : ''}</span>
+                <span className="text-blue-600">승인</span>
                 {s.acted_at && <span>{format(new Date(s.acted_at), 'yyyy-MM-dd HH:mm', { locale: ko })}</span>}
               </div>
               <p className="text-gray-700 whitespace-pre-wrap">{s.comment}</p>
@@ -290,14 +292,12 @@ export default function ApprovalDocumentDetailPage() {
         </div>
       )}
 
-      {doc.final_comment && (
-        <div className="bg-red-50 p-3 rounded"><p className="text-sm font-semibold mb-1">반려 사유:</p><p className="text-sm text-gray-700">{doc.final_comment}</p></div>
-      )}
-
-      {rejectionHistory.length > 0 && (
+      {/* 가장 최근(현재) 반려 사유는 시행문에 이미 나오므로, 여기서는 그보다 이전 상신 회차의
+          반려 이력만 보여준다 — round가 resubmit_count보다 큰(=아직 재상신 전, 현재 회차) 건은 제외. */}
+      {rejectionHistory.filter(h => h.round <= doc.resubmit_count).length > 0 && (
         <div className="bg-red-50/60 border border-red-100 p-3 rounded space-y-2">
-          <p className="text-sm font-semibold text-red-800">반려 이력 ({rejectionHistory.length}건)</p>
-          {rejectionHistory.map(h => (
+          <p className="text-sm font-semibold text-red-800">이전 반려 이력 ({rejectionHistory.filter(h => h.round <= doc.resubmit_count).length}건)</p>
+          {rejectionHistory.filter(h => h.round <= doc.resubmit_count).map(h => (
             <div key={h.id} className="text-sm bg-white rounded border border-red-100 p-2">
               <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
                 <span className="font-medium text-red-700">{h.round}차 상신 반려</span>
