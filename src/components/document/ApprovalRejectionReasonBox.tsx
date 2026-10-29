@@ -23,8 +23,8 @@ export default function ApprovalRejectionReasonBox({ doc }: Props) {
           </span>
         )}
       </div>
-      <div style={{ fontSize: 12, color: '#333' }}>
-        {doc.final_comment.split('\n').map((line, i) => <div key={i}>{line || ' '}</div>)}
+      <div style={{ fontSize: 12, color: '#333', lineHeight: 1.7 }}>
+        {doc.final_comment.split('\n').map((line, i) => <div key={i} style={{ minHeight: '1.7em' }}>{line || ' '}</div>)}
       </div>
     </div>
   );

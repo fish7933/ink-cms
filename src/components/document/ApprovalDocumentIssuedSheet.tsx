@@ -48,11 +48,14 @@ interface Props {
 // 인쇄 모달/독립 인쇄 페이지 양쪽에서 재사용된다.
 export default function ApprovalDocumentIssuedSheet({ doc, documentType, company, positions, creatorPositionName, includeAttachments = false, leaveDetail, dailyCashReport, referenceLabels = [] }: Props) {
   const docNumber = `${documentType?.code || 'DOC'}-${new Date(doc.created_at).getFullYear()}-${doc.id.slice(0, 8).toUpperCase()}`;
-  // 기안일(작성/상신일)과 시행일(결재 완료일)은 서로 다른 날짜다 — 기안일은 항상 created_at,
-  // 시행일은 결재가 실제로 끝난 completed_at만 쓰고(완료 전이면 created_at으로 대체해 보여주지
-  // 않는다), 결재 진행중인 문서를 시행일이 정해진 것처럼 잘못 표기하지 않도록 한다.
+  // 기안일(작성/상신일)과 시행일(결재 완료일)은 서로 다른 날짜다 — 기안일은 항상 created_at.
+  // 시행일은 "승인되어 실제로 시행된" 날짜이므로 completed_at이 있어도 승인(approved)
+  // 상태일 때만 쓴다 — 반려/취소로 결재가 끝난 문서도 completed_at은 똑같이 채워지지만,
+  // 그 문서는 시행된 적이 없으므로 시행일을 표기하면 안 된다.
   const draftedDate = new Date(doc.created_at);
-  const issuedDate = doc.completed_at ? new Date(doc.completed_at) : null;
+  const issuedDate = doc.status === 'approved' && doc.completed_at ? new Date(doc.completed_at) : null;
+  const notIssuedLabel = { pending: ['결재 진행중', 'In progress'], rejected: ['반려', 'Rejected'], cancelled: ['취소', 'Cancelled'] } as const;
+  const notIssuedText = (notIssuedLabel as Record<string, readonly [string, string]>)[doc.status] || notIssuedLabel.pending;
   const fields = documentType?.field_schema || [];
   // 외부로 나가는 문서는 내부 결재 절차는 그대로 거치되, 시행문에는 내부 결재란/기안일시/
   // 기안부서를 노출하지 않고 발신(회사 영문명)·수신·참조·제목만 영문 형식으로 보여준다.
@@ -247,8 +250,8 @@ export default function ApprovalDocumentIssuedSheet({ doc, documentType, company
                   {infoRow(
                     isExternal ? 'Date' : '시행일시',
                     isExternal
-                      ? (issuedDate ? toIsoDate(issuedDate) : 'In progress')
-                      : (issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : '결재 진행중')
+                      ? (issuedDate ? toIsoDate(issuedDate) : notIssuedText[1])
+                      : (issuedDate ? `${issuedDate.toLocaleDateString('ko-KR')} ${issuedDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : notIssuedText[0])
                   )}
                   {isExternal ? (
                     <>
