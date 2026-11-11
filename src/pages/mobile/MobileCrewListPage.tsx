@@ -86,25 +86,54 @@ export default function MobileCrewListPage({ onSelect }: Props) {
 
   const byCategory = useMemo(() => crews.filter(c => matchesCategory(c, category)), [crews, category]);
 
-  // 데스크탑 CrewManagementPage처럼 다른 필터와 교차시킨 옵션별 카운트까지는 두지 않고
-  // (모바일에서는 과한 복잡도), 현재 탭 안에서 실제로 존재하는 값만 간단히 모아 보여준다.
-  const uniqueOptions = (getId: (c: CrewWithDetails) => string | undefined, getLabel: (c: CrewWithDetails) => string | undefined) => {
-    const map = new Map<string, string>();
-    for (const c of byCategory) {
-      const id = getId(c);
-      if (id && !map.has(id)) map.set(id, getLabel(c) || id);
-    }
-    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ko'));
+  // 데스크탑 CrewManagementPage와 동일한 교차필터(facet) 패턴 — 선주사를 고르면 플릿/선박
+  // 옵션이 그 선주사 소속만 남도록, 자기 자신을 뺀 나머지 활성 필터를 먼저 적용한 목록을
+  // 기준으로 각 드롭다운의 옵션/카운트를 계산한다.
+  type FacetKey = 'owner' | 'fleet' | 'ship' | 'rank' | 'manning' | 'nationality';
+  const facetFilter = (exclude: FacetKey) => {
+    let l = byCategory;
+    if (exclude !== 'owner' && filterOwner !== 'all') l = l.filter(c => effOwnerId(c) === filterOwner);
+    if (exclude !== 'fleet' && filterFleet !== 'all') l = l.filter(c => effFleetId(c) === filterFleet);
+    if (exclude !== 'ship' && filterShip !== 'all') l = l.filter(c => effShipId(c) === filterShip);
+    if (exclude !== 'rank' && filterRank !== 'all') l = l.filter(c => effRankId(c) === filterRank);
+    if (exclude !== 'manning' && filterManning !== 'all') l = l.filter(c => c.manning_agency_id === filterManning);
+    if (exclude !== 'nationality' && filterNationality !== 'all') l = l.filter(c => c.nationality === filterNationality);
+    return l;
   };
-  const ownerOptions = useMemo(() => uniqueOptions(effOwnerId, effOwnerName), [byCategory]);
-  const fleetOptions = useMemo(() => uniqueOptions(effFleetId, effFleetName), [byCategory]);
-  const shipOptions = useMemo(() => uniqueOptions(effShipId, effShipName), [byCategory]);
-  const manningOptions = useMemo(() => uniqueOptions(c => c.manning_agency_id, c => c.manning_agency_name), [byCategory]);
-  const nationalityCodes = useMemo(() => new Set(byCategory.map(c => c.nationality).filter((n): n is string => !!n)), [byCategory]);
-  const nationalityOptions = useMemo(
-    () => nationalities.filter(n => nationalityCodes.has(n.country_code)).map(n => [n.country_code, n.country_name_ko] as const),
-    [nationalities, nationalityCodes]
+  const buildFacetOptions = (list: CrewWithDetails[], getId: (c: CrewWithDetails) => string | undefined, getLabel: (c: CrewWithDetails) => string | undefined) => {
+    const map = new Map<string, { label: string; count: number }>();
+    for (const c of list) {
+      const id = getId(c);
+      if (!id) continue;
+      const existing = map.get(id);
+      if (existing) existing.count += 1;
+      else map.set(id, { label: getLabel(c) || id, count: 1 });
+    }
+    return [...map.entries()].map(([id, v]) => [id, v.label, v.count] as const).sort((a, b) => a[1].localeCompare(b[1], 'ko'));
+  };
+
+  const ownerOptions = useMemo(() => buildFacetOptions(facetFilter('owner'), effOwnerId, effOwnerName), [byCategory, filterFleet, filterShip, filterRank, filterManning, filterNationality]);
+  const fleetOptions = useMemo(() => buildFacetOptions(facetFilter('fleet'), effFleetId, effFleetName), [byCategory, filterOwner, filterShip, filterRank, filterManning, filterNationality]);
+  const shipOptions = useMemo(() => buildFacetOptions(facetFilter('ship'), effShipId, effShipName), [byCategory, filterOwner, filterFleet, filterRank, filterManning, filterNationality]);
+  const manningOptions = useMemo(() => buildFacetOptions(facetFilter('manning'), c => c.manning_agency_id, c => c.manning_agency_name), [byCategory, filterOwner, filterFleet, filterShip, filterRank, filterNationality]);
+  // 직급은 라벨 알파벳순이 아니라 항상 직급 관리 화면과 같은 순서(rankOrderIndex)로.
+  const rankFacetOptions = useMemo(
+    () => [...buildFacetOptions(facetFilter('rank'), effRankId, effRankCode)].sort((a, b) => (rankOrderIndex.get(a[0]) ?? 999) - (rankOrderIndex.get(b[0]) ?? 999)),
+    [byCategory, filterOwner, filterFleet, filterShip, filterManning, filterNationality, rankOrderIndex]
   );
+  const nationalityOptions = useMemo(() => {
+    const base = facetFilter('nationality');
+    const counts = new Map<string, number>();
+    for (const c of base) { if (c.nationality) counts.set(c.nationality, (counts.get(c.nationality) || 0) + 1); }
+    return nationalities
+      .filter(n => counts.has(n.country_code))
+      .map(n => [n.country_code, n.country_name_ko, counts.get(n.country_code)!] as const)
+      .sort((a, b) => a[1].localeCompare(b[1], 'ko'));
+  }, [byCategory, filterOwner, filterFleet, filterShip, filterRank, filterManning, nationalities]);
+
+  // 선주사를 '전체'로 되돌리면 플릿/선박도 같이 초기화 — 데스크탑과 동일한 동작.
+  useEffect(() => { if (filterOwner === 'all') setFilterFleet('all'); }, [filterOwner]);
+  useEffect(() => { if (filterFleet === 'all' && filterOwner === 'all') setFilterShip('all'); }, [filterFleet, filterOwner]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -160,27 +189,27 @@ export default function MobileCrewListPage({ onSelect }: Props) {
       <div className="grid grid-cols-2 gap-2">
         <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
           <option value="all">선주사 전체</option>
-          {ownerOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          {ownerOptions.map(([id, label, count]) => <option key={id} value={id}>{label} ({count})</option>)}
         </select>
-        <select value={filterFleet} onChange={e => setFilterFleet(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+        <select value={filterFleet} onChange={e => setFilterFleet(e.target.value)} disabled={filterOwner === 'all'} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs disabled:opacity-50">
           <option value="all">플릿 전체</option>
-          {fleetOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          {fleetOptions.map(([id, label, count]) => <option key={id} value={id}>{label} ({count})</option>)}
         </select>
-        <select value={filterShip} onChange={e => setFilterShip(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+        <select value={filterShip} onChange={e => setFilterShip(e.target.value)} disabled={filterOwner === 'all'} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs disabled:opacity-50">
           <option value="all">선박 전체</option>
-          {shipOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          {shipOptions.map(([id, label, count]) => <option key={id} value={id}>{label} ({count})</option>)}
         </select>
         <select value={filterRank} onChange={e => setFilterRank(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
           <option value="all">직급 전체</option>
-          {sortedRanks.map(r => <option key={r.id} value={r.id}>{r.rank_code || r.name}</option>)}
+          {rankFacetOptions.map(([id, label, count]) => <option key={id} value={id}>{label} ({count})</option>)}
         </select>
         <select value={filterManning} onChange={e => setFilterManning(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
           <option value="all">매닝사 전체</option>
-          {manningOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          {manningOptions.map(([id, label, count]) => <option key={id} value={id}>{label} ({count})</option>)}
         </select>
         <select value={filterNationality} onChange={e => setFilterNationality(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
           <option value="all">국적 전체</option>
-          {nationalityOptions.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+          {nationalityOptions.map(([code, label, count]) => <option key={code} value={code}>{label} ({count})</option>)}
         </select>
       </div>
 
