@@ -4,6 +4,9 @@ import { ChevronLeft, LogOut, Monitor, Users, Inbox, FileText, CalendarDays, Rec
 import { getCurrentUser, logout as logoutUser } from '@/lib/store';
 import type { User } from '@/lib/store';
 import { setViewMode } from '@/lib/view-mode';
+import MobileCrewListPage from '@/pages/mobile/MobileCrewListPage';
+import MobileCrewDetailPage from '@/pages/mobile/MobileCrewDetailPage';
+import type { CrewWithDetails } from '@/services/crew.service';
 
 type MobileScreen = 'home' | 'crew-list' | 'crew-detail' | 'approval-inbox' | 'document-draft' | 'leave-request' | 'payslips';
 
@@ -41,6 +44,9 @@ export default function MobileShell() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState<MobileScreen>('home');
+  const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
+
+  const goBack = () => setScreen(screen === 'crew-detail' ? 'crew-list' : 'home');
 
   useEffect(() => {
     let isMounted = true;
@@ -70,13 +76,15 @@ export default function MobileShell() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="sticky top-0 z-10 bg-white border-b px-4 py-3 flex items-center gap-2">
         {screen !== 'home' ? (
-          <button type="button" onClick={() => setScreen('home')} className="flex items-center gap-1 text-sm text-gray-600">
+          <button type="button" onClick={goBack} className="flex items-center gap-1 text-sm text-gray-600">
             <ChevronLeft className="h-5 w-5" />뒤로
           </button>
         ) : (
           <span className="text-sm font-semibold text-gray-800">{currentUser.name}</span>
         )}
-        <span className="flex-1 text-center text-sm font-semibold text-gray-800">{SCREEN_TITLE[screen]}</span>
+        <span className="flex-1 text-center text-sm font-semibold text-gray-800">
+          {screen === 'crew-detail' ? (selectedCrew?.name || SCREEN_TITLE[screen]) : SCREEN_TITLE[screen]}
+        </span>
         <button type="button" onClick={() => setViewMode('desktop')} className="p-1.5 text-gray-500" title="PC 화면으로">
           <Monitor className="h-5 w-5" />
         </button>
@@ -102,7 +110,14 @@ export default function MobileShell() {
           </div>
         )}
 
-        {screen !== 'home' && (
+        {screen === 'crew-list' && (
+          <MobileCrewListPage onSelect={crew => { setSelectedCrew(crew); setScreen('crew-detail'); }} />
+        )}
+        {screen === 'crew-detail' && selectedCrew && (
+          <MobileCrewDetailPage crew={selectedCrew} />
+        )}
+
+        {(screen === 'approval-inbox' || screen === 'document-draft' || screen === 'leave-request' || screen === 'payslips') && (
           <div className="flex items-center justify-center h-40 text-sm text-gray-400">준비 중입니다.</div>
         )}
       </main>
