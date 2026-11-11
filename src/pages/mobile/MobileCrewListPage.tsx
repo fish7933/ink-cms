@@ -67,6 +67,17 @@ export default function MobileCrewListPage({ onSelect }: Props) {
   const effFleetName = (c: CrewWithDetails) => c.is_active_onboard ? c.fleet_name : (c.pending_fleet_name || c.fleet_name);
   const effShipId = (c: CrewWithDetails) => c.is_active_onboard ? c.current_ship_id : (c.pending_ship_id || c.current_ship_id);
 
+  // 승선중이면 승선일(+하선예정일), 승선 예정이면 승선예정일, 그 외(하선/등록)엔 최근 하선일을 보여준다.
+  const embarkInfo = (c: CrewWithDetails): string | null => {
+    if (c.is_active_onboard) {
+      if (!c.latest_embark_date) return null;
+      return `승선 ${c.latest_embark_date}${c.disembark_forecast_date ? ` · 하선예정 ${c.disembark_forecast_date}` : ''}`;
+    }
+    if (c.has_pending_plan && c.pending_embark_date) return `승선예정 ${c.pending_embark_date}`;
+    if (c.latest_disembark_date) return `하선 ${c.latest_disembark_date}`;
+    return null;
+  };
+
   // 모든 선원 목록/드롭다운은 항상 직급 관리 화면과 같은 순서(부서 → display_order)를
   // 따라야 한다 — ranks 테이블의 display_order만 단순 정렬하면 부서가 뒤섞이므로
   // sortRanksByDisplayOrder로 먼저 정렬한 뒤 그 순서의 인덱스를 기준으로 선원을 정렬한다.
@@ -186,6 +197,7 @@ export default function MobileCrewListPage({ onSelect }: Props) {
                 {effRankCode(c) || '-'} · {effShipName(c) || '대기 중'}
               </div>
               <div className="text-sm font-semibold text-gray-800 truncate">{c.name}</div>
+              {embarkInfo(c) && <div className="text-[11px] text-gray-400 truncate mt-0.5">{embarkInfo(c)}</div>}
             </div>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full ${c.is_active_onboard ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
               {c.is_active_onboard ? '승선중' : '대기중'}

@@ -1,5 +1,9 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { CrewWithDetails } from '@/services/crew.service';
+import { getSeaServiceRecords } from '@/services/crew-extended.service';
+import { getEvaluations } from '@/services/evaluation.service';
+import type { SeaServiceRecord } from '@/types/crew-extended';
+import type { CrewEvaluationWithDetails } from '@/types/evaluation';
 
 interface Props {
   crew: CrewWithDetails;
@@ -32,6 +36,15 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
   const effOwnerName = c.is_active_onboard ? c.owner_name : (c.pending_owner_name || c.owner_name);
 
   const soonExpiring = (c.certificates || []).filter(cert => !cert.no_expiry && cert.expiry_date);
+
+  const [seaService, setSeaService] = useState<SeaServiceRecord[]>([]);
+  const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
+  useEffect(() => {
+    getSeaServiceRecords(c.id).then(setSeaService).catch(() => setSeaService([]));
+    getEvaluations(c.id).then(setEvaluations).catch(() => setEvaluations([]));
+  }, [c.id]);
+  const sortedSeaService = [...seaService].sort((a, b) => b.sign_on_date.localeCompare(a.sign_on_date));
+  const sortedEvaluations = [...evaluations].sort((a, b) => b.evaluation_period_end.localeCompare(a.evaluation_period_end));
 
   return (
     <div className="space-y-3">
@@ -75,6 +88,46 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
           {c.emergency_contacts.map((ec, i) => (
             <Row key={i} label={`${ec.name} (${ec.relationship})`} value={ec.phone} />
           ))}
+        </Section>
+      )}
+
+      {sortedSeaService.length > 0 && (
+        <Section title="승선 경력">
+          <div className="space-y-2.5">
+            {sortedSeaService.map(r => (
+              <div key={r.id} className="border-b border-gray-100 last:border-0 pb-2.5 last:pb-0">
+                <div className="flex justify-between gap-2">
+                  <span className="text-sm font-medium text-gray-800 truncate">{r.ship_name}</span>
+                  <span className="text-xs text-gray-500 shrink-0">{r.rank}{r.rank_grade ? ` (${r.rank_grade})` : ''}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {r.sign_on_date} ~ {r.sign_off_date || '현재'}
+                  {r.sign_off_reason_name ? ` · ${r.sign_off_reason_name}` : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {sortedEvaluations.length > 0 && (
+        <Section title="고과">
+          <div className="space-y-2.5">
+            {sortedEvaluations.map(ev => (
+              <div key={ev.id} className="border-b border-gray-100 last:border-0 pb-2.5 last:pb-0">
+                <div className="flex justify-between gap-2">
+                  <span className="text-sm font-medium text-gray-800 truncate">{ev.ship_name || '-'}</span>
+                  {ev.overall_rating != null && (
+                    <span className="text-xs font-semibold text-amber-600 shrink-0">★ {ev.overall_rating.toFixed(1)}</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">
+                  {ev.evaluation_period_start} ~ {ev.evaluation_period_end}
+                  {ev.evaluator_name ? ` · ${ev.evaluator_name}` : ''}
+                </div>
+              </div>
+            ))}
+          </div>
         </Section>
       )}
     </div>
