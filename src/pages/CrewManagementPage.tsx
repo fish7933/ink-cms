@@ -249,7 +249,7 @@ export function CrewManagementPage() {
     const base = facetFilter(facetCrew, 'rank');
     const rankLabel = (c: CrewWithDetails) => {
       const code = c.is_active_onboard ? c.rank_code : (c.pending_rank_code || c.rank_code);
-      return code ? `${code} (${c.rank_name})` : (c.rank_name || t('(이름없음)'));
+      return code || c.rank_name || t('(이름없음)');
     };
     const options = buildFacetOptions(base, effRankId, rankLabel);
     const orderIndex = new Map(ranks.map((r, i) => [r.id, i]));
