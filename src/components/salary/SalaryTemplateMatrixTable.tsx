@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { SalaryTemplateWithItems, SalaryComponent } from '@/lib/salary-store';
 import type { Rank } from '@/types/models';
 
@@ -18,8 +19,12 @@ const LABELS = {
  * SalaryTemplateFormPage(갱신 히스토리)에서는 한글로, 선주/매닝사와 공유되는 선원 급여대장
  * 화면(CrewPayrollManagementPage)에서는 lang="en"으로 영문 표기한다.
  */
-export default function SalaryTemplateMatrixTable({ template, components, ranks, lang = 'ko' }: SalaryTemplateMatrixTableProps) {
-  const t = LABELS[lang];
+export default function SalaryTemplateMatrixTable({ template, components, ranks, lang }: SalaryTemplateMatrixTableProps) {
+  // lang을 명시적으로 받으면(CrewPayrollManagementPage의 "en" 등) 그 값을 그대로 쓰고,
+  // 안 받으면 화면 전체 언어 토글(i18next)을 따라간다 — 이게 없으면 이 표만 토글을 무시하고
+  // 항상 한글로 남아 영문 화면에 한글이 섞여 보이는 문제가 생긴다.
+  const { i18n } = useTranslation();
+  const t = LABELS[lang ?? (i18n.language?.startsWith('en') ? 'en' : 'ko')];
   const rankCodeOf = (rankName: string) => ranks.find(r => r.name === rankName)?.rank_code || rankName;
   const gradesForRank = (rank: string): string[] =>
     Array.from(new Set(template.items.filter(i => i.rank === rank && i.rank_grade).map(i => i.rank_grade as string))).sort();

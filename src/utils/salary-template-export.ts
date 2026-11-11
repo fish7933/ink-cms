@@ -89,7 +89,7 @@ export async function exportSalaryTemplateToExcel(
 
   const titleRowCount = rows.length; // 4
 
-  // 그룹 헤더 행 (직급 / 급여 구성 항목 / 공제 항목 / 계산 결과)
+  // 그룹 헤더 행 (직급 / 급여 항목 / 공제 항목 / 급여 총액)
   const groupRow: ReturnType<typeof cell>[] = [
     cell('직급', {
       font: { bold: true, sz: BASE_SZ, color: { rgb: RANK_HEADER.fg } },
@@ -100,7 +100,7 @@ export async function exportSalaryTemplateToExcel(
   ];
   if (earningIds.length > 0) {
     groupRow.push(
-      cell('급여 구성 항목', {
+      cell('급여 항목', {
         font: { bold: true, sz: BASE_SZ, color: { rgb: EARNING_HEADER.fg } },
         fill: { fgColor: { rgb: EARNING_HEADER.bg } },
         alignment: { horizontal: 'center', vertical: 'center' },
@@ -125,7 +125,7 @@ export async function exportSalaryTemplateToExcel(
     );
   }
   groupRow.push(
-    cell('계산 결과', {
+    cell('급여 총액', {
       font: { bold: true, sz: BASE_SZ, color: { rgb: RESULT_HEADER.fg } },
       fill: { fgColor: { rgb: RESULT_HEADER.bg } },
       alignment: { horizontal: 'center', vertical: 'center' },

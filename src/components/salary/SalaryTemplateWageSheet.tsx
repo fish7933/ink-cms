@@ -64,8 +64,8 @@ export default function SalaryTemplateWageSheet({ template: data, components, ra
           .print-content { zoom: var(--print-zoom, 1); }
         }
         table.wage-table { border-collapse: collapse; width: 100%; border: 2px solid #333; }
-        table.wage-table th, table.wage-table td { border: 1px solid #ccc; padding: 8px 10px; font-size: 12.5px; }
-        table.wage-table thead tr.group-row th { text-align: center; font-weight: 700; font-size: 12px; letter-spacing: 0.3px; padding: 7px 10px; }
+        table.wage-table th, table.wage-table td { border: 1px solid #ccc; padding: 6px 10px; font-size: 12.5px; }
+        table.wage-table thead tr.group-row th { text-align: center; font-weight: 700; font-size: 12px; letter-spacing: 0.3px; padding: 5px 10px; }
         table.wage-table thead tr.col-row th { text-align: center; font-weight: 600; font-size: 12px; background: #fafafa; vertical-align: bottom; }
         table.wage-table th.group-earning { background: #dbeafe; color: #1e40af; }
         table.wage-table th.group-deduction { background: #fee2e2; color: #b91c1c; }
@@ -93,9 +93,9 @@ export default function SalaryTemplateWageSheet({ template: data, components, ra
           <thead>
             <tr className="group-row">
               <th rowSpan={2} style={{ background: '#e0e7ff', color: '#3730a3' }}>{t('직급')}</th>
-              {earningIds.length > 0 && <th className="group-earning" colSpan={earningIds.length}>{t('급여 구성 항목')}</th>}
+              {earningIds.length > 0 && <th className="group-earning" colSpan={earningIds.length}>{t('급여 항목')}</th>}
               {deductionIds.length > 0 && <th className="group-deduction divider-left" colSpan={deductionIds.length}>{t('공제 항목')}</th>}
-              <th className="group-result divider-left" colSpan={2}>{t('계산 결과')}</th>
+              <th className="group-result divider-left" colSpan={2}>{t('급여 총액')}</th>
             </tr>
             <tr className="col-row">
               {orderedComps.map((comp, i) => (
