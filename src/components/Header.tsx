@@ -5,7 +5,8 @@ import i18n from '@/i18n';
 import { getCurrentUser, logout as logoutUser, setUserLanguage } from '@/lib/store';
 import type { User } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Ship, LogOut, ChevronDown, User as UserIcon, Languages } from 'lucide-react';
+import { Ship, LogOut, ChevronDown, User as UserIcon, Languages, Monitor, Smartphone } from 'lucide-react';
+import { useViewMode } from '@/hooks/use-view-mode';
 import { cn } from '@/lib/utils';
 import NotificationCenter from '@/components/NotificationCenter';
 import {
@@ -39,6 +40,7 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
   const [loading, setLoading] = useState(true);
   const [logoUrl, setLogoUrl] = useState('');
   const [lang, setLang] = useState(i18n.language);
+  const { mode, setMode } = useViewMode();
 
   useEffect(() => {
     const onLangChange = (l: string) => setLang(l);
@@ -185,6 +187,16 @@ export default function Header({ selectedCategoryId, onCategorySelect, menuStruc
         >
           <Languages className="h-3.5 w-3.5" />
           <span className="text-xs font-medium">{lang === 'en' ? 'EN' : 'KO'}</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2.5 gap-1.5 rounded-full text-gray-600 hover:bg-gray-100"
+          onClick={() => setMode(mode === 'mobile' ? 'desktop' : 'mobile')}
+          title={mode === 'mobile' ? 'PC 화면으로' : '모바일 화면으로'}
+        >
+          {mode === 'mobile' ? <Monitor className="h-3.5 w-3.5" /> : <Smartphone className="h-3.5 w-3.5" />}
+          <span className="text-xs font-medium">{mode === 'mobile' ? 'PC' : '모바일'}</span>
         </Button>
         <NotificationCenter />
 

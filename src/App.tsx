@@ -14,9 +14,12 @@ import EmployeePayrollLedgerPrintPage from '@/pages/EmployeePayrollLedgerPrintPa
 import CrewPayslipPrintPage from '@/pages/CrewPayslipPrintPage';
 import CrewPayrollLedgerPrintPage from '@/pages/CrewPayrollLedgerPrintPage';
 import Layout from '@/components/Layout';
+import MobileShell from '@/components/mobile/MobileShell';
 import { Toaster } from '@/components/ui/toaster';
+import { useViewMode } from '@/hooks/use-view-mode';
 
 function App() {
+  const { effectiveMode } = useViewMode();
   return (
     <Router>
       <UISettingsProvider>
@@ -36,7 +39,9 @@ function App() {
           <Route path="/print/employee-payroll-ledger/:periodId" element={<EmployeePayrollLedgerPrintPage />} />
           <Route path="/print/crew-payslips/:id" element={<CrewPayslipPrintPage />} />
           <Route path="/print/crew-payroll/:periodId" element={<CrewPayrollLedgerPrintPage />} />
-          <Route path="*" element={<Layout />} />
+          {/* 모바일 전용 화면 세트 — PC/모바일 전환(viewMode, Header.tsx)이나 좁은 뷰포트일 때
+              데스크탑 Layout(탭 기반) 대신 이쪽으로. 북마크 가능한 하위 경로는 아직 없음(v1). */}
+          <Route path="*" element={effectiveMode === 'mobile' ? <MobileShell /> : <Layout />} />
         </Routes>
         <Toaster />
       </TabProvider>
