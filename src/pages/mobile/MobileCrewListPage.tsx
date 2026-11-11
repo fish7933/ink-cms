@@ -224,7 +224,9 @@ export default function MobileCrewListPage({ onSelect }: Props) {
             <div className="min-w-0">
               <div className="text-xs text-gray-500 truncate">{effShipName(c) || '대기 중'}</div>
               {/* 직급과 이름은 항시 같이 다닌다 — 따로 떨어뜨려 표시하지 않는다. */}
-              <div className="text-sm font-semibold text-gray-800 truncate">{effRankCode(c) || '-'} {c.name}</div>
+              <div className="text-sm font-semibold text-gray-800 truncate">
+                <span className="text-blue-600">{effRankCode(c) || '-'}</span> {c.name}
+              </div>
               {embarkInfo(c) && <div className="text-[11px] text-gray-400 truncate mt-0.5">{embarkInfo(c)}</div>}
             </div>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full ${c.is_active_onboard ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>

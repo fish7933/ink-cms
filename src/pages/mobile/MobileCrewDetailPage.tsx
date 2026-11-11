@@ -1,9 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { CrewWithDetails } from '@/services/crew.service';
 import { getSeaServiceRecords } from '@/services/crew-extended.service';
 import { getEvaluations } from '@/services/evaluation.service';
+import { getRanks } from '@/lib/store';
 import type { SeaServiceRecord } from '@/types/crew-extended';
 import type { CrewEvaluationWithDetails } from '@/types/evaluation';
+import type { Rank } from '@/types/models';
 
 interface Props {
   crew: CrewWithDetails;
@@ -39,12 +41,19 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
 
   const [seaService, setSeaService] = useState<SeaServiceRecord[]>([]);
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
   useEffect(() => {
     getSeaServiceRecords(c.id).then(setSeaService).catch(() => setSeaService([]));
     getEvaluations(c.id).then(setEvaluations).catch(() => setEvaluations([]));
+    getRanks().then(setRanks).catch(() => setRanks([]));
   }, [c.id]);
   const sortedSeaService = [...seaService].sort((a, b) => b.sign_on_date.localeCompare(a.sign_on_date));
   const sortedEvaluations = [...evaluations].sort((a, b) => b.evaluation_period_end.localeCompare(a.evaluation_period_end));
+  // 승선 경력의 직급은 자유 입력(과거 입사 전 경력 등)이라 "Chief Officer"처럼 풀네임으로
+  // 저장된 경우가 있다 — 항상 코드로 보이도록 ranks.name → rank_code로 변환, 매칭 안 되면
+  // (이미 코드인 값 등) 원문 그대로 보여준다.
+  const rankCodeByName = useMemo(() => new Map(ranks.map(r => [r.name, r.rank_code])), [ranks]);
+  const seaServiceRankCode = (r: SeaServiceRecord) => rankCodeByName.get(r.rank) || r.rank;
 
   return (
     <div className="space-y-3">
@@ -56,7 +65,9 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
         )}
         <div className="min-w-0">
           {/* 직급과 이름은 항시 같이 다닌다 — 따로 떨어뜨려 표시하지 않는다. */}
-          <div className="text-base font-bold text-gray-900 truncate">{effRankCode || '-'} {c.name}</div>
+          <div className="text-base font-bold text-gray-900 truncate">
+            <span className="text-blue-600">{effRankCode || '-'}</span> {c.name}
+          </div>
           <div className="text-xs text-gray-500 truncate">{effShipName || '대기 중'}</div>
           {effOwnerName && <div className="text-xs text-gray-400 truncate">{effOwnerName}</div>}
         </div>
@@ -98,8 +109,12 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
             {sortedSeaService.map(r => (
               <div key={r.id} className="border-b border-gray-100 last:border-0 pb-2.5 last:pb-0">
                 <div className="flex justify-between gap-2">
-                  <span className="text-sm font-medium text-gray-800 truncate">{r.ship_name}</span>
-                  <span className="text-xs text-gray-500 shrink-0">{r.rank}{r.rank_grade ? ` (${r.rank_grade})` : ''}</span>
+                  <span className="text-sm font-medium text-gray-800 truncate">
+                    {r.owner_company_name ? `${r.owner_company_name} · ` : ''}{r.ship_name}
+                  </span>
+                  <span className="text-xs shrink-0">
+                    <span className="text-blue-600">{seaServiceRankCode(r)}</span>{r.rank_grade ? ` (${r.rank_grade})` : ''}
+                  </span>
                 </div>
                 <div className="text-xs text-gray-400 mt-0.5">
                   {r.sign_on_date} ~ {r.sign_off_date || '현재'}
