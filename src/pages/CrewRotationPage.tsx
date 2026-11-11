@@ -712,7 +712,12 @@ export function CrewRotationPage() {
               <input
                 type="month"
                 value={monthFrom}
-                onChange={e => setMonthFrom(e.target.value)}
+                onChange={e => {
+                  // 시작월을 바꾸면 기본값으로 1개월 치만 보이게 종료월도 같은 달로 맞춰준다 —
+                  // 범위를 넓히고 싶으면 종료월 컨트롤을 따로 조정하면 된다.
+                  setMonthFrom(e.target.value);
+                  setMonthTo(e.target.value);
+                }}
                 className="h-8 rounded-md border border-input bg-white px-2 text-xs"
               />
               <span className="text-xs text-gray-400">~</span>
