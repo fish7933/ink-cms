@@ -46,6 +46,7 @@ export default function RotationPlanLedgerPrintPage() {
       setPlans(matched);
       setPortLabelByPlanId(new Map(matched.map(p => [p.id, p.port_id ? portMap.get(p.port_id) || '-' : '-'])));
       setLoading(false);
+      document.title = 'Rotation Plan Ledger';
     };
     load();
   }, [searchParams]);

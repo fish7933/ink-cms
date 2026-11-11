@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X, Printer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -19,10 +19,19 @@ interface Props {
 // index.css의 `body.crew-resume-print-dialog-open #root { display: none }` 규칙과 짝을 이룬다.
 export default function CrewResumeDialog({ open, onOpenChange, crewId }: Props) {
   const { t } = useTranslation('CrewResumeDialog');
+  const prevTitleRef = useRef<string | null>(null);
   useEffect(() => {
     if (open) document.body.classList.add(BODY_PRINT_CLASS);
     else document.body.classList.remove(BODY_PRINT_CLASS);
     return () => document.body.classList.remove(BODY_PRINT_CLASS);
+  }, [open]);
+
+  useEffect(() => {
+    // 이 모달은 새 탭이 아니라 앱 화면 위에 뜨므로, 닫히면 document.title을 원래 앱 탭
+    // 제목으로 되돌린다 — PDF로 저장할 때 제안되는 파일명은 CrewResumeSheet가 선원 이름을
+    // 알려주는 시점에 설정한다(아래 onCrewName).
+    if (open) prevTitleRef.current = document.title;
+    else if (prevTitleRef.current !== null) { document.title = prevTitleRef.current; prevTitleRef.current = null; }
   }, [open]);
 
   return (
@@ -51,7 +60,7 @@ export default function CrewResumeDialog({ open, onOpenChange, crewId }: Props) 
             </div>
           </div>
           <div className="p-6 print:p-0">
-            <CrewResumeSheet crewId={crewId} />
+            <CrewResumeSheet crewId={crewId} onCrewName={name => { document.title = `${name}_Resume`; }} />
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

@@ -132,11 +132,14 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 interface Props {
   crewId: string;
+  // PDF로 저장할 때 제안되는 파일명(document.title)을 선원 이름으로 맞추기 위해, 이 컴포넌트가
+  // 직접 불러온 선원 이름을 부모(독립 인쇄 페이지/인쇄 모달)에게 알려준다.
+  onCrewName?: (name: string) => void;
 }
 
 // 선원 이력서 문서 본문 — 독립 인쇄 페이지와 인쇄 모달 양쪽에서 재사용된다.
 // 상단 레터헤드는 결재문서 시행문(ApprovalDocumentIssuedSheet)과 동일하게 회사정보(company_info)를 사용한다.
-export default function CrewResumeSheet({ crewId }: Props) {
+export default function CrewResumeSheet({ crewId, onCrewName }: Props) {
   const { t, i18n } = useTranslation('CrewResumeSheet');
   const [crew, setCrew] = useState<CrewData | null>(null);
   const [rankName, setRankName] = useState('');
@@ -174,6 +177,7 @@ export default function CrewResumeSheet({ crewId }: Props) {
       } catch { contacts = []; }
 
       setCrew({ ...crewData, certificates: certs, emergency_contacts: contacts });
+      onCrewName?.(crewData.name_english || crewData.name);
       setSeaService((serviceData || []).map((r: SeaServiceRecord & { sign_off_reasons?: { name: string } | null }) => ({
         ...r,
         sign_off_reason_name: r.sign_off_reasons?.name,

@@ -246,7 +246,6 @@ export default function SalaryTemplatesPage() {
                         )}
                         <TableHead className="text-xs">{t('템플릿명')}</TableHead>
                         <TableHead className="text-xs">{t('통화')}</TableHead>
-                        <TableHead className="text-xs">{t('설명')}</TableHead>
                         <TableHead className="text-xs">{t('유효기간')}</TableHead>
                         <TableHead className="text-xs">{t('상태')}</TableHead>
                         <TableHead className="text-right text-xs">{t('작업')}</TableHead>
@@ -265,7 +264,6 @@ export default function SalaryTemplatesPage() {
                           )}
                           <TableCell className="font-medium text-sm">{tpl.name}</TableCell>
                           <TableCell className="text-sm">{tpl.currency}</TableCell>
-                          <TableCell className="text-gray-600 text-sm">{tpl.description || '-'}</TableCell>
                           <TableCell className="text-xs">{t('{{date}} ~ 현재', { date: tpl.effective_from })}</TableCell>
                           <TableCell>
                             <Badge variant={tpl.is_active ? 'default' : 'secondary'} className="text-xs">

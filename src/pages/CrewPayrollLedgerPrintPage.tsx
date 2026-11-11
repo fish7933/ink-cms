@@ -34,6 +34,9 @@ export default function CrewPayrollLedgerPrintPage() {
       setPayslips(payslipData);
       setCompany(companyInfo);
       setLoading(false);
+      // PDF 저장은 한 번에 하나만 보고 저장하는 용도라 날짜 없이 선박명만 쓴다
+      // (엑셀 내보내기는 여러 회차를 구분해야 해서 월을 붙임).
+      if (data) document.title = `${data.ship_name}_Payroll`;
     };
     load();
   }, [periodId]);

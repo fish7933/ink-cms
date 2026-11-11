@@ -51,6 +51,8 @@ export default function ApprovalDocumentPrintPage() {
       setDailyCashReport(found?.reference_type === 'daily_cash_report' && found.reference_id ? await getDailyReportById(found.reference_id).catch(() => null) : null);
       setReferenceLabels(found ? await approvalDocumentService.getReferenceLabels(found.id, found.steps.map(s => s.approver_id)).catch(() => []) : []);
       setLoading(false);
+      // PDF로 저장할 때 제안되는 파일명이 document.title을 따라가므로 문서 제목으로 맞춰준다.
+      if (found) document.title = found.title;
     };
     load();
   }, [id]);

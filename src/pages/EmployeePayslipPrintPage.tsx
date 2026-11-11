@@ -27,6 +27,8 @@ export default function EmployeePayslipPrintPage() {
       setPayslip(detail);
       setCompany(companyInfo);
       setLoading(false);
+      // PDF로 저장할 때 제안되는 파일명을 직원명으로 (날짜는 불필요).
+      if (detail) document.title = `${detail.employee_name}_급여명세서`;
     };
     load();
   }, [id]);

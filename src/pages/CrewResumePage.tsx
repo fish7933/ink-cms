@@ -43,7 +43,7 @@ export default function CrewResumePage() {
       </button>
 
       <div className="resume-page-wrapper">
-        <CrewResumeSheet crewId={id} />
+        <CrewResumeSheet crewId={id} onCrewName={name => { document.title = `${name}_Resume`; }} />
       </div>
     </>
   );

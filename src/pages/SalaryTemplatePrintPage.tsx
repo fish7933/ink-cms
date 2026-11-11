@@ -34,6 +34,10 @@ export default function SalaryTemplatePrintPage() {
       setComponents(comp);
       setRanks(rnk);
       setLoading(false);
+      // PDF로 인쇄(브라우저 "PDF로 저장")할 때 제안되는 파일명은 document.title을 따라간다.
+      // 엑셀 내보내기는 같은 템플릿명으로 여러 버전을 저장할 수 있어 적용일을 붙이지만,
+      // PDF는 한 번에 하나만 보고 저장하는 용도라 날짜 없이 템플릿명만 쓴다.
+      if (full) document.title = full.name;
     };
     load();
   }, [id]);

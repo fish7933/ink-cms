@@ -30,6 +30,17 @@ export default function SalaryTemplatePrintDialog({ open, onOpenChange, template
     return () => document.body.classList.remove(BODY_PRINT_CLASS);
   }, [open]);
 
+  useEffect(() => {
+    // PDF로 인쇄(브라우저 "PDF로 저장")할 때 제안되는 파일명은 document.title을 따라간다.
+    // 엑셀 내보내기는 적용일을 붙이지만 PDF는 한 번에 하나만 보고 저장하는 용도라 날짜 없이
+    // 템플릿명만 쓴다. 인쇄 중에만 바꾸고 닫으면 원래 앱 탭 제목으로 되돌린다 — 이 모달은
+    // 새 탭이 아니라 앱 화면 위에 뜨는 모달이라서다.
+    if (!open) return;
+    const prevTitle = document.title;
+    document.title = template.name;
+    return () => { document.title = prevTitle; };
+  }, [open, template.name]);
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>

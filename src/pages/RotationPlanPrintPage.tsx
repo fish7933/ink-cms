@@ -31,6 +31,8 @@ export default function RotationPlanPrintPage() {
         if (port) setPortLabel(`${port.country_name} ${port.city_name}`);
       }
       setLoading(false);
+      // PDF로 저장할 때 제안되는 파일명을 선박명으로 (날짜는 불필요).
+      if (data) document.title = `${data.ship_name}_Dispatch Plan`;
     };
     load();
   }, [id]);

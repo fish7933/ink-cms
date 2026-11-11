@@ -45,6 +45,8 @@ export default function ShipCrewListPrintPage() {
       setRoster(rosterData);
       setNationalities(nationalityData);
       setLoading(false);
+      // PDF로 저장할 때 제안되는 파일명을 선박명으로 (날짜는 불필요).
+      if (shipData) document.title = `${shipData.name}_Crew List`;
     };
     load();
   }, [shipId, date]);
