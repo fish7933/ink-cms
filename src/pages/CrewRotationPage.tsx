@@ -26,6 +26,7 @@ import { getReferenceOrgUnitNames } from '@/services/approval-authority.service'
 import type { ApprovalRequestWithDetails } from '@/services/approval-engine';
 import type { ApprovalLineWithSteps } from '@/types/approval';
 import { ApprovalChainCell } from '@/components/approval/ApprovalChainCell';
+import RotationPlanLedgerPrintDialog from '@/components/rotation/RotationPlanLedgerPrintDialog';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
@@ -170,6 +171,7 @@ export function CrewRotationPage() {
   // 좁혀지면 탭에 보이는 전체 건수와 목록 건수가 어긋나 혼란을 준다.
   const [monthFrom, setMonthFrom] = useState('');
   const [monthTo, setMonthTo] = useState('');
+  const [printDialog, setPrintDialog] = useState<{ plans: CrewRotationPlanWithDetails[]; periodLabel?: string } | null>(null);
   const pickedMonths = useMemo(() => {
     if (!monthFrom || !monthTo) return [];
     const [fy, fm] = monthFrom.split('-').map(Number);
@@ -231,7 +233,9 @@ export function CrewRotationPage() {
     if (monthPlans.length === 0) { toast({ title: t('선택한 달에 교대계획이 없습니다'), variant: 'destructive' }); return; }
     setMonthExporting('months');
     try {
-      await exportRotationPlansLedgerToExcel(monthPlans, portLabelMapFor(monthPlans), pickedMonths.join('_'));
+      // 선택한 달이 여러 개라도 파일명에 하나하나 나열하지 않고 "시작월~종료월" 범위로만 표기.
+      const rangeHint = pickedMonths.length > 1 ? `${pickedMonths[0]}~${pickedMonths[pickedMonths.length - 1]}` : pickedMonths[0];
+      await exportRotationPlansLedgerToExcel(monthPlans, portLabelMapFor(monthPlans), rangeHint);
     } finally {
       setMonthExporting(null);
     }
@@ -241,7 +245,8 @@ export function CrewRotationPage() {
     if (pickedMonths.length === 0) { toast({ title: t('달을 하나 이상 골라주세요'), variant: 'destructive' }); return; }
     const monthPlans = plansForMonths(pickedMonths);
     if (monthPlans.length === 0) { toast({ title: t('선택한 달에 교대계획이 없습니다'), variant: 'destructive' }); return; }
-    window.open(`/print/rotation-plans-ledger?months=${pickedMonths.join(',')}`, '_blank');
+    const periodLabel = pickedMonths.length > 1 ? `${pickedMonths[0]} ~ ${pickedMonths[pickedMonths.length - 1]}` : pickedMonths[0];
+    setPrintDialog({ plans: monthPlans, periodLabel });
   };
 
   const handleExportSelectedExcel = async () => {
@@ -257,7 +262,9 @@ export function CrewRotationPage() {
 
   const handlePrintSelected = () => {
     if (selectedIds.length === 0) return;
-    window.open(`/print/rotation-plans-ledger?ids=${selectedIds.join(',')}`, '_blank');
+    const targetPlans = plans.filter(p => selectedIds.includes(p.id));
+    if (targetPlans.length === 0) return;
+    setPrintDialog({ plans: targetPlans });
   };
 
   // 삭제(발령 완료 포함 전 상태)는 시스템관리자 이상만 가능. 삭제해도 실제 선원 상태/계약/
@@ -982,6 +989,13 @@ export function CrewRotationPage() {
         </DialogContent>
       </Dialog>
 
+      <RotationPlanLedgerPrintDialog
+        open={!!printDialog}
+        onOpenChange={open => { if (!open) setPrintDialog(null); }}
+        plans={printDialog?.plans || []}
+        portLabelByPlanId={printDialog ? portLabelMapFor(printDialog.plans) : new Map()}
+        periodLabel={printDialog?.periodLabel}
+      />
     </div>
   );
 }

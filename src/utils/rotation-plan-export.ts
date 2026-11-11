@@ -314,11 +314,27 @@ export async function exportRotationPlansLedgerToExcel(
     })));
   });
 
+  const totalOnSigners = ledgerRows.filter(r => r.boarding !== '-').length;
+  const totalOffSigners = ledgerRows.filter(r => r.disembark !== '-').length;
+  const totalsRow = (label: string, value: number, color: string) => [
+    cell(`●`, { font: { sz: BASE_SZ, color: { rgb: color } } }),
+    cell(`${label}: ${value}`, { font: { bold: true, sz: BASE_SZ, color: { rgb: '333333' } } }),
+    ...Array.from({ length: colCount - 2 }, () => cell('', {})),
+  ];
+  rows.push(Array.from({ length: colCount }, () => cell('', {})));
+  rows.push(totalsRow('Total On-Signers', totalOnSigners, '1D4ED8'));
+  rows.push(totalsRow('Total Off-Signers', totalOffSigners, 'B91C1C'));
+
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
   worksheet['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 6 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 24 }];
 
   const DATA_START = 3; // 제목(0) + 빈줄(1) + 헤더(2) 다음부터 데이터
-  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } }];
+  const totalsStartRow = DATA_START + ledgerRows.length + 1; // 데이터 다음 빈줄 한 칸 뒤
+  const merges = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } },
+    { s: { r: totalsStartRow, c: 1 }, e: { r: totalsStartRow, c: colCount - 1 } },
+    { s: { r: totalsStartRow + 1, c: 1 }, e: { r: totalsStartRow + 1, c: colCount - 1 } },
+  ];
   ledgerRows.forEach((r, i) => {
     if (r.ownerGroupStart && r.ownerGroupSize > 1) {
       merges.push({ s: { r: DATA_START + i, c: 0 }, e: { r: DATA_START + i + r.ownerGroupSize - 1, c: 0 } });

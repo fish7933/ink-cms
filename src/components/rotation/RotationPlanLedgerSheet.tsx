@@ -18,6 +18,8 @@ export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, peri
   const contentRef = useRef<HTMLDivElement>(null);
   const [printZoom, setPrintZoom] = useState(1);
   const rows = buildRotationPlanLedgerRows(plans, portLabelByPlanId);
+  const totalOnSigners = rows.filter(r => r.boarding !== '-').length;
+  const totalOffSigners = rows.filter(r => r.disembark !== '-').length;
 
   useEffect(() => {
     const computeZoom = () => {
@@ -80,6 +82,19 @@ export default function RotationPlanLedgerSheet({ plans, portLabelByPlanId, peri
             ))}
           </tbody>
         </table>
+
+        {rows.length > 0 && (
+          <div style={{ marginTop: 14, display: 'inline-flex', flexDirection: 'column', gap: 5, fontSize: 12.5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#1d4ed8' }} />
+              <span style={{ fontWeight: 600, color: '#333' }}>Total On-Signers: <span style={{ color: '#1d4ed8' }}>{totalOnSigners}</span></span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#b91c1c' }} />
+              <span style={{ fontWeight: 600, color: '#333' }}>Total Off-Signers: <span style={{ color: '#b91c1c' }}>{totalOffSigners}</span></span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

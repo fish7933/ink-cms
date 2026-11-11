@@ -124,4 +124,9 @@
   body.crew-resume-print-dialog-open #root {
     display: none !important;
   }
+
+  /* 교대 계획표 인쇄 모달이 열려있는 동안은 뒤에 있는 앱 화면을 인쇄에서 제외한다 */
+  body.rotation-plan-print-dialog-open #root {
+    display: none !important;
+  }
 }

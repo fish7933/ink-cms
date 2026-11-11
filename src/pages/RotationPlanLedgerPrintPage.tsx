@@ -40,7 +40,8 @@ export default function RotationPlanLedgerPrintPage() {
         const monthSet = new Set(monthsParam.split(',').filter(Boolean));
         matched = allPlans.filter(p => monthSet.has(p.rotation_date.slice(0, 7)));
         const sortedMonths = [...monthSet].sort();
-        setPeriodLabel(sortedMonths.join(', '));
+        // 선택된 달이 여러 개라도 하나하나 나열하지 않고 "시작월 ~ 종료월" 범위로만 표기한다.
+        setPeriodLabel(sortedMonths.length > 1 ? `${sortedMonths[0]} ~ ${sortedMonths[sortedMonths.length - 1]}` : sortedMonths[0] || '');
       }
 
       setPlans(matched);
