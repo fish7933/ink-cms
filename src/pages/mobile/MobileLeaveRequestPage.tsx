@@ -301,8 +301,25 @@ export default function MobileLeaveRequestPage({ currentUser }: Props) {
             <ChevronLeft className="w-4 h-4" />목록으로
           </button>
           <div className="grid grid-cols-2 gap-2">
-            <input type="date" value={annualForm.start_date} onChange={e => setAnnualForm(f => ({ ...f, start_date: e.target.value }))} className="h-10 rounded-lg border border-gray-200 px-2 text-sm" />
-            <input type="date" value={annualForm.end_date} onChange={e => setAnnualForm(f => ({ ...f, end_date: e.target.value }))} className="h-10 rounded-lg border border-gray-200 px-2 text-sm" />
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">시작일</label>
+              <input
+                type="date"
+                value={annualForm.start_date}
+                onChange={e => {
+                  // 종료일을 아직 안 건드렸으면(또는 시작일보다 앞서게 되면) 시작일과 같은 날로
+                  // 맞춰준다 — 그래야 하루짜리(반차) 신청에서 바로 반차 선택지가 뜬다. 종료일을
+                  // 이미 다른 날로 지정해둔 경우(여러 날 신청)는 그대로 둔다.
+                  const v = e.target.value;
+                  setAnnualForm(f => ({ ...f, start_date: v, end_date: (!f.end_date || f.end_date < v) ? v : f.end_date }));
+                }}
+                className="w-full h-10 rounded-lg border border-gray-200 px-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">종료일</label>
+              <input type="date" value={annualForm.end_date} onChange={e => setAnnualForm(f => ({ ...f, end_date: e.target.value }))} className="w-full h-10 rounded-lg border border-gray-200 px-2 text-sm" />
+            </div>
           </div>
           {isSingleDay && (
             <div className="grid grid-cols-3 gap-2">
@@ -345,8 +362,14 @@ export default function MobileLeaveRequestPage({ currentUser }: Props) {
             <ChevronLeft className="w-4 h-4" />목록으로
           </button>
           <div className="grid grid-cols-2 gap-2">
-            <input type="date" value={sickForm.start_date} onChange={e => setSickForm(f => ({ ...f, start_date: e.target.value }))} className="h-10 rounded-lg border border-gray-200 px-2 text-sm" />
-            <input type="date" value={sickForm.end_date} onChange={e => setSickForm(f => ({ ...f, end_date: e.target.value }))} className="h-10 rounded-lg border border-gray-200 px-2 text-sm" />
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">시작일</label>
+              <input type="date" value={sickForm.start_date} onChange={e => setSickForm(f => ({ ...f, start_date: e.target.value }))} className="w-full h-10 rounded-lg border border-gray-200 px-2 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">종료일</label>
+              <input type="date" value={sickForm.end_date} onChange={e => setSickForm(f => ({ ...f, end_date: e.target.value }))} className="w-full h-10 rounded-lg border border-gray-200 px-2 text-sm" />
+            </div>
           </div>
           <textarea
             value={sickForm.reason}

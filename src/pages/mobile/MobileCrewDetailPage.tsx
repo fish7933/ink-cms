@@ -55,8 +55,9 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
           <div className="w-14 h-14 rounded-full bg-gray-100 shrink-0" />
         )}
         <div className="min-w-0">
-          <div className="text-base font-bold text-gray-900 truncate">{c.name}</div>
-          <div className="text-xs text-gray-500 truncate">{effRankCode || '-'} · {effShipName || '대기 중'}</div>
+          {/* 직급과 이름은 항시 같이 다닌다 — 따로 떨어뜨려 표시하지 않는다. */}
+          <div className="text-base font-bold text-gray-900 truncate">{effRankCode || '-'} {c.name}</div>
+          <div className="text-xs text-gray-500 truncate">{effShipName || '대기 중'}</div>
           {effOwnerName && <div className="text-xs text-gray-400 truncate">{effOwnerName}</div>}
         </div>
       </div>
