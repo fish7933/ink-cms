@@ -9,14 +9,37 @@ interface Props {
   onSelect: (crew: CrewWithDetails) => void;
 }
 
-// 선원 목록 — 조회 전용(모바일 범위는 선원 목록/상세 조회만). 데스크탑 CrewManagementPage의
-// 선주/플릿/선박/직급/매닝사/국적 등 다중 필터는 화면이 좁은 모바일에서는 생략하고 이름/직급/
-// 선박 통합 검색 한 칸으로 단순화했다.
+// 데스크탑 CrewManagementPage와 동일한 5단계 탭 — 같은 상태 매핑(CATEGORY_STATUS_MAP/
+// matchesCategory)을 그대로 가져와 모바일에서도 같은 기준으로 분류한다.
+type CategoryTab = 'all' | 'registered' | 'standby' | 'onboard' | 'disembarked';
+const CATEGORY_LABELS: Record<CategoryTab, string> = {
+  all: '전체', registered: '등록', standby: '대기', onboard: '승선중', disembarked: '하선',
+};
+const CATEGORY_STATUS_MAP: Record<CategoryTab, string[]> = {
+  all: [],
+  registered: ['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected'],
+  standby: ['deployment_decided', 'standby'],
+  onboard: ['onboard'],
+  disembarked: ['standby'],
+};
+const CATEGORY_ORDER: CategoryTab[] = ['all', 'registered', 'standby', 'onboard', 'disembarked'];
+
+function matchesCategory(c: CrewWithDetails & { status?: string }, cat: CategoryTab): boolean {
+  if (cat === 'all') return true;
+  const st = c.status || c.current_status || '';
+  if (cat === 'standby') return CATEGORY_STATUS_MAP.standby.includes(st) && Boolean(c.has_pending_plan);
+  if (cat === 'disembarked') return st === 'standby' && !c.has_pending_plan;
+  return CATEGORY_STATUS_MAP[cat].includes(st);
+}
+
+// 선원 목록 — 조회 전용(모바일 범위는 선원 목록/상세 조회만). 선주/플릿/매닝사/국적 등 다중
+// 필터는 화면이 좁은 모바일에서는 생략하고 이름/직급/선박 통합 검색 + 상태 탭으로 단순화했다.
 export default function MobileCrewListPage({ onSelect }: Props) {
   const [crews, setCrews] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<CategoryTab>('all');
 
   useEffect(() => {
     Promise.all([crewService.getAllWithDetails(), getRanks()]).then(([crewData, rankData]) => {
@@ -38,16 +61,18 @@ export default function MobileCrewListPage({ onSelect }: Props) {
     return new Map(sorted.map((r, i) => [r.id, i]));
   }, [ranks]);
 
+  const byCategory = useMemo(() => crews.filter(c => matchesCategory(c, category)), [crews, category]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...crews].sort((a, b) => (rankOrderIndex.get(effRankId(a) || '') ?? 999) - (rankOrderIndex.get(effRankId(b) || '') ?? 999));
+    const sorted = [...byCategory].sort((a, b) => (rankOrderIndex.get(effRankId(a) || '') ?? 999) - (rankOrderIndex.get(effRankId(b) || '') ?? 999));
     if (!q) return sorted;
     return sorted.filter(c =>
       (c.name || '').toLowerCase().includes(q) ||
       (effRankCode(c) || '').toLowerCase().includes(q) ||
       (effShipName(c) || '').toLowerCase().includes(q)
     );
-  }, [crews, search, rankOrderIndex]);
+  }, [byCategory, search, rankOrderIndex]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
@@ -66,6 +91,19 @@ export default function MobileCrewListPage({ onSelect }: Props) {
         />
       </div>
 
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+        {CATEGORY_ORDER.map(cat => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setCategory(cat)}
+            className={`shrink-0 h-8 px-3 rounded-full text-xs font-medium border ${category === cat ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'}`}
+          >
+            {CATEGORY_LABELS[cat]} {crews.filter(c => matchesCategory(c, cat)).length}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-2">
         {filtered.map(c => (
           <button
@@ -75,10 +113,10 @@ export default function MobileCrewListPage({ onSelect }: Props) {
             className="w-full flex items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-left shadow-sm active:bg-gray-50"
           >
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-800 truncate">{c.name}</div>
               <div className="text-xs text-gray-500 truncate">
                 {effRankCode(c) || '-'} · {effShipName(c) || '대기 중'}
               </div>
+              <div className="text-sm font-semibold text-gray-800 truncate">{c.name}</div>
             </div>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full ${c.is_active_onboard ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
               {c.is_active_onboard ? '승선중' : '대기중'}
