@@ -563,42 +563,42 @@ export function CrewManagementPage() {
             {/* 필터 */}
             <div className="flex flex-wrap gap-2">
               <Select value={filterOwner} onValueChange={setFilterOwner}>
-                <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder={t('선주사')} /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder={t('선주사')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('전체 선주사 ({{count}})', { count: ownerFacet.total })}</SelectItem>
                   {ownerFacet.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label} ({o.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterFleet} onValueChange={setFilterFleet} disabled={filterOwner === 'all'}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('플릿')} /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder={t('플릿')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('전체 플릿 ({{count}})', { count: fleetFacet.total })}</SelectItem>
                   {fleetFacet.options.map(f => <SelectItem key={f.value} value={f.value}>{f.label} ({f.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterShip} onValueChange={setFilterShip} disabled={filterOwner === 'all'}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('선박')} /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder={t('선박')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('전체 선박 ({{count}})', { count: shipFacet.total })}</SelectItem>
                   {shipFacet.options.map(s => <SelectItem key={s.value} value={s.value}>{s.label} ({s.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterRank} onValueChange={setFilterRank}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('직급')} /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder={t('직급')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('전체 직급 ({{count}})', { count: rankFacet.total })}</SelectItem>
                   {rankFacet.options.map(r => <SelectItem key={r.value} value={r.value}>{r.label} ({r.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterManning} onValueChange={setFilterManning}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('매닝사')} /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder={t('매닝사')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('전체 매닝사 ({{count}})', { count: manningFacet.total })}</SelectItem>
                   {manningFacet.options.map(a => <SelectItem key={a.value} value={a.value}>{a.label} ({a.count})</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterNationality} onValueChange={setFilterNationality}>
-                <SelectTrigger className="h-8 text-xs w-28"><SelectValue placeholder={t('국적')} /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs w-32"><SelectValue placeholder={t('국적')} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('전체 국적 ({{count}})', { count: nationalityFacet.total })}</SelectItem>
                   {nationalityFacet.options.map(n => <SelectItem key={n.value} value={n.value}>{n.label} ({n.count})</SelectItem>)}
@@ -606,7 +606,7 @@ export function CrewManagementPage() {
               </Select>
               {category === 'registered' && (
                 <Select value={filterSource} onValueChange={setFilterSource}>
-                  <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder={t('등록출처')} /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder={t('등록출처')} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t('전체 출처 ({{count}})', { count: sourceFacet.total })}</SelectItem>
                     {sourceFacet.options.map(s => <SelectItem key={s.value} value={s.value}>{s.label} ({s.count})</SelectItem>)}
