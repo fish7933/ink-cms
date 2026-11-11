@@ -8,6 +8,7 @@ import MobileCrewListPage from '@/pages/mobile/MobileCrewListPage';
 import MobileCrewDetailPage from '@/pages/mobile/MobileCrewDetailPage';
 import MobileApprovalInboxPage from '@/pages/mobile/MobileApprovalInboxPage';
 import MobileDocumentDraftPage from '@/pages/mobile/MobileDocumentDraftPage';
+import MobileLeaveRequestPage from '@/pages/mobile/MobileLeaveRequestPage';
 import type { CrewWithDetails } from '@/services/crew.service';
 
 type MobileScreen = 'home' | 'crew-list' | 'crew-detail' | 'approval-inbox' | 'document-draft' | 'leave-request' | 'payslips';
@@ -121,8 +122,9 @@ export default function MobileShell() {
 
         {screen === 'approval-inbox' && <MobileApprovalInboxPage currentUser={currentUser} />}
         {screen === 'document-draft' && <MobileDocumentDraftPage currentUser={currentUser} />}
+        {screen === 'leave-request' && <MobileLeaveRequestPage currentUser={currentUser} />}
 
-        {(screen === 'leave-request' || screen === 'payslips') && (
+        {screen === 'payslips' && (
           <div className="flex items-center justify-center h-40 text-sm text-gray-400">준비 중입니다.</div>
         )}
       </main>
