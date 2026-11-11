@@ -3,7 +3,9 @@ import { Search, ChevronRight } from 'lucide-react';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { getRanks } from '@/lib/store';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
+import { getNationalities } from '@/services/nationality.service';
 import type { Rank } from '@/types/models';
+import type { Nationality } from '@/types/nationality';
 
 interface Props {
   onSelect: (crew: CrewWithDetails) => void;
@@ -32,19 +34,26 @@ function matchesCategory(c: CrewWithDetails & { status?: string }, cat: Category
   return CATEGORY_STATUS_MAP[cat].includes(st);
 }
 
-// 선원 목록 — 조회 전용(모바일 범위는 선원 목록/상세 조회만). 선주/플릿/매닝사/국적 등 다중
-// 필터는 화면이 좁은 모바일에서는 생략하고 이름/직급/선박 통합 검색 + 상태 탭으로 단순화했다.
+// 선원 목록 — 조회 전용(모바일 범위는 선원 목록/상세 조회만).
 export default function MobileCrewListPage({ onSelect }: Props) {
   const [crews, setCrews] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<CategoryTab>('all');
+  const [filterOwner, setFilterOwner] = useState('all');
+  const [filterFleet, setFilterFleet] = useState('all');
+  const [filterShip, setFilterShip] = useState('all');
+  const [filterRank, setFilterRank] = useState('all');
+  const [filterManning, setFilterManning] = useState('all');
+  const [filterNationality, setFilterNationality] = useState('all');
 
   useEffect(() => {
-    Promise.all([crewService.getAllWithDetails(), getRanks()]).then(([crewData, rankData]) => {
+    Promise.all([crewService.getAllWithDetails(), getRanks(), getNationalities()]).then(([crewData, rankData, natData]) => {
       setCrews(crewData);
       setRanks(rankData);
+      setNationalities(natData);
       setLoading(false);
     });
   }, []);
@@ -52,27 +61,60 @@ export default function MobileCrewListPage({ onSelect }: Props) {
   const effRankId = (c: CrewWithDetails) => c.is_active_onboard ? c.rank_id : (c.pending_rank_id || c.rank_id);
   const effRankCode = (c: CrewWithDetails) => c.is_active_onboard ? c.rank_code : (c.pending_rank_code || c.rank_code);
   const effShipName = (c: CrewWithDetails) => c.is_active_onboard ? c.current_ship_name : (c.pending_ship_name || c.current_ship_name);
+  const effOwnerId = (c: CrewWithDetails) => c.is_active_onboard ? c.owner_id : (c.pending_owner_id || c.owner_id);
+  const effOwnerName = (c: CrewWithDetails) => c.is_active_onboard ? c.owner_name : (c.pending_owner_name || c.owner_name);
+  const effFleetId = (c: CrewWithDetails) => c.is_active_onboard ? c.fleet_id : (c.pending_fleet_id || c.fleet_id);
+  const effFleetName = (c: CrewWithDetails) => c.is_active_onboard ? c.fleet_name : (c.pending_fleet_name || c.fleet_name);
+  const effShipId = (c: CrewWithDetails) => c.is_active_onboard ? c.current_ship_id : (c.pending_ship_id || c.current_ship_id);
 
   // 모든 선원 목록/드롭다운은 항상 직급 관리 화면과 같은 순서(부서 → display_order)를
   // 따라야 한다 — ranks 테이블의 display_order만 단순 정렬하면 부서가 뒤섞이므로
   // sortRanksByDisplayOrder로 먼저 정렬한 뒤 그 순서의 인덱스를 기준으로 선원을 정렬한다.
-  const rankOrderIndex = useMemo(() => {
-    const sorted = sortRanksByDisplayOrder(ranks);
-    return new Map(sorted.map((r, i) => [r.id, i]));
-  }, [ranks]);
+  const sortedRanks = useMemo(() => sortRanksByDisplayOrder(ranks), [ranks]);
+  const rankOrderIndex = useMemo(() => new Map(sortedRanks.map((r, i) => [r.id, i])), [sortedRanks]);
 
   const byCategory = useMemo(() => crews.filter(c => matchesCategory(c, category)), [crews, category]);
 
+  // 데스크탑 CrewManagementPage처럼 다른 필터와 교차시킨 옵션별 카운트까지는 두지 않고
+  // (모바일에서는 과한 복잡도), 현재 탭 안에서 실제로 존재하는 값만 간단히 모아 보여준다.
+  const uniqueOptions = (getId: (c: CrewWithDetails) => string | undefined, getLabel: (c: CrewWithDetails) => string | undefined) => {
+    const map = new Map<string, string>();
+    for (const c of byCategory) {
+      const id = getId(c);
+      if (id && !map.has(id)) map.set(id, getLabel(c) || id);
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1], 'ko'));
+  };
+  const ownerOptions = useMemo(() => uniqueOptions(effOwnerId, effOwnerName), [byCategory]);
+  const fleetOptions = useMemo(() => uniqueOptions(effFleetId, effFleetName), [byCategory]);
+  const shipOptions = useMemo(() => uniqueOptions(effShipId, effShipName), [byCategory]);
+  const manningOptions = useMemo(() => uniqueOptions(c => c.manning_agency_id, c => c.manning_agency_name), [byCategory]);
+  const nationalityCodes = useMemo(() => new Set(byCategory.map(c => c.nationality).filter((n): n is string => !!n)), [byCategory]);
+  const nationalityOptions = useMemo(
+    () => nationalities.filter(n => nationalityCodes.has(n.country_code)).map(n => [n.country_code, n.country_name_ko] as const),
+    [nationalities, nationalityCodes]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...byCategory].sort((a, b) => (rankOrderIndex.get(effRankId(a) || '') ?? 999) - (rankOrderIndex.get(effRankId(b) || '') ?? 999));
-    if (!q) return sorted;
-    return sorted.filter(c =>
-      (c.name || '').toLowerCase().includes(q) ||
-      (effRankCode(c) || '').toLowerCase().includes(q) ||
-      (effShipName(c) || '').toLowerCase().includes(q)
+    let list = byCategory.filter(c =>
+      (filterOwner === 'all' || effOwnerId(c) === filterOwner) &&
+      (filterFleet === 'all' || effFleetId(c) === filterFleet) &&
+      (filterShip === 'all' || effShipId(c) === filterShip) &&
+      (filterRank === 'all' || effRankId(c) === filterRank) &&
+      (filterManning === 'all' || c.manning_agency_id === filterManning) &&
+      (filterNationality === 'all' || c.nationality === filterNationality)
     );
-  }, [byCategory, search, rankOrderIndex]);
+    list = [...list].sort((a, b) => (rankOrderIndex.get(effRankId(a) || '') ?? 999) - (rankOrderIndex.get(effRankId(b) || '') ?? 999));
+    if (q) {
+      list = list.filter(c =>
+        (c.name || '').toLowerCase().includes(q) ||
+        (effRankCode(c) || '').toLowerCase().includes(q) ||
+        (effShipName(c) || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [byCategory, search, rankOrderIndex, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterNationality]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-40"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
@@ -102,6 +144,33 @@ export default function MobileCrewListPage({ onSelect }: Props) {
             {CATEGORY_LABELS[cat]} {crews.filter(c => matchesCategory(c, cat)).length}
           </button>
         ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <select value={filterOwner} onChange={e => setFilterOwner(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+          <option value="all">선주사 전체</option>
+          {ownerOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+        <select value={filterFleet} onChange={e => setFilterFleet(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+          <option value="all">플릿 전체</option>
+          {fleetOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+        <select value={filterShip} onChange={e => setFilterShip(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+          <option value="all">선박 전체</option>
+          {shipOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+        <select value={filterRank} onChange={e => setFilterRank(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+          <option value="all">직급 전체</option>
+          {sortedRanks.map(r => <option key={r.id} value={r.id}>{r.rank_code || r.name}</option>)}
+        </select>
+        <select value={filterManning} onChange={e => setFilterManning(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+          <option value="all">매닝사 전체</option>
+          {manningOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+        <select value={filterNationality} onChange={e => setFilterNationality(e.target.value)} className="h-9 rounded-lg border border-gray-200 bg-white px-2 text-xs">
+          <option value="all">국적 전체</option>
+          {nationalityOptions.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+        </select>
       </div>
 
       <div className="space-y-2">
