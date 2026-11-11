@@ -67,14 +67,14 @@ export default function MobileCrewListPage({ onSelect }: Props) {
   const effFleetName = (c: CrewWithDetails) => c.is_active_onboard ? c.fleet_name : (c.pending_fleet_name || c.fleet_name);
   const effShipId = (c: CrewWithDetails) => c.is_active_onboard ? c.current_ship_id : (c.pending_ship_id || c.current_ship_id);
 
-  // 승선중이면 승선일(+하선예정일), 승선 예정이면 승선예정일, 그 외(하선/등록)엔 최근 하선일을 보여준다.
-  const embarkInfo = (c: CrewWithDetails): string | null => {
+  // 승선중이면 승선일(+하선예정일, 줄바꿔서), 승선 예정이면 승선예정일, 그 외(하선/등록)엔 최근 하선일을 보여준다.
+  const embarkInfo = (c: CrewWithDetails): { primary: string; secondary?: string } | null => {
     if (c.is_active_onboard) {
       if (!c.latest_embark_date) return null;
-      return `승선 ${c.latest_embark_date}${c.disembark_forecast_date ? ` · 하선예정 ${c.disembark_forecast_date}` : ''}`;
+      return { primary: `승선 ${c.latest_embark_date}`, secondary: c.disembark_forecast_date ? `하선예정 ${c.disembark_forecast_date}` : undefined };
     }
-    if (c.has_pending_plan && c.pending_embark_date) return `승선예정 ${c.pending_embark_date}`;
-    if (c.latest_disembark_date) return `하선 ${c.latest_disembark_date}`;
+    if (c.has_pending_plan && c.pending_embark_date) return { primary: `승선예정 ${c.pending_embark_date}` };
+    if (c.latest_disembark_date) return { primary: `하선 ${c.latest_disembark_date}` };
     return null;
   };
 
@@ -213,28 +213,32 @@ export default function MobileCrewListPage({ onSelect }: Props) {
         </select>
       </div>
 
-      <div className="space-y-2">
-        {filtered.map(c => (
+      <div className="space-y-1.5">
+        {filtered.map(c => {
+          const embark = embarkInfo(c);
+          return (
           <button
             key={c.id}
             type="button"
             onClick={() => onSelect(c)}
-            className="w-full flex items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-left shadow-sm active:bg-gray-50"
+            className="w-full flex items-center justify-between gap-3 rounded-xl border bg-white px-4 py-2.5 text-left shadow-sm active:bg-gray-50"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 leading-tight">
               <div className="text-xs text-gray-500 truncate">{effShipName(c) || '대기 중'}</div>
               {/* 직급과 이름은 항시 같이 다닌다 — 따로 떨어뜨려 표시하지 않는다. */}
               <div className="text-sm font-semibold text-gray-800 truncate">
                 <span className="text-blue-600">{effRankCode(c) || '-'}</span> {c.name}
               </div>
-              {embarkInfo(c) && <div className="text-[11px] text-gray-400 truncate mt-0.5">{embarkInfo(c)}</div>}
+              {embark && <div className="text-[11px] text-gray-400 truncate">{embark.primary}</div>}
+              {embark?.secondary && <div className="text-[11px] text-gray-400 truncate">{embark.secondary}</div>}
             </div>
             <span className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full ${c.is_active_onboard ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
               {c.is_active_onboard ? '승선중' : '대기중'}
             </span>
             <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
           </button>
-        ))}
+          );
+        })}
         {filtered.length === 0 && (
           <div className="text-center text-sm text-gray-400 py-10">검색 결과가 없습니다.</div>
         )}

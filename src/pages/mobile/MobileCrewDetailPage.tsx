@@ -105,18 +105,19 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
 
       {sortedSeaService.length > 0 && (
         <Section title="승선 경력">
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {sortedSeaService.map(r => (
-              <div key={r.id} className="border-b border-gray-100 last:border-0 pb-2.5 last:pb-0">
+              <div key={r.id} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0 leading-tight">
+                {r.owner_company_name && (
+                  <div className="text-xs text-gray-400 truncate">{r.owner_company_name}</div>
+                )}
                 <div className="flex justify-between gap-2">
-                  <span className="text-sm font-medium text-gray-800 truncate">
-                    {r.owner_company_name ? `${r.owner_company_name} · ` : ''}{r.ship_name}
-                  </span>
+                  <span className="text-sm font-medium text-gray-800 truncate">{r.ship_name}</span>
                   <span className="text-xs shrink-0">
                     <span className="text-blue-600">{seaServiceRankCode(r)}</span>{r.rank_grade ? ` (${r.rank_grade})` : ''}
                   </span>
                 </div>
-                <div className="text-xs text-gray-400 mt-0.5">
+                <div className="text-xs text-gray-400">
                   {r.sign_on_date} ~ {r.sign_off_date || '현재'}
                   {r.sign_off_reason_name ? ` · ${r.sign_off_reason_name}` : ''}
                 </div>
@@ -128,16 +129,16 @@ export default function MobileCrewDetailPage({ crew: c }: Props) {
 
       {sortedEvaluations.length > 0 && (
         <Section title="고과">
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {sortedEvaluations.map(ev => (
-              <div key={ev.id} className="border-b border-gray-100 last:border-0 pb-2.5 last:pb-0">
+              <div key={ev.id} className="border-b border-gray-100 last:border-0 pb-2 last:pb-0 leading-tight">
                 <div className="flex justify-between gap-2">
                   <span className="text-sm font-medium text-gray-800 truncate">{ev.ship_name || '-'}</span>
                   {ev.overall_rating != null && (
                     <span className="text-xs font-semibold text-amber-600 shrink-0">★ {ev.overall_rating.toFixed(1)}</span>
                   )}
                 </div>
-                <div className="text-xs text-gray-400 mt-0.5">
+                <div className="text-xs text-gray-400">
                   {ev.evaluation_period_start} ~ {ev.evaluation_period_end}
                   {ev.evaluator_name ? ` · ${ev.evaluator_name}` : ''}
                 </div>
