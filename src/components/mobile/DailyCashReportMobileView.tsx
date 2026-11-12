@@ -45,7 +45,8 @@ export default function DailyCashReportMobileView({ reportId }: Props) {
                 <div key={t.id} className="text-xs">
                   <div className="flex justify-between gap-2">
                     <span className="text-gray-500 shrink-0">{t.date}</span>
-                    <span className={`truncate ${t.expense ? 'text-red-600' : 'text-blue-600'}`}>
+                    {/* 한국 시세 표기 관행(상승·수입=빨강, 하락·지출=파랑)을 따른다. */}
+                    <span className={`truncate ${t.expense ? 'text-blue-600' : 'text-red-600'}`}>
                       {t.expense ? `-${fmt(t.expense)}` : `+${fmt(t.income)}`}
                     </span>
                   </div>
