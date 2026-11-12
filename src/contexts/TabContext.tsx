@@ -144,7 +144,9 @@ export function TabProvider({ children }: { children: React.ReactNode }) {
   // 탭바에서 이미 열려 있는 탭을 다시 클릭했을 때도 항상 최신 데이터로 새로고침되어야 하는 경로
   // (다른 탭에서의 액션으로 목록이 바뀔 수 있는 목록형 화면) — 그 외 탭은 입력 중인 폼 상태
   // 유지가 더 중요하므로 재마운트하지 않는다.
-  const ALWAYS_REFRESH_ON_ACTIVATE = new Set(['/crew', '/crew/management']);
+  // 선원 목록(/crew, /crew/management)은 여기 있었으나, 탭을 다시 열 때마다 검색어/탭/필터가
+  // 전부 초기화되어 탭을 유지하는 목적이 없어진다는 피드백으로 제외했다(2026-11-12).
+  const ALWAYS_REFRESH_ON_ACTIVATE = new Set<string>([]);
 
   const activateTab = useCallback((id: string) => {
     setTabs(current => {
