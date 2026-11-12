@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { approvalDocumentService } from '@/services/approval-document.service';
 import { renderRichTextReadOnlyHtml, looksLikeHtml } from '@/utils/rich-text-field';
 import { useToast } from '@/hooks/use-toast';
+import AttachmentList from '@/components/mobile/AttachmentList';
+import DailyCashReportMobileView from '@/components/mobile/DailyCashReportMobileView';
 import type { ApprovalDocumentWithDetails } from '@/types/approval-document';
 import type { User } from '@/lib/store';
 
@@ -70,7 +72,9 @@ export default function MobileDocumentDraftPage({ currentUser }: Props) {
 
         <div className="rounded-xl border bg-white p-4 shadow-sm">
           <div className="text-xs font-semibold text-gray-500 mb-2">내용</div>
-          {hasStructuredContent ? (
+          {selected.reference_type === 'daily_cash_report' && selected.reference_id ? (
+            <DailyCashReportMobileView reportId={selected.reference_id} />
+          ) : hasStructuredContent ? (
             <a href={`/print/documents/${selected.id}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline">
               구조화된 양식 문서입니다 — PC 화면에서 전체 내용 보기
             </a>
@@ -83,6 +87,8 @@ export default function MobileDocumentDraftPage({ currentUser }: Props) {
             <div className="text-sm text-gray-400">내용 없음</div>
           )}
         </div>
+
+        <AttachmentList attachments={selected.attachments} />
 
         {selected.status === 'rejected' && selected.final_comment && (
           <div className="rounded-xl border border-red-100 bg-red-50 p-4">
