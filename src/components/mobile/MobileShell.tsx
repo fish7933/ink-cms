@@ -49,8 +49,12 @@ export default function MobileShell() {
   const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState<MobileScreen>('home');
   const [selectedCrew, setSelectedCrew] = useState<CrewWithDetails | null>(null);
+  // 화면을 한 번 방문하면 계속 마운트 상태로 두고(display만 토글) 떠났다 돌아와도 검색어/탭
+  // 선택 등 화면 내부 상태가 그대로 유지되게 한다 — 매번 새로 마운트되면서 초기화되던 문제.
+  const [visited, setVisited] = useState<Set<MobileScreen>>(new Set(['home']));
+  const goTo = (s: MobileScreen) => { setScreen(s); setVisited(prev => new Set(prev).add(s)); };
 
-  const goBack = () => setScreen(screen === 'crew-detail' ? 'crew-list' : 'home');
+  const goBack = () => goTo(screen === 'crew-detail' ? 'crew-list' : 'home');
 
   useEffect(() => {
     let isMounted = true;
@@ -98,13 +102,13 @@ export default function MobileShell() {
       </header>
 
       <main className="flex-1 p-4">
-        {screen === 'home' && (
+        <div style={{ display: screen === 'home' ? 'block' : 'none' }}>
           <div className="grid grid-cols-2 gap-3">
             {TILES.map(tile => (
               <button
                 key={tile.screen}
                 type="button"
-                onClick={() => setScreen(tile.screen)}
+                onClick={() => goTo(tile.screen)}
                 className="flex flex-col items-center justify-center gap-2 rounded-xl border bg-white py-6 text-sm font-medium text-gray-700 shadow-sm active:bg-gray-50"
               >
                 <tile.icon className="h-6 w-6 text-blue-600" />
@@ -112,19 +116,38 @@ export default function MobileShell() {
               </button>
             ))}
           </div>
-        )}
+        </div>
 
-        {screen === 'crew-list' && (
-          <MobileCrewListPage onSelect={crew => { setSelectedCrew(crew); setScreen('crew-detail'); }} />
+        {visited.has('crew-list') && (
+          <div style={{ display: screen === 'crew-list' ? 'block' : 'none' }}>
+            <MobileCrewListPage onSelect={crew => { setSelectedCrew(crew); goTo('crew-detail'); }} />
+          </div>
         )}
-        {screen === 'crew-detail' && selectedCrew && (
-          <MobileCrewDetailPage crew={selectedCrew} />
+        {visited.has('crew-detail') && selectedCrew && (
+          <div style={{ display: screen === 'crew-detail' ? 'block' : 'none' }}>
+            <MobileCrewDetailPage crew={selectedCrew} />
+          </div>
         )}
-
-        {screen === 'approval-inbox' && <MobileApprovalInboxPage currentUser={currentUser} />}
-        {screen === 'document-draft' && <MobileDocumentDraftPage currentUser={currentUser} />}
-        {screen === 'leave-request' && <MobileLeaveRequestPage currentUser={currentUser} />}
-        {screen === 'payslips' && <MobileMyPayslipsPage currentUser={currentUser} />}
+        {visited.has('approval-inbox') && (
+          <div style={{ display: screen === 'approval-inbox' ? 'block' : 'none' }}>
+            <MobileApprovalInboxPage currentUser={currentUser} />
+          </div>
+        )}
+        {visited.has('document-draft') && (
+          <div style={{ display: screen === 'document-draft' ? 'block' : 'none' }}>
+            <MobileDocumentDraftPage currentUser={currentUser} />
+          </div>
+        )}
+        {visited.has('leave-request') && (
+          <div style={{ display: screen === 'leave-request' ? 'block' : 'none' }}>
+            <MobileLeaveRequestPage currentUser={currentUser} />
+          </div>
+        )}
+        {visited.has('payslips') && (
+          <div style={{ display: screen === 'payslips' ? 'block' : 'none' }}>
+            <MobileMyPayslipsPage currentUser={currentUser} />
+          </div>
+        )}
       </main>
     </div>
   );
