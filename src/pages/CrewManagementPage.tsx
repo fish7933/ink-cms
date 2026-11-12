@@ -98,7 +98,10 @@ export function CrewManagementPage() {
 
   // 헤더 클릭 정렬
   type SortField = 'owner' | 'fleet' | 'ship' | 'manning' | 'rank' | 'name' | 'nationality' | 'birth' | 'date1' | 'date2';
-  const [sortField, setSortField] = useState<SortField | null>(null);
+  // 모든 선원 목록은 항상 직급순이 기본이어야 한다 — 컬럼을 직접 클릭해 정렬하기 전까지
+  // null이면 정렬을 전혀 안 걸고 가져온 순서 그대로 보여줘서(모바일은 항상 직급순) 첫
+  // 화면이 서로 달라 보이는 문제가 있었다.
+  const [sortField, setSortField] = useState<SortField | null>('rank');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => { loadData(); }, []);
