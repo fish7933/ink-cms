@@ -34,20 +34,44 @@ function matchesCategory(c: CrewWithDetails & { status?: string }, cat: Category
   return CATEGORY_STATUS_MAP[cat].includes(st);
 }
 
+// 화면 안에서 왔다갔다 하는 동안(MobileShell의 keep-alive)은 컴포넌트가 안 사라지니 괜찮지만,
+// 브라우저 탭을 새로고침하거나 앱을 다시 열면 컴포넌트 자체가 새로 마운트되며 검색어/탭/필터가
+// 전부 초기화된다 — 그래서 localStorage에도 저장해 "다시 접속해도" 유지되게 한다.
+const FILTERS_KEY = 'mobileCrewListFilters';
+interface SavedFilters {
+  search: string; category: CategoryTab;
+  filterOwner: string; filterFleet: string; filterShip: string;
+  filterRank: string; filterManning: string; filterNationality: string;
+}
+function loadSavedFilters(): Partial<SavedFilters> {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
 // 선원 목록 — 조회 전용(모바일 범위는 선원 목록/상세 조회만).
 export default function MobileCrewListPage({ onSelect }: Props) {
   const [crews, setCrews] = useState<CrewWithDetails[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [nationalities, setNationalities] = useState<Nationality[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<CategoryTab>('all');
-  const [filterOwner, setFilterOwner] = useState('all');
-  const [filterFleet, setFilterFleet] = useState('all');
-  const [filterShip, setFilterShip] = useState('all');
-  const [filterRank, setFilterRank] = useState('all');
-  const [filterManning, setFilterManning] = useState('all');
-  const [filterNationality, setFilterNationality] = useState('all');
+  const saved = loadSavedFilters();
+  const [search, setSearch] = useState(saved.search ?? '');
+  const [category, setCategory] = useState<CategoryTab>(saved.category ?? 'all');
+  const [filterOwner, setFilterOwner] = useState(saved.filterOwner ?? 'all');
+  const [filterFleet, setFilterFleet] = useState(saved.filterFleet ?? 'all');
+  const [filterShip, setFilterShip] = useState(saved.filterShip ?? 'all');
+  const [filterRank, setFilterRank] = useState(saved.filterRank ?? 'all');
+  const [filterManning, setFilterManning] = useState(saved.filterManning ?? 'all');
+  const [filterNationality, setFilterNationality] = useState(saved.filterNationality ?? 'all');
+
+  useEffect(() => {
+    const toSave: SavedFilters = { search, category, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterNationality };
+    try { localStorage.setItem(FILTERS_KEY, JSON.stringify(toSave)); } catch { /* ignore */ }
+  }, [search, category, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterNationality]);
 
   useEffect(() => {
     Promise.all([crewService.getAllWithDetails(), getRanks(), getNationalities()]).then(([crewData, rankData, natData]) => {
