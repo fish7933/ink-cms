@@ -4,6 +4,7 @@ const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const CrewManagementPage = lazy(() => import('@/pages/CrewManagementPage'));
 const CrewDetailPage = lazy(() => import('@/pages/CrewDetailPage'));
 const CrewInputPage = lazy(() => import('@/pages/CrewInputPage'));
+const ResumeParseTestPage = lazy(() => import('@/pages/ResumeParseTestPage'));
 const CrewAssignmentPage = lazy(() => import('@/pages/CrewAssignmentPage'));
 const CrewRotationPage = lazy(() => import('@/pages/CrewRotationPage').then(m => ({ default: m.CrewRotationPage })));
 const RotationPlanFormPage = lazy(() => import('@/pages/RotationPlanFormPage'));
@@ -108,6 +109,8 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew/new', component: CrewDetailPage },
   { path: '/crew/:id', component: CrewDetailPage },
   { path: '/crew', component: CrewManagementPage },
+  // 메뉴에는 안 올림(1단계 테스트 전용) — 주소로 직접 접속: /resume-parse-test
+  { path: '/resume-parse-test', component: ResumeParseTestPage },
   { path: '/assignments', component: CrewAssignmentPage },
   { path: '/crew-rotation/new', component: RotationPlanFormPage },
   { path: '/crew-rotation/:id/edit', component: RotationPlanFormPage },
