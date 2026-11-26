@@ -38,6 +38,7 @@
   "교대계획(하선) ({{count}})": "Rotation Plan (Disembarkation) ({{count}})",
   "삭제 ({{count}})": "Delete ({{count}})",
   "선원 등록": "Register Crew",
+  "AI로 선원 등록": "Register Crew with AI",
   "새로고침": "Refresh",
   "이름, 직급, 여권번호, 선원수첩번호로 검색...": "Search by name, rank, passport number, seaman's book number...",
   "선주사": "Owner Company",

@@ -5,6 +5,7 @@ const CrewManagementPage = lazy(() => import('@/pages/CrewManagementPage'));
 const CrewDetailPage = lazy(() => import('@/pages/CrewDetailPage'));
 const CrewInputPage = lazy(() => import('@/pages/CrewInputPage'));
 const ResumeParseTestPage = lazy(() => import('@/pages/ResumeParseTestPage'));
+const CrewResumeAiRegisterPage = lazy(() => import('@/pages/CrewResumeAiRegisterPage'));
 const CrewAssignmentPage = lazy(() => import('@/pages/CrewAssignmentPage'));
 const CrewRotationPage = lazy(() => import('@/pages/CrewRotationPage').then(m => ({ default: m.CrewRotationPage })));
 const RotationPlanFormPage = lazy(() => import('@/pages/RotationPlanFormPage'));
@@ -111,6 +112,8 @@ export const routeConfig: RouteEntry[] = [
   { path: '/crew', component: CrewManagementPage },
   // 메뉴에는 안 올림(1단계 테스트 전용) — 주소로 직접 접속: /resume-parse-test
   { path: '/resume-parse-test', component: ResumeParseTestPage },
+  // 메뉴에는 안 올림 — 선원 목록(CrewManagementPage)의 "AI로 선원 등록" 버튼으로만 접근
+  { path: '/crew/ai-register', component: CrewResumeAiRegisterPage },
   { path: '/assignments', component: CrewAssignmentPage },
   { path: '/crew-rotation/new', component: RotationPlanFormPage },
   { path: '/crew-rotation/:id/edit', component: RotationPlanFormPage },

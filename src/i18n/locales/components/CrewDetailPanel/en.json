@@ -15,6 +15,8 @@
   "이름(영문)과 직급은 필수입니다.": "Name (English) and rank are required.",
   "등록 완료": "Registered",
   "선원이 등록되었습니다.": "Crew member has been registered.",
+  "선원이 등록되었습니다. 승선 경력 {{count}}건도 함께 등록되었습니다.": "Crew member has been registered. {{count}} sea service record(s) were also registered.",
+  "AI가 이력서에서 추출한 내용이 채워져 있습니다. 저장 전 각 항목을 꼭 확인/수정하세요.": "This has been pre-filled with content extracted by AI from the resume. Please review and correct each field before saving.",
   "저장 완료": "Saved",
   "선원 정보가 수정되었습니다.": "Crew member information has been updated.",
   "저장 실패": "Save failed",

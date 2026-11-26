@@ -8,7 +8,7 @@ import { crewDisplayName } from '@/lib/utils';
 import {
   Plus, Search, X, ChevronLeft, ChevronRight, Trash2,
   ArrowUpCircle, Ship, Users, UserCheck, UserMinus, LayoutList,
-  CheckCircle, XCircle, RefreshCw,
+  CheckCircle, XCircle, RefreshCw, Sparkles,
   ArrowUp, ArrowDown, ArrowUpDown, Star,
 } from 'lucide-react';
 import { useTabContext } from '@/contexts/TabContext';
@@ -538,6 +538,11 @@ export function CrewManagementPage() {
                       </Button>
                     )}
                   </>
+                )}
+                {permissions.canCreate && (
+                  <Button onClick={() => openNewTab('/crew/ai-register', t('AI로 선원 등록'), true)} size="sm" variant="outline" className="gap-1.5 h-8 border-blue-300 text-blue-700 hover:bg-blue-50">
+                    <Sparkles className="w-4 h-4" />{t('AI로 선원 등록')}
+                  </Button>
                 )}
                 {permissions.canCreate && (
                   <Button onClick={() => openNewTab('/crew/new', t('선원 등록'), true)} size="sm" className="gap-1.5 h-8">
