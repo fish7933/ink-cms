@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import en from '@/i18n/locales/components/CrewDetailPanel/en.json';
-import { Save, Upload, User, X, Plus, Trash2, FileText, FileSpreadsheet, Edit2, Star, Stethoscope } from 'lucide-react';
+import { Save, Upload, User, X, Plus, Trash2, FileText, FileSpreadsheet, Edit2, Star, Stethoscope, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,10 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { supabase } from '@/lib/supabase';
 import { getFileUrl } from '@/lib/upload';
 import { crewService } from '@/services/crew.service';
+import { getCurrentUser } from '@/lib/store';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { crewDisplayName } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -46,7 +49,13 @@ import {
   getCrewSalaryRecords, deleteCrewSalaryRecord,
   getCrewInterviewLogs, deleteCrewInterviewLog,
 } from '@/services/crew-extended.service';
-import { consumeAiCrewPrefill, type AiCrewPrefillPayload } from '@/lib/ai-crew-prefill';
+import { consumeAiCrewPrefill, notesForCategory, type AiCrewPrefillPayload, type PendingSeaServiceRecord, type ReviewerNote } from '@/lib/ai-crew-prefill';
+import { getSignOffReasons } from '@/services/sign-off-reason.service';
+import { getShips } from '@/services/ship.service';
+import { getCompanies } from '@/services/company.service';
+import { getFleets } from '@/services/fleet.service';
+import type { Ship, Company, Fleet } from '@/types/models';
+import type { SignOffReason } from '@/types/sign-off-reason';
 import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord, CrewInterviewLog, CrewInterviewLogWithDetails } from '@/types/crew-extended';
 import { crewPayrollService } from '@/services/crew-payroll.service';
 import type { CrewPayrollHistoryRow, CrewPayslipWithDetails } from '@/types/crew-payroll';
@@ -86,7 +95,9 @@ interface Rank {
 interface CrewDetailPanelProps {
   id?: string;
   onBack: () => void;
-  onSaved: (id: string) => void;
+  // viaAi: true면 이력서 AI 추출로 등록한 신규 선원 — CrewDetailPage가 선원 상세 화면 대신
+  // 선원 목록의 "등록" 탭으로 보내서 방금 등록된 선원을 목록에서 바로 확인할 수 있게 한다.
+  onSaved: (id: string, opts?: { viaAi?: boolean }) => void;
   embedded?: boolean;
 }
 
@@ -180,6 +191,28 @@ function SectionDivider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// 그 탭(섹션)에 해당하는 AI 비고만 탭 맨 아래에 붙여서 보여준다 — 탭을 옮기면 그 탭에 맞는
+// 비고로 바뀐다(전체 탭에 똑같은 비고가 따라다니지 않도록).
+function TabNotesList({ items }: { items: string[] }) {
+  const { t } = useTranslation('CrewDetailPanel');
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-3 bg-amber-50 border border-amber-200 rounded-md px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 mb-1.5">
+        <FileText className="w-3.5 h-3.5" />{t('AI 비고')}
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2 text-xs text-amber-900">
+            <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+            <span className="leading-relaxed">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // 인덱스카드의 종이 탭처럼 보이도록 — 선택된 탭은 아래 카드 본문과 같은 흰색이라 경계선이
 // 사라져 하나로 이어진 것처럼 보이고, 나머지는 회색으로 뒤에 접혀 있는 것처럼 보인다.
 const CARD_TAB_CLASS =
@@ -220,6 +253,12 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [exportingExcel, setExportingExcel] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
+  const [signOffReasons, setSignOffReasons] = useState<SignOffReason[]>([]);
+  // 이력서 승선 경력의 선박명이 우리가 관리하는 선박과 일치하면, 그 선박의 선주/플릿을
+  // 역추적해 "당사 승선 경력(company_assignment)으로 등록할지" 사람이 고를 수 있게 한다.
+  const [allShips, setAllShips] = useState<Ship[]>([]);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
+  const [allFleets, setAllFleets] = useState<Fleet[]>([]);
   const [nationalityValidityOverrides, setNationalityValidityOverrides] = useState<CertificateNationalityValidity[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
@@ -239,11 +278,29 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   // 물려 쓰이고 있어 자유롭게 고치면 안 되므로 잠근다. 등록됨 계열(등록/검토중/선주송부/승인/거절)
   // 상태일 때만 계속 수정 가능.
   const [identityFieldsLocked, setIdentityFieldsLocked] = useState(false);
+  // 어떤 경로로 등록된 선원인지 — 'ai_resume'면 이력서 AI 추출로 등록된 선원이라는 뱃지를 보여준다.
+  const [registrationSource, setRegistrationSource] = useState<string | null>(null);
+
+  // 동일 선원 중복 등록 방지 — 이름(영문)+생년월일 또는 여권/선원수첩 번호가 같은 선원이 이미
+  // 있으면 저장 전에 확인창을 띄운다(AI 등록/수동 등록 공통).
+  interface DuplicateCandidate {
+    id: string; name: string; name_english: string; date_of_birth: string;
+    passport_number: string; seaman_book_number: string;
+  }
+  const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  // 사용자가 "그래도 새로 등록" 또는 "삭제 후 새로 등록"을 한 번 선택하면, 같은 내용으로
+  // handleSave를 다시 불러도 또 걸리지 않도록 이번 저장에 한해 검사를 건너뛴다.
+  const [duplicateCheckBypassed, setDuplicateCheckBypassed] = useState(false);
+  const [resolvingDuplicate, setResolvingDuplicate] = useState(false);
 
   // 이력서 AI 추출(중간 점검 화면에서 승인된 내용) — 신규 등록(isNew)일 때만, 마운트 시 한 번만 적용.
   // aiPrefillRef에 원본을 계속 들고 있어야 "AI 추출값으로 되돌리기" 버튼이 언제든 다시 적용할 수 있다.
   const aiPrefillRef = useRef<AiCrewPrefillPayload | null>(null);
   const [aiPrefillApplied, setAiPrefillApplied] = useState(false);
+  // AI가 중간 점검 단계에서 남긴 비고 — 기본정보/증서/비상연락망/승선경력 등 어느 탭으로
+  // 이동해도 계속 보이도록 탭 바로 아래(탭 내용과 별개로) 고정해서 보여준다.
+  const [aiReviewNotes, setAiReviewNotes] = useState<ReviewerNote[]>([]);
   // applyAiPrefill을 호출할 때마다(마운트 1회 + "되돌리기" 때마다) 올라가는 카운터 — 아래 국적
   // 매칭 effect가 formData.nationality 변화와 무관하게 그때마다 다시 실행되도록 의존성에 둔다.
   const [prefillVersion, setPrefillVersion] = useState(0);
@@ -297,6 +354,10 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     getNationalities(true).then(setNationalities).catch(console.error);
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
     getCertificateCategories(true).then(setCertificateCategories).catch(console.error);
+    getSignOffReasons().then(setSignOffReasons).catch(console.error);
+    getShips().then(setAllShips).catch(console.error);
+    getCompanies().then(setAllCompanies).catch(console.error);
+    getFleets().then(setAllFleets).catch(console.error);
     getAllNationalityValidityOverrides().then(setNationalityValidityOverrides).catch(console.error);
     if (!isNew) loadCrew(id!);
     else {
@@ -304,6 +365,8 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       setPreviewUrl('');
       setShipContext(null);
       setIdentityFieldsLocked(false);
+      setDuplicateCheckBypassed(false);
+      setDuplicateCandidates([]);
 
       const prefill = aiPrefillRef.current ?? consumeAiCrewPrefill();
       aiPrefillRef.current = prefill;
@@ -315,6 +378,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
         setCertificates([]);
         setEmergencyContacts([]);
         setPendingSeaServiceRecords([]);
+        setAiReviewNotes([]);
       }
     }
   }, [id]);
@@ -348,6 +412,28 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       note: c.relationship && !RELATIONSHIPS.includes(c.relationship) ? `(원문: ${c.relationship})` : '',
     })));
     setPendingSeaServiceRecords(prefill.sea_service_records.filter(r => r.ship_name.trim() && r.sign_on_date.trim()));
+    setRegistrationSource('ai_resume');
+    setAiReviewNotes(prefill.notes_for_reviewer || []);
+
+    // 이력서에서 찾아낸 증명사진이 있으면 File로 바꿔서 기존 "사진 업로드" state에 그대로
+    // 꽂아준다 — uploadPhoto()가 저장 시 자동으로 업로드하므로 별도 업로드 코드가 필요 없다.
+    if (prefill.photo_base64 && prefill.photo_mime) {
+      try {
+        const byteChars = atob(prefill.photo_base64);
+        const byteNumbers = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+        const ext = prefill.photo_mime.split('/')[1] || 'jpg';
+        const file = new File([new Uint8Array(byteNumbers)], `resume-photo.${ext}`, { type: prefill.photo_mime });
+        setSelectedFile(file);
+        setPreviewUrl(`data:${prefill.photo_mime};base64,${prefill.photo_base64}`);
+      } catch (e) {
+        console.error('이력서 사진 적용 실패:', e);
+      }
+    } else {
+      setSelectedFile(null);
+      setPreviewUrl('');
+    }
+
     // 국적은 위 setFormData에서 이미 EMPTY_FORM 기본값('')으로 비워졌다 — prefillVersion을
     // 올려서 아래 국적 매칭 effect가 되돌리기 때도 다시 실행되게 한다.
     setPrefillVersion(v => v + 1);
@@ -380,6 +466,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       if (!data) { toast({ title: t('선원을 찾을 수 없습니다.'), variant: 'destructive' }); onBack(); return; }
 
       setIdentityFieldsLocked(!REGISTERED_STATUSES.has(data.current_status || data.status || 'registered'));
+      setRegistrationSource(data.registration_source || null);
       rotationService.getCrewReservationsByIds([crewId]).then(map => setCrewReservations(map.get(crewId) || []));
       supabase.from('crew_embarkation_records').select('rank_grade').eq('crew_member_id', crewId).eq('status', 'active').maybeSingle()
         .then(({ data: activeEmbark }) => setCurrentGrade(activeEmbark?.rank_grade || data.current_grade || null));
@@ -556,13 +643,100 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const removeContact = (idx: number) => setEmergencyContacts(prev => prev.filter((_, i) => i !== idx));
   const f = (field: string, value: string) => setFormData(p => ({ ...p, [field]: value }));
 
+  // 신규 등록(저장 전) 단계의 승선 경력 — AI가 채워준 값은 물론, 사람이 직접 행을 추가/삭제/
+  // 수정할 수도 있다(선원 id가 아직 없어 이 단계에선 addSeaServiceRecord를 바로 못 부르고,
+  // 저장 성공 직후 handleSave에서 한꺼번에 생성한다).
+  const addPendingSeaRecord = () => setPendingSeaServiceRecords(prev => [...prev, {
+    ship_name: '', ship_type: '', rank: '', sign_on_date: '', sign_off_date: '',
+    owner_company_name: '', ship_manager_name: '', manning_agency_name: '', sign_off_reason: '', sign_off_reason_id: '',
+  }]);
+  const updatePendingSeaRecord = (idx: number, field: keyof PendingSeaServiceRecord, value: string | boolean) =>
+    setPendingSeaServiceRecords(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  const removePendingSeaRecord = (idx: number) => setPendingSeaServiceRecords(prev => prev.filter((_, i) => i !== idx));
+
+  // 승선 경력의 선박명이 우리 ships 목록과 (공백 정리 후) 대소문자 무시하고 정확히 일치하면
+  // 그 선박을 "당사 관리 선박"으로 본다 — 선주/플릿은 이 선박의 owner_id/fleet_id로 역추적.
+  const matchManagedShip = (shipName: string): Ship | undefined => {
+    const norm = shipName.trim().toLowerCase();
+    if (!norm) return undefined;
+    return allShips.find(s => s.name.trim().toLowerCase() === norm);
+  };
+
   const parseBool = (val: string): boolean | null => val === 'yes' ? true : val === 'no' ? false : null;
   const parseOptional = (val: string): string | null => (val && val !== 'none') ? val : null;
 
-  const handleSave = async () => {
+  // 이름(영문)+생년월일 또는 여권/선원수첩 번호가 같은(soft-delete 안 된) 선원을 찾는다.
+  // 각 조건을 따로 조회해 합치는 방식 — supabase .or()에 값을 직접 넣으면 특수문자(쉼표 등)
+  // 이스케이프 문제가 생길 수 있어 피한다.
+  const checkDuplicateCrew = async (): Promise<DuplicateCandidate[]> => {
+    const cols = 'id,name,name_english,date_of_birth,passport_number,seaman_book_number';
+    const found = new Map<string, DuplicateCandidate>();
+    const addAll = (rows: DuplicateCandidate[] | null) => rows?.forEach(r => found.set(r.id, r));
+
+    if (formData.name_english.trim() && formData.date_of_birth) {
+      const { data } = await supabase.from('crew_members').select(cols)
+        .is('deleted_at', null)
+        .ilike('name_english', formData.name_english.trim())
+        .eq('date_of_birth', formData.date_of_birth);
+      addAll(data);
+    }
+    if (formData.passport_number.trim()) {
+      const { data } = await supabase.from('crew_members').select(cols)
+        .is('deleted_at', null).eq('passport_number', formData.passport_number.trim());
+      addAll(data);
+    }
+    if (formData.seaman_book_number.trim()) {
+      const { data } = await supabase.from('crew_members').select(cols)
+        .is('deleted_at', null).eq('seaman_book_number', formData.seaman_book_number.trim());
+      addAll(data);
+    }
+    return [...found.values()];
+  };
+
+  // 중복 확인 다이얼로그에서 "기존 선원 정보로 이동"을 고른 경우 — 실제로는 아무것도 저장하지
+  // 않고 onSaved(기존 id)를 그대로 호출해 "저장 완료 후 이동" 로직을 재사용한다.
+  const handleUseExistingCrew = (existingId: string) => {
+    setDuplicateDialogOpen(false);
+    onSaved(existingId);
+  };
+
+  const handleDeleteDuplicatesAndReregister = async () => {
+    setResolvingDuplicate(true);
+    try {
+      const me = await getCurrentUser();
+      if (!me) return;
+      const { error } = await crewService.softDelete(duplicateCandidates.map(d => d.id), me.id);
+      if (error) { toast({ title: t('기존 선원 삭제 실패'), description: error, variant: 'destructive' }); return; }
+      setDuplicateDialogOpen(false);
+      setDuplicateCheckBypassed(true);
+      await handleSave(true);
+    } finally {
+      setResolvingDuplicate(false);
+    }
+  };
+
+  const handleRegisterAsDifferentPerson = () => {
+    setDuplicateDialogOpen(false);
+    setDuplicateCheckBypassed(true);
+    handleSave(true);
+  };
+
+  // skipDuplicateCheck: 중복 확인 다이얼로그의 선택지에서 바로 다시 호출할 때 쓴다.
+  // setDuplicateCheckBypassed(true) 직후 곧바로 handleSave()를 부르면, 아직 리렌더 전이라
+  // 이 함수 클로저 안의 duplicateCheckBypassed는 여전히 이전 값(false)이라 검사를 또 통과
+  // 못하고 다이얼로그가 다시 떠버린다(상태 업데이트는 비동기) — 그래서 파라미터로 직접 넘긴다.
+  const handleSave = async (skipDuplicateCheck = false) => {
     if (!formData.name_english || !formData.rank_id) {
       toast({ title: t('필수 항목 누락'), description: t('이름(영문)과 직급은 필수입니다.'), variant: 'destructive' });
       return;
+    }
+    if (isNew && !duplicateCheckBypassed && !skipDuplicateCheck) {
+      const dups = await checkDuplicateCrew();
+      if (dups.length > 0) {
+        setDuplicateCandidates(dups);
+        setDuplicateDialogOpen(true);
+        return;
+      }
     }
     try {
       setSaving(true);
@@ -642,26 +816,41 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       if (isNew) {
         const { data: newCrew, error } = await supabase
           .from('crew_members')
-          .insert({ ...updateData, current_status: 'registered', status: 'registered', created_at: new Date().toISOString() })
+          .insert({
+            ...updateData,
+            current_status: 'registered',
+            status: 'registered',
+            created_at: new Date().toISOString(),
+            registration_source: aiPrefillApplied ? 'ai_resume' : null,
+          })
           .select().single();
         if (error) throw new Error(error.message);
 
-        // AI 추출 승선 경력(입사 전) — 이 폼에는 입력란이 없어 저장 성공 직후 별도 테이블에 생성.
+        // 승선 경력(입사 전) — "승선 경력" 탭에서 확정한 행들을 저장 성공 직후 별도 테이블에 생성.
+        // 필수(선박명/승선일)가 비어있는 빈 행은 건너뛴다(사용자가 "추가"만 하고 안 채운 경우).
         let seaServiceAdded = 0;
-        for (const rec of pendingSeaServiceRecords) {
+        for (const rec of pendingSeaServiceRecords.filter(r => r.ship_name.trim() && r.sign_on_date.trim())) {
+          // "당사 승선 경력으로 등록"을 고른 행은 company_assignment로 — 수당 등 경력 계산에서
+          // 당사 재직 기간으로 집계되려면 이 구분이 실제로 중요하다(사용자 요청).
+          const matchedShip = rec.treat_as_company_assignment ? matchManagedShip(rec.ship_name) : undefined;
           try {
             await addSeaServiceRecord({
               crew_member_id: newCrew.id,
-              record_type: 'pre_company',
+              record_type: matchedShip ? 'company_assignment' : 'pre_company',
+              ship_id: matchedShip?.id || undefined,
               ship_name: rec.ship_name,
               ship_type: rec.ship_type || undefined,
               rank: rec.rank || '-',
               sign_on_date: rec.sign_on_date,
               sign_off_date: rec.sign_off_date || undefined,
+              owner_company_name: rec.owner_company_name || undefined,
+              ship_manager_name: rec.ship_manager_name || undefined,
+              manning_agency_name: rec.manning_agency_name || undefined,
+              sign_off_reason_id: rec.sign_off_reason_id || undefined,
             });
             seaServiceAdded++;
           } catch (e) {
-            console.error('AI 추출 승선경력 등록 실패:', e);
+            console.error('승선경력 등록 실패:', e);
           }
         }
 
@@ -671,7 +860,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             ? t('선원이 등록되었습니다. 승선 경력 {{count}}건도 함께 등록되었습니다.', { count: seaServiceAdded })
             : t('선원이 등록되었습니다.'),
         });
-        onSaved(newCrew.id);
+        onSaved(newCrew.id, { viaAi: aiPrefillApplied });
       } else {
         const { error } = await supabase.from('crew_members').update(updateData).eq('id', id!);
         if (error) throw new Error(error.message);
@@ -814,10 +1003,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               ))}
             </div>
           )}
-          <div className="text-xl font-bold text-gray-900">
-            {rankGradeLabel && <span className="text-blue-700 mr-2">{rankGradeLabel}</span>}
+          <div className="text-xl font-bold text-gray-900 flex items-center flex-wrap gap-1.5">
+            {rankGradeLabel && <span className="text-blue-700 mr-0.5">{rankGradeLabel}</span>}
             {crewDisplayName(formData) || (isNew ? t('새 선원 등록') : t('선원 정보 수정'))}
-            {formData.nationality && <span className="text-gray-400 font-normal ml-1.5">({formData.nationality})</span>}
+            {formData.nationality && <span className="text-gray-400 font-normal">({formData.nationality})</span>}
+            {registrationSource === 'ai_resume' && (
+              <Badge variant="outline" className="text-[11px] font-normal gap-1 border-blue-300 text-blue-600 bg-blue-50 align-middle">
+                <Sparkles className="w-3 h-3" />{t('AI 이력서 등록')}
+              </Badge>
+            )}
           </div>
         </div>
       </div>
@@ -831,6 +1025,41 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
 
       {!isNew && <CrewResumeDialog open={resumeDialogOpen} onOpenChange={setResumeDialogOpen} crewId={id!} />}
 
+      <AlertDialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('이미 등록된 선원과 일치하는 것 같습니다')}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>{t('이름(영문)+생년월일 또는 여권·선원수첩 번호가 같은 선원이 이미 있습니다:')}</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  {duplicateCandidates.map(d => (
+                    <li key={d.id}>
+                      {d.name_english || d.name}
+                      {d.date_of_birth && ` (${d.date_of_birth})`}
+                      {d.passport_number && ` · ${t('여권')} ${d.passport_number}`}
+                    </li>
+                  ))}
+                </ul>
+                <p>{t('동일 인물이 시스템에 중복 등록되지 않도록, 아래 중 하나를 선택하세요.')}</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-col gap-2">
+            <Button variant="outline" className="w-full justify-start" onClick={() => handleUseExistingCrew(duplicateCandidates[0].id)}>
+              {t('기존 선원 정보로 이동 — 거기에 계속 입력')}
+            </Button>
+            <Button variant="destructive" className="w-full justify-start" onClick={handleDeleteDuplicatesAndReregister} disabled={resolvingDuplicate}>
+              {t('기존 데이터 삭제 후 새로 등록')}
+            </Button>
+            <Button variant="secondary" className="w-full justify-start" onClick={handleRegisterAsDifferentPerson}>
+              {t('다른 사람입니다 — 그래도 새 선원으로 등록')}
+            </Button>
+            <AlertDialogCancel className="w-full mt-0">{t('닫기(아무것도 하지 않음)')}</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* 탭 — 실제 인덱스카드를 뽑아 본 것처럼, 선택된 탭이 카드 본문과 이어지는 하나의
           종이처럼 보이도록 테두리가 맞물리게 만든다. */}
       <Tabs defaultValue="basic" onValueChange={scrollToTop}>
@@ -840,6 +1069,11 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             {t('증서')}{certificates.length > 0 && <span className="ml-1 bg-blue-100 text-blue-700 rounded-full px-1.5">{certificates.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="emergency" className={CARD_TAB_CLASS}>{t('비상연락망')}</TabsTrigger>
+          {isNew && (
+            <TabsTrigger value="pending_sea_service" className={CARD_TAB_CLASS}>
+              {t('승선 경력')}{pendingSeaServiceRecords.length > 0 && <span className="ml-1 bg-green-100 text-green-700 rounded-full px-1.5">{pendingSeaServiceRecords.length}</span>}
+            </TabsTrigger>
+          )}
           {!isNew && (
             <>
               <TabsTrigger value="sea_service" className={CARD_TAB_CLASS}>
@@ -1000,6 +1234,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
             </div>
           </div>
         </div>
+        {isNew && <TabNotesList items={notesForCategory(aiReviewNotes, 'basic_info')} />}
         </TabsContent>
 
         {/* 연락처 */}
@@ -1034,7 +1269,108 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </div>
             ))}
           </div>
+          {isNew && <TabNotesList items={notesForCategory(aiReviewNotes, 'emergency_contacts')} />}
         </TabsContent>
+
+        {/* 승선 경력(신규 등록, 저장 전) — AI가 채워준 값(있다면) + 직접 추가/수정. 저장 성공
+            직후 handleSave에서 한꺼번에 sea_service_records 테이블에 생성된다. */}
+        {isNew && (
+          <TabsContent value="pending_sea_service" className="mt-3 data-[state=inactive]:hidden">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold">{t('승선 경력 (입사 전)')}</span>
+                <Button type="button" variant="outline" size="sm" onClick={addPendingSeaRecord} className="h-7 text-xs gap-1">
+                  <Plus className="h-3 w-3" />{t('추가')}
+                </Button>
+              </div>
+              {pendingSeaServiceRecords.length === 0 ? (
+                <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed rounded-md">{t('승선 경력을 추가하세요.')}</div>
+              ) : (
+                <div className="overflow-x-auto no-scrollbar">
+                  <table className="w-full text-xs">
+                    <thead><tr className="border-b bg-gray-50/50">
+                      <th className="text-left p-1.5 w-[160px]">{t('선박명')} *</th>
+                      <th className="text-left p-1.5 w-[170px]">{t('당사 관리 선박')}</th>
+                      <th className="text-left p-1.5 w-[110px]">{t('선종')}</th>
+                      <th className="text-left p-1.5 w-[90px]">{t('직급')}</th>
+                      <th className="text-left p-1.5 w-[130px]">{t('승선일')} *</th>
+                      <th className="text-left p-1.5 w-[130px]">{t('하선일')}</th>
+                      <th className="text-left p-1.5 w-[140px]">{t('선주사')}</th>
+                      <th className="text-left p-1.5 w-[140px]">{t('선박관리사')}</th>
+                      <th className="text-left p-1.5 w-[140px]">{t('매닝사')}</th>
+                      <th className="text-left p-1.5 w-[150px]">{t('하선사유')}</th>
+                      <th className="text-center p-1.5 w-[36px]"></th>
+                    </tr></thead>
+                    <tbody>
+                      {pendingSeaServiceRecords.map((rec, idx) => {
+                        const matchedShip = matchManagedShip(rec.ship_name);
+                        const matchedOwnerName = matchedShip ? allCompanies.find(c => c.id === matchedShip.owner_id)?.name : undefined;
+                        const matchedFleetName = matchedShip?.fleet_id ? allFleets.find(f => f.id === matchedShip.fleet_id)?.name : undefined;
+                        return (
+                        <tr key={idx} className={`border-b hover:bg-gray-50/50 ${rec.treat_as_company_assignment ? 'bg-emerald-50/60' : ''}`}>
+                          <td className="p-1"><Input value={rec.ship_name} onChange={e => updatePendingSeaRecord(idx, 'ship_name', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1">
+                            {matchedShip ? (
+                              <label className="flex items-start gap-1.5 cursor-pointer">
+                                <Checkbox
+                                  checked={!!rec.treat_as_company_assignment}
+                                  onCheckedChange={checked => {
+                                    updatePendingSeaRecord(idx, 'treat_as_company_assignment', !!checked);
+                                    // 당사 선박으로 확정하면 선주사/선박관리사/선박명/선종은 이력서 원문이
+                                    // 아니라 우리 시스템에 등록된 값으로 덮어쓴다 — 당사 기록이 기준.
+                                    if (checked && matchedShip) {
+                                      updatePendingSeaRecord(idx, 'ship_name', matchedShip.name);
+                                      if (matchedShip.ship_type) updatePendingSeaRecord(idx, 'ship_type', matchedShip.ship_type);
+                                      updatePendingSeaRecord(idx, 'owner_company_name', matchedOwnerName || '');
+                                      updatePendingSeaRecord(idx, 'ship_manager_name', matchedFleetName || '');
+                                    }
+                                  }}
+                                  className="mt-0.5 shrink-0"
+                                />
+                                <span className="text-[11px] text-emerald-700 leading-tight">
+                                  {t('당사 승선 경력으로 등록')}
+                                  <br />
+                                  <span className="text-gray-500">{[matchedOwnerName, matchedFleetName].filter(Boolean).join(' / ') || t('(당사 관리 선박)')}</span>
+                                </span>
+                              </label>
+                            ) : (
+                              <span className="text-gray-300 text-[11px]">-</span>
+                            )}
+                          </td>
+                          <td className="p-1"><Input value={rec.ship_type} onChange={e => updatePendingSeaRecord(idx, 'ship_type', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1"><Input value={rec.rank} onChange={e => updatePendingSeaRecord(idx, 'rank', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1"><Input type="date" value={rec.sign_on_date} onChange={e => updatePendingSeaRecord(idx, 'sign_on_date', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1"><Input type="date" value={rec.sign_off_date} onChange={e => updatePendingSeaRecord(idx, 'sign_off_date', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1"><Input value={rec.owner_company_name} onChange={e => updatePendingSeaRecord(idx, 'owner_company_name', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1"><Input value={rec.ship_manager_name} onChange={e => updatePendingSeaRecord(idx, 'ship_manager_name', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1"><Input value={rec.manning_agency_name} onChange={e => updatePendingSeaRecord(idx, 'manning_agency_name', e.target.value)} className="h-7 text-xs" /></td>
+                          <td className="p-1">
+                            <Select value={rec.sign_off_reason_id || '_none'} onValueChange={v => updatePendingSeaRecord(idx, 'sign_off_reason_id', v === '_none' ? '' : v)}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder={t('하선 사유 선택')} /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="_none" className="text-xs">{t('선택 안함')}</SelectItem>
+                                {signOffReasons.map(r => <SelectItem key={r.id} value={r.id} className="text-xs">{r.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            {rec.sign_off_reason && !rec.sign_off_reason_id && (
+                              <p className="text-[10px] text-amber-600 mt-0.5 truncate" title={rec.sign_off_reason}>{t('이력서 원문')}: {rec.sign_off_reason}</p>
+                            )}
+                          </td>
+                          <td className="p-1 text-center">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removePendingSeaRecord(idx)} className="h-6 w-6 p-0 text-red-400 hover:text-red-600"><Trash2 className="h-3 w-3" /></Button>
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="text-xs text-gray-400">{t('선박명과 승선일이 있는 행만 저장 시 승선 경력(입사 전)으로 함께 등록됩니다.')}</p>
+              <TabNotesList items={notesForCategory(aiReviewNotes, 'sea_service')} />
+            </div>
+          </TabsContent>
+        )}
 
         {/* 증서 */}
         <TabsContent value="certificates" className="mt-3 data-[state=inactive]:hidden">
@@ -1165,6 +1501,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
               </>
             )}
           </div>
+          {isNew && <TabNotesList items={notesForCategory(aiReviewNotes, 'certificates')} />}
         </TabsContent>
         {/* 승선경력 */}
         {!isNew && (
@@ -1696,7 +2033,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
           <span className="text-sm font-medium text-gray-500">
             {isNew ? t('새 선원 등록') : crewDisplayName(formData) || t('선원 정보 수정')}
           </span>
-          <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
+          <Button onClick={() => handleSave()} disabled={saving} size="sm" className="gap-1.5 h-8">
             <Save className="w-4 h-4" />
             {saving ? t('저장 중...') : isNew ? t('등록') : t('저장')}
           </Button>
@@ -1756,7 +2093,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                   {exportingExcel ? t('저장 중...') : t('엑셀로 저장')}
                 </Button>
               )}
-              <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 h-8">
+              <Button onClick={() => handleSave()} disabled={saving} size="sm" className="gap-1.5 h-8">
                 <Save className="w-4 h-4" />
                 {saving ? t('저장 중...') : isNew ? t('등록') : t('저장')}
               </Button>

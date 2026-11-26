@@ -2,7 +2,7 @@ export type DispatchType = 'promotion' | 'demotion';
 export type DispatchStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'executed';
 // 등급은 급여 템플릿에서 직급별로 자유롭게 정의되므로 고정 유니언이 아닌 문자열로 확장.
 export type RankGrade = string;
-export type RegistrationSource = 'agency_recommended' | 'agency_direct' | 'company_direct';
+export type RegistrationSource = 'agency_recommended' | 'agency_direct' | 'company_direct' | 'ai_resume';
 
 export const RANK_GRADE_LABELS: Record<string, string> = {
   A: 'A급 (최고)',
@@ -28,6 +28,7 @@ export const REGISTRATION_SOURCE_LABELS: Record<RegistrationSource, string> = {
   agency_recommended: '매닝사 추천 등록',
   agency_direct: '매닝사 직접 등록',
   company_direct: '본사 직접 등록',
+  ai_resume: 'AI 이력서 등록',
 };
 
 export interface CrewDispatchOrder {

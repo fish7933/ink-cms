@@ -39,6 +39,8 @@
   "하선일": "Sign-off Date",
   "승인하면 선원 저장 시 승선 경력(입사 전)으로 함께 등록됩니다.": "Once approved, these will be registered as pre-company sea service records when the crew member is saved.",
   "비고 (AI가 남긴 검토 참고사항)": "Notes (review points left by AI)",
+  "비고": "Notes",
+  "비고 (그 외 참고사항)": "Notes (Other)",
   "다시 업로드": "Upload Again",
   "승인 — 선원 등록 화면으로 진행": "Approve — Proceed to Crew Registration",
   "선원 등록": "Crew Registration",
@@ -58,5 +60,6 @@
   "기타": "Other",
   "증서 선택 필요": "Selection Required",
   "이력서 직급 표기": "Rank as Written in Resume",
-  "원문 그대로 유지": "Keep as Written"
+  "원문 그대로 유지": "Keep as Written",
+  "이력서에서 찾은 사진 — 승인하면 선원 등록 화면의 사진으로 자동 반영됩니다.": "Photo found in the resume — once approved, it will be automatically applied as the crew photo on the registration screen."
 }

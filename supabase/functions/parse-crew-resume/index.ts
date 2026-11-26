@@ -6,6 +6,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk@0.75.0';
 import { z } from 'npm:zod@4';
 import { zodOutputFormat } from 'npm:@anthropic-ai/sdk@0.75.0/helpers/zod';
 import * as XLSX from 'npm:xlsx@0.18.5';
+import { unzipSync } from 'npm:fflate@0.8.2';
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
@@ -25,7 +26,12 @@ const ExtractedResumeSchema = z.object({
   name: z.string(),
   name_english: z.string(),
   date_of_birth: z.string().describe('YYYY-MM-DD, 모르면 빈 문자열'),
-  nationality: z.string().describe('이력서에 적힌 국적 원문 그대로(코드로 변환하지 않음)'),
+  nationality: z.string().describe(
+    '이력서에 국적이 명시돼 있으면 그 원문 그대로(코드로 변환하지 않음). 명시돼 있지 않으면 ' +
+    '이름의 언어적 특징으로 보아 가장 가능성 높은 국적을 추정해서 적으세요(완전히 판단이 안 ' +
+    '서는 경우에만 빈 문자열). 추정한 경우 notes_for_reviewer에 "국적은 이름을 보고 추정함 ' +
+    '— 확인 필요"라고 반드시 남기세요.'
+  ),
   gender: z.string(),
   passport_number: z.string(),
   passport_expiry: z.string().describe('YYYY-MM-DD'),
@@ -59,6 +65,14 @@ const ExtractedResumeSchema = z.object({
     sign_off_date: z.string(),
     // 요청 본문의 rankCatalog 중 가장 가까운 rank_code, 확신이 없으면 빈 문자열.
     matched_rank_code: z.string(),
+    // 이 승선 건의 선주사(회사명) — 이력서에 "Company", "Owner" 등으로 적혀 있으면 그대로.
+    owner_company_name: z.string(),
+    // 선박관리사(있는 경우만 — 선주사와 다른 회사일 때).
+    ship_manager_name: z.string(),
+    // 매닝사(송출기관) — 있는 경우만.
+    manning_agency_name: z.string(),
+    // 하선 사유(예: 계약만료, Sign off, Contract finished 등) — 있는 경우만.
+    sign_off_reason: z.string(),
   })),
   // 이력서에 현재/목표 직급이 명시되어 있으면 그 직급에 가장 가까운 rankCatalog의 rank_code,
   // 명시되어 있지 않으면 승선 경력 중 가장 최근(마지막) 항목의 직급 기준으로 판단. 확신 없으면 빈 문자열.
@@ -67,8 +81,16 @@ const ExtractedResumeSchema = z.object({
   // "최근 승선 경력(2026-05 GAS UTOPIA, COOK) 기준"). suggested_rank_code가 빈 문자열이면 같이 빈 문자열.
   suggested_rank_source: z.string(),
   // 추출 과정에서 애매했거나 사람이 꼭 확인해야 할 부분을 모델이 직접 남기는 메모 — 검토
-  // 화면에 그대로 보여줘서 어디를 특히 더 봐야 하는지 알려준다.
-  notes_for_reviewer: z.string(),
+  // 화면/등록 화면에서 각 항목이 관련된 섹션(탭) 바로 아래에 표시되므로, 반드시 정확한
+  // category로 분류해야 한다. 한 항목 = 한 줄(text 하나에 여러 내용을 이어 쓰지 말 것).
+  notes_for_reviewer: z.array(z.object({
+    category: z.string().describe(
+      '다음 중 정확히 하나: "basic_info"(이름/생년월일/국적/여권/선원수첩/신체정보/연락처 관련), ' +
+      '"certificates"(자격증/증서 관련), "emergency_contacts"(비상연락처 관련), ' +
+      '"sea_service"(승선 경력/직급 관련), "other"(위 어디에도 안 맞는 일반 메모)'
+    ),
+    text: z.string().describe('이 메모 하나의 내용(한 줄). 번호를 붙이지 말 것 — 화면에서 자동으로 번호가 매겨짐.'),
+  })),
 });
 
 // 엑셀은 Claude에 직접 문서로 못 넘기므로, 모든 시트를 텍스트(탭 구분)로 변환한다.
@@ -81,6 +103,67 @@ function excelToText(bytes: Uint8Array): string {
     parts.push(`--- 시트: ${sheetName} ---\n${csv}`);
   }
   return parts.join('\n\n');
+}
+
+// 큰 배열도 콜스택 오버플로 없이 base64로 인코딩(btoa(String.fromCharCode(...bytes))는 배열이
+// 크면 터진다 — 청크 단위로 나눠 문자열을 쌓은 뒤 한 번에 btoa).
+function toBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+// 엑셀(.xlsx)은 사실 zip 압축 파일이라, 사진이 첨부돼 있으면 xl/media/ 안에 원본 이미지
+// 파일(png/jpg 등)이 그대로 들어있다 — SheetJS 커뮤니티판은 이미지를 못 읽으므로 zip을
+// 직접 풀어서 찾는다. 여러 장(증명사진 + 로고 등)이 있을 수 있어 가장 큰 파일을 증명사진으로
+// 추정한다(이력서에서 제일 큰 이미지는 보통 얼굴 사진).
+function extractLargestImageFromXlsx(bytes: Uint8Array): { data: Uint8Array; mime: string } | null {
+  try {
+    const files = unzipSync(bytes);
+    let best: { data: Uint8Array; mime: string } | null = null;
+    for (const [path, content] of Object.entries(files)) {
+      if (!/^xl\/media\//i.test(path)) continue;
+      const ext = path.split('.').pop()?.toLowerCase();
+      const mime = ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'bmp' ? 'image/bmp' : null;
+      if (!mime) continue; // emf/wmf(벡터 그림) 등은 건너뜀
+      if (!best || content.length > best.data.length) best = { data: content, mime };
+    }
+    return best;
+  } catch (e) {
+    console.error('엑셀 이미지 추출 실패:', e);
+    return null;
+  }
+}
+
+// PDF는 전체 구조를 파싱하지 않고도, JPEG로 저장된 이미지(DCTDecode)는 PDF 바이너리 안에
+// 원본 JPEG 바이트가 그대로(SOI 0xFFD8FFxx ~ EOI 0xFFD9) 들어있다는 점을 이용해 바로 찾는다.
+// PNG/원본 픽셀로 저장된 이미지는 PDF 객체 딕셔너리(가로/세로/색공간 등)를 알아야 복원 가능해
+// 이 방식으로는 못 뽑는다 — 이력서 사진은 대부분 JPEG라 실용적으로는 충분하다.
+function extractLargestJpegFromPdf(bytes: Uint8Array): Uint8Array | null {
+  let best: Uint8Array | null = null;
+  let i = 0;
+  while (i < bytes.length - 3) {
+    if (bytes[i] === 0xff && bytes[i + 1] === 0xd8 && bytes[i + 2] === 0xff) {
+      let j = i + 3;
+      let end = -1;
+      while (j < bytes.length - 1) {
+        if (bytes[j] === 0xff && bytes[j + 1] === 0xd9) { end = j + 2; break; }
+        j++;
+      }
+      if (end > 0) {
+        const candidate = bytes.subarray(i, end);
+        if (!best || candidate.length > best.length) best = candidate;
+        i = end;
+        continue;
+      }
+    }
+    i++;
+  }
+  // 너무 작은 건(아이콘·서명·도장 이미지 등) 증명사진이 아닐 가능성이 커서 제외.
+  return best && best.length > 3000 ? best : null;
 }
 
 Deno.serve(async req => {
@@ -97,6 +180,18 @@ Deno.serve(async req => {
 
     const isPdf = mimeType === 'application/pdf';
     const isExcel = mimeType.includes('spreadsheet') || mimeType.includes('excel') || /\.(xlsx?|xlsm)$/i.test(fileName || '');
+    const fileBytes = Uint8Array.from(atob(fileBase64), c => c.charCodeAt(0));
+
+    // 이력서에 붙어 있는 증명사진을 찾아 선원 등록 화면의 "사진 업로드"가 이미 된 상태로
+    // 만들어준다(Claude 호출과 무관하게 바로 할 수 있는 작업이라 먼저 처리).
+    let extractedPhoto: { base64: string; mime: string } | null = null;
+    if (isExcel) {
+      const img = extractLargestImageFromXlsx(fileBytes);
+      if (img) extractedPhoto = { base64: toBase64(img.data), mime: img.mime };
+    } else if (isPdf) {
+      const jpeg = extractLargestJpegFromPdf(fileBytes);
+      if (jpeg) extractedPhoto = { base64: toBase64(jpeg), mime: 'image/jpeg' };
+    }
 
     const catalogInstruction = [
       certificateCatalog && certificateCatalog.length > 0
@@ -121,7 +216,7 @@ Deno.serve(async req => {
     const instruction = [
       '아래는 선원(해기사/부원) 이력서입니다. 양식은 회사마다 다를 수 있습니다.',
       '이름, 생년월일, 국적, 여권/선원수첩 번호·만료일, 신체정보(신장/체중/혈액형), 연락처,',
-      '비상연락처, 자격증(증서) 목록, 승선 경력(선박명/직급/승선일/하선일) 을 최대한 정확히 뽑아주세요.',
+      '비상연락처, 자격증(증서) 목록, 승선 경력(선박명/직급/승선일/하선일/선주사/선박관리사/매닝사/하선사유) 을 최대한 정확히 뽑아주세요.',
       '이력서에 없는 항목은 추측하지 말고, 문자열 필드는 빈 문자열("")로, 숫자 필드는 0으로 두세요.',
       '날짜는 가능하면 YYYY-MM-DD로 변환하세요.',
       catalogInstruction,
@@ -134,7 +229,7 @@ Deno.serve(async req => {
         ]
       : isExcel
         ? [
-            { type: 'text', text: `${instruction}\n\n--- 이력서 내용(엑셀을 텍스트로 변환함) ---\n${excelToText(Uint8Array.from(atob(fileBase64), c => c.charCodeAt(0)))}` },
+            { type: 'text', text: `${instruction}\n\n--- 이력서 내용(엑셀을 텍스트로 변환함) ---\n${excelToText(fileBytes)}` },
           ]
         : null;
 
@@ -177,7 +272,11 @@ Deno.serve(async req => {
 
             try {
               const parsed = ExtractedResumeSchema.parse(JSON.parse(textBlock.text));
-              controller.enqueue(encoder.encode(JSON.stringify({ data: parsed })));
+              controller.enqueue(encoder.encode(JSON.stringify({
+                data: parsed,
+                photo_base64: extractedPhoto?.base64,
+                photo_mime: extractedPhoto?.mime,
+              })));
             } catch (e) {
               controller.enqueue(encoder.encode(JSON.stringify({ error: `구조화된 출력 파싱 실패: ${String(e)}` })));
             }

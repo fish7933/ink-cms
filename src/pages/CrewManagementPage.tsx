@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import en from '@/i18n/locales/pages/CrewManagementPage/en.json';
@@ -73,6 +73,7 @@ export function CrewManagementPage() {
   const { toast } = useToast();
   const { openNewTab } = useTabContext();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const permissions = usePermissions('crew_list');
 
   const [crew, setCrew] = useState<CrewWithDetails[]>([]);
@@ -105,6 +106,15 @@ export function CrewManagementPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => { loadData(); }, []);
+  // AI로 선원 등록 완료 후 /crew?category=registered로 보내는 식으로, 다른 화면에서 탭 경로를
+  // 바꿔 특정 탭으로 이동시킬 때 쓴다 — 이 탭이 이미 열려 마운트돼 있어도(remount 없이) 반영되게
+  // searchParams 자체를 의존성으로 둔다(수동으로 탭을 클릭하는 동작은 URL을 안 바꾸므로 안 겹침).
+  useEffect(() => {
+    const cat = searchParams.get('category');
+    if (cat && (['all', 'registered', 'standby', 'onboard', 'disembarked'] as CategoryTab[]).includes(cat as CategoryTab)) {
+      setCategory(cat as CategoryTab);
+    }
+  }, [searchParams]);
   useEffect(() => { setCurrentPage(1); setSelectedIds([]); }, [category, searchTerm, filterOwner, filterFleet, filterShip, filterRank, filterManning, filterSource, filterNationality, sortField, sortDirection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 메뉴 접속(canView) 권한이 명시적으로 꺼진 경우에도 접근 차단 — 로딩 중(loading)에는
@@ -795,7 +805,14 @@ export function CrewManagementPage() {
                                   );
                                 })()}
                               </td>
-                              <td className="px-2 py-1.5 font-medium text-gray-900">{crewDisplayName(c)}</td>
+                              <td className="px-2 py-1.5 font-medium text-gray-900">
+                                <span className="inline-flex items-center gap-1">
+                                  {crewDisplayName(c)}
+                                  {(c as CrewWithDetails & { registration_source?: string }).registration_source === 'ai_resume' && (
+                                    <Sparkles className="w-3 h-3 text-blue-500 shrink-0" />
+                                  )}
+                                </span>
+                              </td>
                               <td className="px-2 py-1.5 text-gray-500">{nationalityDisplay}</td>
                               <td className="px-2 py-1.5 text-gray-500">
                                 {c.date_of_birth

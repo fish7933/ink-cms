@@ -17,7 +17,7 @@ import { getCertificateCategories } from '@/services/certificate-category.servic
 import type { CertificateType } from '@/types/certificate-type';
 import type { CertificateCategory } from '@/types/certificate-category';
 import type { Rank } from '@/types/models';
-import { saveAiCrewPrefill, type AiExtractedResumeData, type AiCrewPrefillPayload } from '@/lib/ai-crew-prefill';
+import { saveAiCrewPrefill, notesForCategory, type AiExtractedResumeData, type AiCrewPrefillPayload } from '@/lib/ai-crew-prefill';
 
 i18n.addResourceBundle('en', 'CrewResumeAiRegisterPage', en, true, true);
 
@@ -41,6 +41,27 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.onerror = () => reject(reader.error);
     reader.readAsArrayBuffer(file);
   });
+
+// 각 카드 안에 그 섹션에 해당하는 비고만 나열 — AI가 category로 분류해둔 걸 그대로 믿는다.
+function NotesList({ items }: { items: string[] }) {
+  const { t } = useTranslation('CrewResumeAiRegisterPage');
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-3 pt-3 border-t border-amber-200/70 bg-amber-50/50 -mx-6 -mb-6 px-6 py-3 rounded-b-lg">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 mb-1.5">
+        <FileText className="w-3 h-3" />{t('비고')}
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item, i) => (
+          <li key={i} className="flex gap-2 text-xs text-amber-900">
+            <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+            <span className="leading-relaxed">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function Field({ label, value }: { label: string; value: string | number }) {
   const empty = value === '' || value === 0;
@@ -77,6 +98,10 @@ export default function CrewResumeAiRegisterPage() {
   const [certChoices, setCertChoices] = useState<string[]>([]);
   const [rankChoice, setRankChoice] = useState<string>('');
   const [seaRankChoices, setSeaRankChoices] = useState<string[]>([]);
+  // 이력서(엑셀 첨부/PDF 내 JPEG)에서 서버가 찾아낸 증명사진 — Claude 구조화 출력(data)과
+  // 별개로 응답에 같이 실려온다.
+  const [photoBase64, setPhotoBase64] = useState<string | undefined>(undefined);
+  const [photoMime, setPhotoMime] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
@@ -123,6 +148,8 @@ export default function CrewResumeAiRegisterPage() {
       if (res?.error) throw new Error(res.error);
       const result = res?.data as AiExtractedResumeData;
       setData(result);
+      setPhotoBase64(res?.photo_base64);
+      setPhotoMime(res?.photo_mime);
       deriveChoicesFromAi(result);
       setStep('review');
     } catch (e) {
@@ -164,8 +191,13 @@ export default function CrewResumeAiRegisterPage() {
         ship_name: r.ship_name, ship_type: r.ship_type,
         rank: seaRankChoices[i] === KEEP_RAW_RANK ? r.rank : seaRankChoices[i],
         sign_on_date: r.sign_on_date, sign_off_date: r.sign_off_date,
+        owner_company_name: r.owner_company_name, ship_manager_name: r.ship_manager_name,
+        manning_agency_name: r.manning_agency_name, sign_off_reason: r.sign_off_reason,
+        sign_off_reason_id: '',
       })),
       resolved_rank_id: rankChoice,
+      photo_base64: photoBase64,
+      photo_mime: photoMime,
       notes_for_reviewer: data.notes_for_reviewer,
     };
     saveAiCrewPrefill(payload);
@@ -235,6 +267,12 @@ export default function CrewResumeAiRegisterPage() {
           <Card>
             <CardHeader><CardTitle className="text-sm">{t('기본 정보')}</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-x-6">
+              {photoBase64 && photoMime && (
+                <div className="col-span-2 flex items-center gap-3 pb-2 mb-2 border-b">
+                  <img src={`data:${photoMime};base64,${photoBase64}`} alt="" className="w-16 h-16 rounded-full object-cover border" />
+                  <span className="text-xs text-gray-500">{t('이력서에서 찾은 사진 — 승인하면 선원 등록 화면의 사진으로 자동 반영됩니다.')}</span>
+                </div>
+              )}
               <Field label={t('이름')} value={data.name} />
               <Field label={t('영문 이름')} value={data.name_english} />
               <Field label={t('생년월일')} value={data.date_of_birth} />
@@ -248,6 +286,7 @@ export default function CrewResumeAiRegisterPage() {
               <Field label={t('혈액형')} value={data.blood_type} />
               <Field label={t('연락처')} value={data.contact_phone} />
               <Field label={t('이메일')} value={data.contact_email} />
+              <div className="col-span-2"><NotesList items={notesForCategory(data.notes_for_reviewer, 'basic_info')} /></div>
             </CardContent>
           </Card>
 
@@ -287,6 +326,7 @@ export default function CrewResumeAiRegisterPage() {
                   </tbody>
                 </table>
               )}
+              <NotesList items={notesForCategory(data.notes_for_reviewer, 'emergency_contacts')} />
             </CardContent>
           </Card>
 
@@ -338,6 +378,7 @@ export default function CrewResumeAiRegisterPage() {
                   })}
                 </div>
               )}
+              <NotesList items={notesForCategory(data.notes_for_reviewer, 'certificates')} />
             </CardContent>
           </Card>
 
@@ -353,6 +394,11 @@ export default function CrewResumeAiRegisterPage() {
                       <div className="text-xs space-y-0.5">
                         <div className="font-medium text-gray-800">{r.ship_name || '-'} <span className="text-gray-400 font-normal">({r.ship_type || '-'})</span></div>
                         <div className="text-gray-400">{t('이력서 직급 표기')}: {r.rank || '-'} · {r.sign_on_date || '-'} ~ {r.sign_off_date || '-'}</div>
+                        {(r.owner_company_name || r.ship_manager_name || r.manning_agency_name || r.sign_off_reason) && (
+                          <div className="text-gray-400">
+                            {[r.owner_company_name, r.ship_manager_name, r.manning_agency_name, r.sign_off_reason].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
                       </div>
                       <Select value={seaRankChoices[i] || KEEP_RAW_RANK} onValueChange={v => setSeaRankChoices(prev => prev.map((x, idx) => idx === i ? v : x))}>
                         <SelectTrigger className="h-8 text-xs w-56"><SelectValue /></SelectTrigger>
@@ -366,14 +412,24 @@ export default function CrewResumeAiRegisterPage() {
                 </div>
               )}
               <p className="text-xs text-gray-400 mt-2">{t('승인하면 선원 저장 시 승선 경력(입사 전)으로 함께 등록됩니다.')}</p>
+              <NotesList items={notesForCategory(data.notes_for_reviewer, 'sea_service')} />
             </CardContent>
           </Card>
 
-          {data.notes_for_reviewer && (
-            <Card className="border-amber-300">
-              <CardHeader><CardTitle className="text-sm flex items-center gap-1.5 text-amber-700"><FileText className="w-4 h-4" />{t('비고 (AI가 남긴 검토 참고사항)')}</CardTitle></CardHeader>
-              <CardContent>
-                <p className="text-sm text-amber-800 whitespace-pre-wrap">{data.notes_for_reviewer}</p>
+          {notesForCategory(data.notes_for_reviewer, 'other').length > 0 && (
+            <Card className="border-amber-300 overflow-hidden">
+              <CardHeader className="bg-amber-50/60">
+                <CardTitle className="text-sm flex items-center gap-1.5 text-amber-700"><FileText className="w-4 h-4" />{t('비고 (그 외 참고사항)')}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <ul className="space-y-3">
+                  {notesForCategory(data.notes_for_reviewer, 'other').map((item, i) => (
+                    <li key={i} className="flex gap-3 text-sm text-amber-900">
+                      <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold flex items-center justify-center">{i + 1}</span>
+                      <span className="leading-relaxed pt-px">{item}</span>
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
           )}
