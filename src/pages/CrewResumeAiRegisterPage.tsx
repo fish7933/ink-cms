@@ -1,20 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import en from '@/i18n/locales/pages/CrewResumeAiRegisterPage/en.json';
-import { ArrowLeft, Upload, FileText, Sparkles, AlertTriangle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, Sparkles, AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useTabContext } from '@/contexts/TabContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/lib/supabase';
-import { saveAiCrewPrefill, type AiExtractedResumeData } from '@/lib/ai-crew-prefill';
+import { sortRanksByDisplayOrder } from '@/lib/rank-order';
+import { getCertificateTypes } from '@/services/certificate-type.service';
+import { getCertificateCategories } from '@/services/certificate-category.service';
+import type { CertificateType } from '@/types/certificate-type';
+import type { CertificateCategory } from '@/types/certificate-category';
+import type { Rank } from '@/types/models';
+import { saveAiCrewPrefill, type AiExtractedResumeData, type AiCrewPrefillPayload } from '@/lib/ai-crew-prefill';
 
 i18n.addResourceBundle('en', 'CrewResumeAiRegisterPage', en, true, true);
 
 type Step = 'upload' | 'review';
+
+// 증서 매칭 Select에서 "기존 목록과 매칭하지 않고 새 증서로 유지" 선택지.
+const CUSTOM_CERT = '__custom__';
+// 승선경력 직급 매칭 Select에서 "우리 직급 체계로 바꾸지 않고 이력서 원문 그대로 유지" 선택지.
+const KEEP_RAW_RANK = '__keep_raw__';
 
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -55,6 +67,23 @@ export default function CrewResumeAiRegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AiExtractedResumeData | null>(null);
 
+  // 우리 시스템의 증서/직급 카탈로그 — AI 추출 호출 시 같이 넘겨서 매칭을 시도하게 하고,
+  // 중간 점검 화면에서 사람이 최종 확인/선택하는 Select의 선택지로도 그대로 쓴다.
+  const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
+  const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
+  const [ranks, setRanks] = useState<Rank[]>([]);
+
+  // 증서/직급 매칭을 사람이 확정한 값 — 인덱스는 data.certificates / data.sea_service_records와 동일.
+  const [certChoices, setCertChoices] = useState<string[]>([]);
+  const [rankChoice, setRankChoice] = useState<string>('');
+  const [seaRankChoices, setSeaRankChoices] = useState<string[]>([]);
+
+  useEffect(() => {
+    getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
+    getCertificateCategories(true).then(setCertificateCategories).catch(console.error);
+    supabase.from('ranks').select('*').then(({ data: rd }) => { if (rd) setRanks(sortRanksByDisplayOrder(rd)); });
+  }, []);
+
   const finish = () => {
     if (activeTabId) closeTab(activeTabId);
     else navigate('/crew');
@@ -65,6 +94,16 @@ export default function CrewResumeAiRegisterPage() {
     return null;
   }
 
+  // AI가 내놓은 매칭 제안이 실제 카탈로그에 있는 값일 때만 그대로 쓰고, 아니면 사람이 고르게 둔다.
+  const deriveChoicesFromAi = (result: AiExtractedResumeData) => {
+    const certNames = new Set(certificateTypes.map(ct => ct.type_name_en));
+    const rankCodes = new Set(ranks.map(r => r.rank_code));
+    setCertChoices(result.certificates.map(c => (c.matched_certificate_type && certNames.has(c.matched_certificate_type)) ? c.matched_certificate_type : ''));
+    const matchedRank = ranks.find(r => r.rank_code === result.suggested_rank_code);
+    setRankChoice(matchedRank ? matchedRank.id : '');
+    setSeaRankChoices(result.sea_service_records.map(r => (r.matched_rank_code && rankCodes.has(r.matched_rank_code)) ? r.matched_rank_code : KEEP_RAW_RANK));
+  };
+
   const handleExtract = async () => {
     if (!file) return;
     setExtracting(true);
@@ -72,11 +111,19 @@ export default function CrewResumeAiRegisterPage() {
     try {
       const fileBase64 = await fileToBase64(file);
       const { data: res, error: fnError } = await supabase.functions.invoke('parse-crew-resume', {
-        body: { fileName: file.name, mimeType: file.type, fileBase64 },
+        body: {
+          fileName: file.name,
+          mimeType: file.type,
+          fileBase64,
+          certificateCatalog: certificateTypes.map(ct => ct.type_name_en),
+          rankCatalog: ranks.map(r => ({ code: r.rank_code, name: r.name })),
+        },
       });
       if (fnError) throw fnError;
       if (res?.error) throw new Error(res.error);
-      setData(res?.data as AiExtractedResumeData);
+      const result = res?.data as AiExtractedResumeData;
+      setData(result);
+      deriveChoicesFromAi(result);
       setStep('review');
     } catch (e) {
       console.error(e);
@@ -86,13 +133,52 @@ export default function CrewResumeAiRegisterPage() {
     }
   };
 
+  const allCertsResolved = certChoices.length > 0 && certChoices.every(c => c !== '');
+
   const handleApprove = () => {
     if (!data) return;
-    saveAiCrewPrefill(data);
+    if (!allCertsResolved) {
+      toast({ title: t('증서 매칭을 모두 확인해주세요'), description: t('아직 선택하지 않은 증서가 있습니다. 기존 증서와 매칭하거나 새 증서로 유지할지 골라주세요.'), variant: 'destructive' });
+      return;
+    }
+    const payload: AiCrewPrefillPayload = {
+      name: data.name,
+      name_english: data.name_english,
+      date_of_birth: data.date_of_birth,
+      nationality: data.nationality,
+      passport_number: data.passport_number,
+      passport_expiry: data.passport_expiry,
+      seaman_book_number: data.seaman_book_number,
+      seaman_book_expiry: data.seaman_book_expiry,
+      height_cm: data.height_cm,
+      weight_kg: data.weight_kg,
+      blood_type: data.blood_type,
+      contact_phone: data.contact_phone,
+      contact_email: data.contact_email,
+      emergency_contacts: data.emergency_contacts,
+      certificates: data.certificates.map((c, i) => ({
+        name: certChoices[i] === CUSTOM_CERT ? c.name : certChoices[i],
+        number: c.number, issued_date: c.issued_date, expiry_date: c.expiry_date, issuing_authority: c.issuing_authority,
+      })),
+      sea_service_records: data.sea_service_records.map((r, i) => ({
+        ship_name: r.ship_name, ship_type: r.ship_type,
+        rank: seaRankChoices[i] === KEEP_RAW_RANK ? r.rank : seaRankChoices[i],
+        sign_on_date: r.sign_on_date, sign_off_date: r.sign_off_date,
+      })),
+      resolved_rank_id: rankChoice,
+      notes_for_reviewer: data.notes_for_reviewer,
+    };
+    saveAiCrewPrefill(payload);
     toast({ title: t('선원 등록 화면으로 이동합니다'), description: t('추출된 내용이 채워진 상태로 열립니다. 저장 전 다시 한 번 확인하세요.') });
     openNewTab('/crew/new', t('선원 등록'), true);
     finish();
   };
+
+  const certCategoryOf = (ct: CertificateType) => certificateCategories.find(cat => cat.code === ct.category);
+  const groupedCertTypes = certificateCategories
+    .map(cat => ({ cat, items: certificateTypes.filter(ct => ct.category === cat.code) }))
+    .filter(g => g.items.length > 0);
+  const uncategorizedCertTypes = certificateTypes.filter(ct => !certCategoryOf(ct));
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
@@ -139,8 +225,11 @@ export default function CrewResumeAiRegisterPage() {
 
       {step === 'review' && data && (
         <div className="space-y-4">
-          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
-            {t('AI가 자동으로 추출한 내용입니다. 선원 등록 화면으로 넘어가기 전에 아래 내용을 꼭 확인하세요.')}
+          <div className="flex items-start justify-between gap-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
+            <span>{t('AI가 자동으로 추출한 내용입니다. 선원 등록 화면으로 넘어가기 전에 아래 내용을 꼭 확인하세요.')}</span>
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-1 shrink-0 bg-white" onClick={() => deriveChoicesFromAi(data)}>
+              <RotateCcw className="w-3 h-3" />{t('AI 추천값으로 되돌리기')}
+            </Button>
           </div>
 
           <Card>
@@ -150,7 +239,6 @@ export default function CrewResumeAiRegisterPage() {
               <Field label={t('영문 이름')} value={data.name_english} />
               <Field label={t('생년월일')} value={data.date_of_birth} />
               <Field label={t('국적')} value={data.nationality} />
-              <Field label={t('성별')} value={data.gender} />
               <Field label={t('여권번호')} value={data.passport_number} />
               <Field label={t('여권만료일')} value={data.passport_expiry} />
               <Field label={t('선원수첩번호')} value={data.seaman_book_number} />
@@ -160,6 +248,25 @@ export default function CrewResumeAiRegisterPage() {
               <Field label={t('혈액형')} value={data.blood_type} />
               <Field label={t('연락처')} value={data.contact_phone} />
               <Field label={t('이메일')} value={data.contact_email} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-sm">{t('직급')}</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {data.suggested_rank_source && (
+                <p className="text-xs text-gray-500">{t('AI 추천 근거')}: {data.suggested_rank_source}</p>
+              )}
+              <Select value={rankChoice || '_none'} onValueChange={v => setRankChoice(v === '_none' ? '' : v)}>
+                <SelectTrigger className="h-9 max-w-xs"><SelectValue placeholder={t('직급 선택')} /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">{t('선택 안함')}</SelectItem>
+                  {ranks.map(r => <SelectItem key={r.id} value={r.id}>{r.rank_code} ({r.name})</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {!rankChoice && (
+                <p className="text-xs text-amber-600">{t('직급을 확인/선택하지 않으면 선원 등록 화면에서 직접 선택해야 합니다.')}</p>
+              )}
             </CardContent>
           </Card>
 
@@ -184,26 +291,51 @@ export default function CrewResumeAiRegisterPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-sm">{t('자격증/증서 ({{count}}건)', { count: data.certificates.length })}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-sm">{t('자격증/증서 ({{count}}건)', { count: data.certificates.length })}</CardTitle>
+              <p className="text-xs text-gray-500 mt-1">{t('AI가 확신하지 못한 증서는 직접 어떤 증서인지 선택해야 합니다(또는 새 증서로 유지).')}</p>
+            </CardHeader>
             <CardContent>
               {data.certificates.length === 0 ? (
                 <p className="text-sm text-gray-400">{t('추출된 내용 없음')}</p>
               ) : (
-                <div className="overflow-x-auto no-scrollbar">
-                  <table className="w-full text-xs whitespace-nowrap">
-                    <thead><tr className="border-b bg-gray-50/50">
-                      <th className="text-left p-1.5">{t('증서명')}</th><th className="text-left p-1.5">{t('번호')}</th>
-                      <th className="text-left p-1.5">{t('발급일')}</th><th className="text-left p-1.5">{t('만료일')}</th><th className="text-left p-1.5">{t('발급기관')}</th>
-                    </tr></thead>
-                    <tbody>
-                      {data.certificates.map((c, i) => (
-                        <tr key={i} className="border-b">
-                          <td className="p-1.5">{c.name || '-'}</td><td className="p-1.5">{c.number || '-'}</td>
-                          <td className="p-1.5">{c.issued_date || '-'}</td><td className="p-1.5">{c.expiry_date || '-'}</td><td className="p-1.5">{c.issuing_authority || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-2">
+                  {data.certificates.map((c, i) => {
+                    const unresolved = certChoices[i] === '';
+                    const aiMatched = c.matched_certificate_type && certChoices[i] === c.matched_certificate_type;
+                    return (
+                      <div key={i} className={`grid grid-cols-[1fr_auto] gap-3 items-center p-2 rounded-md border ${unresolved ? 'border-red-300 bg-red-50/40' : 'border-gray-100'}`}>
+                        <div className="text-xs space-y-0.5">
+                          <div className="font-medium text-gray-800">{c.name || t('(증서명 미확인)')}</div>
+                          <div className="text-gray-400">
+                            {t('번호')} {c.number || '-'} · {t('발급일')} {c.issued_date || '-'} · {t('만료일')} {c.expiry_date || '-'}
+                            {c.issuing_authority && ` · ${c.issuing_authority}`}
+                          </div>
+                          {aiMatched && <div className="text-emerald-600 text-[11px]">{t('AI 추천 매칭')}</div>}
+                        </div>
+                        <Select value={certChoices[i] || ''} onValueChange={v => setCertChoices(prev => prev.map((x, idx) => idx === i ? v : x))}>
+                          <SelectTrigger className={`h-8 text-xs w-56 ${unresolved ? 'border-red-400' : ''}`}>
+                            <SelectValue placeholder={t('증서 선택 필요')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={CUSTOM_CERT} className="text-xs">{t('새 증서로 유지(직접 입력)')}</SelectItem>
+                            {groupedCertTypes.map(g => (
+                              <SelectGroup key={g.cat.code}>
+                                <SelectLabel className="text-xs">{g.cat.name}</SelectLabel>
+                                {g.items.map(ct => <SelectItem key={ct.id} value={ct.type_name_en} className="text-xs">{ct.type_name_en}</SelectItem>)}
+                              </SelectGroup>
+                            ))}
+                            {uncategorizedCertTypes.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel className="text-xs">{t('기타')}</SelectLabel>
+                                {uncategorizedCertTypes.map(ct => <SelectItem key={ct.id} value={ct.type_name_en} className="text-xs">{ct.type_name_en}</SelectItem>)}
+                              </SelectGroup>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -215,21 +347,22 @@ export default function CrewResumeAiRegisterPage() {
               {data.sea_service_records.length === 0 ? (
                 <p className="text-sm text-gray-400">{t('추출된 내용 없음')}</p>
               ) : (
-                <div className="overflow-x-auto no-scrollbar">
-                  <table className="w-full text-xs whitespace-nowrap">
-                    <thead><tr className="border-b bg-gray-50/50">
-                      <th className="text-left p-1.5">{t('선박명')}</th><th className="text-left p-1.5">{t('선종')}</th>
-                      <th className="text-left p-1.5">{t('직급')}</th><th className="text-left p-1.5">{t('승선일')}</th><th className="text-left p-1.5">{t('하선일')}</th>
-                    </tr></thead>
-                    <tbody>
-                      {data.sea_service_records.map((r, i) => (
-                        <tr key={i} className="border-b">
-                          <td className="p-1.5">{r.ship_name || '-'}</td><td className="p-1.5">{r.ship_type || '-'}</td>
-                          <td className="p-1.5">{r.rank || '-'}</td><td className="p-1.5">{r.sign_on_date || '-'}</td><td className="p-1.5">{r.sign_off_date || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-2">
+                  {data.sea_service_records.map((r, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_auto] gap-3 items-center p-2 rounded-md border border-gray-100">
+                      <div className="text-xs space-y-0.5">
+                        <div className="font-medium text-gray-800">{r.ship_name || '-'} <span className="text-gray-400 font-normal">({r.ship_type || '-'})</span></div>
+                        <div className="text-gray-400">{t('이력서 직급 표기')}: {r.rank || '-'} · {r.sign_on_date || '-'} ~ {r.sign_off_date || '-'}</div>
+                      </div>
+                      <Select value={seaRankChoices[i] || KEEP_RAW_RANK} onValueChange={v => setSeaRankChoices(prev => prev.map((x, idx) => idx === i ? v : x))}>
+                        <SelectTrigger className="h-8 text-xs w-56"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={KEEP_RAW_RANK} className="text-xs">{t('원문 그대로 유지')} ({r.rank || '-'})</SelectItem>
+                          {ranks.map(rk => <SelectItem key={rk.id} value={rk.rank_code} className="text-xs">{rk.rank_code} ({rk.name})</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
                 </div>
               )}
               <p className="text-xs text-gray-400 mt-2">{t('승인하면 선원 저장 시 승선 경력(입사 전)으로 함께 등록됩니다.')}</p>

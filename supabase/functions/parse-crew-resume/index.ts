@@ -47,6 +47,9 @@ const ExtractedResumeSchema = z.object({
     issued_date: z.string(),
     expiry_date: z.string(),
     issuing_authority: z.string(),
+    // 요청 본문의 certificateCatalog 중 정확히 일치한다고 확신하는 항목의 이름 그대로(복사),
+    // 확신이 없으면 빈 문자열 — 새 증서를 함부로 만들지 않고 기존 목록에서 찾아 매칭하기 위함.
+    matched_certificate_type: z.string(),
   })),
   sea_service_records: z.array(z.object({
     ship_name: z.string(),
@@ -54,7 +57,15 @@ const ExtractedResumeSchema = z.object({
     rank: z.string(),
     sign_on_date: z.string(),
     sign_off_date: z.string(),
+    // 요청 본문의 rankCatalog 중 가장 가까운 rank_code, 확신이 없으면 빈 문자열.
+    matched_rank_code: z.string(),
   })),
+  // 이력서에 현재/목표 직급이 명시되어 있으면 그 직급에 가장 가까운 rankCatalog의 rank_code,
+  // 명시되어 있지 않으면 승선 경력 중 가장 최근(마지막) 항목의 직급 기준으로 판단. 확신 없으면 빈 문자열.
+  suggested_rank_code: z.string(),
+  // suggested_rank_code를 어떤 근거로 판단했는지 한 줄 설명(예: "이력서에 명시된 지원 직급",
+  // "최근 승선 경력(2026-05 GAS UTOPIA, COOK) 기준"). suggested_rank_code가 빈 문자열이면 같이 빈 문자열.
+  suggested_rank_source: z.string(),
   // 추출 과정에서 애매했거나 사람이 꼭 확인해야 할 부분을 모델이 직접 남기는 메모 — 검토
   // 화면에 그대로 보여줘서 어디를 특히 더 봐야 하는지 알려준다.
   notes_for_reviewer: z.string(),
@@ -76,7 +87,10 @@ Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
-    const { fileName, mimeType, fileBase64 } = await req.json();
+    const { fileName, mimeType, fileBase64, certificateCatalog, rankCatalog } = await req.json() as {
+      fileName?: string; mimeType?: string; fileBase64?: string;
+      certificateCatalog?: string[]; rankCatalog?: { code: string; name: string }[];
+    };
     if (!fileBase64 || !mimeType) {
       return new Response(JSON.stringify({ error: 'fileBase64, mimeType가 필요합니다' }), { status: 400, headers: CORS_HEADERS });
     }
@@ -84,13 +98,34 @@ Deno.serve(async req => {
     const isPdf = mimeType === 'application/pdf';
     const isExcel = mimeType.includes('spreadsheet') || mimeType.includes('excel') || /\.(xlsx?|xlsm)$/i.test(fileName || '');
 
+    const catalogInstruction = [
+      certificateCatalog && certificateCatalog.length > 0
+        ? `아래는 우리 시스템에 이미 등록된 증서(자격증) 종류 목록입니다: ${certificateCatalog.join(' | ')}\n` +
+          '이력서의 각 증서가 이 목록 중 하나와 분명히 같은 것이라고 확신되면 matched_certificate_type에 그 ' +
+          '이름을 토씨 하나 틀리지 않고 그대로 적으세요(목록에 없는 이름을 지어내지 마세요). 확신이 서지 않으면 ' +
+          '반드시 빈 문자열로 두세요 — 잘못 매칭해서 다른 증서 데이터에 섞여 들어가는 것보다, 사람이 직접 확인하게 ' +
+          '두는 쪽이 낫습니다.'
+        : '',
+      rankCatalog && rankCatalog.length > 0
+        ? `아래는 우리 시스템의 직급 체계(rank_code: 이름)입니다: ${rankCatalog.map(r => `${r.code}: ${r.name}`).join(' | ')}\n` +
+          '승선 경력의 각 직급(rank)에 대해, 위 직급 체계 중 가장 가까운 rank_code를 matched_rank_code에 적으세요 ' +
+          '(예: "COOK(C)"나 "Cook/C" 같은 표기는 등급(Grade) 표시를 뺀 "COOK"으로). 확신이 없으면 빈 문자열로 두세요.\n' +
+          '또한 후보자의 현재/목표 직급을 suggested_rank_code에 판단해 적으세요 — 이력서에 지원 직급이나 현재 ' +
+          '직급이 명시되어 있으면 그것을 기준으로, 명시되어 있지 않으면 승선 경력 중 날짜상 가장 최근(마지막) ' +
+          '항목의 직급을 기준으로 판단하세요. suggested_rank_source에는 그 판단 근거를 한국어 한 줄로 적으세요 ' +
+          '(예: "이력서에 명시된 지원 직급" 또는 "최근 승선 경력(2026-05 GAS UTOPIA, COOK) 기준"). 확신이 없으면 ' +
+          '둘 다 빈 문자열로 두세요.'
+        : '',
+    ].filter(Boolean).join('\n\n');
+
     const instruction = [
       '아래는 선원(해기사/부원) 이력서입니다. 양식은 회사마다 다를 수 있습니다.',
       '이름, 생년월일, 국적, 여권/선원수첩 번호·만료일, 신체정보(신장/체중/혈액형), 연락처,',
       '비상연락처, 자격증(증서) 목록, 승선 경력(선박명/직급/승선일/하선일) 을 최대한 정확히 뽑아주세요.',
       '이력서에 없는 항목은 추측하지 말고, 문자열 필드는 빈 문자열("")로, 숫자 필드는 0으로 두세요.',
       '날짜는 가능하면 YYYY-MM-DD로 변환하세요.',
-    ].join(' ');
+      catalogInstruction,
+    ].filter(Boolean).join(' ');
 
     const content: Anthropic.MessageParam['content'] = isPdf
       ? [

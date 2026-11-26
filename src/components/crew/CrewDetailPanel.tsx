@@ -46,7 +46,7 @@ import {
   getCrewSalaryRecords, deleteCrewSalaryRecord,
   getCrewInterviewLogs, deleteCrewInterviewLog,
 } from '@/services/crew-extended.service';
-import { consumeAiCrewPrefill, type AiExtractedResumeData, type AiExtractedSeaServiceRecord } from '@/lib/ai-crew-prefill';
+import { consumeAiCrewPrefill, type AiCrewPrefillPayload } from '@/lib/ai-crew-prefill';
 import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord, CrewInterviewLog, CrewInterviewLogWithDetails } from '@/types/crew-extended';
 import { crewPayrollService } from '@/services/crew-payroll.service';
 import type { CrewPayrollHistoryRow, CrewPayslipWithDetails } from '@/types/crew-payroll';
@@ -241,11 +241,15 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [identityFieldsLocked, setIdentityFieldsLocked] = useState(false);
 
   // 이력서 AI 추출(중간 점검 화면에서 승인된 내용) — 신규 등록(isNew)일 때만, 마운트 시 한 번만 적용.
-  const aiPrefillRef = useRef<AiExtractedResumeData | null>(null);
+  // aiPrefillRef에 원본을 계속 들고 있어야 "AI 추출값으로 되돌리기" 버튼이 언제든 다시 적용할 수 있다.
+  const aiPrefillRef = useRef<AiCrewPrefillPayload | null>(null);
   const [aiPrefillApplied, setAiPrefillApplied] = useState(false);
+  // applyAiPrefill을 호출할 때마다(마운트 1회 + "되돌리기" 때마다) 올라가는 카운터 — 아래 국적
+  // 매칭 effect가 formData.nationality 변화와 무관하게 그때마다 다시 실행되도록 의존성에 둔다.
+  const [prefillVersion, setPrefillVersion] = useState(0);
   // 승선 경력은 이 폼에 입력란이 없고(신규 등록 중엔 선원 id가 없어 저장 불가) 저장 성공 후에만
   // addSeaServiceRecord로 만들 수 있으므로, 승인 전까지 따로 들고 있다가 handleSave에서 한꺼번에 생성.
-  const [pendingSeaServiceRecords, setPendingSeaServiceRecords] = useState<AiExtractedSeaServiceRecord[]>([]);
+  const [pendingSeaServiceRecords, setPendingSeaServiceRecords] = useState<AiCrewPrefillPayload['sea_service_records']>([]);
 
   const [seaServiceRecords, setSeaServiceRecords] = useState<SeaServiceRecord[]>([]);
   const [evaluations, setEvaluations] = useState<CrewEvaluationWithDetails[]>([]);
@@ -304,30 +308,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       const prefill = aiPrefillRef.current ?? consumeAiCrewPrefill();
       aiPrefillRef.current = prefill;
       if (prefill) {
-        setFormData({
-          ...EMPTY_FORM,
-          name: prefill.name || '',
-          name_english: prefill.name_english || '',
-          date_of_birth: prefill.date_of_birth || '',
-          height: prefill.height_cm ? String(prefill.height_cm) : '',
-          weight: prefill.weight_kg ? String(prefill.weight_kg) : '',
-          blood_type: BLOOD_TYPES.includes(prefill.blood_type) ? prefill.blood_type : 'none',
-          contact_phone: prefill.contact_phone || '',
-          contact_email: prefill.contact_email || '',
-          passport_number: prefill.passport_number || '',
-          passport_expiry: prefill.passport_expiry || '',
-          seaman_book_number: prefill.seaman_book_number || '',
-          seaman_book_expiry: prefill.seaman_book_expiry || '',
-        });
-        setCertificates(prefill.certificates.filter(c => c.name.trim()).map(c => ({
-          name: c.name, number: c.number, issued_date: c.issued_date, expiry_date: c.expiry_date,
-          issuing_authority: c.issuing_authority, no_expiry: !c.expiry_date,
-        })));
-        setEmergencyContacts(prefill.emergency_contacts.filter(c => c.name.trim()).map(c => ({
-          name: c.name, relationship: mapAiRelationship(c.relationship), phone: c.phone,
-          note: c.relationship && !RELATIONSHIPS.includes(c.relationship) ? `(원문: ${c.relationship})` : '',
-        })));
-        setPendingSeaServiceRecords(prefill.sea_service_records.filter(r => r.ship_name.trim() && r.sign_on_date.trim()));
+        applyAiPrefill(prefill);
         setAiPrefillApplied(true);
       } else {
         setFormData(EMPTY_FORM);
@@ -338,13 +319,48 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     }
   }, [id]);
 
+  // 승인된 AI 추출 내용을 폼에 채운다 — 마운트 시 한 번, 그리고 "AI 추출값으로 되돌리기"
+  // 버튼을 눌렀을 때 다시. 직급(rank_id)은 중간 점검 화면에서 사람이 이미 확정한 값이라
+  // 국적처럼 별도 매칭 없이 그대로 쓴다.
+  const applyAiPrefill = (prefill: AiCrewPrefillPayload) => {
+    setFormData({
+      ...EMPTY_FORM,
+      name: prefill.name || '',
+      name_english: prefill.name_english || '',
+      date_of_birth: prefill.date_of_birth || '',
+      height: prefill.height_cm ? String(prefill.height_cm) : '',
+      weight: prefill.weight_kg ? String(prefill.weight_kg) : '',
+      blood_type: BLOOD_TYPES.includes(prefill.blood_type) ? prefill.blood_type : 'none',
+      contact_phone: prefill.contact_phone || '',
+      contact_email: prefill.contact_email || '',
+      passport_number: prefill.passport_number || '',
+      passport_expiry: prefill.passport_expiry || '',
+      seaman_book_number: prefill.seaman_book_number || '',
+      seaman_book_expiry: prefill.seaman_book_expiry || '',
+      rank_id: prefill.resolved_rank_id || '',
+    });
+    setCertificates(prefill.certificates.filter(c => c.name.trim()).map(c => ({
+      name: c.name, number: c.number, issued_date: c.issued_date, expiry_date: c.expiry_date,
+      issuing_authority: c.issuing_authority, no_expiry: !c.expiry_date,
+    })));
+    setEmergencyContacts(prefill.emergency_contacts.filter(c => c.name.trim()).map(c => ({
+      name: c.name, relationship: mapAiRelationship(c.relationship), phone: c.phone,
+      note: c.relationship && !RELATIONSHIPS.includes(c.relationship) ? `(원문: ${c.relationship})` : '',
+    })));
+    setPendingSeaServiceRecords(prefill.sea_service_records.filter(r => r.ship_name.trim() && r.sign_on_date.trim()));
+    // 국적은 위 setFormData에서 이미 EMPTY_FORM 기본값('')으로 비워졌다 — prefillVersion을
+    // 올려서 아래 국적 매칭 effect가 되돌리기 때도 다시 실행되게 한다.
+    setPrefillVersion(v => v + 1);
+  };
+
   // 국적은 AI가 원문 그대로("Indonesia")로 뽑아오므로, 국적 목록이 로드된 뒤 코드로 매칭을
   // 시도한다 — 여기서 이미 값을 채워버리면 매칭을 다시 시도하지 않도록(사용자가 직접 고른
-  // 값을 덮어쓰지 않도록) formData.nationality가 비어있을 때만 적용한다.
+  // 값을 덮어쓰지 않도록) formData.nationality가 비어있을 때만 적용한다. prefillVersion을
+  // 의존성에 둬서 "AI 추출값으로 되돌리기"(국적을 다시 ''로 비움) 때마다도 재시도한다.
   useEffect(() => {
-    if (!isNew || !aiPrefillApplied || nationalities.length === 0) return;
+    if (!isNew || !aiPrefillApplied || nationalities.length === 0 || formData.nationality) return;
     const rawNationality = aiPrefillRef.current?.nationality?.trim();
-    if (!rawNationality || formData.nationality) return;
+    if (!rawNationality) return;
     const rawLower = rawNationality.toLowerCase();
     const matched = nationalities.find(n =>
       n.country_code.toLowerCase() === rawLower ||
@@ -352,7 +368,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
       n.country_name_ko === rawNationality
     );
     if (matched) setFormData(p => ({ ...p, nationality: matched.country_code }));
-  }, [nationalities, isNew, aiPrefillApplied]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nationalities, isNew, aiPrefillApplied, prefillVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const REGISTERED_STATUSES = new Set(['registered', 'under_review', 'sent_to_owner', 'owner_approved', 'owner_rejected']);
 
@@ -750,8 +766,14 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const formBody = (
     <>
       {isNew && aiPrefillApplied && (
-        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
-          {t('AI가 이력서에서 추출한 내용이 채워져 있습니다. 저장 전 각 항목을 꼭 확인/수정하세요.')}
+        <div className="flex items-center justify-between gap-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3">
+          <span>{t('AI가 이력서에서 추출한 내용이 채워져 있습니다. 저장 전 각 항목을 꼭 확인/수정하세요.')}</span>
+          <Button
+            type="button" variant="outline" size="sm" className="h-7 text-xs gap-1 shrink-0 bg-white"
+            onClick={() => { if (aiPrefillRef.current) applyAiPrefill(aiPrefillRef.current); }}
+          >
+            {t('AI 추출값으로 되돌리기')}
+          </Button>
         </div>
       )}
       {/* 사진 + 선주/플릿/선박·직급/이름(국적) — 어느 탭에서든 항상 보이도록 탭 밖에 배치 */}
