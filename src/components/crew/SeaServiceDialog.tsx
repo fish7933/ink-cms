@@ -129,7 +129,8 @@ export default function SeaServiceDialog({
       // 선박을 하나라도 보유한(ships.owner_id로 참조되는) 회사를 "선주사"로 간주해야 한다.
       const ownerIds = new Set((shipsRes.data || []).map((s: { owner_id: string }) => s.owner_id));
       setOwnerCompanies((companiesRes.data || []).filter((c: { id: string }) => ownerIds.has(c.id)));
-      setShipManagerCompanyName(companyInfo?.name || '');
+      // 선박관리사 표기는 전부 영문(INK Co., Ltd.)으로 통일(사용자 요청, 2026-11-27).
+      setShipManagerCompanyName(companyInfo?.name_en || companyInfo?.name || '');
       const manningId = (crewRes.data as { manning_agency_id?: string } | null)?.manning_agency_id;
       setCrewManningAgencyName(manningId ? (cMap.get(manningId) || '') : '');
       setSalaryRankMaps(salaryMaps);

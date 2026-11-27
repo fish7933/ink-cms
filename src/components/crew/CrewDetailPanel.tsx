@@ -54,6 +54,7 @@ import { getSignOffReasons } from '@/services/sign-off-reason.service';
 import { getShips } from '@/services/ship.service';
 import { getCompanies } from '@/services/company.service';
 import { getFleets } from '@/services/fleet.service';
+import { getCompanyInfo } from '@/services/company-info.service';
 import type { Ship, Company, Fleet } from '@/types/models';
 import type { SignOffReason } from '@/types/sign-off-reason';
 import type { SeaServiceRecord, TrainingRecord, MedicalRecord, CrewSalaryRecord, CrewInterviewLog, CrewInterviewLogWithDetails } from '@/types/crew-extended';
@@ -259,6 +260,9 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
   const [allShips, setAllShips] = useState<Ship[]>([]);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [allFleets, setAllFleets] = useState<Fleet[]>([]);
+  // "선박관리사" 표기를 전부 영문(INK Co., Ltd.)으로 통일하기 위한 당사 영문 상호(사용자 요청,
+  // 2026-11-27) — 플릿명(한글일 수 있음)으로 채우던 것을 이걸로 대체한다.
+  const [companyManagerNameEn, setCompanyManagerNameEn] = useState('');
   const [nationalityValidityOverrides, setNationalityValidityOverrides] = useState<CertificateNationalityValidity[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [certFiles, setCertFiles] = useState<Record<number, File>>({});
@@ -358,6 +362,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     getShips().then(setAllShips).catch(console.error);
     getCompanies().then(setAllCompanies).catch(console.error);
     getFleets().then(setAllFleets).catch(console.error);
+    getCompanyInfo().then(info => setCompanyManagerNameEn(info?.name_en || info?.name || '')).catch(console.error);
     getAllNationalityValidityOverrides().then(setNationalityValidityOverrides).catch(console.error);
     if (!isNew) loadCrew(id!);
     else {
@@ -1331,7 +1336,7 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
                                       updatePendingSeaRecord(idx, 'ship_name', matchedShip.name);
                                       if (matchedShip.ship_type) updatePendingSeaRecord(idx, 'ship_type', matchedShip.ship_type);
                                       updatePendingSeaRecord(idx, 'owner_company_name', matchedOwnerName || '');
-                                      updatePendingSeaRecord(idx, 'ship_manager_name', matchedFleetName || '');
+                                      updatePendingSeaRecord(idx, 'ship_manager_name', companyManagerNameEn);
                                     }
                                   }}
                                   className="mt-0.5 shrink-0"
