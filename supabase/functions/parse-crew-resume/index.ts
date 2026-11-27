@@ -29,8 +29,10 @@ const ExtractedResumeSchema = z.object({
   nationality: z.string().describe(
     '이력서에 국적이 명시돼 있으면 그 원문 그대로(코드로 변환하지 않음). 명시돼 있지 않으면 ' +
     '이름의 언어적 특징으로 보아 가장 가능성 높은 국적을 추정해서 적으세요(완전히 판단이 안 ' +
-    '서는 경우에만 빈 문자열). 추정한 경우 notes_for_reviewer에 "국적은 이름을 보고 추정함 ' +
-    '— 확인 필요"라고 반드시 남기세요.'
+    '서는 경우에만 빈 문자열). 반드시 나라 이름 자체로 적으세요(예: "Indonesia") — "Indonesian", ' +
+    '"Filipino"처럼 그 나라 사람을 가리키는 형용사/명사형으로 쓰지 마세요(나라 이름이 그대로 ' +
+    '있어야 시스템의 국적 목록과 자동으로 매칭됩니다). 추정한 경우 notes_for_reviewer에 ' +
+    '"국적은 이름을 보고 추정함 — 확인 필요"라고 반드시 남기세요.'
   ),
   gender: z.string(),
   passport_number: z.string(),

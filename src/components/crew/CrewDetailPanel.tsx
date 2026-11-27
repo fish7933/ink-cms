@@ -448,11 +448,20 @@ export function CrewDetailPanel({ id, onBack, onSaved, embedded = false }: CrewD
     const rawNationality = aiPrefillRef.current?.nationality?.trim();
     if (!rawNationality) return;
     const rawLower = rawNationality.toLowerCase();
-    const matched = nationalities.find(n =>
+    let matched = nationalities.find(n =>
       n.country_code.toLowerCase() === rawLower ||
       n.country_name_en.toLowerCase() === rawLower ||
       n.country_name_ko === rawNationality
     );
+    // 정확히 안 맞으면(예: AI가 "Indonesia" 대신 "Indonesian"처럼 사람을 가리키는 형용사형으로
+    // 쓴 경우) 포함 관계로 한 번 더 시도 — 너무 짧은 문자열(국가명이 짧은 "Chad", "Laos" 등과
+    // 섞여 엉뚱하게 걸리는 것 방지용으로 4자 이상일 때만).
+    if (!matched && rawLower.length >= 4) {
+      matched = nationalities.find(n => {
+        const en = n.country_name_en.toLowerCase();
+        return en.length >= 4 && (rawLower.includes(en) || en.includes(rawLower));
+      });
+    }
     if (matched) setFormData(p => ({ ...p, nationality: matched.country_code }));
   }, [nationalities, isNew, aiPrefillApplied, prefillVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 

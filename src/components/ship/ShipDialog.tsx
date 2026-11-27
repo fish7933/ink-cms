@@ -122,7 +122,7 @@ export default function ShipDialog({
   useEffect(() => {
     const gt = Number(formData.gt);
     if (gt > 0 && formData.ship_type) {
-      const selectedShipType = shipTypes.find(t => t.name_ko === formData.ship_type);
+      const selectedShipType = shipTypes.find(t => t.name === formData.ship_type || t.name_ko === formData.ship_type);
       const calculatedDWT = calculateDWTFromGT(gt, selectedShipType?.category || formData.ship_type);
       onFormDataChange({
         ...formData,
@@ -138,7 +138,7 @@ export default function ShipDialog({
       const gt = Number(formData.gt) || Number(formData.gross_tonnage) || 0;
       
       if (dwt > 0 || gt > 0) {
-        const selectedShipType = shipTypes.find(t => t.name_ko === formData.ship_type);
+        const selectedShipType = shipTypes.find(t => t.name === formData.ship_type || t.name_ko === formData.ship_type);
         const classification = await getShipClassification(dwt, gt, selectedShipType?.id);
         setShipClassification(classification);
       } else {
@@ -452,8 +452,12 @@ export default function ShipDialog({
                     </SelectTrigger>
                     <SelectContent>
                       {shipTypes.map(type => (
-                        <SelectItem key={type.id} value={type.name_ko} className="text-sm">
-                          {type.name_ko} ({type.name})
+                        // 표기와 저장값 모두 영어(name)로 통일(사용자 요청, 2026-11-27) — 이전에
+                        // 선박마다 제각각이던 선종 표기(한글/약식 영문 등)를 전부 선종 카탈로그의
+                        // 정식 영문명으로 일괄 정규화했다. 과거 데이터 호환을 위해 ship_type을
+                        // 읽는 쪽(위 두 lookup)은 name_ko도 같이 찾아보도록 남겨뒀다.
+                        <SelectItem key={type.id} value={type.name} className="text-sm">
+                          {type.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
