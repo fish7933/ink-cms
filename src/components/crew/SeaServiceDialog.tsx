@@ -125,7 +125,10 @@ export default function SeaServiceDialog({
       setFleetOptions(fleetsRes.data || []);
       const cMap = new Map((companiesRes.data || []).map((c: { id: string; name: string }) => [c.id, c.name]));
       setCompaniesMap(cMap);
-      setOwnerCompanies((companiesRes.data || []).filter((c: { company_type?: string }) => c.company_type === 'owner'));
+      // companies.company_type은 실제로는 전부 '일반'이라 선주/매닝사 구분에 안 쓰인다 — 실제로
+      // 선박을 하나라도 보유한(ships.owner_id로 참조되는) 회사를 "선주사"로 간주해야 한다.
+      const ownerIds = new Set((shipsRes.data || []).map((s: { owner_id: string }) => s.owner_id));
+      setOwnerCompanies((companiesRes.data || []).filter((c: { id: string }) => ownerIds.has(c.id)));
       setShipManagerCompanyName(companyInfo?.name || '');
       const manningId = (crewRes.data as { manning_agency_id?: string } | null)?.manning_agency_id;
       setCrewManningAgencyName(manningId ? (cMap.get(manningId) || '') : '');
