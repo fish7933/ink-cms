@@ -199,7 +199,12 @@ Deno.serve(async req => {
           '이력서의 각 증서가 이 목록 중 하나와 분명히 같은 것이라고 확신되면 matched_certificate_type에 그 ' +
           '이름을 토씨 하나 틀리지 않고 그대로 적으세요(목록에 없는 이름을 지어내지 마세요). 확신이 서지 않으면 ' +
           '반드시 빈 문자열로 두세요 — 잘못 매칭해서 다른 증서 데이터에 섞여 들어가는 것보다, 사람이 직접 확인하게 ' +
-          '두는 쪽이 낫습니다.'
+          '두는 쪽이 낫습니다.\n' +
+          '특히 여권(Passport)과 국내 선원수첩(Seaman\'s Book, 외국 선원수첩이 아닌 경우)은 반드시 ' +
+          'certificates 배열에도 각각 하나의 항목으로(번호=여권/수첩 번호, 발급일/만료일 포함) 넣고, ' +
+          '목록에 "PASSPORT"와 "SEAMAN\'S BOOK"이 있으면 matched_certificate_type에 정확히 그 이름을 ' +
+          '적으세요 — 여권/선원수첩은 유효기간 관리가 증서 데이터를 기준으로 이뤄지므로 절대 빠뜨리면 ' +
+          '안 됩니다(passport_number/seaman_book_number 필드에만 적고 certificates에서 빠뜨리지 말 것).'
         : '',
       rankCatalog && rankCatalog.length > 0
         ? `아래는 우리 시스템의 직급 체계(rank_code: 이름)입니다: ${rankCatalog.map(r => `${r.code}: ${r.name}`).join(' | ')}\n` +

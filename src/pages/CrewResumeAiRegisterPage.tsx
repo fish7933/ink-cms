@@ -168,6 +168,23 @@ export default function CrewResumeAiRegisterPage() {
       toast({ title: t('증서 매칭을 모두 확인해주세요'), description: t('아직 선택하지 않은 증서가 있습니다. 기존 증서와 매칭하거나 새 증서로 유지할지 골라주세요.'), variant: 'destructive' });
       return;
     }
+    const resolvedCertificates = data.certificates.map((c, i) => ({
+      name: certChoices[i] === CUSTOM_CERT ? c.name : certChoices[i],
+      number: c.number, issued_date: c.issued_date, expiry_date: c.expiry_date, issuing_authority: c.issuing_authority,
+    }));
+
+    // 여권/선원수첩은 우리 증서 목록(PASSPORT/SEAMAN'S BOOK)으로 이미 관리되는 항목이라,
+    // 유효기간이 "증서 만료 현황"에 잡히려면 반드시 증서 데이터로 들어가야 한다. AI의 증서
+    // 매칭(퍼지 매칭)이 이 둘을 못 찾았을 수도 있으니, 기본정보의 여권/선원수첩 번호·만료일로
+    // 직접 증서 항목을 만들어 보강한다(이미 매칭되어 있으면 그 항목을 그대로 둔다).
+    const ensureCertificate = (catalogName: string, number: string, expiry: string) => {
+      if (!number && !expiry) return;
+      if (resolvedCertificates.some(c => c.name === catalogName)) return;
+      resolvedCertificates.push({ name: catalogName, number, issued_date: '', expiry_date: expiry, issuing_authority: '' });
+    };
+    ensureCertificate('PASSPORT', data.passport_number, data.passport_expiry);
+    ensureCertificate("SEAMAN'S BOOK", data.seaman_book_number, data.seaman_book_expiry);
+
     const payload: AiCrewPrefillPayload = {
       name: data.name,
       name_english: data.name_english,
@@ -183,10 +200,7 @@ export default function CrewResumeAiRegisterPage() {
       contact_phone: data.contact_phone,
       contact_email: data.contact_email,
       emergency_contacts: data.emergency_contacts,
-      certificates: data.certificates.map((c, i) => ({
-        name: certChoices[i] === CUSTOM_CERT ? c.name : certChoices[i],
-        number: c.number, issued_date: c.issued_date, expiry_date: c.expiry_date, issuing_authority: c.issuing_authority,
-      })),
+      certificates: resolvedCertificates,
       sea_service_records: data.sea_service_records.map((r, i) => ({
         ship_name: r.ship_name, ship_type: r.ship_type,
         rank: seaRankChoices[i] === KEEP_RAW_RANK ? r.rank : seaRankChoices[i],
