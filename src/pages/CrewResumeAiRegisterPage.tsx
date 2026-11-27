@@ -216,8 +216,9 @@ export default function CrewResumeAiRegisterPage() {
     };
     saveAiCrewPrefill(payload);
     toast({ title: t('선원 등록 화면으로 이동합니다'), description: t('추출된 내용이 채워진 상태로 열립니다. 저장 전 다시 한 번 확인하세요.') });
+    // 이 탭은 일부러 안 닫는다 — 선원 등록 화면에서 다시 이 중간 점검 화면으로 돌아와
+    // 추출 결과를 확인하고 싶을 수 있으므로, 탭 목록에 남겨둬서 탭 바에서 다시 누를 수 있게 한다.
     openNewTab('/crew/new', t('선원 등록'), true);
-    finish();
   };
 
   const certCategoryOf = (ct: CertificateType) => certificateCategories.find(cat => cat.code === ct.category);
