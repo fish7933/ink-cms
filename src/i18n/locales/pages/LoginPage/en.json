@@ -8,6 +8,8 @@
   "로그인 중...": "Signing in...",
   "로그인": "Sign In",
   "업데이트 소식": "What's New",
+  "전화": "Tel",
+  "팩스": "Fax",
   "입력하신 아이디가 존재하지 않습니다. 아이디를 확인해주세요.": "This username doesn't exist. Please check your username.",
   "비밀번호가 올바르지 않습니다. 다시 확인해주세요.": "Incorrect password. Please try again.",
   "로그인 중 오류가 발생했습니다. 다시 시도해주세요.": "An error occurred while signing in. Please try again."

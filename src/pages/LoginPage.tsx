@@ -126,17 +126,32 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="mt-4 pt-4 border-t flex flex-col items-center gap-1 text-center">
-            {companyInfo?.logo_url && (
-              <img src={companyInfo.logo_url} alt="" className="h-6 object-contain mb-1" />
-            )}
-            <p className="text-xs text-gray-500">
-              {companyInfo?.name_en || companyInfo?.name || t('선박 관리 시스템')}
-            </p>
-            {companyInfo?.website && (
-              <p className="text-[11px] text-gray-400">{companyInfo.website.replace(/^https?:\/\//, '')}</p>
-            )}
-          </div>
+          {companyInfo && (
+            <div className="mt-4 pt-4 border-t flex flex-col items-center gap-1.5 text-center">
+              {companyInfo.logo_url && (
+                <img src={companyInfo.logo_url} alt="" className="h-8 object-contain mb-1" />
+              )}
+              <p className="text-sm font-semibold text-gray-700">{companyInfo.name}</p>
+              {companyInfo.name_en && companyInfo.name_en !== companyInfo.name && (
+                <p className="text-xs text-gray-400">{companyInfo.name_en}</p>
+              )}
+              {companyInfo.address && (
+                <p className="text-[11px] text-gray-400">{companyInfo.address}</p>
+              )}
+              {(companyInfo.phone || companyInfo.fax || companyInfo.email) && (
+                <p className="text-[11px] text-gray-400">
+                  {[
+                    companyInfo.phone && `${t('전화')} ${companyInfo.phone}`,
+                    companyInfo.fax && `${t('팩스')} ${companyInfo.fax}`,
+                    companyInfo.email,
+                  ].filter(Boolean).join('  ·  ')}
+                </p>
+              )}
+              {companyInfo.website && (
+                <p className="text-[11px] text-gray-400">{companyInfo.website.replace(/^https?:\/\//, '')}</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
