@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, ChevronRight } from 'lucide-react';
 import { crewService, type CrewWithDetails } from '@/services/crew.service';
 import { getRanks } from '@/lib/store';
@@ -158,6 +158,17 @@ export default function MobileCrewListPage({ onSelect }: Props) {
   // 선주사를 '전체'로 되돌리면 플릿/선박도 같이 초기화 — 데스크탑과 동일한 동작.
   useEffect(() => { if (filterOwner === 'all') setFilterFleet('all'); }, [filterOwner]);
   useEffect(() => { if (filterFleet === 'all' && filterOwner === 'all') setFilterShip('all'); }, [filterFleet, filterOwner]);
+
+  // 선주사/플릿/선박 필터는 "현재 승선 중인 선박" 기준이라 등록/대기/하선 선원에게는 대부분
+  // 해당 사항이 없다(아직 배정 전이거나 배정이 끝난 상태) — 승선중 탭에서 특정 선박으로
+  // 필터링해둔 채로 다른 탭(등록/대기/하선)으로 넘어가면, 그 탭의 선원들은 이 조건에 안 걸려
+  // 목록이 전부 사라져 버린다(상단 개수 배지는 탭 전환과 무관하게 정확해서 더 혼란스러웠음).
+  // 탭을 바꿀 때마다 이 세 필터를 초기화해 항상 승선중 탭과 같은 조건(전체)으로 시작하게 한다.
+  const isFirstCategoryRender = useRef(true);
+  useEffect(() => {
+    if (isFirstCategoryRender.current) { isFirstCategoryRender.current = false; return; }
+    setFilterOwner('all'); setFilterFleet('all'); setFilterShip('all');
+  }, [category]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
