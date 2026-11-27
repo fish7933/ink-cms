@@ -14,9 +14,13 @@ import { supabase } from '@/lib/supabase';
 import { sortRanksByDisplayOrder } from '@/lib/rank-order';
 import { getCertificateTypes } from '@/services/certificate-type.service';
 import { getCertificateCategories } from '@/services/certificate-category.service';
+import { getShipTypes } from '@/services/ship-classification.service';
+import { getSignOffReasons } from '@/services/sign-off-reason.service';
 import type { CertificateType } from '@/types/certificate-type';
 import type { CertificateCategory } from '@/types/certificate-category';
 import type { Rank } from '@/types/models';
+import type { ShipType } from '@/types/ship-classification';
+import type { SignOffReason } from '@/types/sign-off-reason';
 import { saveAiCrewPrefill, notesForCategory, type AiExtractedResumeData, type AiCrewPrefillPayload } from '@/lib/ai-crew-prefill';
 
 i18n.addResourceBundle('en', 'CrewResumeAiRegisterPage', en, true, true);
@@ -27,6 +31,10 @@ type Step = 'upload' | 'review';
 const CUSTOM_CERT = '__custom__';
 // 승선경력 직급 매칭 Select에서 "우리 직급 체계로 바꾸지 않고 이력서 원문 그대로 유지" 선택지.
 const KEEP_RAW_RANK = '__keep_raw__';
+// 승선경력 선종 매칭 Select에서 "우리 선종 카탈로그로 바꾸지 않고 이력서 원문 그대로 유지" 선택지.
+const KEEP_RAW_SHIP_TYPE = '__keep_raw_ship_type__';
+// 승선경력 하선사유 매칭 Select에서 "선택 안함"(하선사유를 특정하지 않음) 선택지.
+const NO_SIGN_OFF_REASON = '__none__';
 
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -93,11 +101,15 @@ export default function CrewResumeAiRegisterPage() {
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [certificateCategories, setCertificateCategories] = useState<CertificateCategory[]>([]);
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [shipTypes, setShipTypes] = useState<ShipType[]>([]);
+  const [signOffReasons, setSignOffReasons] = useState<SignOffReason[]>([]);
 
-  // 증서/직급 매칭을 사람이 확정한 값 — 인덱스는 data.certificates / data.sea_service_records와 동일.
+  // 증서/직급/선종/하선사유 매칭을 사람이 확정한 값 — 인덱스는 data.certificates / data.sea_service_records와 동일.
   const [certChoices, setCertChoices] = useState<string[]>([]);
   const [rankChoice, setRankChoice] = useState<string>('');
   const [seaRankChoices, setSeaRankChoices] = useState<string[]>([]);
+  const [seaShipTypeChoices, setSeaShipTypeChoices] = useState<string[]>([]);
+  const [seaSignOffChoices, setSeaSignOffChoices] = useState<string[]>([]);
   // 이력서(엑셀 첨부/PDF 내 JPEG)에서 서버가 찾아낸 증명사진 — Claude 구조화 출력(data)과
   // 별개로 응답에 같이 실려온다.
   const [photoBase64, setPhotoBase64] = useState<string | undefined>(undefined);
@@ -107,6 +119,8 @@ export default function CrewResumeAiRegisterPage() {
     getCertificateTypes(true).then(setCertificateTypes).catch(console.error);
     getCertificateCategories(true).then(setCertificateCategories).catch(console.error);
     supabase.from('ranks').select('*').then(({ data: rd }) => { if (rd) setRanks(sortRanksByDisplayOrder(rd)); });
+    getShipTypes().then(setShipTypes).catch(console.error);
+    getSignOffReasons().then(setSignOffReasons).catch(console.error);
   }, []);
 
   const finish = () => {
@@ -123,10 +137,14 @@ export default function CrewResumeAiRegisterPage() {
   const deriveChoicesFromAi = (result: AiExtractedResumeData) => {
     const certNames = new Set(certificateTypes.map(ct => ct.type_name_en));
     const rankCodes = new Set(ranks.map(r => r.rank_code));
+    const shipTypeNames = new Set(shipTypes.map(st => st.name));
+    const signOffReasonNames = new Set(signOffReasons.map(r => r.name));
     setCertChoices(result.certificates.map(c => (c.matched_certificate_type && certNames.has(c.matched_certificate_type)) ? c.matched_certificate_type : ''));
     const matchedRank = ranks.find(r => r.rank_code === result.suggested_rank_code);
     setRankChoice(matchedRank ? matchedRank.id : '');
     setSeaRankChoices(result.sea_service_records.map(r => (r.matched_rank_code && rankCodes.has(r.matched_rank_code)) ? r.matched_rank_code : KEEP_RAW_RANK));
+    setSeaShipTypeChoices(result.sea_service_records.map(r => (r.matched_ship_type && shipTypeNames.has(r.matched_ship_type)) ? r.matched_ship_type : KEEP_RAW_SHIP_TYPE));
+    setSeaSignOffChoices(result.sea_service_records.map(r => (r.matched_sign_off_reason && signOffReasonNames.has(r.matched_sign_off_reason)) ? r.matched_sign_off_reason : NO_SIGN_OFF_REASON));
   };
 
   const handleExtract = async () => {
@@ -142,6 +160,8 @@ export default function CrewResumeAiRegisterPage() {
           fileBase64,
           certificateCatalog: certificateTypes.map(ct => ct.type_name_en),
           rankCatalog: ranks.map(r => ({ code: r.rank_code, name: r.name })),
+          shipTypeCatalog: shipTypes.map(st => st.name),
+          signOffReasonCatalog: signOffReasons.map(r => r.name),
         },
       });
       if (fnError) throw fnError;
@@ -201,14 +221,21 @@ export default function CrewResumeAiRegisterPage() {
       contact_email: data.contact_email,
       emergency_contacts: data.emergency_contacts,
       certificates: resolvedCertificates,
-      sea_service_records: data.sea_service_records.map((r, i) => ({
-        ship_name: r.ship_name, ship_type: r.ship_type,
-        rank: seaRankChoices[i] === KEEP_RAW_RANK ? r.rank : seaRankChoices[i],
-        sign_on_date: r.sign_on_date, sign_off_date: r.sign_off_date,
-        owner_company_name: r.owner_company_name, ship_manager_name: r.ship_manager_name,
-        manning_agency_name: r.manning_agency_name, sign_off_reason: r.sign_off_reason,
-        sign_off_reason_id: '',
-      })),
+      sea_service_records: data.sea_service_records.map((r, i) => {
+        const signOffChoice = seaSignOffChoices[i];
+        const matchedSignOffReason = signOffChoice && signOffChoice !== NO_SIGN_OFF_REASON
+          ? signOffReasons.find(sr => sr.name === signOffChoice)
+          : undefined;
+        return {
+          ship_name: r.ship_name,
+          ship_type: seaShipTypeChoices[i] === KEEP_RAW_SHIP_TYPE ? r.ship_type : seaShipTypeChoices[i],
+          rank: seaRankChoices[i] === KEEP_RAW_RANK ? r.rank : seaRankChoices[i],
+          sign_on_date: r.sign_on_date, sign_off_date: r.sign_off_date,
+          owner_company_name: r.owner_company_name, ship_manager_name: r.ship_manager_name,
+          manning_agency_name: r.manning_agency_name, sign_off_reason: r.sign_off_reason,
+          sign_off_reason_id: matchedSignOffReason?.id || '',
+        };
+      }),
       resolved_rank_id: rankChoice,
       photo_base64: photoBase64,
       photo_mime: photoMime,
@@ -404,26 +431,48 @@ export default function CrewResumeAiRegisterPage() {
                 <p className="text-sm text-gray-400">{t('추출된 내용 없음')}</p>
               ) : (
                 <div className="space-y-2">
-                  {data.sea_service_records.map((r, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_auto] gap-3 items-center p-2 rounded-md border border-gray-100">
-                      <div className="text-xs space-y-0.5">
-                        <div className="font-medium text-gray-800">{r.ship_name || '-'} <span className="text-gray-400 font-normal">({r.ship_type || '-'})</span></div>
-                        <div className="text-gray-400">{t('이력서 직급 표기')}: {r.rank || '-'} · {r.sign_on_date || '-'} ~ {r.sign_off_date || '-'}</div>
-                        {(r.owner_company_name || r.ship_manager_name || r.manning_agency_name || r.sign_off_reason) && (
-                          <div className="text-gray-400">
-                            {[r.owner_company_name, r.ship_manager_name, r.manning_agency_name, r.sign_off_reason].filter(Boolean).join(' · ')}
-                          </div>
-                        )}
+                  {data.sea_service_records.map((r, i) => {
+                    const shipTypeUnresolved = r.ship_type !== '' && seaShipTypeChoices[i] === KEEP_RAW_SHIP_TYPE;
+                    return (
+                      <div key={i} className="grid grid-cols-[1fr_auto] gap-3 items-start p-2 rounded-md border border-gray-100">
+                        <div className="text-xs space-y-0.5 pt-1">
+                          <div className="font-medium text-gray-800">{r.ship_name || '-'} <span className="text-gray-400 font-normal">({r.ship_type || '-'})</span></div>
+                          <div className="text-gray-400">{t('이력서 직급 표기')}: {r.rank || '-'} · {r.sign_on_date || '-'} ~ {r.sign_off_date || '-'}</div>
+                          {(r.owner_company_name || r.ship_manager_name || r.manning_agency_name || r.sign_off_reason) && (
+                            <div className="text-gray-400">
+                              {[r.owner_company_name, r.ship_manager_name, r.manning_agency_name, r.sign_off_reason].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Select value={seaRankChoices[i] || KEEP_RAW_RANK} onValueChange={v => setSeaRankChoices(prev => prev.map((x, idx) => idx === i ? v : x))}>
+                            <SelectTrigger className="h-8 text-xs w-56"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={KEEP_RAW_RANK} className="text-xs">{t('원문 그대로 유지')} ({r.rank || '-'})</SelectItem>
+                              {ranks.map(rk => <SelectItem key={rk.id} value={rk.rank_code} className="text-xs">{rk.rank_code} ({rk.name})</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Select value={seaShipTypeChoices[i] || KEEP_RAW_SHIP_TYPE} onValueChange={v => setSeaShipTypeChoices(prev => prev.map((x, idx) => idx === i ? v : x))}>
+                            <SelectTrigger className={`h-8 text-xs w-56 ${shipTypeUnresolved ? 'border-amber-400' : ''}`}><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={KEEP_RAW_SHIP_TYPE} className="text-xs">{t('원문 그대로 유지')} ({r.ship_type || '-'})</SelectItem>
+                              {shipTypes.map(st => <SelectItem key={st.id} value={st.name} className="text-xs">{st.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Select value={seaSignOffChoices[i] || NO_SIGN_OFF_REASON} onValueChange={v => setSeaSignOffChoices(prev => prev.map((x, idx) => idx === i ? v : x))}>
+                            <SelectTrigger className="h-8 text-xs w-56"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_SIGN_OFF_REASON} className="text-xs">{t('하선사유 선택 안함')}</SelectItem>
+                              {signOffReasons.map(sr => <SelectItem key={sr.id} value={sr.name} className="text-xs">{sr.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {shipTypeUnresolved && (
+                            <p className="text-[11px] text-amber-600 w-56">{t('선종이 카탈로그에 없습니다. 기존 선종으로 고르거나, 원문을 유지하려면 나중에 선종 관리 화면에서 추가하세요.')}</p>
+                          )}
+                        </div>
                       </div>
-                      <Select value={seaRankChoices[i] || KEEP_RAW_RANK} onValueChange={v => setSeaRankChoices(prev => prev.map((x, idx) => idx === i ? v : x))}>
-                        <SelectTrigger className="h-8 text-xs w-56"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={KEEP_RAW_RANK} className="text-xs">{t('원문 그대로 유지')} ({r.rank || '-'})</SelectItem>
-                          {ranks.map(rk => <SelectItem key={rk.id} value={rk.rank_code} className="text-xs">{rk.rank_code} ({rk.name})</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <p className="text-xs text-gray-400 mt-2">{t('승인하면 선원 저장 시 승선 경력(입사 전)으로 함께 등록됩니다.')}</p>

@@ -61,5 +61,7 @@
   "증서 선택 필요": "Selection Required",
   "이력서 직급 표기": "Rank as Written in Resume",
   "원문 그대로 유지": "Keep as Written",
-  "이력서에서 찾은 사진 — 승인하면 선원 등록 화면의 사진으로 자동 반영됩니다.": "Photo found in the resume — once approved, it will be automatically applied as the crew photo on the registration screen."
+  "이력서에서 찾은 사진 — 승인하면 선원 등록 화면의 사진으로 자동 반영됩니다.": "Photo found in the resume — once approved, it will be automatically applied as the crew photo on the registration screen.",
+  "하선사유 선택 안함": "No sign-off reason selected",
+  "선종이 카탈로그에 없습니다. 기존 선종으로 고르거나, 원문을 유지하려면 나중에 선종 관리 화면에서 추가하세요.": "This ship type isn't in the catalog. Pick an existing one, or keep it as written and add it later in Ship Type settings."
 }

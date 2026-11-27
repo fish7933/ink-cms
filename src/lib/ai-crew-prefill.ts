@@ -27,6 +27,10 @@ export interface AiExtractedSeaServiceRecord {
   ship_manager_name: string;
   manning_agency_name: string;
   sign_off_reason: string;
+  // 우리 선종 카탈로그(ship_types.name) 중 AI가 확신한 매칭 — 확신 없으면 빈 문자열.
+  matched_ship_type: string;
+  // 우리 하선사유 목록(sign_off_reasons.name) 중 AI가 확신한 매칭 — 확신 없으면 빈 문자열.
+  matched_sign_off_reason: string;
 }
 
 // 선원 등록 화면(신규 등록)의 "승선 경력" 탭에서 저장 전까지 사람이 직접 추가/수정/삭제할 수

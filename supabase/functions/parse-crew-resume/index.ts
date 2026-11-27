@@ -75,6 +75,12 @@ const ExtractedResumeSchema = z.object({
     manning_agency_name: z.string(),
     // 하선 사유(예: 계약만료, Sign off, Contract finished 등) — 있는 경우만.
     sign_off_reason: z.string(),
+    // 요청 본문의 shipTypeCatalog 중 이 선박의 선종과 정확히 같다고 확신하는 이름 그대로(복사),
+    // 확신이 없으면 빈 문자열.
+    matched_ship_type: z.string(),
+    // 요청 본문의 signOffReasonCatalog 중 sign_off_reason과 같은 의미라고 확신하는 이름 그대로
+    // (복사), 확신이 없으면 빈 문자열.
+    matched_sign_off_reason: z.string(),
   })),
   // 이력서에 현재/목표 직급이 명시되어 있으면 그 직급에 가장 가까운 rankCatalog의 rank_code,
   // 명시되어 있지 않으면 승선 경력 중 가장 최근(마지막) 항목의 직급 기준으로 판단. 확신 없으면 빈 문자열.
@@ -172,9 +178,10 @@ Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
-    const { fileName, mimeType, fileBase64, certificateCatalog, rankCatalog } = await req.json() as {
+    const { fileName, mimeType, fileBase64, certificateCatalog, rankCatalog, shipTypeCatalog, signOffReasonCatalog } = await req.json() as {
       fileName?: string; mimeType?: string; fileBase64?: string;
       certificateCatalog?: string[]; rankCatalog?: { code: string; name: string }[];
+      shipTypeCatalog?: string[]; signOffReasonCatalog?: string[];
     };
     if (!fileBase64 || !mimeType) {
       return new Response(JSON.stringify({ error: 'fileBase64, mimeType가 필요합니다' }), { status: 400, headers: CORS_HEADERS });
@@ -217,6 +224,17 @@ Deno.serve(async req => {
           '항목의 직급을 기준으로 판단하세요. suggested_rank_source에는 그 판단 근거를 한국어 한 줄로 적으세요 ' +
           '(예: "이력서에 명시된 지원 직급" 또는 "최근 승선 경력(2026-05 GAS UTOPIA, COOK) 기준"). 확신이 없으면 ' +
           '둘 다 빈 문자열로 두세요.'
+        : '',
+      shipTypeCatalog && shipTypeCatalog.length > 0
+        ? `아래는 우리 시스템에 등록된 선종 목록입니다: ${shipTypeCatalog.join(' | ')}\n` +
+          '각 승선 경력의 선박 선종(ship_type)이 이 목록 중 하나와 분명히 같은 것이라고 확신되면 ' +
+          'matched_ship_type에 그 이름을 토씨 하나 틀리지 않고 그대로 적으세요. 확신이 서지 않으면 빈 문자열로 두세요.'
+        : '',
+      signOffReasonCatalog && signOffReasonCatalog.length > 0
+        ? `아래는 우리 시스템의 하선 사유 목록입니다: ${signOffReasonCatalog.join(' | ')}\n` +
+          '각 승선 경력의 하선 사유(sign_off_reason)가 이 목록 중 하나와 의미가 같다고 확신되면(예: ' +
+          '"FINISH CONTRACT", "Contract completion"은 "계약만료"와 같은 의미) matched_sign_off_reason에 ' +
+          '그 이름을 토씨 하나 틀리지 않고 그대로 적으세요. 확신이 서지 않으면 빈 문자열로 두세요.'
         : '',
     ].filter(Boolean).join('\n\n');
 
