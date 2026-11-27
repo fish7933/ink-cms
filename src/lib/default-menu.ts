@@ -176,7 +176,10 @@ export const defaultMenuStructure: MenuCategory[] = [
         label: '결재함',
         path: '/approval-inbox',
         icon: 'Inbox',
-        roles: ['ship_manager', 'manning_agency'],
+        // 그룹웨어는 우리회사 내부 직원 전용 영역 — 매닝사/선주에게는 대메뉴 자체가 안 보여야
+        // 하므로(사용자 요청, 2026-11-26) 여기서 'manning_agency'를 빼야 한다. 대메뉴는 하위
+        // 항목이 하나라도 보이면 뜨는 구조라, 이 항목이 유일하게 매닝사에게 열려 있던 통로였음.
+        roles: ['ship_manager'],
         order: 1,
         is_active: true,
       },
